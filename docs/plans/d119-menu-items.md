@@ -100,30 +100,12 @@ uses.
 
 ## Checkpoints
 
-### 1. One native context menu and popup focus ✅ implemented, awaiting review
+### 1. One native context menu and popup focus ✅
 
-Extract the shared context-menu helper. Move the tree row menu and the stripe
-button menu onto it, and give an open menu its own Knot-side `Focus::Popup`,
-removing the key path's popup exception. Behavior doesn't change for users.
-
-- **Implementation context:** `src/app/tree_view.rs` (`ContextMenu`,
-  `open_context_menu`, `close_context_menu`, render at the
-  `context_menu` child) and `src/app/product/stripes.rs` (`StripeMenu`,
-  `open_stripe_menu`) duplicate the build, focus, subscribe, and track steps.
-  Put the helper beside `track_popup`/`popup_focused` in
-  `src/app/components.rs`, or in a new `src/app/context_menu.rs` registered in
-  `src/app/mod.rs`. Add `Popup` to `enum Focus` in `src/app/product.rs`, set it
-  when a menu opens, and restore it on dismissal. `KnotWindow::key_down` in
-  `src/app/product/key_routing.rs` checks `Focus::Popup` instead of
-  `popup_focused`. Keep the router-first ordering
-  ([keymaps](../architecture/commands.md#keymaps)).
-- **Validation:** the existing `src/app/product/tests/tree_context_menu.rs`
-  and `stripes.rs` tests pass unchanged. Add tests for a global binding
-  winning while a menu is open, for leftover keys reaching the menu, and for
-  focus returning on dismissal and on blur.
-- **Review gate:** tree and stripe menus behave as before in the real app.
-  Update the keymaps section of `docs/architecture/commands.md` and the tree
-  context menu paragraph of `docs/architecture/semantic-ui.md`.
+Done and approved. The tree row and stripe button menus open through
+`src/app/context_menu.rs`, and an open menu gives the window the
+`Focus::Popup` layer. See [keymaps](../architecture/commands.md#keymaps) and
+the [tree context menu](../architecture/semantic-ui.md).
 
 ### 2. `@knot/chrome` from `@knot/status-bar` ✳️ not started
 
