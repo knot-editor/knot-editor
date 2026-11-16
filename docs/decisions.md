@@ -134,6 +134,9 @@ touches.
 
 - [Go to Line and the editor handle](decisions/bundled-packages.md#go-to-line-and-the-editor-handle):
   a bundled package that proves the editor API.
+- [Search Everywhere](decisions/bundled-packages.md#search-everywhere): one
+  tabbed picker for files, buffers, and commands; scope by tab, not prefix; a
+  minimal native palette as the fallback.
 - [Bundled Vim mode](decisions/bundled-packages.md#bundled-vim-mode): public
   APIs only, a JavaScript state machine over typed text.
 - [Bundled explorer](decisions/bundled-packages.md#bundled-explorer): public

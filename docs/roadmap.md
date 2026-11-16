@@ -28,21 +28,20 @@ point.
 
 ## Next up
 
-1. D193 — Chrome refinements: two open choices of the current look.
-2. D119 — Tab, editor, and extension menu items.
-3. D117 — Non-modal notifications and progress: D041 and D181 build on it.
-4. D022 — Editor autocompletion.
-5. D183 — Deterministic indentation after Enter and closing tokens.
-6. D175 — Type-ahead after a held Enter.
-7. D182 — Interleave extension roots at awaits: before D067.
-8. D156 — Fewer host round trips per key.
-9. D087 — Extension entitlements: D085, D126, D067, and D101 need it.
-10. D129 — Refactor builtin language extensions.
-11. D138 — Extension startup report as an untitled document.
-12. D054 — Dedicated read-only generated text surface.
-13. D085 — Cross-file search.
-14. D197 — Diff view: D126 and D174 build on it.
-15. D126 — Git status and changes per root.
+1. D119 — Tab, editor, and extension menu items.
+2. D117 — Non-modal notifications and progress: D041 and D181 build on it.
+3. D022 — Editor autocompletion.
+4. D183 — Deterministic indentation after Enter and closing tokens.
+5. D175 — Type-ahead after a held Enter.
+6. D182 — Interleave extension roots at awaits: before D067.
+7. D156 — Fewer host round trips per key.
+8. D087 — Extension entitlements: D085, D126, D067, and D101 need it.
+9. D129 — Refactor builtin language extensions.
+10. D138 — Extension startup report as an untitled document.
+11. D054 — Dedicated read-only generated text surface.
+12. D085 — Cross-file search.
+13. D197 — Diff view: D126 and D174 build on it.
+14. D126 — Git status and changes per root.
 
 Remove an item from this list when it is done or dropped.
 
@@ -665,13 +664,6 @@ Kakoune mode could use them too. The
     prompts (OSC 133) that libghostty already parses a product contract.
 
 ### Platforms, accessibility, and website
-
-- **D193 — Chrome refinements** 🚧
-  - Depends on: none
-  - Description: Two choices of the Islands look stayed open. The focused card
-    has no visible emphasis, and pickers have no scope tabs (All, Files,
-    Symbols, Actions) like Search Everywhere. Decide each, and build the ones
-    worth having. Plan: [d193-chrome-refinements.md](plans/d193-chrome-refinements.md).
 
 - **D035 — macOS distribution**
   - Depends on: none

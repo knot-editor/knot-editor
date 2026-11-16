@@ -28,6 +28,30 @@ References: [editor views](../architecture/editor-and-languages.md#editor-views)
 [commands](../architecture/commands.md#extension-execution), and
 [extension guide](../extension-api.md#register-a-command).
 
+## Search Everywhere
+
+Go to File, buffer switching, and the command palette are one tabbed picker
+(All, Buffers, Files, Actions) in `@knot/go-to-file`, differing only in the tab
+they start on, so each query is matched, ranked, and highlighted by one
+implementation. Scope is chosen only by tab: IntelliJ-style prefixes (`>`, `@`)
+were rejected as a second syntax to learn beside tabs, and `:N` stays because
+it parameterizes a row rather than selecting a scope. Commands chosen from
+Actions rank first through the `history` primitive, so the palette needs no
+native command history or stored record. Recent files are not a separate tab: Buffers orders open documents by recent activity, and Open
+Recent stays its own command because it lists files outside the window's roots.
+Buffers has its own binding because a preset keymap cannot bind arguments, which
+is why Go to Buffer is its own command.
+
+`workbench.show-command-palette` stays native so a failed or disabled package
+cannot leave the editor without a way to reach the extension report or Close.
+A minimal native palette (titles only, no bindings, descriptions, or recents)
+is the fallback; keeping the full native palette beside the package was
+rejected as two implementations of one list. Search Everywhere has no default
+key binding since cmd-p and the palette key are taken.
+
+References: [semantic UI](../architecture/semantic-ui.md#extension-transient-interactions),
+[commands](../architecture/commands.md).
+
 ## Bundled Vim mode
 
 `@knot/vim` is a bundled JavaScript package on public APIs only, because it is

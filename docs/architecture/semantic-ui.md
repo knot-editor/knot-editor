@@ -376,6 +376,17 @@ query change. Tab and Shift+Tab run `picker.next-tab` and
 `picker.previous-tab`, bound in the native `picker` view
 ([keymaps](commands.md#picker-tabs)); clicking a tab switches to it.
 
+The bundled `@knot/go-to-file` package builds the workbench's one navigation
+picker on tabs: Search Everywhere (`workspace.search-everywhere`, optional
+`{ tab }`) over All, Buffers, Files, and Actions, with Go to File and Go to
+Buffer (cmd-p, cmd-alt-p) and the palette command starting it on Files,
+Buffers, and Actions. Buffers lists open documents by recent activity, current
+last; All lists buffers, then files that are not open buffers, then at most
+eight actions once something is typed. A query of only `:N` lists a single Go
+to line row, and `text:N` opens the chosen row at line N. Actions match titles
+and names, show each command's binding for the origin view, and put commands
+chosen there first.
+
 The matcher serves every list that filters by a typed query. Its styles
 (`prefix`, `substring`, `flex`, `orderless`) are the user's ordered
 `completion.styles` setting: a candidate matches if any listed style matches
