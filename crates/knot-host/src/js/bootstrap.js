@@ -864,6 +864,15 @@ function pickerItem(value) {
     hint: optionalText(value.hint),
     icon: iconRef(value.icon),
     selected: value.selected === true,
+    tabs: value.tabs == null ? [] : arrayItems(value.tabs, (tab) => string(tab, "picker item tab must be text")),
+  };
+}
+
+function pickerTab(value) {
+  record(value, "picker tab must be an object");
+  return {
+    id: string(value.id, "picker tab ID must be text"),
+    label: string(value.label, "picker tab label must be text"),
   };
 }
 
@@ -918,8 +927,14 @@ export async function showPicker(options) {
     throw new TypeError("picker onQuery must be a function and excludes items");
   }
   const items = onQuery == null ? arrayItems(options.items, pickerItem) : [];
+  const tabs = options.tabs == null ? [] : arrayItems(options.tabs, pickerTab);
+  if (new Set(tabs.map((tab) => tab.id)).size !== tabs.length) {
+    throw new TypeError("picker tab IDs must be unique");
+  }
   const onHighlight = options.onHighlight;
-  if (onHighlight == null && onQuery == null) return request("showPicker", title, items, target);
+  if (onHighlight == null && onQuery == null && tabs.length === 0) {
+    return request("showPicker", title, items, target);
+  }
   if (onHighlight != null && typeof onHighlight !== "function") {
     throw new TypeError("picker onHighlight must be a function");
   }
@@ -929,13 +944,13 @@ export async function showPicker(options) {
   // never stays open unowned. The rows answering a query travel back with
   // the next pull.
   let failure = null;
-  let update = await request("beginPicker", title, items, target, onQuery == null ? 0 : 1);
+  let update = await request("beginPicker", title, items, target, onQuery == null ? 0 : 1, tabs);
   while (update.kind === "highlighted" || update.kind === "queried") {
     let rows = null;
     if (failure === null) {
       try {
         if (update.kind === "queried") {
-          rows = arrayItems(await onQuery(update.query), pickerRow);
+          rows = arrayItems(await onQuery(update.query, update.tab), pickerRow);
         } else if (onHighlight != null) {
           await onHighlight(update.id);
         }

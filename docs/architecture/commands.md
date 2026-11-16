@@ -96,7 +96,7 @@ extension bindings still win over it. A sequence that stops matching runs its lo
 delivers its first key natively, and routes the rest again, and a pending
 sequence flushes the same way after one second or ends when focus moves. Keys
 typed in the palette or a transient interaction skip the router and go to
-them. Menus and palette commands bypass keymaps. gpui holds bindings only for
+them, except in a [picker with tabs](#picker-tabs). Menus and palette commands bypass keymaps. gpui holds bindings only for
 menu key equivalents, the config-error window's Quit, and the bindings
 gpui-component installs at startup, which every keymap rebuild restores.
 
@@ -115,6 +115,17 @@ tab, so `editor` and `buffer` are the bar's. Keys the keymap leaves go to the
 field's text input. Tab and Shift+Tab are native form keys with no command or
 binding: they move focus to the next or previous field across the editor's
 bars, top to bottom, wrapping, and never insert text.
+
+### Picker tabs
+
+While a picker with scope tabs has Knot-side focus, the router resolves keys
+against the native view kind `picker` with no contexts, and only bindings
+scoped to that view apply: global and editor bindings stay blocked, as they are
+for every transient surface. Tab and Shift+Tab are bound there to
+`picker.next-tab` and `picker.previous-tab`, which are hidden from the palette
+and run without a captured tab, because they act on the window's picker. A
+picker without tabs, the palette, and inputs skip the router, so Tab stays
+unclaimed there.
 
 ### Key contexts
 

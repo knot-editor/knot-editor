@@ -123,7 +123,7 @@ function emptyState() {
     answers: new Map<keyof Answers, unknown[]>(),
     prompts: [] as Prompt[],
     pickerHighlights: [] as (string | null)[],
-    pickerQueries: [] as string[],
+    pickerQueries: [] as ({ query: string } | { tab: string })[],
     pickerRows: [] as (readonly Knot.PickerRow[])[],
     inputValues: [] as string[],
     inputMessages: [] as (string | null)[],
@@ -876,7 +876,14 @@ export function highlight(...ids: (string | null)[]) {
 /** Queries the next picker with `onQuery` reports after the empty one, in
  * order, before it settles with its scripted answer. */
 export function query(...queries: string[]) {
-  state.pickerQueries.push(...queries);
+  state.pickerQueries.push(...queries.map((query) => ({ query })));
+}
+
+/** Tabs the next picker with `tabs` and `onQuery` switches to after the
+ * empty query, in order, interleaved with `query`; each asks again with the
+ * typed text. */
+export function selectTab(...ids: string[]) {
+  state.pickerQueries.push(...ids.map((tab) => ({ tab })));
 }
 
 /** The rows each `onQuery` call returned, in order. */
@@ -2399,10 +2406,17 @@ export const api: KnotApi = {
       const result = prompt("showPicker", options);
       const highlights = state.pickerHighlights;
       state.pickerHighlights = [];
-      const queries = ["", ...state.pickerQueries];
+      const asks = state.pickerQueries;
       state.pickerQueries = [];
       if (options.onQuery !== undefined) {
-        for (const query of queries) state.pickerRows.push(await options.onQuery(query));
+        let text = "";
+        let tab = options.tabs?.[0]?.id ?? null;
+        state.pickerRows.push(await options.onQuery(text, tab));
+        for (const ask of asks) {
+          if ("query" in ask) text = ask.query;
+          else tab = ask.tab;
+          state.pickerRows.push(await options.onQuery(text, tab));
+        }
       }
       if (options.onHighlight !== undefined) {
         for (const id of highlights) await options.onHighlight(id);

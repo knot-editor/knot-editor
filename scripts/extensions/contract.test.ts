@@ -300,6 +300,16 @@ await workbench.showPicker({
   ],
   onHighlight: (id) => void id,
 });
+await workbench.showPicker({
+  title: "Tabs",
+  tabs: [{ id: "all", label: "All" }],
+  onQuery: (query: string, tab: string | null) => [{ id: `${tab}:${query}`, label: "A" }],
+});
+await workbench.showPicker({
+  title: "Tabs",
+  tabs: [{ id: "all", label: "All" }],
+  items: [{ id: "a", label: "A", tabs: ["all"] }],
+});
 const typed: import("knot").InputResult = await workbench.showInput({
   title: "Name", value: "seed", target: opened.presentation.target.window,
 });

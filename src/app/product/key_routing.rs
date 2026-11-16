@@ -33,6 +33,23 @@ pub(super) struct KeyRouting {
     native: bool,
 }
 
+/// The native view kind of keys typed in a picker with tabs. Only bindings
+/// scoped to it apply there.
+const PICKER_VIEW: &str = "picker";
+
+/// How `typed` matches the keymap where it was typed.
+fn match_keys(
+    keymaps: &knot_model::commands::keymaps::BindingRegistry,
+    typed: &[Keystroke],
+    view: Option<&str>,
+    contexts: &[&str],
+) -> knot_model::commands::key_router::TypedMatch {
+    match view {
+        Some(PICKER_VIEW) => keymaps.match_typed_scoped(typed, PICKER_VIEW, contexts),
+        _ => keymaps.match_typed(typed, view, contexts),
+    }
+}
+
 /// Marks the interceptor installed, so installing it again changes nothing.
 struct KeyInterception;
 
@@ -238,7 +255,7 @@ impl KnotWindow {
         native_window: Option<&mut Window>,
         cx: &mut Context<Self>,
     ) -> bool {
-        if self.focus != Focus::Workbench {
+        if self.focus != Focus::Workbench && self.tabbed_picker(cx).is_none() {
             return false;
         }
         let focus = Some(self.focus_target(cx));
@@ -252,7 +269,7 @@ impl KnotWindow {
             return false;
         };
         let actions = self.keys.router.key(keystroke.clone(), |typed| {
-            keymaps.match_typed(typed, view.as_deref(), &contexts)
+            match_keys(keymaps, typed, view.as_deref(), &contexts)
         });
         self.keys.generation += 1;
         if self.keys.router.is_pending() {
@@ -274,6 +291,9 @@ impl KnotWindow {
     /// The contexts are the view's own rather than gpui's, which reflect the
     /// last rendered frame, since the previous key may have changed them.
     fn key_scope(&mut self, cx: &mut Context<Self>) -> (Option<String>, Vec<String>) {
+        if self.tabbed_picker(cx).is_some() {
+            return (Some(PICKER_VIEW.to_owned()), Vec::new());
+        }
         let target = self.capture_command_target(cx);
         let contexts = Self::target_editor(&target, cx)
             .map(|editor| {
@@ -292,6 +312,23 @@ impl KnotWindow {
         (Self::target_view_kind(&target, cx), contexts)
     }
 
+    /// The picker with scope tabs that has Knot-side focus.
+    fn tabbed_picker(&self, cx: &App) -> Option<Entity<Picker>> {
+        if self.focus != Focus::Transient {
+            return None;
+        }
+        match self.transient.as_ref()?.surface.as_ref()? {
+            TransientSurface::Picker(picker) if picker.read(cx).has_tabs() => Some(picker.clone()),
+            _ => None,
+        }
+    }
+
+    /// Switch the focused picker's tab by `delta`; false when it has no tabs.
+    pub(crate) fn cycle_picker_tab(&mut self, delta: isize, cx: &mut Context<Self>) -> bool {
+        self.tabbed_picker(cx)
+            .is_some_and(|picker| picker.update(cx, |picker, cx| picker.cycle_tab(delta, cx)))
+    }
+
     /// The editor a captured target's focus is in.
     fn target_editor(target: &ProductCommandTarget, cx: &App) -> Option<Entity<EditorView>> {
         Self::target_view_kind(target, cx)?;
@@ -301,11 +338,16 @@ impl KnotWindow {
         }
     }
 
-    /// Run a key's command in the focused view. Later input waits for an
+    /// Run a key's command in the focused view, or the focused picker. Later input waits for an
     /// extension command; native ones run in this turn. False when nothing
     /// can be targeted.
     fn run_key_command(&mut self, command: Command, cx: &mut Context<Self>) -> bool {
-        let target = self.capture_command_target(cx);
+        let mut target = self.capture_command_target(cx);
+        if self.tabbed_picker(cx).is_some() {
+            // A picker's keys act on the picker, not on the pane behind it.
+            target.tab = None;
+            target.view = None;
+        }
         let editor = Self::target_editor(&target, cx);
         let dispatcher = Self::command_dispatcher(cx);
         let native = matches!(
@@ -379,7 +421,7 @@ impl KnotWindow {
                     let actions = this
                         .keys
                         .router
-                        .flush(|typed| keymaps.match_typed(typed, view.as_deref(), &contexts));
+                        .flush(|typed| match_keys(keymaps, typed, view.as_deref(), &contexts));
                     this.perform_key_actions(actions.into(), native_window, cx);
                 };
                 match this.read(cx).native_window {

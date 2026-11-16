@@ -728,6 +728,30 @@ pub(crate) async fn show_extension_memory(
         .await
 }
 
+async fn cycle_picker_tab(context: CommandContext, delta: isize) -> Result<(), CommandOutcome> {
+    context
+        .window(move |window, _, cx| {
+            window
+                .cycle_picker_tab(delta, cx)
+                .then_some(())
+                .ok_or(CommandOutcome::Unavailable)
+        })
+        .await
+}
+
+#[command("picker.next-tab", title = "Next Picker Tab", description = "Show the next scope tab of the open picker.", palette = false, id = PICKER_NEXT_TAB_COMMAND, participant = Application)]
+pub(crate) async fn picker_next_tab(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
+    cycle_picker_tab(context, 1).await
+}
+
+#[command("picker.previous-tab", title = "Previous Picker Tab", description = "Show the previous scope tab of the open picker.", palette = false, id = PICKER_PREVIOUS_TAB_COMMAND, participant = Application)]
+pub(crate) async fn picker_previous_tab(
+    context: CommandContext,
+    (): (),
+) -> Result<(), CommandOutcome> {
+    cycle_picker_tab(context, -1).await
+}
+
 #[command("window.new", title = "New Blank Window", description = "Open a window without folders.", id = NEW_WINDOW_COMMAND, participant = Application)]
 pub(crate) async fn new_window(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
     context

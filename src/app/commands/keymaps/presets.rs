@@ -198,6 +198,8 @@ const SHARED_BINDINGS: &[PresetEntry] = &[
     ("ctrl-g", GO_TO_LINE_COMMAND, Some("editor")),
     ("secondary-f", FIND_COMMAND, Some("editor")),
     ("secondary-f", FIND_COMMAND, Some("bar")),
+    ("tab", PICKER_NEXT_TAB_COMMAND, Some("picker")),
+    ("shift-tab", PICKER_PREVIOUS_TAB_COMMAND, Some("picker")),
     ("shift-f10", SHOW_TREE_CONTEXT_MENU_COMMAND, None),
     ("secondary-n", NEW_COMMAND, None),
     ("ctrl-`", TOGGLE_TERMINAL_COMMAND, None),

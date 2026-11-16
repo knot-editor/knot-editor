@@ -16,6 +16,7 @@ fn owner(invocation: Option<u64>) -> TransientOwner {
 fn picker_items() -> Vec<PickerItem> {
     vec![
         PickerItem {
+            tabs: Vec::new(),
             detail: None,
             hint: None,
 
@@ -28,6 +29,7 @@ fn picker_items() -> Vec<PickerItem> {
             description: Some("first".into()),
         },
         PickerItem {
+            tabs: Vec::new(),
             detail: None,
             hint: None,
             icon: None,
@@ -608,7 +610,7 @@ fn field_text(input: &Entity<crate::app::transient::InputView>, cx: &gpui::App) 
 }
 
 const LIVE_INPUT_SOURCE: &str = r#"
-import { commands, completion, history, workbench } from "knot";
+import { commands, completion, history, keymaps, workbench } from "knot";
 await commands.register("transient.live-input", async () => {
   const seen = [];
   const result = await workbench.showInput({
@@ -694,6 +696,39 @@ await commands.register("transient.query", async () => {
   });
   await workbench.writeClipboardText(`${seen.join(",")}|${JSON.stringify(result)}`);
 });
+const TABS = [
+  { id: "all", label: "All" },
+  { id: "files", label: "Files" },
+  { id: "actions", label: "Actions" },
+];
+await commands.register("transient.tabbed-query", async () => {
+  const result = await workbench.showPicker({
+    title: "Tabs",
+    tabs: TABS,
+    onQuery: (query, tab) => [{ id: `${tab}:${query}`, label: `${tab}:${query}` }],
+  });
+  await workbench.writeClipboardText(`|${JSON.stringify(result)}`);
+});
+await commands.register("transient.tabbed-items", async () => {
+  const result = await workbench.showPicker({
+    title: "Tabs",
+    tabs: TABS,
+    items: [
+      { id: "a", label: "Anywhere" },
+      { id: "f", label: "File", tabs: ["all", "files"] },
+      { id: "x", label: "Action", tabs: ["all", "actions"] },
+    ],
+  });
+  await workbench.writeClipboardText(`|${JSON.stringify(result)}`);
+});
+await commands.register("transient.tabbed-rebound", async () => {
+  keymaps.bind("ctrl-j", { name: "picker.next-tab" }, { view: "picker" });
+  await workbench.showPicker({
+    title: "Tabs",
+    tabs: TABS,
+    onQuery: (query, tab) => [{ id: tab, label: tab }],
+  });
+});
 await commands.register("transient.failing-query", async () => {
   const seen = [];
   try {
@@ -765,6 +800,7 @@ fn live_window(
     use knot_protocol::ExtensionKey;
 
     let documents = install_globals(cx);
+    cx.update(crate::app::commands::keymaps::install);
     let host = cx.update(crate::app::extensions::host::install);
     let key = ExtensionKey::new(ExtensionId::new(714), ExtensionLifecycleId::new(1));
     let storage = tempfile::tempdir().unwrap();
@@ -1153,4 +1189,74 @@ fn history_orders_recent_items_first_and_persists_in_package_storage(cx: &mut Te
     let pending = dispatch_product_command(&window, native_window, "transient.history", cx);
     assert_eq!(wait_for_command(pending, cx), CommandOutcome::Completed);
     assert_eq!(clipboard(cx).as_deref(), Some("c,b|c,b,a,d"));
+}
+
+#[gpui::test]
+fn tab_keys_switch_the_tab_a_queried_picker_asks_for(cx: &mut TestAppContext) {
+    let (_host, _key, window, native_window, completion) =
+        start_live_input("transient.tabbed-query", cx);
+    let picker = transient_picker(&window, cx);
+    wait_for_api_condition(cx, |cx| picker_labels(&picker, cx) == ["all:"]);
+    cx.simulate_keystrokes(native_window, "tab");
+    wait_for_api_condition(cx, |cx| picker_labels(&picker, cx) == ["files:"]);
+    cx.simulate_input(native_window, "x");
+    wait_for_api_condition(cx, |cx| picker_labels(&picker, cx) == ["files:x"]);
+    cx.simulate_keystrokes(native_window, "shift-tab shift-tab");
+    wait_for_api_condition(cx, |cx| picker_labels(&picker, cx) == ["actions:x"]);
+    cx.simulate_keystrokes(native_window, "enter");
+    wait_for_api_condition(cx, clipboard_has_outcome);
+    assert_eq!(
+        clipboard(cx).as_deref(),
+        Some(r#"|{"kind":"selected","id":"actions:x"}"#)
+    );
+    assert_eq!(wait_for_command(completion, cx), CommandOutcome::Completed);
+}
+
+#[gpui::test]
+fn tab_keys_filter_the_items_of_a_local_picker_and_global_bindings_stay_blocked(
+    cx: &mut TestAppContext,
+) {
+    let (_host, _key, window, native_window, completion) =
+        start_live_input("transient.tabbed-items", cx);
+    let picker = transient_picker(&window, cx);
+    assert_eq!(
+        cx.read(|cx| picker_labels(&picker, cx)),
+        ["Anywhere", "File", "Action"]
+    );
+    // The strip lists every tab, and clicking one switches to it.
+    let mut visual = gpui::VisualTestContext::from_window(native_window, cx);
+    visual.run_until_parked();
+    let actions = visual.debug_bounds("picker-tab-2").unwrap();
+    visual.simulate_click(actions.center(), gpui::Modifiers::none());
+    assert_eq!(
+        picker.read_with(&visual, |picker, _| picker.visible_labels()),
+        ["Anywhere", "Action"]
+    );
+    // Tab wraps from the last tab to the first, then moves on.
+    cx.simulate_keystrokes(native_window, "tab tab");
+    assert_eq!(
+        cx.read(|cx| picker_labels(&picker, cx)),
+        ["Anywhere", "File"]
+    );
+    // A global binding does not run while a picker with tabs has focus.
+    cx.simulate_keystrokes(native_window, "cmd-n");
+    cx.run_until_parked();
+    cx.read(|cx| assert!(window.read(cx).transient.is_some()));
+    cx.simulate_keystrokes(native_window, "down enter");
+    wait_for_api_condition(cx, clipboard_has_outcome);
+    assert_eq!(
+        clipboard(cx).as_deref(),
+        Some(r#"|{"kind":"selected","id":"f"}"#)
+    );
+    assert_eq!(wait_for_command(completion, cx), CommandOutcome::Completed);
+}
+
+#[gpui::test]
+fn a_binding_in_the_picker_view_switches_tabs(cx: &mut TestAppContext) {
+    let (_host, _key, window, native_window, _completion) =
+        start_live_input("transient.tabbed-rebound", cx);
+    let picker = transient_picker(&window, cx);
+    wait_for_api_condition(cx, |cx| picker_labels(&picker, cx) == ["all"]);
+    cx.simulate_keystrokes(native_window, "ctrl-j");
+    wait_for_api_condition(cx, |cx| picker_labels(&picker, cx) == ["files"]);
 }

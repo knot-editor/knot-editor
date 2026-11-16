@@ -25,6 +25,7 @@ impl KnotWindow {
             .filter_map(|entry| {
                 let name = entry.name.clone()?;
                 Some(PickerItem {
+                    tabs: Vec::new(),
                     detail: None,
                     hint: None,
                     icon: None,

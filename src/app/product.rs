@@ -82,7 +82,7 @@ use super::{
     },
     model::{Buffer, BufferModel},
     open::{OpenResource, load_resource},
-    picker::{Picker, PickerEntry, PickerEvent},
+    picker::{Picker, PickerAsk, PickerEntry, PickerEvent, PickerTab},
     terminal::session::TerminalSession,
     terminal::view::TerminalView,
     transient::{
@@ -1561,6 +1561,19 @@ impl KnotWindow {
         self.begin_owned_picker(Some(owner), title, items, highlights, cx)
     }
 
+    /// As [`Self::begin_picker`], with scope tabs.
+    pub(crate) fn begin_tabbed_picker(
+        &mut self,
+        owner: TransientOwner,
+        title: String,
+        items: Vec<knot_protocol::PickerItem>,
+        tabs: Vec<knot_protocol::PickerTab>,
+        highlights: Option<tokio::sync::watch::Sender<Option<String>>>,
+        cx: &mut Context<Self>,
+    ) -> Result<tokio::sync::oneshot::Receiver<TransientOutcome>, TransientError> {
+        self.present_entries(Some(owner), title, items, tabs, highlights, cx)
+    }
+
     /// Present a picker in the transient slot. With `highlights`, the ID of
     /// the highlighted item is published as it changes, starting with the
     /// initial one.
@@ -1569,6 +1582,18 @@ impl KnotWindow {
         owner: Option<TransientOwner>,
         title: String,
         items: Vec<knot_protocol::PickerItem>,
+        highlights: Option<tokio::sync::watch::Sender<Option<String>>>,
+        cx: &mut Context<Self>,
+    ) -> Result<tokio::sync::oneshot::Receiver<TransientOutcome>, TransientError> {
+        self.present_entries(owner, title, items, Vec::new(), highlights, cx)
+    }
+
+    fn present_entries(
+        &mut self,
+        owner: Option<TransientOwner>,
+        title: String,
+        items: Vec<knot_protocol::PickerItem>,
+        tabs: Vec<knot_protocol::PickerTab>,
         highlights: Option<tokio::sync::watch::Sender<Option<String>>>,
         cx: &mut Context<Self>,
     ) -> Result<tokio::sync::oneshot::Receiver<TransientOutcome>, TransientError> {
@@ -1581,22 +1606,24 @@ impl KnotWindow {
                 hint: item.hint,
                 icon: item.icon,
                 selected: item.selected,
+                tabs: item.tabs,
                 ..PickerEntry::new(item.label)
             })
             .collect();
-        self.present_picker(owner, title, Some(entries), highlights, None, cx)
+        self.present_picker(owner, title, (Some(entries), tabs), highlights, None, cx)
             .map(|(receiver, _)| receiver)
     }
 
     /// Present a lifecycle-authorized picker whose rows the owner supplies:
-    /// each query, starting with the empty one, is published on `queries`
-    /// and answered through the returned view.
+    /// each query with the active tab's ID, starting with the empty query,
+    /// is published on `queries` and answered through the returned view.
     pub(crate) fn begin_queried_picker(
         &mut self,
         owner: TransientOwner,
         title: String,
+        tabs: Vec<knot_protocol::PickerTab>,
         highlights: tokio::sync::watch::Sender<Option<String>>,
-        queries: tokio::sync::watch::Sender<Option<String>>,
+        queries: tokio::sync::watch::Sender<Option<PickerAsk>>,
         cx: &mut Context<Self>,
     ) -> Result<
         (
@@ -1608,7 +1635,7 @@ impl KnotWindow {
         self.present_picker(
             Some(owner),
             title,
-            None,
+            (None, tabs),
             Some(highlights),
             Some(queries),
             cx,
@@ -1616,14 +1643,14 @@ impl KnotWindow {
     }
 
     /// Present a picker over `entries`, or with supplied rows when there are
-    /// none. Entries carry the IDs that outcomes and highlights name.
+    /// none, with scope `tabs`. Entries carry the IDs that outcomes and highlights name.
     fn present_picker(
         &mut self,
         owner: Option<TransientOwner>,
         title: String,
-        entries: Option<Vec<PickerEntry>>,
+        (entries, tabs): (Option<Vec<PickerEntry>>, Vec<knot_protocol::PickerTab>),
         highlights: Option<tokio::sync::watch::Sender<Option<String>>>,
-        queries: Option<tokio::sync::watch::Sender<Option<String>>>,
+        queries: Option<tokio::sync::watch::Sender<Option<PickerAsk>>>,
         cx: &mut Context<Self>,
     ) -> Result<
         (
@@ -1638,6 +1665,19 @@ impl KnotWindow {
             Some(entries) => Picker::new(Some(title), entries, super::TRANSIENT_KEY_CONTEXT, cx),
             None => Picker::supplied(Some(title), super::TRANSIENT_KEY_CONTEXT, cx),
         });
+        if !tabs.is_empty() {
+            view.update(cx, |picker, cx| {
+                picker.set_tabs(
+                    tabs.into_iter()
+                        .map(|tab| PickerTab {
+                            id: tab.id,
+                            label: tab.label,
+                        })
+                        .collect(),
+                    cx,
+                )
+            });
+        }
         let weak = view.downgrade();
         let focus = view.read(cx).focus_handle(cx);
         let id_of = |picker: &Picker, entry: Option<usize>| {
@@ -1648,7 +1688,8 @@ impl KnotWindow {
             highlights.send_replace(id_of(picker, picker.selected_entry()));
         }
         if let Some(queries) = &queries {
-            queries.send_replace(Some(view.read(cx).query(cx)));
+            let picker = view.read(cx);
+            queries.send_replace(Some((picker.query(cx), picker.active_tab_id())));
         }
         let subscription = cx.subscribe(
             &view,
@@ -1660,9 +1701,9 @@ impl KnotWindow {
                         }
                         return;
                     }
-                    PickerEvent::Queried(query) => {
+                    PickerEvent::Queried(query, tab) => {
                         if let Some(queries) = &queries {
-                            queries.send_replace(Some(query.clone()));
+                            queries.send_replace(Some((query.clone(), tab.clone())));
                         }
                         return;
                     }

@@ -1175,8 +1175,8 @@ pub(crate) async fn dispose_editor_contributions(
 use crate::app::extensions::semantics::{SemanticError, ViewPresentation};
 use knot_protocol::{
     CompletionProviderRegistrationId, ConfirmationResult, FolderPickerResult, InputCompletion,
-    InputResult, InputUpdate, PickerItem, PickerResult, PickerRow, PickerUpdate, ProviderIdentity,
-    TreeAction, TreeProviderRegistrationId, ViewContentKind,
+    InputResult, InputUpdate, PickerItem, PickerResult, PickerRow, PickerTab, PickerUpdate,
+    ProviderIdentity, TreeAction, TreeProviderRegistrationId, ViewContentKind,
 };
 
 use crate::app::transient::{PromptText, TransientOutcome, TransientOwner};
@@ -1471,10 +1471,10 @@ enum FeedbackTarget {
 
 struct QueriedPicker {
     picker: WeakEntity<crate::app::picker::Picker>,
-    queries: tokio::sync::watch::Receiver<Option<String>>,
-    /// The query the caller last pulled; rows apply only while the field
-    /// still holds it.
-    delivered: Option<String>,
+    queries: tokio::sync::watch::Receiver<Option<crate::app::picker::PickerAsk>>,
+    /// The query and tab the caller last pulled; rows apply only while the
+    /// field and the active tab still hold them.
+    delivered: Option<crate::app::picker::PickerAsk>,
 }
 
 impl TransientSession {
@@ -1485,8 +1485,15 @@ impl TransientSession {
 
 /// The next thing a caller pulls from a session.
 enum Pulled {
-    Changed { session: u64, value: Option<String> },
-    Queried { session: u64, query: String },
+    Changed {
+        session: u64,
+        value: Option<String>,
+    },
+    Queried {
+        session: u64,
+        query: String,
+        tab: Option<String>,
+    },
     Settled(TransientOutcome),
 }
 
@@ -1495,12 +1502,17 @@ pub(crate) struct BeginPickerArguments {
     picker: PickerArguments,
     /// Whether the caller supplies the rows for each query.
     queried: bool,
+    tabs: Vec<PickerTab>,
 }
 impl HostArguments for BeginPickerArguments {
     fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
         Ok(Self {
             picker: PickerArguments::decode(reader)?,
             queried: reader.integer(5)? != 0,
+            tabs: serde_json::to_value(reader.command_arguments(6)?)
+                .ok()
+                .and_then(|value| serde_json::from_value::<Vec<PickerTab>>(value).ok())
+                .ok_or(DecodeError::Type("invalid picker tabs"))?,
         })
     }
 }
@@ -1522,6 +1534,7 @@ pub(crate) async fn begin_picker(
                 target,
             },
         queried,
+        tabs,
     } = arguments;
     let (sender, changes) = tokio::sync::watch::channel(None);
     let (query_sender, queries) = tokio::sync::watch::channel(None);
@@ -1531,8 +1544,14 @@ pub(crate) async fn begin_picker(
             target.as_deref(),
             move |window, cx| {
                 if queried {
-                    let (completion, picker) =
-                        window.begin_queried_picker(owner, title, sender, query_sender, cx)?;
+                    let (completion, picker) = window.begin_queried_picker(
+                        owner,
+                        title,
+                        tabs,
+                        sender,
+                        query_sender,
+                        cx,
+                    )?;
                     Ok((
                         completion,
                         Some(QueriedPicker {
@@ -1542,7 +1561,8 @@ pub(crate) async fn begin_picker(
                         }),
                     ))
                 } else {
-                    let completion = window.begin_picker(owner, title, items, Some(sender), cx)?;
+                    let completion =
+                        window.begin_tabbed_picker(owner, title, items, tabs, Some(sender), cx)?;
                     Ok((completion, None))
                 }
             },
@@ -1601,6 +1621,7 @@ fn picker_entry(row: PickerRow) -> crate::app::picker::PickerEntry {
         detail: item.detail,
         hint: item.hint,
         icon: item.icon,
+        tabs: item.tabs,
         ..crate::app::picker::PickerEntry::new(item.label)
     }
 }
@@ -1620,11 +1641,13 @@ pub(crate) async fn next_picker_event(
         .foreground(|host, cx| {
             let session = host.take_transient_session(owner, session)?;
             if let (Some(rows), Some(queried)) = (rows, session.queried.as_ref())
-                && let (Some(picker), Some(query)) =
-                    (queried.picker.upgrade(), queried.delivered.as_deref())
+                && let (Some(picker), Some((query, tab))) =
+                    (queried.picker.upgrade(), queried.delivered.as_ref())
             {
                 let entries = rows.into_iter().map(picker_entry).collect();
-                picker.update(cx, |picker, cx| picker.supply(query, entries, cx));
+                picker.update(cx, |picker, cx| {
+                    picker.supply(query, tab.as_deref(), entries, cx)
+                });
             }
             Some(session)
         })?
@@ -1635,7 +1658,15 @@ pub(crate) async fn next_picker_event(
 fn picker_update(pulled: Pulled) -> Result<PickerUpdate, TransientError> {
     match pulled {
         Pulled::Changed { session, value } => Ok(PickerUpdate::Highlighted { session, id: value }),
-        Pulled::Queried { session, query } => Ok(PickerUpdate::Queried { session, query }),
+        Pulled::Queried {
+            session,
+            query,
+            tab,
+        } => Ok(PickerUpdate::Queried {
+            session,
+            query,
+            tab,
+        }),
         Pulled::Settled(TransientOutcome::Picker(id)) => Ok(PickerUpdate::Selected { id }),
         Pulled::Settled(TransientOutcome::Dismissed) => Ok(PickerUpdate::Dismissed),
         Pulled::Settled(_) => Err(TransientError::Cancelled),
@@ -1699,14 +1730,18 @@ async fn next_change(
         Next::Settled(Err(_)) => Err(TransientError::Cancelled),
         Next::Queried => {
             let queried = session.queried.as_mut().expect("queried picker");
-            let query = queried
+            let (query, tab) = queried
                 .queries
                 .borrow_and_update()
                 .clone()
                 .unwrap_or_default();
-            queried.delivered = Some(query.clone());
+            queried.delivered = Some((query.clone(), tab.clone()));
             let session = context.foreground(|host, _| host.keep_transient_session(session))?;
-            Ok(Pulled::Queried { session, query })
+            Ok(Pulled::Queried {
+                session,
+                query,
+                tab,
+            })
         }
         Next::Changed | Next::Closed => {
             let value = session.changes.borrow_and_update().clone();

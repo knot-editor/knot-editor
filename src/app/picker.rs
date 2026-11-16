@@ -9,6 +9,12 @@
 //! the caller's order, as does an empty query. Events name items by their index in
 //! the list the picker was created with. The picker reports the highlighted
 //! item whenever it changes, so a consumer can preview it.
+//!
+//! A picker may show scope tabs under its field. The first tab is active
+//! initially, and cycling wraps. A local row tagged with tab ids shows only
+//! in those tabs, and an untagged row shows in all of them. A picker whose
+//! rows are supplied reports the active tab with each query and a tab change
+//! asks for new rows like a query change.
 
 use crate::app::convert::ThemePaint as _;
 use std::ops::Range;
@@ -50,6 +56,8 @@ pub(crate) struct PickerEntry {
     pub(crate) id: Option<String>,
     /// The picker opens with this row highlighted.
     pub(crate) selected: bool,
+    /// The tabs the row belongs to; it shows in every tab when empty.
+    pub(crate) tabs: Vec<String>,
     /// Byte ranges of the label and description a supplied row highlights.
     pub(crate) label_matches: Vec<Range<usize>>,
     pub(crate) description_matches: Vec<Range<usize>>,
@@ -70,10 +78,21 @@ pub(crate) enum PickerEvent {
     Highlighted(Option<usize>),
     Confirmed(usize),
     Dismissed,
-    /// A picker whose rows are supplied: the query changed and the owner
-    /// should answer with [`Picker::supply`].
-    Queried(String),
+    /// A picker whose rows are supplied: the query or the active tab, whose
+    /// ID is given, changed and the owner should answer with
+    /// [`Picker::supply`].
+    Queried(String, Option<String>),
 }
+
+/// One scope tab of a picker.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct PickerTab {
+    pub(crate) id: String,
+    pub(crate) label: String,
+}
+
+/// What supplied rows answer: the query and the active tab's ID.
+pub(crate) type PickerAsk = (String, Option<String>);
 
 /// One visible row: the entry index and its highlighted byte ranges.
 #[derive(Clone, Debug, PartialEq)]
@@ -87,6 +106,8 @@ pub(crate) struct Picker {
     title: Option<SharedString>,
     entries: Vec<PickerEntry>,
     matches: Vec<PickerMatch>,
+    tabs: Vec<PickerTab>,
+    active_tab: usize,
     selected: usize,
     /// The highlighted entry last reported.
     highlighted: Option<usize>,
@@ -97,8 +118,9 @@ pub(crate) struct Picker {
     /// Whether the owner supplies the rows for each query, shown as given,
     /// instead of the picker matching its entries.
     supplied: bool,
-    /// The query the supplied rows answer; `None` before the first answer.
-    answered: Option<String>,
+    /// The query and tab the supplied rows answer; `None` before the first
+    /// answer.
+    answered: Option<PickerAsk>,
     /// Enter was pressed on rows that did not answer the field. The field is
     /// frozen and the highlighted row is confirmed once they do.
     confirm_pending: bool,
@@ -138,7 +160,8 @@ impl Picker {
             |this: &mut Self, _input, _event: &TextInputEvent, cx| {
                 let query = this.input.read(cx).text().to_string();
                 if this.supplied {
-                    cx.emit(PickerEvent::Queried(query));
+                    let tab = this.active_tab_id();
+                    cx.emit(PickerEvent::Queried(query, tab));
                     return;
                 }
                 this.refilter(&query, cx);
@@ -150,6 +173,8 @@ impl Picker {
             title: title.map(Into::into),
             entries,
             matches: Vec::new(),
+            tabs: Vec::new(),
+            active_tab: 0,
             selected: 0,
             highlighted: None,
             input,
@@ -181,6 +206,57 @@ impl Picker {
 
     pub(crate) fn focus_handle(&self, cx: &App) -> FocusHandle {
         self.input.read(cx).focus_handle()
+    }
+
+    /// Show scope tabs, the first active. Rows are filtered by the active tab
+    /// from here on.
+    pub(crate) fn set_tabs(&mut self, tabs: Vec<PickerTab>, cx: &mut Context<Self>) {
+        self.tabs = tabs;
+        self.active_tab = 0;
+        let query = self.query(cx);
+        self.refilter(&query, cx);
+        self.highlighted = self.selected_entry();
+        cx.notify();
+    }
+
+    /// Whether the picker shows scope tabs.
+    pub(crate) fn has_tabs(&self) -> bool {
+        self.tabs.len() > 1
+    }
+
+    /// The active tab's ID, when the picker has tabs.
+    pub(crate) fn active_tab_id(&self) -> Option<String> {
+        self.tabs.get(self.active_tab).map(|tab| tab.id.clone())
+    }
+
+    /// Make the tab `delta` places from the active one active, wrapping.
+    /// False when the picker has fewer than two tabs.
+    pub(crate) fn cycle_tab(&mut self, delta: isize, cx: &mut Context<Self>) -> bool {
+        let count = self.tabs.len();
+        if count < 2 {
+            return false;
+        }
+        if !self.confirm_pending {
+            let next = (self.active_tab as isize + delta).rem_euclid(count as isize);
+            self.select_tab(next as usize, cx);
+        }
+        true
+    }
+
+    fn select_tab(&mut self, tab: usize, cx: &mut Context<Self>) {
+        if tab >= self.tabs.len() || tab == self.active_tab || self.confirm_pending {
+            return;
+        }
+        self.active_tab = tab;
+        let query = self.query(cx);
+        if self.supplied {
+            self.selected = 0;
+            cx.emit(PickerEvent::Queried(query, self.active_tab_id()));
+        } else {
+            self.refilter(&query, cx);
+            self.report_highlight(cx);
+        }
+        cx.notify();
     }
 
     /// The entry index of the selected row.
@@ -228,16 +304,18 @@ impl Picker {
         self.input.read(cx).text().to_string()
     }
 
-    /// Show `entries` in the given order as the rows for `query`, unless the
-    /// field has changed since. The highlight is reported even when it keeps
-    /// its index, because it may now name another row.
+    /// Show `entries` in the given order as the rows for `query` in the tab
+    /// with ID `tab`, unless the field or the active tab has changed since.
+    /// The highlight is reported even when it keeps its index, because it
+    /// may now name another row.
     pub(crate) fn supply(
         &mut self,
         query: &str,
+        tab: Option<&str>,
         entries: Vec<PickerEntry>,
         cx: &mut Context<Self>,
     ) {
-        if !self.supplied || self.query(cx) != query {
+        if !self.supplied || self.query(cx) != query || self.active_tab_id().as_deref() != tab {
             return;
         }
         self.matches = entries
@@ -250,7 +328,7 @@ impl Picker {
             })
             .collect();
         self.entries = entries;
-        self.answered = Some(query.to_owned());
+        self.answered = Some((query.to_owned(), tab.map(str::to_owned)));
         self.selected = 0;
         self.scroll.scroll_to_item(0, ScrollStrategy::Top);
         self.highlighted = self.selected_entry();
@@ -267,8 +345,13 @@ impl Picker {
         if self.supplied {
             return;
         }
+        let tab = self.active_tab_id();
+        let in_tab = |item: &PickerEntry| {
+            item.tabs.is_empty() || tab.as_ref().is_none_or(|tab| item.tabs.contains(tab))
+        };
         if query.trim().is_empty() {
             self.matches = (0..self.entries.len())
+                .filter(|entry| in_tab(&self.entries[*entry]))
                 .map(|entry| PickerMatch {
                     entry,
                     label: Vec::new(),
@@ -284,6 +367,9 @@ impl Picker {
         let query = Query::new(query, &styles);
         let mut scored = Vec::new();
         for (entry, item) in self.entries.iter().enumerate() {
+            if !in_tab(item) {
+                continue;
+            }
             let fields = [
                 Some(item.label.as_str()),
                 item.description.as_deref(),
@@ -328,7 +414,7 @@ impl Picker {
     }
 
     pub(crate) fn confirm(&mut self, cx: &mut Context<Self>) {
-        if self.supplied && self.answered.as_deref() != Some(self.query(cx).as_str()) {
+        if self.supplied && self.answered != Some((self.query(cx), self.active_tab_id())) {
             self.confirm_pending = true;
             return;
         }
@@ -398,6 +484,46 @@ pub(crate) fn highlighted(text: String, ranges: &[Range<usize>], color: Hsla) ->
         ..HighlightStyle::default()
     };
     StyledText::new(text).with_highlights(ranges.iter().map(|range| (range.clone(), style)))
+}
+
+impl Picker {
+    /// The strip of scope tabs, each clickable.
+    fn render_tabs(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = theme(cx);
+        let entity = cx.entity();
+        div()
+            .px(zoom::rems(tokens::list::PICKER_INSET))
+            .py_1()
+            .flex()
+            .flex_row()
+            .gap_1()
+            .border_b_1()
+            .border_color(theme.paint_color(color::BORDER))
+            .children(self.tabs.iter().enumerate().map(|(index, tab)| {
+                let active = index == self.active_tab;
+                let entity = entity.clone();
+                div()
+                    .id(("picker-tab", index))
+                    .debug_selector(move || format!("picker-tab-{index}"))
+                    .px_2()
+                    .rounded(zoom::rems(tokens::radius::MD))
+                    .text_xs()
+                    .when(active, |chip| {
+                        chip.bg(theme.paint_color(color::LIST_SELECTED_BACKGROUND))
+                            .text_color(theme.paint_color(color::LIST_SELECTED_FOREGROUND))
+                    })
+                    .when(!active, |chip| {
+                        chip.text_color(theme.paint_color(color::TEXT_MUTED))
+                            .hover(|style| {
+                                style.bg(theme.paint_color(color::LIST_HOVER_BACKGROUND))
+                            })
+                    })
+                    .child(tab.label.clone())
+                    .on_click(move |_, _, cx| {
+                        entity.update(cx, |picker, cx| picker.select_tab(index, cx));
+                    })
+            }))
+    }
 }
 
 impl Render for Picker {
@@ -541,6 +667,9 @@ impl Render for Picker {
                     )
                     .child(div().flex_1().child(self.input.clone())),
             )
+            .when(self.tabs.len() > 1, |panel| {
+                panel.child(self.render_tabs(cx))
+            })
             .when(rows == 0, |panel| {
                 panel.child(
                     div()
@@ -563,7 +692,7 @@ mod tests {
     use crate::app::keys::Keystroke;
     use gpui::{AppContext as _, Entity, TestAppContext};
 
-    use super::{Picker, PickerEntry, PickerEvent};
+    use super::{Picker, PickerEntry, PickerEvent, PickerTab};
 
     fn entry(label: &str, description: Option<&str>) -> PickerEntry {
         PickerEntry {
@@ -770,7 +899,12 @@ mod tests {
             ..PickerEntry::new(label)
         };
         picker.update(cx, |picker, cx| {
-            picker.supply("", vec![row("zed", vec![]), row("alpha", vec![0..2])], cx);
+            picker.supply(
+                "",
+                None,
+                vec![row("zed", vec![]), row("alpha", vec![0..2])],
+                cx,
+            );
             assert_eq!(labels(picker), ["zed", "alpha"]);
             assert_eq!(picker.highlights(1).0, [0..2]);
         });
@@ -781,10 +915,15 @@ mod tests {
         });
         picker.update(cx, |picker, cx| {
             // An answer to an earlier query is dropped.
-            picker.supply("", vec![row("stale", vec![])], cx);
+            picker.supply("", None, vec![row("stale", vec![])], cx);
             assert_eq!(labels(picker), ["zed", "alpha"]);
             // The matcher plays no part: a row the query cannot match shows.
-            picker.supply("a", vec![row("beta", vec![]), row("omega", vec![])], cx);
+            picker.supply(
+                "a",
+                None,
+                vec![row("beta", vec![]), row("omega", vec![])],
+                cx,
+            );
             assert_eq!(labels(picker), ["beta", "omega"]);
             picker.move_selection(1, cx);
             picker.confirm(cx);
@@ -793,7 +932,7 @@ mod tests {
             *events.borrow(),
             [
                 PickerEvent::Highlighted(Some(0)),
-                PickerEvent::Queried("a".into()),
+                PickerEvent::Queried("a".into(), None),
                 PickerEvent::Highlighted(Some(0)),
                 PickerEvent::Highlighted(Some(1)),
                 PickerEvent::Confirmed(1),
@@ -820,7 +959,7 @@ mod tests {
             ..PickerEntry::new(label)
         };
         picker.update(cx, |picker, cx| {
-            picker.supply("", vec![row("old")], cx);
+            picker.supply("", None, vec![row("old")], cx);
             picker.insert_text("ab", cx);
             picker.confirm(cx);
             // Typing after the held Enter does not reach the field.
@@ -829,8 +968,8 @@ mod tests {
         });
         picker.update(cx, |picker, cx| {
             // An answer to an older query does not release it.
-            picker.supply("", vec![row("stale")], cx);
-            picker.supply("ab", vec![row("new")], cx);
+            picker.supply("", None, vec![row("stale")], cx);
+            picker.supply("ab", None, vec![row("new")], cx);
         });
         assert!(events.borrow().contains(&PickerEvent::Confirmed(0)));
         assert_eq!(labels_of(&picker, cx), ["new"]);
@@ -926,6 +1065,96 @@ mod tests {
                 PickerEvent::Confirmed(2),
                 PickerEvent::Dismissed,
             ]
+        );
+    }
+
+    fn tabs() -> Vec<PickerTab> {
+        ["all", "files", "actions"]
+            .map(|id| PickerTab {
+                id: id.into(),
+                label: id.to_uppercase(),
+            })
+            .into()
+    }
+
+    fn tagged(label: &str, tabs: &[&str]) -> PickerEntry {
+        PickerEntry {
+            tabs: tabs.iter().map(|tab| (*tab).to_owned()).collect(),
+            ..PickerEntry::new(label)
+        }
+    }
+
+    #[gpui::test]
+    fn the_active_tab_filters_rows_before_matching_and_cycling_wraps(cx: &mut TestAppContext) {
+        let picker = picker(
+            vec![
+                tagged("main.rs", &["all", "files"]),
+                tagged("Save", &["all", "actions"]),
+                tagged("Save File", &["actions"]),
+                entry("Everywhere", None),
+            ],
+            cx,
+        );
+        picker.update(cx, |picker, cx| {
+            // A picker without tabs shows every row.
+            assert!(!picker.cycle_tab(1, cx));
+            assert_eq!(picker.visible_entries(), [0, 1, 2, 3]);
+            picker.set_tabs(tabs(), cx);
+            assert_eq!(picker.active_tab_id().as_deref(), Some("all"));
+            // Untagged rows show in every tab.
+            assert_eq!(picker.visible_entries(), [0, 1, 3]);
+            assert!(picker.cycle_tab(1, cx));
+            assert_eq!(picker.visible_entries(), [0, 3]);
+            assert!(picker.cycle_tab(1, cx));
+            assert_eq!(picker.visible_entries(), [1, 2, 3]);
+            picker.set_query("save", cx);
+            assert_eq!(picker.visible_entries(), [1, 2]);
+            assert!(picker.cycle_tab(1, cx));
+            assert_eq!(picker.active_tab_id().as_deref(), Some("all"));
+            assert_eq!(picker.visible_entries(), [1]);
+            assert!(picker.cycle_tab(-1, cx));
+            assert_eq!(picker.active_tab_id().as_deref(), Some("actions"));
+            assert_eq!(picker.visible_entries(), [1, 2]);
+        });
+    }
+
+    #[gpui::test]
+    fn a_tab_change_asks_again_and_answers_for_another_tab_drop(cx: &mut TestAppContext) {
+        let picker = cx.new(|cx| Picker::supplied(Some("Pick".into()), "picker", cx));
+        let events = Rc::new(RefCell::new(Vec::new()));
+        let observed = events.clone();
+        let _subscription = cx.update(|cx| {
+            cx.subscribe(&picker, move |_, event, _| {
+                observed.borrow_mut().push(event.clone())
+            })
+        });
+        let row = |label: &str| PickerEntry {
+            id: Some(label.to_owned()),
+            ..PickerEntry::new(label)
+        };
+        picker.update(cx, |picker, cx| {
+            picker.set_tabs(tabs(), cx);
+            picker.supply("", Some("all"), vec![row("everything")], cx);
+            assert!(picker.cycle_tab(1, cx));
+            // The old rows stay until the new tab is answered.
+            assert_eq!(picker.visible_labels(), ["everything"]);
+            picker.supply("", Some("all"), vec![row("stale")], cx);
+            assert_eq!(picker.visible_labels(), ["everything"]);
+            picker.supply("", Some("files"), vec![row("main.rs")], cx);
+            assert_eq!(picker.visible_labels(), ["main.rs"]);
+            // Enter on rows for another tab waits for the answer.
+            assert!(picker.cycle_tab(1, cx));
+            picker.confirm(cx);
+            assert!(picker.cycle_tab(1, cx));
+            assert_eq!(picker.active_tab_id().as_deref(), Some("actions"));
+        });
+        let events = events.borrow();
+        assert!(events.contains(&PickerEvent::Queried("".into(), Some("files".into()))));
+        assert!(events.contains(&PickerEvent::Queried("".into(), Some("actions".into()))));
+        assert!(
+            !events
+                .iter()
+                .any(|event| matches!(event, PickerEvent::Confirmed(_)))
         );
     }
 }

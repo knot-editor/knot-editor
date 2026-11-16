@@ -352,9 +352,9 @@ picker:
 
 ```text
 showPicker({ onHighlight, onQuery })
-  beginPicker ──> highlighted(session, id) | queried(session, query) ─┐
-  callback awaited                                                    │ repeat
-  nextPickerEvent(session, rows?) ──> highlighted | queried ──────────┘
+  beginPicker ──> highlighted(session, id) | queried(session, query, tab) ─┐
+  callback awaited                                                          │ repeat
+  nextPickerEvent(session, rows?) ──> highlighted | queried ────────────────┘
                                   └─> selected | dismissed
 ```
 
@@ -362,9 +362,18 @@ With `onQuery` the picker is created without rows and does no matching: each
 pull of a query is answered by the rows the next pull carries, which the
 picker shows in the order given with the supplied ranges, and a query is
 answered before the highlight it replaces. Rows apply only while the field
-still holds the query last delivered; otherwise they are dropped. Enter on
+and the active tab still hold the query and tab last delivered; otherwise they
+are dropped. Enter on
 rows that do not answer the field waits for the rows that do, freezing the
 field meanwhile, and then confirms the highlighted row.
+
+A picker may show scope tabs in a strip under its field, the first active.
+Local rows tagged with tab IDs show only in those tabs, untagged rows in
+every tab, and the active tab filters rows before matching. With `onQuery` the
+active tab's ID travels with each query, and a tab change asks again like a
+query change. Tab and Shift+Tab run `picker.next-tab` and
+`picker.previous-tab`, bound in the native `picker` view
+([keymaps](commands.md#picker-tabs)); clicking a tab switches to it.
 
 The matcher serves every list that filters by a typed query. Its styles
 (`prefix`, `substring`, `flex`, `orderless`) are the user's ordered

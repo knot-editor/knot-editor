@@ -60,6 +60,7 @@ fn a_transient_picker_and_input_settle_from_keys(cx: &mut TestAppContext) {
     let (window, model) = headless_window(&documents, cx);
     let items = ["one", "two", "three"]
         .map(|label| PickerItem {
+            tabs: Vec::new(),
             id: label.to_uppercase(),
             label: label.into(),
             description: None,

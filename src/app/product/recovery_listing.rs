@@ -52,6 +52,7 @@ impl KnotWindow {
                 .iter()
                 .enumerate()
                 .map(|(index, snapshot)| PickerItem {
+            tabs: Vec::new(),
                     detail: None,
                     hint: None,
                     icon: None,

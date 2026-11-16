@@ -10,6 +10,7 @@ pub(super) const ABOUT_TITLE: &str = "About Knot";
 impl KnotWindow {
     pub(crate) fn start_about(&mut self, cx: &mut Context<Self>) {
         let row = |id: &str, label: &str, description: &str| PickerItem {
+            tabs: Vec::new(),
             icon: None,
             selected: false,
             id: id.into(),

@@ -47,3 +47,21 @@ test("an input records the completions an object answer carries", async () => {
     [{ label: "beta", value: "beta", detail: "word" }],
   ]);
 });
+
+test("a picker with tabs asks again with the active tab when the tab or query changes", async () => {
+  const window = host.openWindow();
+  host.query("a");
+  host.selectTab("files");
+  host.answer("showPicker", { kind: "dismissed" });
+  const asked: [string, string | null][] = [];
+  await workbench.showPicker({
+    title: "Everywhere",
+    target: window,
+    tabs: [{ id: "all", label: "All" }, { id: "files", label: "Files" }],
+    onQuery: (query, tab) => {
+      asked.push([query, tab]);
+      return [];
+    },
+  });
+  assert.deepEqual(asked, [["", "all"], ["a", "all"], ["a", "files"]]);
+});

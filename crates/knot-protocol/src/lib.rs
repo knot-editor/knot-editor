@@ -441,8 +441,15 @@ pub enum ViewContentKind {
     Text,
 }
 
-/// One selectable row offered to an extension picker.
+/// One scope tab of an extension picker.
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct PickerTab {
+    pub id: String,
+    pub label: String,
+}
+
+/// One selectable row offered to an extension picker.
+#[derive(Clone, Debug, Default, PartialEq, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PickerItem {
     pub id: String,
@@ -458,6 +465,9 @@ pub struct PickerItem {
     /// The picker opens with this row highlighted.
     #[serde(default)]
     pub selected: bool,
+    /// The IDs of the tabs the row shows in; every tab when empty.
+    #[serde(default)]
+    pub tabs: Vec<String>,
 }
 
 /// One row a query-driven picker is given for a query: an item with the
@@ -487,9 +497,19 @@ pub enum PickerResult {
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum PickerUpdate {
-    Highlighted { session: u64, id: Option<String> },
-    Queried { session: u64, query: String },
-    Selected { id: String },
+    Highlighted {
+        session: u64,
+        id: Option<String>,
+    },
+    Queried {
+        session: u64,
+        query: String,
+        /// The ID of the active tab, for a picker with tabs.
+        tab: Option<String>,
+    },
+    Selected {
+        id: String,
+    },
     Dismissed,
 }
 

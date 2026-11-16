@@ -81,6 +81,7 @@ fn keybinding_item(
         _ => {}
     }
     PickerItem {
+        tabs: Vec::new(),
         icon: None,
         selected: false,
         id: index.to_string(),

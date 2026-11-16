@@ -32,6 +32,7 @@ impl KnotWindow {
             .then(|| crate::app::languages::effective_language(model.read(cx), cx));
         let mut choices = vec![None];
         let mut items = vec![PickerItem {
+            tabs: Vec::new(),
             detail: None,
             hint: None,
             icon: None,
@@ -54,6 +55,7 @@ impl KnotWindow {
                 language.id.clone()
             };
             items.push(PickerItem {
+                tabs: Vec::new(),
                 detail: None,
                 hint: None,
                 icon: None,

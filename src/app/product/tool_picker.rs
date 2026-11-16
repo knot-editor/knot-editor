@@ -18,6 +18,7 @@ impl KnotWindow {
         let items = tools
             .into_iter()
             .map(|(id, title)| PickerItem {
+                tabs: Vec::new(),
                 detail: None,
                 hint: None,
                 icon: None,

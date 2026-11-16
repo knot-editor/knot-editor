@@ -2071,6 +2071,15 @@ declare module "knot" {
     readonly icon?: IconRef | null;
     /** The picker opens with this row highlighted; the first such row wins. */
     readonly selected?: boolean;
+    /** The IDs of the `tabs` this row shows in; it shows in every tab when
+     * omitted or empty. Rows an `onQuery` returns are shown as given, so
+     * the tag is for `items`. */
+    readonly tabs?: readonly string[] | null;
+  }
+  /** One scope tab of a picker. */
+  export interface PickerTab {
+    readonly id: string;
+    readonly label: string;
   }
   /** Selection or explicit dismissal; dismissal is not an operational failure. */
   export type PickerResult = Readonly<
@@ -2106,10 +2115,23 @@ declare module "knot" {
      * ranges they carry highlighted. Calls are serial; while one runs, later
      * queries collapse into the latest. An answer applies only while the
      * field still holds the query it answers. A throw stops further calls
-     * and is rethrown once the picker settles. `onHighlight` works as it does
-     * with `items`.
+     * and is rethrown once the picker settles. `tab` is the active tab's ID,
+     * or null without `tabs`; a tab change calls it again, and an answer
+     * applies only while the field and the tab still hold what it answers.
+     * `onHighlight` works as it does with `items`.
      */
-    readonly onQuery?: (query: string) => readonly PickerRow[] | Promise<readonly PickerRow[]>;
+    readonly onQuery?: (
+      query: string,
+      tab: string | null,
+    ) => readonly PickerRow[] | Promise<readonly PickerRow[]>;
+    /**
+     * Scope tabs shown under the field, the first active; by convention an
+     * "All" tab leads. The IDs must be unique. Tab and Shift+Tab switch
+     * tabs, as the commands `picker.next-tab` and `picker.previous-tab`
+     * bound in the `picker` view; clicking a tab does too. With `items`, a
+     * row shows in the tabs its `tabs` names before matching.
+     */
+    readonly tabs?: readonly PickerTab[];
     /**
      * Called with the highlighted item's ID, or null when nothing matches,
      * first for the initial highlight and then whenever it changes. Calls are
