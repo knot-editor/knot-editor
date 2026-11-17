@@ -216,6 +216,25 @@ contributions, and semantic providers even when buffer models or views are still
 retained. No final author callback or disposer retry is required. Cancellation
 listener failure cannot prevent other listeners from receiving cancellation.
 
+## Providers
+
+A package shares a feature with others by registering a named provider, an
+object of methods. The application keeps registrations in registration order,
+each owned by its lifecycle (`knot_model::providers`); lifecycle teardown drops
+them with the other registrations. `providers.get` answers the latest
+registration of a name and `providers.all` every one, oldest first, so one
+package overrides another by registering later. The application never
+interprets a name or a method.
+
+A call through a handle is a host request of the caller that enqueues a root in
+the provider's package, like a semantic provider callback, with the method
+name, a JSON argument and the caller's command window. The provider sees that
+window as its own target, and its JSON result or thrown message settles the
+caller's request. A handle names one registration: once it is disposed, a call
+rejects `ProviderNotFound`. A package runs one root at a time, so a call to its
+own provider would wait on itself; the host rejects it, and a package uses its
+own code directly.
+
 ## Application metadata queries
 
 Queries derive documents from the application collection and windows, panes,

@@ -1,6 +1,6 @@
 # D198 — Extension providers
 
-Status: 🚧 approved, not started. Roadmap item [D198](../roadmap.md).
+Status: 🚧 checkpoint 1 awaiting review. Roadmap item [D198](../roadmap.md).
 
 ## Goal
 
@@ -100,7 +100,7 @@ Deleting back to `:` brings back the usual Ex completions.
 
 ## Checkpoints
 
-### 1. Provider registry and cross-package calls
+### 1. Provider registry and cross-package calls — ✅ implemented, review gate pending
 
 Deliverables: `providers.register`, `providers.get`, and `providers.all` in the
 public API and the in-memory test host, cross-isolate calls with the caller's
@@ -117,6 +117,20 @@ Fake-host tests for the same lookup rules. `just check`.
 Review gate: a `post-init.js` registering `try.*` commands that register a
 provider from personal config, call Go to File-independent sample providers,
 and show the results in a message.
+
+Implemented ✅: the registry, calls, cleanup, product tests (including a
+personal-config override), fake-host tests, the contract test, and the
+providers sections in the [extension host](../architecture/extension-host.md#providers)
+and [extension guide](../extension-api.md#share-a-feature-with-other-packages).
+Scope decisions made while implementing:
+- A provider method receives one JSON argument and a call context
+  `{ window }`, so `rows(query)` on a handle is `rows(query, context)` in the
+  provider, and `provideCompletions(request, context)` keeps its shape in
+  checkpoint 2.
+- A package calling its own provider is rejected with `UnsupportedOperation`
+  rather than left to deadlock.
+- A disposed or restarted registration rejects with `ProviderNotFound`; a
+  provider's throw rejects with `ProviderFailure` and its message.
 
 **Implementation context**
 - Mirror editor completion providers for the reverse call path:

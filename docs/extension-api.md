@@ -1021,6 +1021,37 @@ contributed view's `copy` registration shares the native command name and handle
 it only when that view instance claims the command. Dispose these registrations
 when removing the feature; native definitions retain their application ownership.
 
+## Share a feature with other packages
+
+A package offers a feature to others by registering a named provider; others
+find it by name and call it, so they reuse the feature rather than copy it:
+
+```ts
+import { providers } from "knot";
+
+// In the providing package.
+await providers.register("example.greeter", {
+  async greet(name: string, context) {
+    return `hello ${name}`; // context.window is the caller's window, or null
+  },
+});
+
+// In another package, which declares the interface it expects.
+interface Greeter { greet(name: string): Promise<string> }
+const greeter = await providers.get<Greeter>("example.greeter");
+const text = greeter === null ? "no greeter" : await greeter.greet("knot");
+```
+
+Each method takes one JSON argument and returns JSON, since the call runs in the
+providing package. `get` returns the latest registration of a name, so a later
+package or personal config replaces a provider for everyone; `all` returns
+every registration, oldest first, for features several packages contribute to.
+Look a provider up when the feature runs, and fall back when it is missing: a
+handle rejects `ProviderNotFound` once its package unloads or restarts. Call
+your own package's code directly, never through `providers`. The full contract
+is `providers` in
+[`knot.d.ts`](../crates/knot-host/src/js/knot.d.ts).
+
 ## Identity and lifetime
 
 | Identity | Ownership and validity | Persist? |
