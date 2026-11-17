@@ -1,6 +1,6 @@
 # D156 — Fewer host round trips per key
 
-Status: 🚧 checkpoint 1 awaiting review. Source: [roadmap](../roadmap.md) D156.
+Status: 🚧 checkpoint 1 done; checkpoint 2 in progress. Source: [roadmap](../roadmap.md) D156.
 
 ## Goal
 
@@ -73,30 +73,12 @@ per-key request counts so they cannot creep back.
 
 ### 1. Request counter and baseline ✅
 
-Deliverables: a test-support count of foreground host requests on the
-extension host; a Vim test that presses `j`, `w`, and `x` with chrome and
-word highlight active and asserts the current counts; the baseline counts
-and per-case time recorded in this plan.
-
-Validation: the new test; `just check`.
-
-Review gate: the counts match the analysis above, and the counter measures
-what a real key costs.
-
-**Result:** the counter already existed as `work_counts::request`, fed by
-`handle_request` and read through `TestEditor::work_per_key`, so no counter
-code was added. The new Vim test
+The counter already existed as `work_counts::request`, read through
+`TestEditor::work_per_key`. The Vim test
 `a_key_costs_a_bounded_number_of_requests_across_extensions` runs Vim, chrome,
 and word highlight and pins the baseline of foreground requests per key
-(settled after each): `j` 21, `w` 17, `x` 16. Per-case time: the test runs in
-about 0.13 s in debug.
-
-**Implementation context:** count in `ProductExtensionHost::handle_request`
-(`src/app/extensions/host.rs`) behind `test-support`, exposed through
-`knot::test_support` like `pending_view_request_count`. The test lives in
-`crates/knot-ext-vim/tests/vim.rs`, using its `TestProduct` setup with the
-chrome and word-highlight packages loaded; settle after each key before
-reading the count.
+(settled after each): `j` 21, `w` 17, `x` 16. It runs in about 0.13 s in
+debug.
 
 ### 2. Optimized host glue in debug
 
