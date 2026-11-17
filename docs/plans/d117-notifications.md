@@ -1,6 +1,6 @@
 # D117: Non-modal notifications
 
-Status: 🚧 approved, checkpoint 1 done, checkpoint 2 awaiting review. Roadmap item [D117](../roadmap.md).
+Status: 🚧 approved, checkpoints 1 and 2 done. Roadmap item [D117](../roadmap.md).
 
 ## Outcome
 
@@ -128,43 +128,38 @@ the four `notifications.*` settings ([settings](../settings.md)), and the
 `notifications.timeout` is in seconds (default 8) and `notifications.maxVisible`
 defaults to 3. A timed-out popup hides in its own window only; closing one marks
 the notice read everywhere. Still open: the "+N more" pill paints but opens
-nothing until checkpoint 3 wires it to the panel, and checkpoint 2 replaces the
+nothing until checkpoint 4 wires it to the panel, and checkpoint 2 replaces the
 temporary Developer: Raise Sample Notices command with `Try:` commands.
 
-### 2. Extension API ✅ (awaiting review)
+### 2. Extension API ✅
 
-Deliverables: `showNotice`, the `notifications` snapshot field and
-`notificationsChanged` event, mark-read, dismiss, and clear; removal of
-`showMessage`; Explorer and Projects moved to notices; the debug command
-replaced by a `post-init.js` with `Try:` commands.
+Approved. `workbench.showNotice` and the store operations, the snapshot's
+`notifications` and the `notificationsChanged` event, and the removal of
+`showMessage` are in place ([extension guide](../extension-api.md#tell-the-user-without-interrupting)).
+Explorer and Projects report failures as `warning` notices. A notice without a
+`target` shows in every window, so those reports no longer stay in the
+command's window. The personal `post-init.js` carries the `Try:` commands.
 
-Validation: handler and observation tests (validation errors, target
-resolution, lifecycle teardown leaves recorded notices); contract tests; the
-Explorer and Projects tests updated for notices.
+### 3. Popup countdown ring
 
-Review gate: the user runs the `Try:` commands for each severity, actions,
-targets, and positions.
+Deliverables: the close button is always visible, replacing the hover-only
+button. On an auto-dismissing popup a thin ring in the severity accent drains
+around it over `notifications.timeout`; a sticky popup shows the plain button.
+Pointing at the stack freezes every ring along with its timer, and leaving
+resumes both.
 
-Done: `showNotice` returns the notice ID; the snapshot's `notifications` and
-`notificationsChanged` (carrying the whole history) are derived by comparing
-snapshots; `showMessage` and its native prompt are gone. A notice without a
-`target` shows in every window, so Explorer reports now pop up everywhere
-rather than in the command's window. The personal `post-init.js` has the
-`Try: Notice ...`, `Try: Notices ...`, and `Try: Notifications ...` commands.
+Validation: a window test that a ring's progress follows the timer, freezes
+while the stack is hovered, resumes after, and is absent on a sticky popup.
+
+Review gate: the user watches popups of each severity and `autoDismiss` setting
+with the `Try: Notice ...` commands, including pointing at the stack.
 
 Implementation context:
-- Handlers in `src/app/extensions/host/handlers.rs` next to `show_message`
-  (`#[host_operation]`), argument decoding as `MessageArguments`.
-- Snapshot and events in `src/app/application_observation.rs` and
-  `crates/knot-model/src/observation.rs`.
-- Public types in `crates/knot-host/src/js/knot.d.ts`,
-  `docs/extension-api.md`, the fake host in `scripts/extensions/testing/host.ts`,
-  and `scripts/extensions/contract.test.ts`.
-- Callers: `extensions/@knot/explorer/src/actions.ts`,
-  `extensions/@knot/projects/src/report.ts`; the removal test in
-  `src/app/product/tests/transient.rs`.
+- `src/app/product/notifications.rs` owns the cards, timers, and hover pause.
+- Track elapsed time per card rather than only the timer task, so the ring and
+  the pause agree.
 
-### 3. Notifications panel
+### 4. Notifications panel
 
 Deliverables: the `@knot/notifications` package with the dock tool, groups,
 rows, context menu actions, toolbar actions, empty state, bell status item,
@@ -188,7 +183,7 @@ Implementation context:
 - A new tree primitive goes through `src/app/tree_view.rs`,
   `src/app/extensions/semantics.rs`, and `knot.d.ts`.
 
-### 4. Configuration warnings and docs
+### 5. Configuration warnings and docs
 
 Deliverables: notices at every `knot::config` warning site, held until the first
 window; the Open Personal Configuration command; architecture, decision, and
