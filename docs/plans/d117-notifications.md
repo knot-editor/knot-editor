@@ -1,6 +1,6 @@
 # D117: Non-modal notifications
 
-Status: 🚧 approved, checkpoint 1 implemented and awaiting review. Roadmap item [D117](../roadmap.md).
+Status: 🚧 approved, checkpoint 1 done. Roadmap item [D117](../roadmap.md).
 
 ## Outcome
 
@@ -122,47 +122,14 @@ listing setting warnings.
 
 ### 1. Native store and popups ✅
 
-Implemented, awaiting the review gate. Scope decisions: `notifications.timeout`
-is a number of seconds (default 8) and `notifications.maxVisible` defaults to 3,
-both open to tuning at the review; a timed-out popup hides in its own window
-only, while closing one marks the notice read everywhere; the "+N more" pill
-paints but does nothing until checkpoint 3 wires it to the panel. The review's
-`Try:` commands live in the personal `post-init.js` (positions and popups on or
-off).
-
-Deliverables: the `knot-model` notification store; the application global; the
-popup overlay with severity icons, actions, close, hover pause, timeout, the
-"+N more" pill (opening the panel is wired in checkpoint 3), and entry and exit
-animation; the four settings; the color keys. The temporary sample command
-lets the review see popups before the API exists.
-
-Validation: model tests for eviction, read state, per-window visibility,
-auto-dismiss defaults, and visible-count limits; product tests that a notice
-pops up in the right windows, times out, pauses under the pointer, closes,
-runs an action in its window, and that `notifications.popups` false records
-without showing.
-
-Review gate: the user reviews the look in light and dark, Islands and flat,
-and each position, through a temporary Developer: Raise Sample Notices command
-that checkpoint 2 replaces with `Try:` commands.
-
-Implementation context:
-- Add `crates/knot-model/src/notifications.rs` (+ `notifications/tests.rs`),
-  mirroring `status_bar.rs`'s registry with lifecycle removal.
-- Add `src/app/notifications.rs` with an `ApplicationNotifications` global,
-  registered in `src/app/mod.rs` like `ApplicationStatusBar`
-  (`src/app/status_bar.rs`).
-- Paint the overlay in `KnotWindow::render` (`src/app/product/render.rs`) beside
-  the palette and transient overlays; reuse `tokens`, `zoom::rems`, and the icon
-  set (`crates/knot-model/src/icons.rs`); tooltips and buttons through
-  `src/app/components.rs`. Timers on the window entity, revalidated by notice
-  ID.
-- Color keys go in the `color_keys!` table in `crates/knot-model/src/theme.rs`;
-  settings beside `STATUS_BAR_VISIBLE` in `crates/knot-model/src/settings.rs`,
-  documented in `docs/settings.md`.
-- Action dispatch reuses the status item click path (captured window command
-  target) in `render_status_bar`.
-- Tests in a new `src/app/product/tests/notifications.rs`.
+Approved. The `knot-model` store, the application global, the popup overlay,
+the four `notifications.*` settings ([settings](../settings.md)), and the
+`notification.*` color keys are in place; every bundled theme sets the keys.
+`notifications.timeout` is in seconds (default 8) and `notifications.maxVisible`
+defaults to 3. A timed-out popup hides in its own window only; closing one marks
+the notice read everywhere. Still open: the "+N more" pill paints but opens
+nothing until checkpoint 3 wires it to the panel, and checkpoint 2 replaces the
+temporary Developer: Raise Sample Notices command with `Try:` commands.
 
 ### 2. Extension API
 
