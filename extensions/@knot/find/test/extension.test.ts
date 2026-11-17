@@ -7,6 +7,7 @@ import {
   CLOSE,
   CURRENT_COLOR,
   FIND,
+  HISTORY,
   MATCH_COLOR,
   NEXT,
   PREVIOUS,
@@ -473,4 +474,46 @@ test("find in selection from the palette keeps a multi-line selection as the sco
   assert.deepEqual(scope(window), [0, LINE_TWO[1]]);
   await host.typeInBar("find", "query", "foo", window);
   assert.deepEqual(scope(window), [0, LINE_TWO[1]]);
+});
+
+const settled = () => new Promise((resolve) => setTimeout(resolve, 0));
+const fieldHistory = (window: WindowTarget, bar: string) =>
+  host.editorBars(window).bars.find((candidate) => candidate.id === bar)?.fields[0]?.history;
+
+test("queries and replacements are remembered newest first, capped, and recalled after a restart", async () => {
+  const { window } = await setup();
+  await host.run(REPLACE, { window });
+  await host.typeInBar("find", "query", "foo", window);
+  await host.typeInBar("replace", "replacement", "qux", window);
+  await host.run(REPLACE_ALL, { window });
+  await host.typeInBar("find", "query", "bar", window);
+  await host.run(NEXT, { window });
+  await host.typeInBar("find", "query", "foo", window);
+  await host.run(NEXT, { window });
+
+  assert.deepEqual(fieldHistory(window, "find"), ["foo", "bar"]);
+  assert.deepEqual(fieldHistory(window, "replace"), ["qux"]);
+
+  // A new session reads the saved lists without any earlier state.
+  await settled();
+  const saved = host.record(HISTORY)!;
+  host.reset();
+  host.setRecord(HISTORY, saved);
+  const window2 = host.openWindow({ documents: [host.addDocument({ text: TEXT })] });
+  await start();
+  await host.run(REPLACE, { window: window2 });
+  assert.deepEqual(fieldHistory(window2, "find"), ["foo", "bar"]);
+  assert.deepEqual(fieldHistory(window2, "replace"), ["qux"]);
+});
+
+test("a long history keeps the most recent entries", async () => {
+  const { window } = await setup();
+  await host.run(FIND, { window });
+  for (let index = 0; index < 120; index++) {
+    await host.typeInBar("find", "query", `q${index}`, window);
+    await host.run(NEXT, { window });
+  }
+  const history = fieldHistory(window, "find")!;
+  assert.equal(history.length, 100);
+  assert.equal(history[0], "q119");
 });

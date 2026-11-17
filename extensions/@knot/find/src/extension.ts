@@ -3,7 +3,7 @@
 // the bar, or the next and previous commands anywhere, step between matches.
 // Replace adds a second bar beneath it that replaces the current match or
 // every match, natively, in one undo step.
-import { commands, icons, keymaps, platform, windows, workbench } from "knot";
+import { commands, icons, keymaps, platform, storage, windows, workbench } from "knot";
 import type { Buffer, ByteRange, CommandContext, Disposable, Editor, EditorHandle } from "knot";
 import { endOf, highlights, invalidPattern, matchBefore, matchFrom, rebase, sameRange, summary } from "./search.js";
 import type { Options } from "./search.js";
@@ -33,6 +33,31 @@ let query = "";
 let replacement = "";
 const options: Options = { caseSensitive: false, wholeWord: false, regex: false };
 
+/** The storage record holding the query and replacement histories. */
+export const HISTORY = "history";
+const HISTORY_LIMIT = 100;
+
+// Earlier queries and replacements, newest first, recalled with Up and Down in
+// the bar's fields.
+let queries: string[] = [];
+let replacements: string[] = [];
+let saving = Promise.resolve();
+
+/** Move a non-empty `entry` to the front of `list`, within the cap, and save. */
+function remember(list: "queries" | "replacements", entry: string) {
+  if (entry === "") return;
+  const next = [entry, ...(list === "queries" ? queries : replacements).filter((other) => other !== entry)];
+  next.length = Math.min(next.length, HISTORY_LIMIT);
+  if (list === "queries") queries = next;
+  else replacements = next;
+  const value = { queries, replacements };
+  saving = saving.then(() => storage.write(HISTORY, value)).catch(() => {});
+}
+
+function strings(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((entry) => typeof entry === "string").slice(0, HISTORY_LIMIT) : [];
+}
+
 /** The bar of one editor. */
 type Session = {
   editor: EditorHandle;
@@ -40,6 +65,8 @@ type Session = {
   open: boolean;
   /** Whether the Replace bar is open beneath the find bar. */
   replaceOpen: boolean;
+  /** The find bar's message, shown again when the bars are reopened. */
+  message: string | null;
   /** The Replace bar's message: what the last Replace All did. */
   replaced: string | null;
   /** The range Find in Selection limits the search to, kept current through
@@ -70,6 +97,7 @@ async function sessionOf(context: CommandContext, editor: Editor, buffer: Buffer
     buffer,
     open: false,
     replaceOpen: false,
+    message: null,
     replaced: null,
     scope: null,
     scopeRevision: 0,
@@ -180,6 +208,7 @@ async function revisionOf(buffer: Buffer): Promise<number> {
 }
 
 async function showBars(session: Session, message: string | null) {
+  session.message = message;
   await showBar(session, message);
   if (session.replaceOpen) await showReplaceBar(session);
 }
@@ -187,7 +216,7 @@ async function showBars(session: Session, message: string | null) {
 async function showReplaceBar(session: Session) {
   try {
     await session.editor.openBar(REPLACE_BAR, {
-      fields: [{ id: REPLACEMENT, placeholder: "Replace" }],
+      fields: [{ id: REPLACEMENT, placeholder: "Replace", history: replacements }],
       message: session.replaced,
       buttons: [
         { id: "replace", icon: "find.replace", tooltip: "Replace (Enter)", command: { name: REPLACE_CURRENT } },
@@ -207,7 +236,7 @@ async function showReplaceBar(session: Session) {
 async function showBar(session: Session, message: string | null) {
   try {
     await session.editor.openBar(BAR, {
-      fields: [{ id: FIELD, placeholder: "Find" }],
+      fields: [{ id: FIELD, placeholder: "Find", history: queries }],
       toggles: [
         {
           id: "case",
@@ -304,6 +333,7 @@ async function step(context: CommandContext, forward: boolean) {
   const { editor, buffer } = context;
   if (editor === null || buffer === null) commands.unavailable();
   if (query === "") return open(context, false);
+  remember("queries", query);
   const selection = selectedRange(await editor.selection());
   const scope = (await openSession(context))?.scope ?? null;
   let match: ByteRange | null;
@@ -315,7 +345,11 @@ async function step(context: CommandContext, forward: boolean) {
     if (invalidPattern(error) !== null) return;
     throw error;
   }
-  if (match === null) return;
+  if (match === null) {
+    const session = await openSession(context);
+    if (session !== undefined) await showBars(session, session.message);
+    return;
+  }
   await editor.setSelection({ anchor: match.startByteOffset, caret: match.endByteOffset }, { reveal: "center" });
   const session = await openSession(context);
   if (session !== undefined) await refresh(session, { anchor: match.startByteOffset, caret: match.endByteOffset });
@@ -359,6 +393,8 @@ async function toggleScope(context: CommandContext) {
 async function replaceCurrent(context: CommandContext) {
   const session = await openSession(context);
   if (session === undefined || query === "") return;
+  remember("queries", query);
+  remember("replacements", replacement);
   const { buffer, editor } = session;
   const selection = await editor.selection();
   const selected = selectedRange(selection);
@@ -383,6 +419,8 @@ async function replaceCurrent(context: CommandContext) {
 async function replaceAll(context: CommandContext) {
   const session = await openSession(context);
   if (session === undefined || query === "") return;
+  remember("queries", query);
+  remember("replacements", replacement);
   try {
     const before = await endOf(session.buffer);
     const scoped = session.scope === null ? options : { ...options, range: session.scope };
@@ -439,6 +477,10 @@ export async function start() {
   options.caseSensitive = false;
   options.wholeWord = false;
   options.regex = false;
+  const saved = await storage.read(HISTORY);
+  const record = saved.found ? (saved.value as { queries?: unknown; replacements?: unknown } | null) : null;
+  queries = strings(record?.queries);
+  replacements = strings(record?.replacements);
   await icons.define("find.case", { lucide: "case-sensitive" });
   await icons.define("find.word", { lucide: "whole-word" });
   await icons.define("find.regex", { lucide: "regex" });

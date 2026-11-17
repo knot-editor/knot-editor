@@ -57,7 +57,7 @@ type FakeTab = {
 /** An open bar as the fake keeps it, with each field's text. */
 export type FakeBar = {
   id: string;
-  fields: { id: string; placeholder: string; text: string }[];
+  fields: { id: string; placeholder: string; text: string; history: string[] }[];
   toggles: { id: string; icon: Knot.IconRef; tooltip: string | null; active: boolean; command: Knot.EditorBarCommand }[];
   buttons: { id: string; icon: Knot.IconRef; tooltip: string | null; command: Knot.EditorBarCommand }[];
   message: string | null;
@@ -1534,6 +1534,7 @@ function editor(tab: FakeTab): Knot.Editor {
         fields: fields.map((field) => ({
           id: field.id,
           placeholder: field.placeholder ?? "",
+          history: [...(field.history ?? [])],
           text: existing?.fields.find((kept) => kept.id === field.id)?.text ?? "",
         })),
         toggles: toggles.map((toggle) => ({
