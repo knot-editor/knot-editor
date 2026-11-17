@@ -1,6 +1,6 @@
 # D202: Fast typing in large files
 
-Status: 🚧 checkpoints 1–2 complete; checkpoint 3 next. Roadmap item [D202](../roadmap.md).
+Status: 🚧 checkpoints 1–2 complete; checkpoint 3 awaiting review. Roadmap item [D202](../roadmap.md).
 
 ## Goal
 
@@ -136,30 +136,51 @@ Markdown's remaining cost is the per-layer syntax work of checkpoint 3; the
 other languages' after work at the fast pace (a rebased parse) is just over
 target.
 
-### 3. Syntax work that does not grow with layers (provisional)
+### 3. Syntax work that does not grow with layers 🔍
 
-Re-measure after checkpoint 2, then, for what remains:
+Awaiting review in the real app. Re-measuring after checkpoint 2 and
+profiling (`samply`, over the product benchmark) showed four costs, each
+fixed:
 
-- Skip a foreground attempt that cannot finish: remember that the last
-  reparse of the state overran the budget and go straight to the background.
-- Make `edit`, the clone before a parse, and the rebase leave untouched
-  layers alone, for example by shifting layers after the edit lazily rather
-  than editing each tree.
+- ✅ A foreground attempt that cannot finish: a state remembers the budget it
+  overran and skips the foreground until a background parse takes less than
+  that budget. A Markdown reparse needs about 1.7 ms, so every key paid it.
+- ✅ `edit`, the rebase, and the layer clone: an edit touches only the root
+  layer; each injection applies the edits it is behind when read or
+  reparsed (`Layer::{catch_up, current}`), and layers are `Arc`s shared with
+  background parses. Fold marks test a layer's host span against the visible
+  bytes before reading its tree.
+- ✅ `layers_at` and `layer_at` listed the included ranges of every sibling
+  layer on each paint; they test the host span first.
+- ✅ Dropping the replaced trees (1.7 ms in Markdown) now happens on a
+  short-lived thread.
 
-Deterministic tests cover each mechanism, such as layers outside an edit
-staying untouched and an overrunning state skipping the foreground.
+Deterministic tests: an edit leaves injections shared until they are read, an
+overrunning state skips the foreground until a fitting background parse, and
+the existing random-edit tests compare against a fresh parse.
 
-**Implementation context**: `crates/knot-model/src/syntax.rs`
-(`SyntaxState::{edit, parse_in_foreground, start_background_parse,
-finish_background_parse}`, `Layer::{edit, parse, reinject}`),
-`crates/knot-model/src/buffer.rs` (`observe_committed_edits`,
-`finish_syntax_parse`), and the parse driver in `src/app/model.rs`. Update
-[core and buffers](../architecture/core-and-buffers.md#syntax-state) if the
-contract changes.
+Product benchmark after it (p99 per key / after the key, both paces):
+
+| File | Key | After |
+| --- | --- | --- |
+| Markdown | 1.1–1.9 ms | 1.2–2.4 ms |
+| Rust | 1.0–1.1 ms | 1.1–2.0 ms |
+| TypeScript | 1.1–1.3 ms | 1.2–2.4 ms |
+| Python | 0.8–1.0 ms | 1.0–1.8 ms |
+| Plain text | 0.8–1.3 ms | 0.07 ms |
+
+Model benchmark (Markdown, 15,001 layers): syntax edit 2 µs, layer clone
+40 ns, rebase 40 µs, all independent of the edit position.
+
+**Implementation context**: `crates/knot-model/src/syntax.rs`, `syntax/fold.rs`,
+`buffer/folds.rs`. The syntax-state contract in
+[core and buffers](../architecture/core-and-buffers.md#syntax-state) is
+updated.
 
 ### 4. Remaining costs (provisional)
 
-Whatever the benchmarks still show over target after checkpoints 2 and 3,
+Both targets hold after checkpoint 3 in the benchmark, so this is skipped
+unless the manual check finds more. Whatever remains over target,
 such as bracket matching through `layers_at`, or highlights settling late
 after the Markdown background parse. Skipped if both targets hold.
 
