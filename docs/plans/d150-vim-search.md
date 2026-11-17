@@ -1,6 +1,6 @@
 # D150: Vim search and substitution
 
-Status: 🚧 in progress (checkpoints 1–4 done). Roadmap item [D150](../roadmap.md).
+Status: 🚧 in progress (checkpoints 1–5 done). Roadmap item [D150](../roadmap.md).
 
 ## Goal
 
@@ -177,24 +177,13 @@ the word's start. A key typed in the same instant as a prompt's Enter is
 dropped when the command then enters insert mode (`c/foo<cr>x`), so the case
 for `c/` asserts the mode instead.
 
-### 5. Highlights and incremental search (awaiting review)
+### 5. Highlights and incremental search ✅
 
-Deliverables:
-
-- ✅ Highlights in every followed editor after a search, kept current through
-  edits, hidden by `:noh` and shown again by the next search, `n` or `N`.
-- ✅ Incremental highlights and caret preview in the prompt; Escape restores the
-  view; invalid patterns show their message. A visual selection keeps its end
-  while typing, so only the highlights preview there.
-- ✅ Product tests in `crates/knot-ext-vim/tests/vim.rs` reading the editor's
-  decorations, since the case format checks only text and caret.
-
-Implementation context: refresh loop and decoration calls mirror
-`refresh`/`clearHighlights` in `extensions/@knot/find/src/extension.ts`; the
-followed-editor map and per-editor `State` in `extension.ts`/`normal.ts`;
-`viewState`/`restoreViewState` on the editor handle for Escape.
-
-Review gate: try in the real app; `just check` clean.
+Done and approved: `highlight.ts` paints the last pattern's matches in every
+followed editor, refreshed on buffer changes, until `:noh`. The `/` and `?`
+prompts preview matches and the first match's caret as you type, and restore
+the view afterwards; in a visual mode only the highlights preview. Product
+tests in `crates/knot-ext-vim/tests/vim.rs` read the editor's decorations.
 
 ### 6. Substitution
 
