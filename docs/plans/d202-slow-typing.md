@@ -1,6 +1,6 @@
 # D202: Fast typing in large files
 
-Status: 🚧 checkpoint 1 ready for review. Roadmap item [D202](../roadmap.md).
+Status: 🚧 checkpoint 1 complete; checkpoint 2 next. Roadmap item [D202](../roadmap.md).
 
 ## Goal
 
@@ -100,24 +100,19 @@ Smaller costs seen in the profile: bracket matching through
 
 ## Checkpoints
 
-### 1. Measure typing per keystroke ✅ (review pending)
+### 1. Measure typing per keystroke ✅
 
-- ✅ Benchmark documents in `knot_model::large_documents`, exported to
-  product tests through `knot::test_support::large_documents`.
-- ✅ Product benchmark `typing_costs_on_large_documents` in
-  `crates/knot-ext-languages/tests/languages/typing.rs`, through
-  `TestEditor::key_costs`. In tests gpui runs background tasks on the
-  foreground thread, so the driver measures thread CPU time and subtracts
-  the background parses `work_counts` times.
-- ✅ Model benchmark `typing_stage_costs_on_the_large_markdown_document` in
-  `crates/knot-model/src/syntax/tests.rs`.
-- ✅ `samply` profile of the release app, recorded with
-  `samply record --save-only --unstable-presymbolicate target/release/knot`
-  while `Try: Type 200 Characters` typed into `Try: Large Markdown`.
-- ✅ Findings above, and checkpoints 2–5 rewritten to match.
-
-Review gate: agree on the findings, the targets, and the fix checkpoints
-before any optimization.
+Approved with the findings, targets, and checkpoints above. The benchmarks
+are `typing_costs_on_large_documents` in
+`crates/knot-ext-languages/tests/languages/typing.rs` (through
+`TestEditor::key_costs`, which subtracts background parses because tests run
+them on the foreground thread) and
+`typing_stage_costs_on_the_large_markdown_document` in
+`crates/knot-model/src/syntax/tests.rs`, over `knot_model::large_documents`.
+The profile was recorded with
+`samply record --save-only --unstable-presymbolicate target/release/knot`;
+it types through `Try: Type 200 Characters`, which edits through the buffer
+API and so skips key routing, cheap in the benchmark.
 
 ### 2. Fold marks that do not grow with the file
 
