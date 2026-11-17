@@ -276,7 +276,9 @@ focus, and focus returns to the tree on dismissal. The menu and an edit field
 render inside the tree's focus subtree, and the window follows focus entering
 a view without leaving the `Popup` layer, so an action runs when another view
 held focus before the right click.
-An action marked `menuOnly` appears in the menu and not as a row button.
+An action marked `menuOnly` appears in the menu and not as a row button; one
+marked `showOnHover` is a row button visible only while the row is pointed at or
+selected. On a row with detail text the other buttons sit under the text.
 
 A row's command receives how it was activated (`click`, `doubleClick`,
 `middleClick`, `rightClick`, or `enter`) and the row's `arguments`. A double

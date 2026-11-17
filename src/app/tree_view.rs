@@ -142,6 +142,17 @@ enum VisibleRow {
     },
 }
 
+impl VisibleRow {
+    /// Identifies the row across renders.
+    fn key(&self) -> String {
+        match self {
+            Self::Item { item, .. } => item.id.clone(),
+            Self::Draft { .. } => "\0draft".to_owned(),
+            Self::Status { depth, label, .. } => format!("\0status:{depth}:{label}"),
+        }
+    }
+}
+
 /// Keyboard action mode: the row whose actions are being navigated, or frame
 /// actions when no row qualifies.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -199,7 +210,13 @@ pub(crate) struct TreeView {
     /// The selected row and its bounds when last painted.
     selected_bounds: Rc<RefCell<RowBounds>>,
     focus: FocusHandle,
-    scroll: UniformListScrollHandle,
+    /// Row heights and scroll position; kept in step with the visible rows
+    /// while rendering.
+    list: ListState,
+    /// A stable key per list row, to splice only what changed into `list`.
+    row_keys: Vec<String>,
+    /// A row to bring into view once the list knows the rows it indexes.
+    pending_scroll: Option<usize>,
 }
 
 impl TreeView {
@@ -228,7 +245,9 @@ impl TreeView {
             context_menu: None,
             selected_bounds: Rc::default(),
             focus: cx.focus_handle(),
-            scroll: UniformListScrollHandle::new(),
+            list: ListState::new(0, ListAlignment::Top, px(240.)),
+            row_keys: Vec::new(),
+            pending_scroll: None,
         }
     }
 
@@ -552,7 +571,7 @@ impl TreeView {
             .position(|row| matches!(row, VisibleRow::Item { item, .. } if item.id == id));
         self.selected = Some(id);
         if let Some(flat) = position {
-            self.scroll.scroll_to_item(flat, ScrollStrategy::Center);
+            self.list.scroll_to_reveal_item(flat);
         }
     }
 
@@ -670,9 +689,9 @@ impl TreeView {
                     .visible_rows()
                     .iter()
                     .position(|row| matches!(row, VisibleRow::Item { item, .. } if &item.id == id));
-                if let Some(flat) = position {
-                    self.scroll.scroll_to_item(flat, ScrollStrategy::Center);
-                }
+                // The revealed row may be new, so the list scrolls once it
+                // knows the rows.
+                self.pending_scroll = position;
                 cx.notify();
                 return;
             }
@@ -739,6 +758,32 @@ impl TreeView {
         self.drop_orphaned_edit(cx);
         cx.notify();
         true
+    }
+
+    /// Bring the list's row slots in step with `rows`, keeping the scroll
+    /// position by splicing only the rows between the unchanged head and tail.
+    fn sync_list(&mut self, rows: &[VisibleRow]) {
+        let keys = rows.iter().map(VisibleRow::key).collect::<Vec<_>>();
+        let head = self
+            .row_keys
+            .iter()
+            .zip(&keys)
+            .take_while(|(old, new)| old == new)
+            .count();
+        let tail = self.row_keys[head..]
+            .iter()
+            .rev()
+            .zip(keys[head..].iter().rev())
+            .take_while(|(old, new)| old == new)
+            .count();
+        if head + tail < self.row_keys.len() || head + tail < keys.len() {
+            self.list
+                .splice(head..self.row_keys.len() - tail, keys.len() - tail - head);
+        }
+        // A row with the same identity may still have changed its content and
+        // so its height; slots measure again as they are painted.
+        self.list.remeasure_items(0..keys.len());
+        self.row_keys = keys;
     }
 
     fn visible_rows(&self) -> Vec<VisibleRow> {
@@ -1230,7 +1275,7 @@ impl TreeView {
         let (flat, id, _) = item_rows[index];
         self.selected = Some(id.to_owned());
         self.action_focus = None;
-        self.scroll.scroll_to_item(flat, ScrollStrategy::Center);
+        self.list.scroll_to_reveal_item(flat);
         cx.notify();
         true
     }
@@ -1298,8 +1343,6 @@ impl Render for TreeView {
         key_context.add(TREE_KEY_CONTEXT);
         key_context.add(super::commands::keymaps::view_context(&self.view_id));
 
-        // Rows share one height, so a view where any row has a second line
-        // shows all of them at two-line height.
         let edit_label = self.edit.as_ref().and_then(|edit| match &edit.target {
             EditTarget::Label(id) => Some((id.clone(), edit.input.clone())),
             EditTarget::New { .. } => None,
@@ -1308,275 +1351,363 @@ impl Render for TreeView {
             EditTarget::New { .. } => Some(edit.input.clone()),
             EditTarget::Label(_) => None,
         });
-        let two_lines = rows.iter().any(|row| match row {
-            VisibleRow::Item { item, .. } => item.detail.is_some(),
-            _ => false,
-        });
-        let list = uniform_list("extension-tree", rows.len(), move |range, _, cx| {
+        self.sync_list(&rows);
+        if let Some(flat) = self.pending_scroll.take() {
+            self.list.scroll_to(ListOffset {
+                item_ix: flat.saturating_sub(2),
+                offset_in_item: px(0.),
+            });
+        }
+        let list = list(self.list.clone(), move |index, _, cx| {
             let theme = theme(cx);
-            range
-                .map(|index| match &rows[index] {
-                    VisibleRow::Item { item, depth, .. } => {
-                        let id = item.id.clone();
-                        let is_selected = selected.as_deref() == Some(&item.id);
-                        let is_group = item.kind == TreeItemKind::Group;
-                        let row_action_focus = action_focus.as_ref().and_then(|focus| {
-                            (focus.row.as_deref() == Some(item.id.as_str())).then_some(focus.index)
-                        });
-                        let mut row = div()
-                            .id(("extension-tree-row", index))
-                            .debug_selector(move || format!("extension-tree-row-{index}"))
-                            .w_full()
-                            .overflow_hidden()
-                            .rounded(crate::app::zoom::rems(tokens::radius::SM))
-                            .pl(crate::app::zoom::rems(
-                                tokens::list::TREE_INSET - tokens::list::ROW_INSET
-                                    + *depth as f32 * tokens::list::TREE_INDENT,
-                            ))
-                            .pr_2()
-                            .py_0p5()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .gap_1()
-                            .text_size(crate::app::zoom::rems(tokens::list::TEXT_SIZE))
-                            .h(crate::app::zoom::rems(if two_lines {
-                                tokens::list::TWO_LINE_ROW_HEIGHT
-                            } else {
-                                tokens::list::ROW_HEIGHT
-                            }))
-                            .when(is_group, |row| {
-                                row.bg(theme.paint_color(color::LIST_GROUP_BACKGROUND))
-                                    .text_color(theme.paint_color(color::TEXT_MUTED))
-                            })
-                            .when(item.muted && !is_selected, |row| {
-                                row.text_color(theme.paint_color(color::TEXT_MUTED))
-                            })
-                            .when(is_selected, |row| {
-                                row.bg(theme.paint_color(color::LIST_SELECTED_BACKGROUND))
-                                    .text_color(theme.paint_color(color::LIST_SELECTED_FOREGROUND))
-                            })
-                            // A selected row keeps its highlight while hovered.
-                            .when(!is_selected, |row| {
-                                row.hover(|style| {
-                                    style.bg(theme.paint_color(color::LIST_HOVER_BACKGROUND))
-                                })
-                            })
-                            .child(Self::disclosure(item, expanded.contains(&item.id), cx))
-                            .children(Self::icon(item, expanded.contains(&item.id), cx))
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .flex()
-                                    .flex_col()
-                                    .child(
-                                        match (
-                                            edit_label
-                                                .as_ref()
-                                                .filter(|(label, _)| *label == item.id),
-                                            search_ranges.get(&item.id),
-                                        ) {
-                                            (Some((_, input)), _) => div().child(input.clone()),
-                                            (None, Some(ranges)) => {
-                                                div().truncate().child(highlighted(
-                                                    item.label.clone(),
-                                                    ranges,
-                                                    theme.paint_color(color::LIST_MATCH_FOREGROUND),
-                                                ))
-                                            }
-                                            (None, None) => {
-                                                div().truncate().child(item.label.clone())
-                                            }
-                                        },
-                                    )
-                                    .when_some(item.detail.clone(), |column, detail| {
-                                        column.child(
-                                            div()
-                                                .truncate()
-                                                .text_xs()
-                                                .text_color(theme.paint_color(color::TEXT_MUTED))
-                                                .child(detail),
-                                        )
-                                    }),
-                            )
-                            .when_some(item.description.clone(), |row, description| {
-                                row.child(
-                                    div()
-                                        .text_color(theme.paint_color(color::TEXT_MUTED))
-                                        .child(description),
-                                )
-                            });
-                        if is_selected {
-                            let selected_bounds = selected_bounds.clone();
-                            let id = item.id.clone();
-                            row = row.on_prepaint(move |bounds, _, _| {
-                                *selected_bounds.borrow_mut() = Some((id, bounds));
-                            });
-                        }
-                        if let Some(status) = item.status_text.clone() {
-                            row = row.child(
-                                div()
-                                    .text_color(theme.paint_color(color::TEXT_MUTED))
-                                    .child(status),
-                            );
-                        }
-                        if let Some(badge) = &item.badge {
-                            row = row.child(
-                                div()
-                                    .size(crate::app::zoom::rems(tokens::list::BADGE_SIZE))
-                                    .flex_shrink_0()
-                                    .rounded_full()
-                                    .bg(theme.paint_color(badge)),
-                            );
-                        }
-                        for (action_index, action) in item
-                            .actions
-                            .iter()
-                            .filter(|action| !action.menu_only)
-                            .enumerate()
-                        {
-                            let focused = row_action_focus == Some(action_index);
-                            let target = action.clone();
-                            let entity = entity.clone();
-                            row = row.child(
-                                div()
-                                    .id(("extension-tree-action", index * 1024 + action_index))
-                                    .px_1()
-                                    .rounded(crate::app::zoom::rems(crate::app::tokens::radius::SM))
-                                    .text_xs()
-                                    .text_color(theme.paint_color(color::TEXT_ACCENT))
-                                    .bg(theme.paint_color(if focused {
-                                        color::LIST_SELECTED_BACKGROUND
-                                    } else {
-                                        color::BUTTON_BACKGROUND
-                                    }))
-                                    .hover(|style| {
-                                        style.bg(theme.paint_color(color::BUTTON_HOVER_BACKGROUND))
-                                    })
-                                    .child(action_content(action, cx))
-                                    .when_some(action_tooltip(action), |button, tooltip| {
-                                        button.tooltip(tooltip)
-                                    })
-                                    .on_click(move |_, window, cx| {
-                                        entity.update(cx, |tree, cx| {
-                                            tree.focus_handle(cx).focus(window, cx);
-                                            tree.invoke_action(target.clone(), cx);
-                                        });
-                                        cx.stop_propagation();
-                                    }),
-                            );
-                        }
-                        // The row is inset from the list's edges, so its rounded
-                        // selection and hover float inside the card.
-                        div()
-                            .w_full()
-                            .px(crate::app::zoom::rems(tokens::list::ROW_INSET))
-                            .child(
-                                row.on_click({
-                                    let entity = entity.clone();
-                                    let id = id.clone();
-                                    move |event, window, cx| {
-                                        let gesture = if event.click_count() >= 2 {
-                                            TreeGesture::DoubleClick
-                                        } else {
-                                            TreeGesture::Click
-                                        };
-                                        entity.update(cx, |tree, cx| {
-                                            tree.focus_handle(cx).focus(window, cx);
-                                            tree.activate(&id, gesture, cx);
-                                        });
-                                    }
-                                })
-                                .on_mouse_down(MouseButton::Middle, {
-                                    let entity = entity.clone();
-                                    let id = id.clone();
-                                    move |_, window, cx| {
-                                        entity.update(cx, |tree, cx| {
-                                            tree.focus_handle(cx).focus(window, cx);
-                                            tree.activate(&id, TreeGesture::MiddleClick, cx);
-                                        });
-                                        cx.stop_propagation();
-                                    }
-                                })
-                                .on_mouse_down(
-                                    MouseButton::Right,
-                                    {
-                                        let entity = entity.clone();
-                                        move |event, window, cx| {
-                                            entity.update(cx, |tree, cx| {
-                                                tree.focus_handle(cx).focus(window, cx);
-                                                tree.right_click(&id, event.position, window, cx);
-                                            });
-                                            cx.stop_propagation();
-                                        }
-                                    },
-                                ),
-                            )
-                            .into_any_element()
-                    }
-                    VisibleRow::Draft { icon, depth } => div()
-                        .id(("extension-tree-draft", index))
-                        .debug_selector(move || format!("extension-tree-draft-{index}"))
-                        .w_full()
-                        .pl(crate::app::zoom::rems(
-                            tokens::list::TREE_INSET + *depth as f32 * tokens::list::TREE_INDENT,
-                        ))
-                        .pr_2()
-                        .py_0p5()
-                        .flex()
-                        .flex_row()
-                        .items_center()
-                        .gap_1()
-                        .text_size(crate::app::zoom::rems(tokens::list::TEXT_SIZE))
-                        .h(crate::app::zoom::rems(if two_lines {
-                            tokens::list::TWO_LINE_ROW_HEIGHT
+            match &rows[index] {
+                VisibleRow::Item { item, depth, .. } => {
+                    let has_detail = item.detail.is_some();
+                    let hover_group = SharedString::from(format!("extension-tree-row-{index}"));
+                    // Beside a row's first line: the leading and trailing
+                    // parts of a row with a detail line up with its label.
+                    let first_line = |part: AnyElement| {
+                        if has_detail {
+                            div()
+                                .h(crate::app::zoom::rems(tokens::list::FIRST_LINE_HEIGHT))
+                                .flex_none()
+                                .flex()
+                                .items_center()
+                                .child(part)
+                                .into_any_element()
                         } else {
-                            tokens::list::ROW_HEIGHT
-                        }))
-                        .child(AppIcon::blank())
-                        .children(
-                            icon.as_ref()
-                                .map(|icon| AppIcon::new(ref_definition(icon, false, cx))),
-                        )
-                        .children(edit_draft.clone().map(|input| div().flex_1().child(input)))
-                        .into_any_element(),
-                    VisibleRow::Status {
-                        depth,
-                        label,
-                        error,
-                    } => div()
-                        .id(("extension-tree-status", index))
-                        .debug_selector(move || format!("extension-tree-status-{index}"))
+                            part
+                        }
+                    };
+                    let id = item.id.clone();
+                    let is_selected = selected.as_deref() == Some(&item.id);
+                    let is_group = item.kind == TreeItemKind::Group;
+                    let row_action_focus = action_focus.as_ref().and_then(|focus| {
+                        (focus.row.as_deref() == Some(item.id.as_str())).then_some(focus.index)
+                    });
+                    // On a row with detail text, the buttons sit under the text as
+                    // in a notification popup; hover-only ones stay at the top right.
+                    let mut trailing = Vec::new();
+                    let mut below = Vec::new();
+                    for (action_index, action) in item
+                        .actions
+                        .iter()
+                        .filter(|action| !action.menu_only)
+                        .enumerate()
+                    {
+                        let focused = row_action_focus == Some(action_index);
+                        let target = action.clone();
+                        let entity = entity.clone();
+                        let under = has_detail && !action.show_on_hover;
+                        let hidden = action.show_on_hover && !focused && !is_selected;
+                        let group = hover_group.clone();
+                        let button = div()
+                            .id(("extension-tree-action", index * 1024 + action_index))
+                            .when(hidden, |button| {
+                                button
+                                    .invisible()
+                                    .group_hover(group, |style| style.visible())
+                            })
+                            .rounded(crate::app::zoom::rems(crate::app::tokens::radius::SM))
+                            .text_xs()
+                            .text_color(theme.paint_color(color::TEXT_ACCENT))
+                            .when(under, |button| {
+                                button
+                                    .px(crate::app::zoom::rems(8.))
+                                    .py(crate::app::zoom::rems(2.))
+                                    .font_weight(FontWeight::MEDIUM)
+                            })
+                            .when(!under, |button| {
+                                button
+                                    .px_1()
+                                    .bg(theme.paint_color(color::BUTTON_BACKGROUND))
+                            })
+                            // A hover-only button is a quiet glyph until pointed at.
+                            .when(action.show_on_hover && !focused, |button| {
+                                button
+                                    .bg(gpui::transparent_black())
+                                    .text_color(theme.paint_color(color::TEXT_MUTED))
+                            })
+                            .when(focused, |button| {
+                                button.bg(theme.paint_color(color::LIST_SELECTED_BACKGROUND))
+                            })
+                            .hover(|style| {
+                                style.bg(theme.paint_color(color::BUTTON_HOVER_BACKGROUND))
+                            })
+                            .child(action_content(action, cx))
+                            .when_some(action_tooltip(action), |button, tooltip| {
+                                button.tooltip(tooltip)
+                            })
+                            .on_click(move |_, window, cx| {
+                                entity.update(cx, |tree, cx| {
+                                    tree.focus_handle(cx).focus(window, cx);
+                                    tree.invoke_action(target.clone(), cx);
+                                });
+                                cx.stop_propagation();
+                            })
+                            .into_any_element();
+                        if under {
+                            below.push(button);
+                        } else {
+                            trailing.push(first_line(button));
+                        }
+                    }
+                    let has_below = !below.is_empty();
+                    let mut row = div()
+                        .id(("extension-tree-row", index))
+                        .debug_selector(move || format!("extension-tree-row-{index}"))
                         .w_full()
+                        .overflow_hidden()
+                        .rounded(crate::app::zoom::rems(tokens::radius::SM))
                         .pl(crate::app::zoom::rems(
-                            tokens::list::TREE_INSET
-                                + 14.
+                            tokens::list::TREE_INSET - tokens::list::ROW_INSET
                                 + *depth as f32 * tokens::list::TREE_INDENT,
                         ))
                         .pr_2()
-                        .py_0p5()
+                        .group(hover_group.clone())
+                        .flex()
+                        .flex_row()
+                        .gap_1()
                         .text_size(crate::app::zoom::rems(tokens::list::TEXT_SIZE))
-                        // Rows share one height, so a long message is cut
-                        // short rather than wrapped over the rows below.
-                        .truncate()
-                        .h(crate::app::zoom::rems(if two_lines {
-                            tokens::list::TWO_LINE_ROW_HEIGHT
-                        } else {
-                            tokens::list::ROW_HEIGHT
-                        }))
-                        .text_color(theme.paint_color(if *error {
-                            color::ERROR
-                        } else {
-                            color::TEXT_MUTED
-                        }))
-                        .child(label.clone())
-                        .into_any_element(),
-                })
-                .collect()
+                        .when(has_detail, |row| {
+                            row.items_start()
+                                .py_2()
+                                .pr_3()
+                                .min_h(crate::app::zoom::rems(tokens::list::TWO_LINE_ROW_HEIGHT))
+                        })
+                        // A button's own padding stands in for the bottom edge.
+                        .when(has_below, |row| row.pb_1())
+                        .when(!has_detail, |row| {
+                            row.items_center()
+                                .py_0p5()
+                                .h(crate::app::zoom::rems(tokens::list::ROW_HEIGHT))
+                        })
+                        .when(is_group, |row| {
+                            row.bg(theme.paint_color(color::LIST_GROUP_BACKGROUND))
+                                .text_color(theme.paint_color(color::TEXT_MUTED))
+                                .text_xs()
+                                .h(crate::app::zoom::rems(tokens::list::GROUP_ROW_HEIGHT))
+                                .py_0()
+                        })
+                        .when(item.muted && !is_selected, |row| {
+                            row.text_color(theme.paint_color(color::TEXT_MUTED))
+                        })
+                        .when(is_selected, |row| {
+                            row.bg(theme.paint_color(color::LIST_SELECTED_BACKGROUND))
+                                .text_color(theme.paint_color(color::LIST_SELECTED_FOREGROUND))
+                        })
+                        // A selected row keeps its highlight while hovered.
+                        .when(!is_selected, |row| {
+                            row.hover(|style| {
+                                style.bg(theme.paint_color(color::LIST_HOVER_BACKGROUND))
+                            })
+                        })
+                        .child(first_line(
+                            Self::disclosure(item, expanded.contains(&item.id), cx)
+                                .into_any_element(),
+                        ))
+                        .children(
+                            Self::icon(item, expanded.contains(&item.id), cx).map(|icon| {
+                                // The icon of a card is larger than text.
+                                first_line(if has_detail {
+                                    div()
+                                        .text_size(crate::app::zoom::rems(
+                                            tokens::list::DETAIL_ICON_SIZE,
+                                        ))
+                                        .child(icon)
+                                        .into_any_element()
+                                } else {
+                                    icon.into_any_element()
+                                })
+                            }),
+                        )
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .flex()
+                                .flex_col()
+                                .child(
+                                    match (
+                                        edit_label.as_ref().filter(|(label, _)| *label == item.id),
+                                        search_ranges.get(&item.id),
+                                    ) {
+                                        (Some((_, input)), _) => div().child(input.clone()),
+                                        (None, Some(ranges)) => {
+                                            div().truncate().child(highlighted(
+                                                item.label.clone(),
+                                                ranges,
+                                                theme.paint_color(color::LIST_MATCH_FOREGROUND),
+                                            ))
+                                        }
+                                        (None, None) => div().truncate().child(item.label.clone()),
+                                    }
+                                    .when(has_detail, |label| {
+                                        label.h(crate::app::zoom::rems(
+                                            tokens::list::FIRST_LINE_HEIGHT,
+                                        ))
+                                    })
+                                    .when(item.bold, |label| label.font_weight(FontWeight::BOLD)),
+                                )
+                                .when_some(item.detail.clone(), |column, detail| {
+                                    column.child(
+                                        div()
+                                            .mt(crate::app::zoom::rems(2.))
+                                            .line_height(relative(1.4))
+                                            .when_some(item.detail_max_lines, |detail, lines| {
+                                                detail.line_clamp(lines as usize).text_ellipsis()
+                                            })
+                                            .max_w(crate::app::zoom::rems(
+                                                tokens::list::DETAIL_MAX_WIDTH,
+                                            ))
+                                            .text_xs()
+                                            .text_color(theme.paint_color(color::TEXT_MUTED))
+                                            .child(detail),
+                                    )
+                                })
+                                .when(!below.is_empty(), |column| {
+                                    column.child(
+                                        div()
+                                            .flex()
+                                            .flex_row()
+                                            .flex_wrap()
+                                            .gap(crate::app::zoom::rems(4.))
+                                            .mt(crate::app::zoom::rems(4.))
+                                            .ml(crate::app::zoom::rems(-8.))
+                                            .children(below),
+                                    )
+                                }),
+                        )
+                        .when_some(item.description.clone(), |row, description| {
+                            row.child(first_line(
+                                div()
+                                    .text_color(theme.paint_color(color::TEXT_MUTED))
+                                    .child(description)
+                                    .into_any_element(),
+                            ))
+                        });
+                    if is_selected {
+                        let selected_bounds = selected_bounds.clone();
+                        let id = item.id.clone();
+                        row = row.on_prepaint(move |bounds, _, _| {
+                            *selected_bounds.borrow_mut() = Some((id, bounds));
+                        });
+                    }
+                    if let Some(status) = item.status_text.clone() {
+                        row = row.child(first_line(
+                            div()
+                                .flex_shrink_0()
+                                .when(has_detail, |status| status.mr_1())
+                                .text_xs()
+                                .text_color(theme.paint_color(color::TEXT_MUTED))
+                                .child(status)
+                                .into_any_element(),
+                        ));
+                    }
+                    if let Some(badge) = &item.badge {
+                        row = row.child(first_line(
+                            div()
+                                .size(crate::app::zoom::rems(tokens::list::BADGE_SIZE))
+                                .flex_shrink_0()
+                                .rounded_full()
+                                .bg(theme.paint_color(badge))
+                                .into_any_element(),
+                        ));
+                    }
+                    row = row.children(trailing);
+                    // The row is inset from the list's edges, so its rounded
+                    // selection and hover float inside the card.
+                    div()
+                        .w_full()
+                        .px(crate::app::zoom::rems(tokens::list::ROW_INSET))
+                        .child(
+                            row.on_click({
+                                let entity = entity.clone();
+                                let id = id.clone();
+                                move |event, window, cx| {
+                                    let gesture = if event.click_count() >= 2 {
+                                        TreeGesture::DoubleClick
+                                    } else {
+                                        TreeGesture::Click
+                                    };
+                                    entity.update(cx, |tree, cx| {
+                                        tree.focus_handle(cx).focus(window, cx);
+                                        tree.activate(&id, gesture, cx);
+                                    });
+                                }
+                            })
+                            .on_mouse_down(MouseButton::Middle, {
+                                let entity = entity.clone();
+                                let id = id.clone();
+                                move |_, window, cx| {
+                                    entity.update(cx, |tree, cx| {
+                                        tree.focus_handle(cx).focus(window, cx);
+                                        tree.activate(&id, TreeGesture::MiddleClick, cx);
+                                    });
+                                    cx.stop_propagation();
+                                }
+                            })
+                            .on_mouse_down(MouseButton::Right, {
+                                let entity = entity.clone();
+                                move |event, window, cx| {
+                                    entity.update(cx, |tree, cx| {
+                                        tree.focus_handle(cx).focus(window, cx);
+                                        tree.right_click(&id, event.position, window, cx);
+                                    });
+                                    cx.stop_propagation();
+                                }
+                            }),
+                        )
+                        .into_any_element()
+                }
+                VisibleRow::Draft { icon, depth } => div()
+                    .id(("extension-tree-draft", index))
+                    .debug_selector(move || format!("extension-tree-draft-{index}"))
+                    .w_full()
+                    .pl(crate::app::zoom::rems(
+                        tokens::list::TREE_INSET + *depth as f32 * tokens::list::TREE_INDENT,
+                    ))
+                    .pr_2()
+                    .py_0p5()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .gap_1()
+                    .text_size(crate::app::zoom::rems(tokens::list::TEXT_SIZE))
+                    .h(crate::app::zoom::rems(tokens::list::ROW_HEIGHT))
+                    .child(AppIcon::blank())
+                    .children(
+                        icon.as_ref()
+                            .map(|icon| AppIcon::new(ref_definition(icon, false, cx))),
+                    )
+                    .children(edit_draft.clone().map(|input| div().flex_1().child(input)))
+                    .into_any_element(),
+                VisibleRow::Status {
+                    depth,
+                    label,
+                    error,
+                } => div()
+                    .id(("extension-tree-status", index))
+                    .debug_selector(move || format!("extension-tree-status-{index}"))
+                    .w_full()
+                    .pl(crate::app::zoom::rems(
+                        tokens::list::TREE_INSET + 14. + *depth as f32 * tokens::list::TREE_INDENT,
+                    ))
+                    .pr_2()
+                    .py_0p5()
+                    .text_size(crate::app::zoom::rems(tokens::list::TEXT_SIZE))
+                    .truncate()
+                    .h(crate::app::zoom::rems(tokens::list::ROW_HEIGHT))
+                    .text_color(theme.paint_color(if *error {
+                        color::ERROR
+                    } else {
+                        color::TEXT_MUTED
+                    }))
+                    .child(label.clone())
+                    .into_any_element(),
+            }
         })
-        .flex_1()
-        .track_scroll(&self.scroll);
+        .flex_1();
 
         // The tree holds focus while its context menu or edit field does, so
         // the window keeps the tree as the target of what they run.

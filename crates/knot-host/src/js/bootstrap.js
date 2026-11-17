@@ -328,6 +328,7 @@ function treeAction(value) {
     command: string(value.command, "tree action command must be text"),
     icon: iconRef(value.icon),
     menuOnly: value.menuOnly == null ? false : flag(value.menuOnly, "tree action menuOnly must be a boolean"),
+    showOnHover: value.showOnHover == null ? false : flag(value.showOnHover, "tree action showOnHover must be a boolean"),
     arguments: value.arguments === undefined ? null : validateJsonValue(value.arguments),
   };
 }
@@ -344,12 +345,14 @@ function treeItem(value) {
     label: string(value.label, "tree item label must be text"),
     description: optionalText(value.description),
     detail: optionalText(value.detail),
+    detailMaxLines: value.detailMaxLines == null ? null : safeInteger(value.detailMaxLines),
     icon: iconRef(value.icon),
     collapsibleState,
     command: optionalText(value.command),
     arguments: value.arguments === undefined ? null : validateJsonValue(value.arguments),
     kind: kind === null ? "item" : kind,
     muted: value.muted == null ? false : flag(value.muted, "tree item muted must be a boolean"),
+    bold: value.bold == null ? false : flag(value.bold, "tree item bold must be a boolean"),
     statusText: optionalText(value.statusText),
     badge: optionalText(value.badge),
     actions: treeActions(value.actions),

@@ -59,6 +59,7 @@ fn the_header_hides_its_tool_and_shows_the_tree_frame_actions(cx: &mut TestAppCo
                 arguments: CommandArgumentValue::Null,
                 icon: None,
                 menu_only: false,
+                show_on_hover: false,
             }],
             cx,
         )

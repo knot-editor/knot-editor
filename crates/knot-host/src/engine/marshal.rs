@@ -1035,12 +1035,14 @@ pub(super) fn tree_item_from_v8<'s>(
         label: string_property(scope, object, "label")?,
         description: optional_text_property(scope, object, "description")?,
         detail: optional_text_property(scope, object, "detail")?,
+        detail_max_lines: optional_detail_max_lines(scope, object)?,
         collapsible_state,
         icon,
         command: optional_text_property(scope, object, "command")?,
         arguments: optional_argument_property(scope, object, "arguments")?,
         kind,
         muted: optional_flag_property(scope, object, "muted")?,
+        bold: optional_flag_property(scope, object, "bold")?,
         status_text: optional_text_property(scope, object, "statusText")?,
         badge: optional_text_property(scope, object, "badge")?,
         actions: tree_actions_from_v8(scope, object, "actions")?,
@@ -1081,6 +1083,23 @@ fn icon_name_property<'s>(
         Some(folder) => Ok(Some(knot_protocol::IconRef::Folder { folder })),
         None => Err(BoundaryError::Type("an icon needs a name, file, or folder")),
     }
+}
+
+fn optional_detail_max_lines<'s>(
+    scope: &mut v8::PinScope<'s, '_>,
+    object: v8::Local<'s, v8::Object>,
+) -> Result<Option<u8>, BoundaryError> {
+    let value = property(scope, object, "detailMaxLines", "invalid detail line cap")?;
+    if value.is_null_or_undefined() {
+        return Ok(None);
+    }
+    let lines = value
+        .number_value(scope)
+        .filter(|lines| lines.fract() == 0. && (1. ..=255.).contains(lines))
+        .ok_or(BoundaryError::Type(
+            "detailMaxLines must be an integer from 1 to 255",
+        ))?;
+    Ok(Some(lines as u8))
 }
 
 fn optional_flag_property<'s>(
@@ -1148,6 +1167,7 @@ pub(super) fn tree_action_from_v8<'s>(
         arguments,
         icon: icon_name_property(scope, object)?,
         menu_only: optional_flag_property(scope, object, "menuOnly")?,
+        show_on_hover: optional_flag_property(scope, object, "showOnHover")?,
     })
 }
 

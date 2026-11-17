@@ -52,6 +52,8 @@ fn item(id: &str, label: &str, kind: TreeItemKind, actions: Vec<TreeAction>) -> 
         label: label.into(),
         description: None,
         detail: None,
+        detail_max_lines: None,
+        bold: false,
         icon: None,
         collapsible_state: TreeCollapsibleState::None,
         command: Some("example.activate".into()),
@@ -151,6 +153,8 @@ fn stale_and_disposed_tree_responses_are_ignored(cx: &mut TestAppContext) {
                     label: "Root".into(),
                     description: None,
                     detail: None,
+                    detail_max_lines: None,
+                    bold: false,
                     icon: None,
                     collapsible_state: TreeCollapsibleState::None,
                     command: None,
@@ -376,6 +380,7 @@ fn actions_carry_arguments_and_enter_keyboard_focus(cx: &mut TestAppContext) {
         arguments: CommandArgumentValue::Null,
         icon: None,
         menu_only: false,
+        show_on_hover: false,
     };
     let generation = tree.update(cx, |tree, cx| {
         tree.register_provider("example.git", owner(registration), vec![frame_action], cx)
@@ -395,6 +400,7 @@ fn actions_carry_arguments_and_enter_keyboard_focus(cx: &mut TestAppContext) {
         ),
         icon: Some("action.stage".into()),
         menu_only: false,
+        show_on_hover: false,
     };
     tree.update(cx, |tree, cx| {
         assert!(tree.apply_response(
@@ -1182,5 +1188,177 @@ fn focus_loss_with_a_message_dismisses_and_a_vanished_row_ends_the_edit(cx: &mut
         fixture
             .begin(cx, EditTarget::Label("missing".into()), "x", None, false)
             .is_none()
+    );
+}
+
+impl EditFixture {
+    /// Replace the root's children with `items`.
+    fn load(&self, cx: &mut TestAppContext, items: Vec<TreeItem>) {
+        self.window
+            .update(cx, |tree, _, cx| {
+                let generation = tree.children[&None].generation;
+                assert!(tree.apply_response(
+                    response(self.registration, self.view, None, generation, items),
+                    cx
+                ));
+            })
+            .unwrap();
+        draw(cx, self.window);
+    }
+
+    fn row_height(&self, cx: &mut TestAppContext, index: usize) -> f32 {
+        let mut visual = gpui::VisualTestContext::from_window(self.window.into(), cx);
+        let bounds = visual
+            .debug_bounds(Box::leak(
+                format!("extension-tree-row-{index}").into_boxed_str(),
+            ))
+            .unwrap_or_else(|| panic!("row {index} is laid out"));
+        f32::from(bounds.size.height)
+    }
+}
+
+fn plain(id: &str) -> TreeItem {
+    let mut row = item(id, id, TreeItemKind::Item, Vec::new());
+    row.status_text = None;
+    row.badge = None;
+    row
+}
+
+fn detailed(id: &str, detail: &str, max_lines: Option<u8>) -> TreeItem {
+    let mut row = plain(id);
+    row.detail = Some(detail.into());
+    row.detail_max_lines = max_lines;
+    row
+}
+
+#[gpui::test]
+fn rows_take_the_height_of_their_content(cx: &mut TestAppContext) {
+    let fixture = EditFixture::new(cx);
+    let mut group = plain("g");
+    group.kind = TreeItemKind::Group;
+    fixture.load(
+        cx,
+        vec![
+            plain("p"),
+            detailed("one", "short", None),
+            detailed("four", "a\nb\nc\nd", None),
+            detailed("capped", "a\nb\nc\nd", Some(2)),
+            group,
+        ],
+    );
+    let heights = (0..5)
+        .map(|index| fixture.row_height(cx, index))
+        .collect::<Vec<_>>();
+    // A row without detail keeps the plain height, a longer detail grows
+    // its row, a line cap cuts it back, and a group header is shorter than
+    // an ordinary row.
+    assert_eq!(heights[0], crate::app::tokens::list::ROW_HEIGHT);
+    assert!(heights[1] >= crate::app::tokens::list::TWO_LINE_ROW_HEIGHT);
+    assert!(heights[2] > heights[1]);
+    assert!(heights[3] > heights[1] && heights[3] < heights[2]);
+    assert_eq!(heights[4], crate::app::tokens::list::GROUP_ROW_HEIGHT);
+}
+
+#[gpui::test]
+fn a_hover_only_action_stays_an_inline_action(cx: &mut TestAppContext) {
+    let fixture = EditFixture::new(cx);
+    let mut row = plain("row");
+    row.actions = vec![TreeAction {
+        label: "Dismiss".into(),
+        command: "example.dismiss".into(),
+        arguments: CommandArgumentValue::Null,
+        icon: None,
+        menu_only: false,
+        show_on_hover: true,
+    }];
+    fixture.load(cx, vec![row]);
+    // Only its button's visibility depends on the pointer, so keyboard action
+    // navigation still reaches it.
+    fixture
+        .window
+        .update(cx, |tree, _, _| {
+            assert_eq!(tree.inline_actions_for_row("row").len(), 1);
+        })
+        .unwrap();
+}
+
+#[gpui::test]
+fn reveal_scrolls_to_a_row_far_below_the_first_screen(cx: &mut TestAppContext) {
+    let fixture = EditFixture::new(cx);
+    let rows = (0..300).map(|n| plain(&format!("r{n}"))).collect();
+    fixture.load(cx, rows);
+    fixture
+        .window
+        .update(cx, |tree, _, cx| tree.reveal(vec!["r250".into()], cx))
+        .unwrap();
+    draw(cx, fixture.window);
+    fixture
+        .window
+        .update(cx, |tree, _, _| {
+            assert_eq!(tree.selected_id_for_test().as_deref(), Some("r250"));
+            let top = tree.list.logical_scroll_top().item_ix;
+            assert!((200..=250).contains(&top), "scrolled to {top}");
+        })
+        .unwrap();
+}
+
+#[gpui::test]
+fn rows_inserted_above_keep_the_scroll_position(cx: &mut TestAppContext) {
+    let fixture = EditFixture::new(cx);
+    let rows = (0..300).map(|n| plain(&format!("r{n}"))).collect();
+    fixture.load(cx, rows);
+    fixture
+        .window
+        .update(cx, |tree, _, cx| tree.reveal(vec!["r250".into()], cx))
+        .unwrap();
+    draw(cx, fixture.window);
+    let before = fixture
+        .window
+        .update(cx, |tree, _, _| tree.list.logical_scroll_top().item_ix)
+        .unwrap();
+    let mut rows = vec![plain("new")];
+    rows.extend((0..300).map(|n| plain(&format!("r{n}"))));
+    fixture.load(cx, rows);
+    let after = fixture
+        .window
+        .update(cx, |tree, _, _| tree.list.logical_scroll_top().item_ix)
+        .unwrap();
+    assert_eq!(after, before + 1);
+}
+
+#[gpui::test]
+fn inline_actions_of_a_row_with_detail_sit_under_its_text(cx: &mut TestAppContext) {
+    let fixture = EditFixture::new(cx);
+    let action = |show_on_hover| TreeAction {
+        label: "Open".into(),
+        command: "example.open".into(),
+        arguments: CommandArgumentValue::Null,
+        icon: None,
+        menu_only: false,
+        show_on_hover,
+    };
+    let mut with_button = detailed("with", "text", None);
+    with_button.actions = vec![action(false)];
+    let mut hover_only = detailed("hover", "text", None);
+    hover_only.actions = vec![action(true)];
+    let mut plain_button = plain("plain");
+    plain_button.actions = vec![action(false)];
+    fixture.load(
+        cx,
+        vec![
+            detailed("bare", "text", None),
+            with_button,
+            hover_only,
+            plain_button,
+        ],
+    );
+    let bare = fixture.row_height(cx, 0);
+    // A button under the text makes its row taller; a hover-only one stays at
+    // the top right, and a row without detail keeps its single line.
+    assert!(fixture.row_height(cx, 1) > bare);
+    assert_eq!(fixture.row_height(cx, 2), bare);
+    assert_eq!(
+        fixture.row_height(cx, 3),
+        crate::app::tokens::list::ROW_HEIGHT
     );
 }

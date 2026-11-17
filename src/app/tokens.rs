@@ -40,8 +40,17 @@ pub(crate) mod list {
     pub(crate) const PICKER_INPUT_SIZE: f32 = 14.;
     /// The text size of tree and picker rows.
     pub(crate) const TEXT_SIZE: f32 = 13.;
-    /// A tree row with a second line.
+    /// The least height of a tree row with detail text.
     pub(crate) const TWO_LINE_ROW_HEIGHT: f32 = 44.;
+    /// The line a tree row's label, icon, and trailing parts share when the
+    /// row has detail text below.
+    pub(crate) const FIRST_LINE_HEIGHT: f32 = 20.;
+    /// The size of the icon of a row with detail text.
+    pub(crate) const DETAIL_ICON_SIZE: f32 = 16.;
+    /// The widest a row's detail text runs, to keep lines readable in a wide view.
+    pub(crate) const DETAIL_MAX_WIDTH: f32 = 560.;
+    /// A tree group header.
+    pub(crate) const GROUP_ROW_HEIGHT: f32 = 20.;
     /// The gap between a list's edge and its rounded selection.
     pub(crate) const ROW_INSET: f32 = 4.;
     /// A tree row's content inset from the list's edge and the indent per depth level.

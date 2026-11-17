@@ -1908,6 +1908,8 @@ declare module "knot" {
     /** Offer the action only in the context menu, not as a button on the row
      * or toolbar. */
     readonly menuOnly?: boolean;
+    /** Show the button on a row only while the row is pointed at or selected. */
+    readonly showOnHover?: boolean;
   }
   /**
    * Native tree semantics. Optional description, icon and command are nullable.
@@ -1919,9 +1921,11 @@ declare module "knot" {
     readonly id: string;
     readonly label: string;
     readonly description?: string | null;
-    /** A muted second line under the label. When any row of a view has one, the
-     * view shows every row at two-line height. */
+    /** Muted text under the label. It wraps, and the row grows to fit it. */
     readonly detail?: string | null;
+    /** How many lines `detail` may wrap over before it is cut off, 1 to 255;
+     * without it the whole text shows. */
+    readonly detailMaxLines?: number | null;
     /** An icon such as `symbol`, `{ file: "main.rs" }`, or `{ folder: "src" }`. */
     readonly icon?: IconRef | null;
     /** Required expansion state; never inferred from child results. */
@@ -1942,6 +1946,8 @@ declare module "knot" {
     readonly kind?: "item" | "group";
     /** Paint the row dimmed, as for an ignored file. */
     readonly muted?: boolean;
+    /** Paint the label in a heavier weight, as for an unread entry. */
+    readonly bold?: boolean;
     /** Right-aligned short status text, e.g. a Git change letter. */
     readonly statusText?: string | null;
     /** A badge dot in this key's color; put any short label in statusText. */

@@ -257,9 +257,9 @@ changes the fresh-window default. Pass a live `WindowTarget` from
 
 An item is `item` by default. A `group` is a non-activatable header that
 organizes child rows: the native view fetches its children immediately, shows no
-disclosure, and keeps them visible. Items carry an optional muted second line, `detail`
-(a view where any row has one shows every row at two-line height), optional
-`statusText`, and a
+disclosure, and keeps them visible. Items carry optional muted text under the label,
+`detail`, which wraps and grows its row (`detailMaxLines` cuts it off after that many
+lines), an optional `statusText` at the row's top right, and a
 `badge` naming a [color key](#register-a-theme-and-define-colors), such as
 `warning` or `text.muted`, and either kind may declare command-backed `actions`. A
 contribution's own `actions` populate the frame toolbar. An item or action may
@@ -314,8 +314,10 @@ rows toggle on click and Enter instead. A command bound to a key with
 `keymaps.bind(key, command, { view })` learns the selected row from
 `workbench.selectedTreeItem()`. `ViewRegistration.reveal(idPath)` expands each
 ancestor, waiting for its children, then selects and scrolls to the last ID. A
-row may be `muted`, and an action with `menuOnly` shows in the context menu and
-not as a row button. Every tree has speed search: typing on a focused tree
+row may be `muted` or `bold`, an action with `menuOnly` shows in the context menu and
+not as a row button, and an action with `showOnHover` shows its button only while
+the row is pointed at or selected. On a row with `detail`, the other buttons sit
+under the text, as in a notification popup. Every tree has speed search: typing on a focused tree
 highlights and jumps to matching loaded rows.
 
 `editLabel(id, { value, selection, validate })` turns a row's label into a text

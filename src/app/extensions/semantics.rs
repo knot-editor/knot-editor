@@ -649,6 +649,8 @@ mod tests {
                         label: "Root".into(),
                         description: None,
                         detail: None,
+                        detail_max_lines: None,
+                        bold: false,
                         icon: None,
                         collapsible_state: TreeCollapsibleState::None,
                         command: None,

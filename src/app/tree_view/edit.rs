@@ -138,7 +138,7 @@ impl TreeView {
         Some(edit.input.read(cx).text().to_owned())
     }
 
-    fn scroll_to_edit(&self) {
+    fn scroll_to_edit(&mut self) {
         let rows = self.visible_rows();
         let position = rows.iter().position(|row| match (row, self.edit.as_ref()) {
             (VisibleRow::Draft { .. }, Some(_)) => true,
@@ -148,7 +148,7 @@ impl TreeView {
             _ => false,
         });
         if let Some(flat) = position {
-            self.scroll.scroll_to_item(flat, ScrollStrategy::Nearest);
+            self.pending_scroll = Some(flat);
         }
     }
 

@@ -395,6 +395,9 @@ pub struct TreeAction {
     /// Offer the action only in the context menu.
     #[serde(default)]
     pub menu_only: bool,
+    /// Show the action's button only while the row is pointed at or selected.
+    #[serde(default)]
+    pub show_on_hover: bool,
 }
 
 /// Whether a tree row is ordinary selectable content or a group header.
@@ -414,10 +417,13 @@ pub struct TreeItem {
     pub label: String,
     #[serde(default)]
     pub description: Option<String>,
-    /// A muted second line under the label; a view where any row has one
-    /// shows every row at two-line height.
+    /// Muted text under the label; it wraps, and the row grows to fit it.
     #[serde(default)]
     pub detail: Option<String>,
+    /// How many lines the detail may wrap over before it is cut off; without
+    /// it the whole text shows.
+    #[serde(default)]
+    pub detail_max_lines: Option<u8>,
     /// An unknown name paints the fallback icon.
     #[serde(default)]
     pub icon: Option<IconRef>,
@@ -433,6 +439,9 @@ pub struct TreeItem {
     /// Paint the row dimmed, as for an ignored file.
     #[serde(default)]
     pub muted: bool,
+    /// Paint the label in a heavier weight, as for an unread entry.
+    #[serde(default)]
+    pub bold: bool,
     #[serde(default)]
     pub status_text: Option<String>,
     /// The theme color key of the row's badge.
