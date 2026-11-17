@@ -26,6 +26,9 @@ pub struct FindOptions {
     /// `$` match at line boundaries and `\n` matches across lines. Case
     /// folding is then the pattern engine's own.
     pub regex: bool,
+    /// Keep at most one match starting on each line. After a match spanning
+    /// lines, the line it ends on is a candidate again, past the match's end.
+    pub per_line: bool,
 }
 
 /// Why a search failed.
@@ -125,6 +128,7 @@ impl BufferModel {
             (None, None)
         };
         let mut resume = 0;
+        let mut lines = PerLine::new(options);
         for (start, _) in text.char_indices() {
             if start < resume {
                 continue;
@@ -133,6 +137,9 @@ impl BufferModel {
                 continue;
             };
             if options.whole_word && !bounded(&text, start, end, before, after) {
+                continue;
+            }
+            if !lines.accepts(&text, start, end) {
                 continue;
             }
             if found.ranges.len() == limit {
@@ -165,8 +172,12 @@ impl BufferModel {
         }
 
         let (window_start, text, span) = self.window(&range);
+        let mut lines = PerLine::new(options);
         for matched in regex.find_iter(Input::new(&text).span(span)) {
             if options.whole_word && !bounded(&text, matched.start(), matched.end(), None, None) {
+                continue;
+            }
+            if !lines.accepts(&text, matched.start(), matched.end()) {
                 continue;
             }
             if found.ranges.len() == limit {
@@ -198,7 +209,10 @@ impl BufferModel {
     /// `limit` capped at [`MAX_FIND_MATCHES`]; matching is [`Self::find`]'s.
     /// A literal query inserts the replacement as typed. A pattern expands
     /// `$1`, `${name}` and `$$` from the match's groups, and `\n`, `\t` and
-    /// `\\` to a line break, a tab and a backslash. The edits are ascending
+    /// `\\` to a line break, a tab and a backslash; `\u` and `\l` change the
+    /// next character to upper or lower case, `\U` and `\L` everything up to
+    /// `\E` or `\e` (or the replacement's end), over literal text and
+    /// expanded groups alike. The edits are ascending
     /// and disjoint, in the buffer's current coordinates.
     pub fn replace_matches(
         &self,
@@ -236,8 +250,9 @@ impl BufferModel {
         if limit == 0 {
             return Ok(replaced);
         }
-        let template = unescape(replacement);
+        let template = parse_template(replacement);
         let (window_start, text, span) = self.window(&range);
+        let mut lines = PerLine::new(options);
         for captures in regex.captures_iter(Input::new(&text).span(span)) {
             let Some(matched) = captures.get_match() else {
                 continue;
@@ -245,21 +260,14 @@ impl BufferModel {
             if options.whole_word && !bounded(&text, matched.start(), matched.end(), None, None) {
                 continue;
             }
+            if !lines.accepts(&text, matched.start(), matched.end()) {
+                continue;
+            }
             if replaced.edits.len() == limit {
                 replaced.more = true;
                 break;
             }
-            let mut expanded = String::new();
-            interpolate::string(
-                &template,
-                |index, dst| {
-                    if let Some(group) = captures.get_group(index) {
-                        dst.push_str(&text[group.range()]);
-                    }
-                },
-                |name| captures.group_info().to_index(PatternID::ZERO, name),
-                &mut expanded,
-            );
+            let expanded = expand(&template, &captures, &text);
             replaced.edits.push(edit(
                 window_start + matched.start()..window_start + matched.end(),
                 expanded,
@@ -377,9 +385,54 @@ fn edit(range: Range<usize>, text: String) -> knot_protocol::TextEdit {
     }
 }
 
-/// `replacement` with `\n`, `\t` and `\\` replaced by their characters; any
-/// other backslash stays.
-fn unescape(replacement: &str) -> String {
+/// Which matches `per_line` keeps.
+struct PerLine {
+    enabled: bool,
+    /// Matches starting before this offset of the searched text are dropped.
+    skip_before: usize,
+}
+
+impl PerLine {
+    fn new(options: FindOptions) -> Self {
+        Self {
+            enabled: options.per_line,
+            skip_before: 0,
+        }
+    }
+
+    /// Whether the match `start..end` of `text` is kept; a kept match moves
+    /// the next candidate to the next line, or past its end when it spans
+    /// lines.
+    fn accepts(&mut self, text: &str, start: usize, end: usize) -> bool {
+        if !self.enabled {
+            return true;
+        }
+        if start < self.skip_before {
+            return false;
+        }
+        self.skip_before = if text[start..end].contains('\n') {
+            end
+        } else {
+            text[start..]
+                .find('\n')
+                .map_or(text.len(), |newline| start + newline + 1)
+        };
+        true
+    }
+}
+
+/// A part of a replacement template.
+enum Piece {
+    /// Text with `$` references still to expand.
+    Text(String),
+    /// A case escape.
+    Case(char),
+}
+
+/// `replacement` split at its case escapes, with `\n`, `\t` and `\\` replaced
+/// by their characters; any other backslash stays.
+fn parse_template(replacement: &str) -> Vec<Piece> {
+    let mut pieces = Vec::new();
     let mut text = String::with_capacity(replacement.len());
     let mut characters = replacement.chars().peekable();
     while let Some(character) = characters.next() {
@@ -387,6 +440,14 @@ fn unescape(replacement: &str) -> String {
             ('\\', Some('n')) => '\n',
             ('\\', Some('t')) => '\t',
             ('\\', Some('\\')) => '\\',
+            ('\\', Some(&case @ ('u' | 'U' | 'l' | 'L' | 'e' | 'E'))) => {
+                characters.next();
+                if !text.is_empty() {
+                    pieces.push(Piece::Text(std::mem::take(&mut text)));
+                }
+                pieces.push(Piece::Case(case));
+                continue;
+            }
             _ => {
                 text.push(character);
                 continue;
@@ -395,5 +456,52 @@ fn unescape(replacement: &str) -> String {
         characters.next();
         text.push(escaped);
     }
-    text
+    if !text.is_empty() {
+        pieces.push(Piece::Text(text));
+    }
+    pieces
+}
+
+/// The replacement for one match: the template with its groups expanded and
+/// its case escapes applied.
+fn expand(
+    template: &[Piece],
+    captures: &regex_automata::util::captures::Captures,
+    text: &str,
+) -> String {
+    let mut expanded = String::new();
+    let mut next: Option<char> = None;
+    let mut rest: Option<char> = None;
+    for piece in template {
+        let piece = match piece {
+            Piece::Case(case) => {
+                match case {
+                    'u' | 'l' => next = Some(*case),
+                    'U' | 'L' => rest = Some(*case),
+                    _ => rest = None,
+                }
+                continue;
+            }
+            Piece::Text(piece) => piece,
+        };
+        let mut part = String::new();
+        interpolate::string(
+            piece,
+            |index, dst| {
+                if let Some(group) = captures.get_group(index) {
+                    dst.push_str(&text[group.range()]);
+                }
+            },
+            |name| captures.group_info().to_index(PatternID::ZERO, name),
+            &mut part,
+        );
+        for character in part.chars() {
+            match next.take().or(rest) {
+                Some('u' | 'U') => expanded.extend(character.to_uppercase()),
+                Some(_) => expanded.extend(character.to_lowercase()),
+                None => expanded.push(character),
+            }
+        }
+    }
+    expanded
 }

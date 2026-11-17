@@ -1,6 +1,6 @@
 # D150: Vim search and substitution
 
-Status: 🚧 approved, not started. Roadmap item [D150](../roadmap.md).
+Status: 🚧 in progress (checkpoint 1 awaiting review). Roadmap item [D150](../roadmap.md).
 
 ## Goal
 
@@ -143,16 +143,16 @@ cover.
 
 ## Checkpoints
 
-### 1. Native per-line matching and replacement case escapes
+### 1. Native per-line matching and replacement case escapes ✅ (awaiting review)
 
 Deliverables:
 
-- `perLine` on find and replace, and `\u \U \l \L \e \E` in regex
+- ✅ `perLine` on find and replace, and `\u \U \l \L \e \E` in regex
   replacement expansion, through `knot-model`, the host, and `knot.d.ts`.
-- Model tests for both: per-line with multi-line matches, ranges and limits;
+- ✅ Model tests for both: per-line with multi-line matches, ranges and limits;
   case escapes over literal text, groups, Unicode, and unterminated `\U`. A
   Find case for a case-escaped Replace All.
-- Text search docs and the extension guide updated.
+- ✅ Text search docs and the extension guide updated.
 
 Implementation context: `crates/knot-model/src/buffer/find.rs` (matching and
 `replace_matches` expansion) and `crates/knot-model/src/buffer/tests.rs`;

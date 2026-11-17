@@ -286,6 +286,26 @@ fn replace_all_expands_groups_in_one_undo_step_and_reports_the_count(cx: &mut Te
 }
 
 #[gpui::test]
+fn replace_all_applies_case_escapes_in_the_replacement(cx: &mut TestAppContext) {
+    let product = TestProduct::start(only(&["@knot/find"]), cx);
+    let editor = product.windowed_editor("hello world\nfoo\n", cx);
+
+    editor.press_unsettled(REPLACE, cx);
+    wait_until(cx, |cx| editor.bars(cx).len() == 2);
+    editor.press_unsettled(REGEX, cx);
+    editor.type_input(r"(\w)(\w*)", cx);
+    wait_for_message(&editor, "1 of 3", cx);
+    editor.press_unsettled("<tab>", cx);
+    editor.type_input(r"\u$1\U$2", cx);
+
+    editor.press_unsettled(REPLACE_ALL, cx);
+    wait_until(cx, |cx| {
+        replace_message(&editor, cx).as_deref() == Some("Replaced 3")
+    });
+    assert_eq!(editor.marked(cx).replace('‸', ""), "HELLO WORLD\nFOO\n");
+}
+
+#[gpui::test]
 fn an_invalid_pattern_shows_the_parsers_message_and_escape_closes_both_bars(
     cx: &mut TestAppContext,
 ) {

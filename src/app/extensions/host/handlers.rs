@@ -847,6 +847,7 @@ pub(crate) struct FindArguments {
     pub case_sensitive: bool,
     pub whole_word: bool,
     pub regex: bool,
+    pub per_line: bool,
     pub range: Option<ByteRange>,
     pub limit: u64,
 }
@@ -866,6 +867,9 @@ impl HostArguments for FindArguments {
                 .unwrap_or(false),
             range: reader.range(7)?,
             limit: reader.integer(8)?,
+            per_line: reader
+                .optional_boolean(9, "perLine must be a boolean")?
+                .unwrap_or(false),
         })
     }
 }
@@ -889,6 +893,7 @@ pub(crate) async fn find(
                     case_sensitive: arguments.case_sensitive,
                     whole_word: arguments.whole_word,
                     regex: arguments.regex,
+                    per_line: arguments.per_line,
                 };
                 let limit = usize::try_from(arguments.limit).unwrap_or(usize::MAX);
                 let found = model.find(&arguments.query, options, arguments.range, limit)?;
@@ -934,6 +939,9 @@ impl HostArguments for ReplaceArguments {
                     .unwrap_or(false),
                 regex: reader
                     .optional_boolean(7, "regex must be a boolean")?
+                    .unwrap_or(false),
+                per_line: reader
+                    .optional_boolean(11, "perLine must be a boolean")?
                     .unwrap_or(false),
             },
             range: reader.range(8)?,

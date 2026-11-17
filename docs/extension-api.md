@@ -930,10 +930,12 @@ While a field has focus, bind keys with `keymaps.bind(key, command, { view:
 "bar", context: "<bar id>" })`; Tab moves between fields. `buffer.find` supplies
 native matching for highlights and navigation, literal or, with `regex: true`,
 a Rust `regex` pattern in multi-line mode (an invalid one rejects
-`InvalidQuery` with the parser's message in `details.message`).
+`InvalidQuery` with the parser's message in `details.message`); `perLine: true`
+keeps at most one match per line.
 `buffer.replace(query, replacement, options)` takes the same options and
 replaces the matches natively in one commit (one undo step, one change
-notification), expanding `$1`, `${name}` and `$$` in regex mode, and returns
+notification), expanding `$1`, `${name}` and `$$` in regex mode, with `\u` `\l`
+and `\U` `\L` ... `\E` changing the case of what follows, and returns
 `{ revision, count, more }`. The bundled
 [`@knot/find`](../extensions/@knot/find/) package is a complete example; the
 precise contracts are in `knot.d.ts`.

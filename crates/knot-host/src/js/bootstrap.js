@@ -535,6 +535,7 @@ function bufferFor(handle) {
         options?.regex === true,
         options?.range == null ? null : byteRange(options.range),
         limit,
+        options?.perLine === true,
       );
       return Object.freeze({
         revision: result.revision,
@@ -558,6 +559,7 @@ function bufferFor(handle) {
         options?.range == null ? null : byteRange(options.range),
         limit,
         options?.ifRevision == null ? null : safeInteger(options.ifRevision),
+        options?.perLine === true,
       );
       return Object.freeze({ revision: result.revision, count: result.count, more: result.more });
     },

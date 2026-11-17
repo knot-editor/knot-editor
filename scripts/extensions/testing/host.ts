@@ -431,15 +431,48 @@ interface PatternMatch {
   named: Record<string, string | undefined>;
 }
 
-/** The native replacement's expansion: `\\n`, `\\t`, `\\\\`, then `$1`, `${name}` and `$$`. */
+/**
+ * The native replacement's expansion: `\\n`, `\\t`, `\\\\`, the case escapes `\\u` `\\l`
+ * (next character) and `\\U` `\\L` (until `\\E` or `\\e`), then `$1`, `${name}` and `$$`.
+ */
 function expandReplacement(replacement: string, match: PatternMatch): string {
-  const template = replacement.replace(/\\([nt\\])/g, (_, escaped: string) =>
-    escaped === "n" ? "\n" : escaped === "t" ? "\t" : "\\",
+  let next: string | undefined;
+  let rest: string | undefined;
+  const cased = (text: string) =>
+    [...text]
+      .map((character) => {
+        const mode = next ?? rest;
+        next = undefined;
+        return mode === "u" || mode === "U" ? character.toUpperCase() : mode === undefined ? character : character.toLowerCase();
+      })
+      .join("");
+  return replacement.replace(
+    /\\([ntuUlLeE\\])|\$(?:(\$)|\{(\w+)\}|(\w+))|[^\\$]+|[\\$]/g,
+    (whole, escaped?: string, dollar?: string, braced?: string, bare?: string) => {
+      if (escaped === "n") return cased("\n");
+      if (escaped === "t") return cased("\t");
+      if (escaped === "\\") return cased("\\");
+      if (escaped === "u" || escaped === "l") next = escaped;
+      else if (escaped === "U" || escaped === "L") rest = escaped;
+      else if (escaped !== undefined) rest = undefined;
+      else if (dollar !== undefined) return cased("$");
+      else if (braced !== undefined || bare !== undefined) {
+        const name = (braced ?? bare)!;
+        return cased((/^\d+$/.test(name) ? match.groups[Number(name)] : match.named[name]) ?? "");
+      } else return cased(whole);
+      return "";
+    },
   );
-  return template.replace(/\$(?:(\$)|\{(\w+)\}|(\w+))/g, (_, dollar: string | undefined, braced?: string, bare?: string) => {
-    if (dollar !== undefined) return "$";
-    const name = (braced ?? bare)!;
-    return (/^\d+$/.test(name) ? match.groups[Number(name)] : match.named[name]) ?? "";
+}
+
+/** The matches `perLine` keeps: one per line, a spanning match freeing the rest of its last line. */
+function perLineMatches<T extends { start: number; end: number }>(text: string, matches: T[]): T[] {
+  let skipBefore = 0;
+  return matches.filter((match) => {
+    if (match.start < skipBefore) return false;
+    const newline = text.indexOf("\n", match.start);
+    skipBefore = newline !== -1 && newline < match.end ? match.end : newline === -1 ? text.length : newline + 1;
+    return true;
   });
 }
 
@@ -618,7 +651,11 @@ function createBuffer(document: FakeDocument): Knot.Buffer {
       const start = utf16AtByte(document.text, range.startByteOffset);
       const end = utf16AtByte(document.text, range.endByteOffset);
       if (start === undefined || end === undefined || start > end) throw hostError("InvalidRange");
-      const matches = findMatches(document.text, query, options ?? {}, start, end);
+      let matches = findMatches(document.text, query, options ?? {}, start, end);
+      if (options?.perLine === true) {
+        matches = perLineMatches(document.text, matches.map(([from, to]) => ({ start: from, end: to })))
+          .map(({ start, end }): [number, number] => [start, end]);
+      }
       const limit = Math.min(options?.limit ?? 1000, MAX_FIND_MATCHES);
       return {
         revision: document.revision,
@@ -638,7 +675,7 @@ function createBuffer(document: FakeDocument): Knot.Buffer {
       const end = utf16AtByte(document.text, range.endByteOffset);
       if (start === undefined || end === undefined || start > end) throw hostError("InvalidRange");
       const limit = Math.min(options?.limit ?? MAX_FIND_MATCHES, MAX_FIND_MATCHES);
-      const found: { start: number; end: number; text: string }[] =
+      const unfiltered: { start: number; end: number; text: string }[] =
         options?.regex === true
           ? findPatternMatches(document.text, query, options, start, end).map((match) => ({
               ...match,
@@ -649,6 +686,7 @@ function createBuffer(document: FakeDocument): Knot.Buffer {
               end: to,
               text: replacement,
             }));
+      const found = options?.perLine === true ? perLineMatches(document.text, unfiltered) : unfiltered;
       const chosen = found.slice(0, limit);
       const result = { count: chosen.length, more: found.length > limit };
       if (chosen.length === 0) return { revision: document.revision, ...result };

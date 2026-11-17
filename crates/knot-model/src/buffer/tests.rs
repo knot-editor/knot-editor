@@ -1628,6 +1628,95 @@ fn replace_regex_whole_word_and_case() {
     );
 }
 
+fn per_line() -> FindOptions {
+    FindOptions {
+        per_line: true,
+        ..pattern()
+    }
+}
+
+#[test]
+fn per_line_keeps_the_first_match_starting_on_each_line() {
+    let model = BufferModel::from_text("aa a\n\nab ab\na");
+    assert_eq!(found(&model, "a", per_line()), vec![0..1, 6..7, 12..13]);
+    // A literal search honors it too.
+    let literal = FindOptions {
+        per_line: true,
+        ..FindOptions::default()
+    };
+    assert_eq!(found(&model, "a", literal), vec![0..1, 6..7, 12..13]);
+    assert_eq!(
+        replaced_all("aa a\n\nab ab\na", "a", "x", per_line()),
+        "xa a\n\nxb ab\nx"
+    );
+}
+
+#[test]
+fn per_line_frees_the_line_a_multi_line_match_ends_on() {
+    let model = BufferModel::from_text("a\nb b\nb\nc");
+    // `a\nb` spans lines 0-1; a later `b` on line 1 starts a new candidate,
+    // and the one on line 2 is its own.
+    assert_eq!(found(&model, "a\nb|b", per_line()), vec![0..3, 4..5, 6..7]);
+    // Without a match starting past the span's end the line is spent.
+    assert_eq!(found(&model, "a\nb", per_line()), vec![0..3]);
+    // A match ending on a line start leaves that whole line a candidate.
+    let lines = BufferModel::from_text("a\nb\nb");
+    assert_eq!(found(&lines, "a\n|b", per_line()), vec![0..2, 2..3, 4..5]);
+}
+
+#[test]
+fn per_line_respects_ranges_and_limits() {
+    let model = BufferModel::from_text("aa\naa\naa\naa");
+    assert_eq!(
+        model.find("a", per_line(), span(3, 9), 10).unwrap().ranges,
+        vec![3..4, 6..7]
+    );
+    let limited = model.find("a", per_line(), None, 2).unwrap();
+    assert_eq!(limited.ranges, vec![0..1, 3..4]);
+    assert!(limited.more);
+    let exact = model.find("a", per_line(), None, 4).unwrap();
+    assert_eq!(exact.ranges.len(), 4);
+    assert!(!exact.more);
+    let (text, more) = replaced("aa\naa\naa", "a", "x", per_line(), None, 2);
+    assert_eq!(text, "xa\nxa\naa");
+    assert!(more);
+}
+
+#[test]
+fn replacement_case_escapes_change_literal_text_and_groups() {
+    let options = pattern_sensitive();
+    assert_eq!(
+        replaced_all("foo bar", r"(\w+) (\w+)", r"\u$1 \U$2\E!", options),
+        "Foo BAR!"
+    );
+    assert_eq!(
+        replaced_all("FOO BAR", r"(\w+) (\w+)", r"\l$1 \L$2", options),
+        "fOO bar"
+    );
+    // `\u` meets `\L`: the first character up, the rest down.
+    assert_eq!(replaced_all("hELLO", r"\w+", r"\u\L$0", options), "Hello");
+    // `\e` ends a span like `\E`; literal text is changed too.
+    assert_eq!(replaced_all("x", "x", r"\Uab\ecd", options), "ABcd");
+    // An unterminated `\U` runs to the replacement's end, not the next match.
+    assert_eq!(replaced_all("a b", r"\w", r"\Ux", options), "X X");
+    assert_eq!(replaced_all("a b", r"\w", r"x\U", options), "x x");
+}
+
+#[test]
+fn replacement_case_escapes_handle_unicode_and_escaped_backslashes() {
+    let options = pattern_sensitive();
+    assert_eq!(replaced_all("straße", r"\w+", r"\U$0", options), "STRASSE");
+    assert_eq!(replaced_all("éa", r"(é)(a)", r"\U$1\E$2", options), "Éa");
+    // A group's own backslash-u is data, and `\\u` is a backslash then `u`.
+    assert_eq!(replaced_all(r"\u", r".+", r"\U$0", options), r"\U");
+    assert_eq!(replaced_all("x", "x", r"\\u", options), r"\u");
+    // A literal query inserts the replacement as typed.
+    assert_eq!(
+        replaced_all("x", "x", r"\Uy", FindOptions::default()),
+        r"\Uy"
+    );
+}
+
 #[test]
 fn replace_stays_inside_a_range() {
     let options = FindOptions::default();

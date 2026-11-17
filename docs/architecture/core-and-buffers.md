@@ -103,6 +103,8 @@ With `regex` the query is a Rust `regex` pattern in multi-line mode (`^` and
 empty matches are kept and the search resumes one character after one, and an
 invalid pattern fails with the parser's message. Anchors and `\b` at a range
 edge are judged against the buffer text just outside it, as `wholeWord` is.
+`perLine` keeps at most one match starting on each line; after a match that
+spans lines, the line it ends on is a candidate again, past the match's end.
 `wholeWord` requires non-word characters, in the editor's word classes, on both
 sides of a match. The result carries the searched revision, the byte ranges, and
 whether more matches follow a limit that defaults to 1,000 and is capped at
@@ -113,7 +115,10 @@ point searches the range before it.
 `find_and_replace` commits them as one revision-checked batch, one undo step
 (`limit` defaults to every match up to the cap). A literal replacement is
 inserted as typed; a pattern's expands `$1`, `${name}` and `$$` from the match's
-groups (a missing group is empty) and `\n`, `\t` and `\\`. Nothing is committed when no
+groups (a missing group is empty) and `\n`, `\t` and `\\`; `\u` and `\l`
+change the next character to upper or lower case, `\U` and `\L` everything up
+to `\E` or `\e` or the replacement's end, over literal text and groups alike.
+Nothing is committed when no
 match changes the text.
 
 ## Anchored ranges

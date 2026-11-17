@@ -1404,6 +1404,12 @@ declare module "knot" {
      * text outside it.
      */
     readonly regex?: boolean;
+    /**
+     * Keep at most one match starting on each line, the first. After a match
+     * that spans lines, the line it ends on is a candidate again, past the
+     * match's end. For `replace`, one replacement per line.
+     */
+    readonly perLine?: boolean;
     /** Search only here; a match must lie wholly inside. Defaults to the whole buffer. */
     readonly range?: ByteRange;
     /** Most matches to return, 1000 by default and at most 100000 whatever is asked. */
