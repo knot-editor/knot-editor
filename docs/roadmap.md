@@ -494,7 +494,7 @@ hold the analyses that support some items.
     `textobjects` queries beside `folds` and `indents`, and expose node queries
     through the extension API without exposing tree-sitter objects.
 
-- **D113 — Command and input recording**
+- **D113 — Command and input recording** 🚧
   - Depends on: none
   - Description: Nothing can observe the stream of invoked commands together
     with the text typed between them, so neither repeat nor macros can be
@@ -503,7 +503,9 @@ hold the analyses that support some items.
     counts on insert commands such as `3ihi<Esc>`, which all need the text
     typed in insert mode. Do it when daily Vim use misses them, or a user macro
     workflow is selected: record a view's invoked commands with arguments plus
-    its typed text as edits, and replay the recording through ordinary dispatch.
+    its typed text as edits, and replay the recording through ordinary dispatch. The
+    [plan](plans/d113-command-and-input-recording.md) holds the design and
+    checkpoints.
 
 - **D147 — Key contexts on non-editor views**
   - Depends on: none
