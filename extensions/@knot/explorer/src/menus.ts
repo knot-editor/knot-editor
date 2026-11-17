@@ -9,7 +9,7 @@ import { COPY_PATH, COPY_RELATIVE_PATH, REVEAL, REVEAL_ACTIVE } from "./rows.js"
 const TAB_ITEMS: readonly MenuItemOptions[] = [
   { command: COPY_PATH, group: "3_file", order: 0 },
   { command: COPY_RELATIVE_PATH, group: "3_file", order: 1 },
-  { command: REVEAL_ACTIVE, title: "Reveal in Explorer", group: "3_file", order: 2 },
+  { command: REVEAL_ACTIVE, title: "Reveal in Explorer View", group: "3_file", order: 2 },
   { command: REVEAL, group: "3_file", order: 3 },
 ];
 

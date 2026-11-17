@@ -467,7 +467,7 @@ fn the_tab_menu_offers_file_actions_on_editor_tabs(cx: &mut TestAppContext) {
     assert_eq!(menu.len(), 1, "the explorer contributes one group");
     assert_eq!(
         &menu[0][..3],
-        ["Copy Path", "Copy Relative Path", "Reveal in Explorer"]
+        ["Copy Path", "Copy Relative Path", "Reveal in Explorer View"]
     );
     assert!(
         menu[0][3].starts_with("Reveal in "),

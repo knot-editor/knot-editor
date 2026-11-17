@@ -56,7 +56,7 @@ uses.
   package per surface was rejected as too fine-grained. `@knot/chrome` adds the tab items (Close, Close Others, Close to the Right,
   Close All, Split Right, Split Down), the editor items (Cut, Copy, Paste), and
   the terminal items (Copy, Paste). The explorer adds Copy Path, Copy Relative
-  Path, Reveal in Explorer, and Reveal in Finder to editor tabs. Native code
+  Path, Reveal in Explorer View, and Reveal in Finder to editor tabs. Native code
   owns the menu surface, the locations, and the commands.
 - **The menu bar stays native.** It must exist before extensions start and
   where none run (macOS with no window, the config-error window), so its
@@ -132,7 +132,7 @@ See [context menus](../architecture/commands.md#context-menus), the
 
 ### 5. Explorer items in the tab menu 🔍 ready for review
 
-The explorer adds Copy Path, Copy Relative Path, Reveal in Explorer, and
+The explorer adds Copy Path, Copy Relative Path, Reveal in Explorer View, and
 Reveal in Finder to editor tabs, acting on the captured tab's document.
 
 - **Implementation context:** `extensions/@knot/explorer/src/clipboard.ts`

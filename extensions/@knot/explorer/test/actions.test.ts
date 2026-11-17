@@ -168,7 +168,7 @@ test("the tab menu offers the file actions on editor tabs", () => {
   assert.deepEqual(host.menuItems("tab"), [
     { command: COPY_PATH, group: "3_file", order: 0, view: "editor" },
     { command: COPY_RELATIVE_PATH, group: "3_file", order: 1, view: "editor" },
-    { command: REVEAL_ACTIVE, title: "Reveal in Explorer", group: "3_file", order: 2, view: "editor" },
+    { command: REVEAL_ACTIVE, title: "Reveal in Explorer View", group: "3_file", order: 2, view: "editor" },
     { command: REVEAL, group: "3_file", order: 3, view: "editor" },
   ]);
 });
