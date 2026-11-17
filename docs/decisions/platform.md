@@ -135,8 +135,8 @@ layout mode or a hard-coded style, so a flat theme needs no code and a user can
 reshape any theme.
 The prototype's free-form status string was the only place
 some failures appeared, so native failures with no other visible effect use the
-native warning prompt instead. Success and progress notices were dropped because
-their effect is visible. Extension calls get failures as results, so a package
+native warning prompt instead. Success notices were dropped because their
+effect is visible. Extension calls get failures as results, so a package
 decides whether to tell the user. A failed package startup opens the startup
 report, because nothing else passively shows that a package failed.
 
@@ -197,8 +197,8 @@ a long `debug` session grows one file past its cap.
 
 A record's target is static, so extension `console` output uses one target,
 `knot::extension`, with the package as a field. Warnings the user can fix in
-their settings or install use the target `knot::config`, so the notification
-work (D117) can raise a notice at each site found by searching for it; the log
-does not build that bridge.
+their settings or install use the target `knot::config`. Each site also raises
+a notice itself, so the log stays a plain `tracing` sink with no bridge that
+turns records into notices.
 
 Reference: [development](../development.md#application-log).

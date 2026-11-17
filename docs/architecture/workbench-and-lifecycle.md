@@ -52,11 +52,12 @@ config failure discards the queue and opens a focused diagnostic window with
 Copy and Quit; windows remain unavailable for that launch, and nothing
 is recorded.
 
-The status bar carries no operation messages. A native operation whose failure
-leaves no other visible effect, such as Save, Open, Add Folder, recovery, or creating a
-transfer window, reports it through a native warning prompt that needs no
-answer. Successful and in-progress operations show only their effect.
-Extension calls receive the failure as their result instead of a prompt.
+A native operation whose failure leaves no other visible effect, such as Save,
+Open, Add Folder, recovery, or creating a transfer window, reports it through a
+native warning prompt that needs no answer. Successful and in-progress
+operations show only their effect. Extension calls receive the failure as their
+result instead of a prompt. Anything else Knot tells the user without
+interrupting goes through [notifications](#notifications).
 
 ## Windows
 
@@ -149,6 +150,36 @@ commands on the focused editor, as the other two clicks do. Its "Indent Using"
 entries are absent, since Convert Indentation also makes the style the
 document's own. The package's tests run against the fake host and a product test
 drives it through the real host.
+
+## Notifications
+
+The application owns one `NotificationStore` (`crates/knot-model/src/notifications.rs`,
+the `ApplicationNotifications` global in `src/app/notifications.rs`): the last
+100 notices, each read or unread, and the rule for which notices a window's
+popups show. A notice is raised natively through `notifications::raise` or by
+an extension through `workbench.showNotice`; every change redraws the windows
+and publishes `notificationsChanged` to observers
+([extension host](extension-host.md#application-observation)).
+
+Each window mirrors the store into its popup stack and paints it over the
+workbench (`src/app/product/notifications.rs`). A notice with a target shows
+only in that window, otherwise in all of them. Popups are not the history:
+a popup that times out hides in its own window and leaves the notice unread,
+while closing it, running one of its actions, or showing the panel marks the
+notice read everywhere. Nothing is persisted, and notices raised before any
+window exists, such as startup configuration warnings, wait in the store and
+pop up when the first window opens. While the Notifications panel shows in a
+window, that window paints no popups.
+
+The bundled `@knot/notifications` package builds the panel and the status bell
+on the public extension API alone: a dock tool listing the history, with the
+unread count in the bell. Popups can be turned off with `notifications.popups`,
+for a package that presents notices itself.
+
+Every `knot::config` warning also raises a sticky `warning` notice, with
+actions that run Knot: Open Personal Configuration and Knot: Open Log: setting
+warnings and a `font.family` that is not installed. The fatal configuration
+error keeps its diagnostic window.
 
 ## Workbench and protected closure
 

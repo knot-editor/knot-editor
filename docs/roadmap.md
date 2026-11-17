@@ -28,19 +28,18 @@ point.
 
 ## Next up
 
-1. D117 — Non-modal notifications: D041, D181, and D200 build on it.
-2. D022 — Editor autocompletion.
-3. D183 — Deterministic indentation after Enter and closing tokens.
-4. D175 — Type-ahead after a held Enter.
-5. D182 — Interleave extension roots at awaits: before D067.
-6. D156 — Fewer host round trips per key.
-7. D087 — Extension entitlements: D085, D126, D067, and D101 need it.
-8. D129 — Refactor builtin language extensions.
-9. D138 — Extension startup report as an untitled document.
-10. D054 — Dedicated read-only generated text surface.
-11. D085 — Cross-file search.
-12. D197 — Diff view: D126 and D174 build on it.
-13. D126 — Git status and changes per root.
+1. D022 — Editor autocompletion.
+2. D183 — Deterministic indentation after Enter and closing tokens.
+3. D175 — Type-ahead after a held Enter.
+4. D182 — Interleave extension roots at awaits: before D067.
+5. D156 — Fewer host round trips per key.
+6. D087 — Extension entitlements: D085, D126, D067, and D101 need it.
+7. D129 — Refactor builtin language extensions.
+8. D138 — Extension startup report as an untitled document.
+9. D054 — Dedicated read-only generated text surface.
+10. D085 — Cross-file search.
+11. D197 — Diff view: D126 and D174 build on it.
+12. D126 — Git status and changes per root.
 
 Remove an item from this list when it is done or dropped.
 
@@ -298,36 +297,25 @@ hold the analyses that support some items.
     a module whose functions call into the dependency's isolate, typed from
     the dependency's declarations.
 
-- **D117 — Non-modal notifications** 🚧
-  - Depends on: none
-  - Description: Extension messages use the native modal prompt, and nothing
-    passes a notice without interrupting. Add notification popups with a
-    history panel; see [the plan](plans/d117-notifications.md). Its consumers
-    are extensions, terminal notifications (D041), native operation failures
-    (D181), and configuration errors the user can fix, which the
-    [application log](development.md#application-log) records with the target
-    `knot::config`.
-
 - **D200 — Progress reporting**
-  - Depends on: D117
+  - Depends on: none
   - Description: A long-running task has no non-blocking way to show progress.
     Scanning the workspace file index takes about ten seconds on a very large
     project, and language-server indexing (D067) will too. Add a progress handle
     with a title, optional percentage, and cancellation, presented alongside
-    D117's notifications, with the file index scan as its first consumer.
+    notifications, with the file index scan as its first consumer.
     Deliver cancellation through the handle to the root that holds it: inside
     that root when it is still active, otherwise as an ordinary queued root, so
     it works with serial roots and needs no D182.
 
-- **D181 — Native operation failures in the status bar**
-  - Depends on: D117
+- **D181 — Native operation failures as notices**
+  - Depends on: none
   - Description: A native operation whose failure leaves no other visible
     effect, such as Save, Open, Add Folder, or recovery, reports it through a
     native warning prompt, which interrupts and leaves no trace once
-    dismissed. The status bar carries no operation messages. Do it with or
-    after D117: report these failures through its transient notice, keep the
-    last ones reachable from the status bar, and keep prompts only for failures
-    that need a decision.
+    dismissed. The status bar carries no operation messages. Report
+    these failures as notices, which the history keeps reachable, and keep
+    prompts only for failures that need a decision.
 
 - **D145 — Virtual text and anchored floating panels**
   - Depends on: none
@@ -364,7 +352,7 @@ hold the analyses that support some items.
     current line's text to the request if reading the buffer costs too much.
 
 - **D067 — Language servers and semantic tokens**
-  - Depends on: D182, D087, D145, D117, D200, D115, D022
+  - Depends on: D182, D087, D145, D200, D115, D022
   - Description: No language client exists. The syntax highlighting work
     prepared for one: LSP language IDs, `Send` text snapshots, a highlight
     vocabulary that semantic token types and modifiers map onto, and a
@@ -619,14 +607,14 @@ Kakoune mode could use them too. The
 ### Terminal
 
 - **D041 — Terminal titles, bells, and notifications**
-  - Depends on: D117
+  - Depends on: none
   - Description: Keyboard and mouse protocols, HTTP(S) links, and the
     reported working directory are covered. libghostty also parses window
     titles, bells, and desktop notifications (OSC 9 and 777), and Knot ignores
     them. Do it when daily use misses a program's title or a notification from
     a long-running command: show the title on the terminal tab, mark a tab
     whose terminal rang its bell while hidden, and deliver notifications
-    through D117's notices.
+    through notices.
 
 - **D191 — Faster libghostty-vt builds**
   - Depends on: none

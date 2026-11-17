@@ -98,6 +98,11 @@ pane while the palette or a picker has focus, draws a `card.focusedBorder`
 outline inside its edge, so a card with split panes shows which one has focus, and a
 theme sets the key equal to `border` to drop the emphasis.
 
+Notification popups paint with the `notification.*` keys: `background`,
+`border`, `foreground` for the title, `description.foreground` for the
+message, and the severity accents `info`, `warning`, and `error` for the icon
+and countdown ring. A theme or a user override restyles the cards fully.
+
 gpui-component's widgets take their colors from the same resolution: each
 theme application switches gpui-component to the theme's appearance, which
 loads its built-in colors, then sets each field of the `COLORS` table in

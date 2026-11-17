@@ -71,6 +71,7 @@ such as `KNOT_LOG=knot::extension=debug,info`. Targets are `knot::<area>`. A
 warning about something the user can fix in their settings or install uses the
 target `knot::config`; a `font.family` that is not installed logs one such
 warning per scope (`editor`, `terminal`) and family, naming the fallback drawn.
+Each such warning also raises a [notice](architecture/workbench-and-lifecycle.md#notifications).
 The writer runs off the foreground and is flushed when
 Knot quits.
 
