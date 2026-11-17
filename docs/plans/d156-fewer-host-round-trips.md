@@ -1,6 +1,6 @@
 # D156 — Fewer host round trips per key
 
-Status: 🚧 checkpoint 4 awaiting review. Source: [roadmap](../roadmap.md) D156.
+Status: 🚧 checkpoint 4 done. Source: [roadmap](../roadmap.md) D156.
 
 ## Goal
 
@@ -97,27 +97,13 @@ when no tab was focused); Vim keys its state by it. The extension API test
 covers an editor tab; the null case is untested. The budget is `j` 20,
 `w` 16, `x` 15. See [commands](../architecture/commands.md).
 
-### 4. Selection notification payload
+### 4. Selection notification payload ✅
 
-Deliverables ✅: listeners receive the selection; the acknowledgement returns
-it; Vim, chrome, and word highlight use it (word highlight keeps the last
-payload and reads only before the first); the budget test lowers to `j` 18,
-`w` 14, `x` 15. Lines on the notification arrive in checkpoint 5.
-
-Validation: extension API tests that the payload is the selection at turn
-start, including a change during the listener queueing one more turn with
-the newer selection; Vim, chrome, and word-highlight suites; budget test;
-`just check`.
-
-Review gate: decision text updated in
-`docs/decisions/extension-host.md#editor-handles` and its index line.
-
-**Implementation context:** `acknowledge_editor_selection` in
-`src/app/extensions/host.rs` returns the selection, mirroring
-`acknowledge_editor_bars`; the `"selection"` branch in `bootstrap.js`
-passes a frozen event to listeners, as the `"bars"` branch does.
-`EditorEvent` docs in `knot-protocol` stay payload-free on the wire. Update
-`docs/architecture/extension-host.md#editor-handle-notifications`.
+Selection listeners receive the selection as of their turn start, returned by
+the acknowledgement request; Vim, chrome, and word highlight use it (word
+highlight reads only before its first notification). The budget is `j` 18,
+`w` 14, `x` 15. See [extension host](../architecture/extension-host.md#editor-handle-notifications)
+and the [decision](../decisions/extension-host.md#editor-handles).
 
 ### 5. Selection with nearby lines
 
