@@ -1,6 +1,6 @@
 # D156 — Fewer host round trips per key
 
-Status: 🚧 checkpoint 2 awaiting review. Source: [roadmap](../roadmap.md) D156.
+Status: 🚧 checkpoint 2 done. Source: [roadmap](../roadmap.md) D156.
 
 ## Goal
 
@@ -82,41 +82,13 @@ debug.
 
 ### 2. Optimized host glue in debug ✅
 
-Deliverables: dev-profile `opt-level = 3` for `knot-host`, `knot-protocol`,
-`v8`, `serde`, and `serde_json`; before and after numbers for the Vim suite,
-the whole workspace test time, and an incremental rebuild after touching
-`knot-host`, recorded here. A short profile of one turn notes whether the
-root-side adapters still dominate.
-
-Validation: `just test` timings; `just check`.
-
-**Result:** `[profile.dev.package.*] opt-level = 3` for `knot-host` and
-`knot-protocol` only. Adding `v8`, `serde`, and `serde_json` gave the same
-speedup for a 35 s longer clean rebuild, so they are left out. Measured warm
-(debug, this machine):
-
-| | before | after |
-| --- | --- | --- |
-| Vim `tests/vim.rs` (40 cases) | 1.34–1.39 s | 1.23–1.30 s |
-| Vim `tests/edit.rs` (5 cases) | 0.41–0.44 s | 0.30–0.36 s |
-| Budget test case | 0.13 s | 0.12 s |
-| Workspace `nextest` (1823 tests) | 12.2–12.5 s | 12.2–13.5 s (noise) |
-| Incremental rebuild after touching `knot-host` | 6.0 s | 4.8–5.0 s |
-
-The gain is about 5–25% on the Vim binaries and invisible across the
-workspace; a one-time rebuild after the change cost about 50 s. No profile of
-a turn was taken: a gain this small says the host glue is not what a turn
-spends its time on, so the root-side adapters and the key's request count
-(checkpoints 3–5) matter more. Whether to keep the optimization is the
-review decision.
-
-Review gate: the speedup is worth the rebuild cost; drop any crate whose
-optimization does not pay.
-
-**Implementation context:** `[profile.dev.package.*]` entries in the root
-`Cargo.toml`, beside the existing `tree-sitter`, `gpui-pre`, and `taffy`
-entries and their comment style. `just test-timings` gives per-binary
-numbers.
+Dev-profile `opt-level = 3` for `knot-host` and `knot-protocol`; adding `v8`,
+`serde`, and `serde_json` gave the same speedup for a 35 s longer clean
+rebuild, so they are left out. Warm debug timings: Vim `tests/vim.rs` 1.37 s
+to 1.27 s, `tests/edit.rs` 0.42 s to 0.33 s, the budget case 0.13 s to
+0.12 s, workspace nextest unchanged within noise (about 12.5 s), incremental
+`knot-host` rebuild 6.0 s to 4.9 s. No turn profile was taken; the small gain
+suggests the host glue is not what a turn spends its time on.
 
 ### 3. View target on the command context
 
