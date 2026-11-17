@@ -187,7 +187,7 @@ impl TreeView {
             return;
         }
         if !edit.watching {
-            self.finish_edit(TransientOutcome::Input(text), cx);
+            self.finish_edit(TransientOutcome::Input(text, None), cx);
             return;
         }
         if edit.answered.as_deref() != Some(text.as_str()) {
@@ -195,7 +195,7 @@ impl TreeView {
             return;
         }
         if edit.message.is_none() {
-            self.finish_edit(TransientOutcome::Input(text), cx);
+            self.finish_edit(TransientOutcome::Input(text, None), cx);
         } else if lost_focus {
             self.finish_edit(TransientOutcome::Dismissed, cx);
         }
@@ -224,7 +224,7 @@ impl TreeView {
         edit.answered = Some(text.clone());
         let commit = std::mem::take(&mut edit.commit_when_clean) && edit.message.is_none();
         if commit {
-            self.finish_edit(TransientOutcome::Input(text), cx);
+            self.finish_edit(TransientOutcome::Input(text, None), cx);
         }
         cx.notify();
     }

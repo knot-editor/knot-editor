@@ -48,7 +48,7 @@ test("rows offer new items in folders and rename and delete below the roots", as
 });
 
 test("New File validates names, creates missing folders, opens a tab, and reloads the parent", async () => {
-  host.answer("editNewItem", { kind: "accepted", value: "docs/guide.md" });
+  host.answer("editNewItem", { kind: "accepted", value: "docs/guide.md", highlighted: null });
   host.type("README.md", "docs/guide.md", "/x");
   await host.run(NEW_FILE, { arguments: { id: rootRow } });
   const [prompt] = host.prompts().filter((entry) => entry.kind === "editNewItem");
@@ -61,7 +61,7 @@ test("New File validates names, creates missing folders, opens a tab, and reload
 });
 
 test("New Folder creates a folder without opening anything, and a dismissed edit changes nothing", async () => {
-  host.answer("editNewItem", { kind: "accepted", value: "assets" });
+  host.answer("editNewItem", { kind: "accepted", value: "assets", highlighted: null });
   await host.run(NEW_FOLDER, { arguments: { id: rootRow } });
   assert.equal((await (await import("knot")).files.stat(`${ROOT}/assets`))?.kind, "directory");
   assert.equal(host.opens().length, 0);
@@ -73,7 +73,7 @@ test("New Folder creates a folder without opening anything, and a dismissed edit
 
 test("Rename moves the entry and refuses names that exist", async () => {
   const readme = (await rows(rootRow)).find((item) => item.label === "README.md")!;
-  host.answer("editLabel", { kind: "accepted", value: "NOTES.md" });
+  host.answer("editLabel", { kind: "accepted", value: "NOTES.md", highlighted: null });
   host.type("src", "a/b", "");
   await host.run(RENAME, { arguments: { id: readme.id } });
   const [prompt] = host.prompts().filter((entry) => entry.kind === "editLabel");

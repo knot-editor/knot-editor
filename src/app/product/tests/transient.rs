@@ -141,7 +141,7 @@ fn input_and_native_prompts_settle_once(cx: &mut TestAppContext) {
     cx.simulate_keystrokes(native_window, "enter");
     assert_eq!(
         settle(&mut input, cx),
-        TransientOutcome::Input("hello".into())
+        TransientOutcome::Input("hello".into(), None)
     );
 
     let mut rejected = cx
@@ -652,9 +652,11 @@ await commands.register("transient.completing-input", async () => {
         items: found.map(({ index, ranges }) => ({
           label: WORDS[index],
           value: WORDS[index],
-          detail: "word",
+          description: "word",
+          hint: `#${index}`,
           icon: WORDS[index] === "beta" ? { folder: "beta" } : { file: WORDS[index] },
           matches: ranges,
+          descriptionMatches: [[0, 1]],
         })),
       };
     },
@@ -865,7 +867,10 @@ fn live_input_reports_the_latest_value_and_shows_returned_messages(cx: &mut Test
         input_message(&input, cx).as_deref() == Some("message 42")
     });
     input.update(cx, |_, cx| {
-        cx.emit(crate::app::transient::InputEvent::Accepted("42".into()))
+        cx.emit(crate::app::transient::InputEvent::Accepted {
+            value: "42".into(),
+            highlighted: None,
+        })
     });
     wait_for_api_condition(cx, |cx| {
         cx.read_from_clipboard()
@@ -874,7 +879,7 @@ fn live_input_reports_the_latest_value_and_shows_returned_messages(cx: &mut Test
     });
     assert_eq!(
         clipboard(cx).as_deref(),
-        Some(r#"1,123,,42|{"kind":"accepted","value":"42"}"#)
+        Some(r#"1,123,,42|{"kind":"accepted","value":"42","highlighted":null}"#)
     );
     assert_eq!(wait_for_command(completion, cx), CommandOutcome::Completed);
 }
@@ -943,6 +948,9 @@ fn input_completions_show_and_an_empty_answer_hides_them(cx: &mut TestAppContext
     cx.read(|cx| {
         let items = input.read(cx).items();
         assert_eq!(items[0].matches, Some(vec![[0, 2]]));
+        assert_eq!(items[0].description.as_deref(), Some("word"));
+        assert_eq!(items[0].hint.as_deref(), Some("#0"));
+        assert_eq!(items[0].description_matches, Some(vec![[0, 1]]));
         assert_eq!(
             items[0].icon,
             Some(knot_protocol::IconRef::File {
@@ -955,9 +963,15 @@ fn input_completions_show_and_an_empty_answer_hides_them(cx: &mut TestAppContext
     for index in 0..2 {
         assert!(
             visual
-                .debug_bounds(format!("completion-icon-{index}").leak())
+                .debug_bounds(format!("picker-icon-{index}").leak())
                 .is_some(),
             "completion {index} paints its icon"
+        );
+        assert!(
+            visual
+                .debug_bounds(format!("picker-row-{index}").leak())
+                .is_some(),
+            "completion {index} paints as a picker row"
         );
     }
     type_into(&input, &["zz"], cx);
@@ -1009,7 +1023,22 @@ fn enter_submits_the_typed_text_with_a_row_highlighted(cx: &mut TestAppContext) 
     assert_eq!(wait_for_command(completion, cx), CommandOutcome::Completed);
     assert_eq!(
         clipboard(cx).as_deref(),
-        Some(r#"{"kind":"accepted","value":"al"}"#)
+        Some(r#"{"kind":"accepted","value":"al","highlighted":1}"#)
+    );
+}
+
+#[gpui::test]
+fn enter_with_no_list_reports_no_highlighted_completion(cx: &mut TestAppContext) {
+    let (_host, _key, window, _window, completion) =
+        start_live_input("transient.completing-input", cx);
+    let input = transient_input(&window, cx);
+    type_into(&input, &["zz"], cx);
+    wait_for_api_condition(cx, |cx| completion_labels(&input, cx).is_empty());
+    assert!(press(&input, "enter", cx));
+    assert_eq!(wait_for_command(completion, cx), CommandOutcome::Completed);
+    assert_eq!(
+        clipboard(cx).as_deref(),
+        Some(r#"{"kind":"accepted","value":"zz","highlighted":null}"#)
     );
 }
 

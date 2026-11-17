@@ -1760,7 +1760,9 @@ pub(crate) async fn show_input(
         )
     })??;
     match receiver.await {
-        Ok(TransientOutcome::Input(value)) => Ok(InputResult::Accepted { value }),
+        Ok(TransientOutcome::Input(value, highlighted)) => {
+            Ok(InputResult::Accepted { value, highlighted })
+        }
         Ok(TransientOutcome::Dismissed) => Ok(InputResult::Dismissed),
         _ => Err(TransientError::Cancelled),
     }
@@ -1972,7 +1974,9 @@ fn input_update(pulled: Pulled) -> Result<InputUpdate, TransientError> {
             value: value.unwrap_or_default(),
         }),
         Pulled::Queried { .. } => Err(TransientError::Cancelled),
-        Pulled::Settled(TransientOutcome::Input(value)) => Ok(InputUpdate::Accepted { value }),
+        Pulled::Settled(TransientOutcome::Input(value, highlighted)) => {
+            Ok(InputUpdate::Accepted { value, highlighted })
+        }
         Pulled::Settled(TransientOutcome::Dismissed) => Ok(InputUpdate::Dismissed),
         Pulled::Settled(_) => Err(TransientError::Cancelled),
     }

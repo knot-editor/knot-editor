@@ -90,7 +90,7 @@ test("line numbers and other arguments get no items", async () => {
 
 test(":set completes option names with their short forms", async () => {
   const items = await completeEx("set nu");
-  assert.deepEqual(items.map((item) => [item.value, item.detail]), [
+  assert.deepEqual(items.map((item) => [item.value, item.description]), [
     ["set number", "nu"],
     ["set relativenumber", "rnu"],
   ]);

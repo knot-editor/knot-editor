@@ -23,7 +23,7 @@ function prompt() {
 
 test("typing previews each location, centered, and Enter keeps the last", async () => {
   host.type("2", "2:9", "2,10");
-  host.answer("showInput", { kind: "accepted", value: "2,10" });
+  host.answer("showInput", { kind: "accepted", value: "2,10", highlighted: null });
   await host.run(COMMAND);
 
   assert.equal(prompt().title, "Go to Line");
@@ -40,7 +40,7 @@ test("typing previews each location, centered, and Enter keeps the last", async 
 
 test("lines and columns past the end clamp", async () => {
   host.type("3:99", "99:2");
-  host.answer("showInput", { kind: "accepted", value: "99:2" });
+  host.answer("showInput", { kind: "accepted", value: "99:2", highlighted: null });
   await host.run(COMMAND);
 
   assert.deepEqual(host.inputMessages().slice(1), ["Go to line 3, character 6", "Go to line 4, character 1"]);
@@ -59,7 +59,7 @@ test("dismissing restores the view exactly", async () => {
 
 test("invalid input restores the view, shows the usage, and Enter only dismisses", async () => {
   host.type("3", "3x");
-  host.answer("showInput", { kind: "accepted", value: "3x" });
+  host.answer("showInput", { kind: "accepted", value: "3x", highlighted: null });
   await host.run(COMMAND);
 
   assert.deepEqual(host.inputMessages().slice(1), [
@@ -70,7 +70,7 @@ test("invalid input restores the view, shows the usage, and Enter only dismisses
 });
 
 test("Enter on a location newer than the last preview still goes there", async () => {
-  host.answer("showInput", { kind: "accepted", value: "3" });
+  host.answer("showInput", { kind: "accepted", value: "3", highlighted: null });
   await host.run(COMMAND);
 
   assert.deepEqual(host.editorView(), { ...ORIGINAL, anchor: LINE_3, caret: LINE_3 });

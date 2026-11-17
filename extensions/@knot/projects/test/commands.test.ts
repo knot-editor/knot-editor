@@ -12,10 +12,10 @@ test("names need not be unique, and renaming to blank restores the inferred name
   seedProject("b", "Beta", [BETA]);
   host.openWindow();
   await startLaunched();
-  host.answer("showInput", { kind: "accepted", value: "beta" });
+  host.answer("showInput", { kind: "accepted", value: "beta", highlighted: null });
   await host.run("projects.rename", { arguments: { id: "a" } });
   assert.deepEqual(registry().projects.map((project) => project.name), ["beta", "Beta"]);
-  host.answer("showInput", { kind: "accepted", value: "alpha" });
+  host.answer("showInput", { kind: "accepted", value: "alpha", highlighted: null });
   await host.run("projects.rename", { arguments: { id: "a" } });
   assert.equal((host.prompts().at(-1)?.options as { value: string }).value, "beta");
   assert.equal(registry().projects[0]?.name, null);

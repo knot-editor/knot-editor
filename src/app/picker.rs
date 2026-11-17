@@ -491,6 +491,115 @@ pub(crate) fn highlighted(text: String, ranges: &[Range<usize>], color: Hsla) ->
     StyledText::new(text).with_highlights(ranges.iter().map(|range| (range.clone(), style)))
 }
 
+/// The height of a row, with a second line when `two_lines`.
+pub(crate) fn row_height(two_lines: bool, zoom: f32) -> f32 {
+    (LINE_HEIGHT * if two_lines { 2. } else { 1. } + ROW_PADDING) * zoom
+}
+
+/// What one picker row shows, with the byte ranges of its label and
+/// description to highlight as matched.
+pub(crate) struct PickerRowContent<'a> {
+    pub(crate) entry: &'a PickerEntry,
+    pub(crate) label_matches: &'a [Range<usize>],
+    pub(crate) description_matches: &'a [Range<usize>],
+}
+
+/// One row of a list of picker rows, painted the same wherever one shows:
+/// icon, label, description, right-aligned hint, and a detail line. `index`
+/// names the row's element and its test selectors `picker-row-N` and
+/// `picker-icon-N`.
+pub(crate) fn picker_row(
+    content: PickerRowContent<'_>,
+    index: usize,
+    selected: bool,
+    row_height: f32,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    cx: &App,
+) -> Div {
+    let PickerRowContent {
+        entry,
+        label_matches,
+        description_matches,
+    } = content;
+    let theme = theme(cx);
+    let muted = theme.paint_color(color::TEXT_MUTED);
+    let matched = theme.paint_color(color::LIST_MATCH_FOREGROUND);
+    let line = div()
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap_4()
+        .when_some(entry.icon.as_ref(), |line, icon| {
+            line.child(
+                div()
+                    .debug_selector(move || format!("picker-icon-{index}"))
+                    .child(AppIcon::new(ref_definition(icon, false, cx))),
+            )
+        })
+        .child(div().flex_shrink_0().child(highlighted(
+            entry.label.clone(),
+            label_matches,
+            matched,
+        )))
+        .when_some(entry.description.clone(), |line, description| {
+            // A file's folder sits at the row's end so the names line up; a
+            // command's description follows its title.
+            line.child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .flex()
+                    .when(entry.icon.is_some(), |column| column.justify_end())
+                    .child(
+                        div()
+                            .truncate()
+                            .text_xs()
+                            .text_color(muted)
+                            .child(highlighted(description, description_matches, matched)),
+                    ),
+            )
+        })
+        .when(entry.description.is_none(), |line| {
+            line.child(div().flex_1())
+        })
+        .when_some(entry.hint.clone(), |line, hint| {
+            line.child(
+                div()
+                    .flex_shrink_0()
+                    .text_xs()
+                    .text_color(muted)
+                    .child(hint),
+            )
+        });
+    div()
+        .h(px(row_height))
+        .px(zoom::rems(tokens::list::PICKER_INSET))
+        .child(
+            div()
+                .id(("picker-row", index))
+                .debug_selector(move || format!("picker-row-{index}"))
+                .size_full()
+                .px_2()
+                .rounded(zoom::rems(tokens::radius::MD))
+                .flex()
+                .flex_col()
+                .justify_center()
+                .overflow_hidden()
+                .when(selected, |row| {
+                    row.bg(theme.paint_color(color::LIST_SELECTED_BACKGROUND))
+                        .text_color(theme.paint_color(color::LIST_SELECTED_FOREGROUND))
+                })
+                .when(!selected, |row| {
+                    row.hover(|style| style.bg(theme.paint_color(color::LIST_HOVER_BACKGROUND)))
+                })
+                .child(line)
+                .when_some(entry.detail.clone(), |row, detail| {
+                    row.child(div().truncate().text_xs().text_color(muted).child(detail))
+                })
+                .on_click(on_click),
+        )
+}
+
 impl Picker {
     /// The strip of scope tabs, each clickable.
     fn render_tabs(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -536,14 +645,11 @@ impl Render for Picker {
         let entity = cx.entity();
         let has_detail = self.entries.iter().any(|entry| entry.detail.is_some());
         let zoom = crate::app::zoom::factor(cx);
-        let row_height = (LINE_HEIGHT * if has_detail { 2. } else { 1. } + ROW_PADDING) * zoom;
+        let row_height = row_height(has_detail, zoom);
         let rows = self.matches.len();
         let list_height = (rows as f32 * row_height).min(PANEL_MAX_HEIGHT * zoom);
         let list = uniform_list("picker-rows", rows, move |range, _, cx| {
             let picker = entity.read(cx);
-            let theme = theme(cx);
-            let muted = theme.paint_color(color::TEXT_MUTED);
-            let matched = theme.paint_color(color::LIST_MATCH_FOREGROUND);
             range
                 .map(|index| {
                     let found = &picker.matches[index];
@@ -551,86 +657,20 @@ impl Render for Picker {
                     let is_selected = index == picker.selected;
                     let confirmed = found.entry;
                     let entity = entity.clone();
-                    let line = div()
-                        .flex()
-                        .flex_row()
-                        .items_center()
-                        .gap_4()
-                        .when_some(entry.icon.as_ref(), |line, icon| {
-                            line.child(
-                                div()
-                                    .debug_selector(move || format!("picker-icon-{index}"))
-                                    .child(AppIcon::new(ref_definition(icon, false, cx))),
-                            )
-                        })
-                        .child(div().flex_shrink_0().child(highlighted(
-                            entry.label.clone(),
-                            &found.label,
-                            matched,
-                        )))
-                        .when_some(entry.description.clone(), |line, description| {
-                            // A file's folder sits at the row's end so the names
-                            // line up; a command's description follows its title.
-                            line.child(
-                                div()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .flex()
-                                    .when(entry.icon.is_some(), |column| column.justify_end())
-                                    .child(div().truncate().text_xs().text_color(muted).child(
-                                        highlighted(description, &found.description, matched),
-                                    )),
-                            )
-                        })
-                        .when(entry.description.is_none(), |line| {
-                            line.child(div().flex_1())
-                        })
-                        .when_some(entry.hint.clone(), |line, hint| {
-                            line.child(
-                                div()
-                                    .flex_shrink_0()
-                                    .text_xs()
-                                    .text_color(muted)
-                                    .child(hint),
-                            )
-                        });
-                    div()
-                        .h(px(row_height))
-                        .px(zoom::rems(tokens::list::PICKER_INSET))
-                        .child(
-                            div()
-                                .id(("picker-row", index))
-                                .debug_selector(move || format!("picker-row-{index}"))
-                                .size_full()
-                                .px_2()
-                                .rounded(zoom::rems(tokens::radius::MD))
-                                .flex()
-                                .flex_col()
-                                .justify_center()
-                                .overflow_hidden()
-                                .when(is_selected, |row| {
-                                    row.bg(theme.paint_color(color::LIST_SELECTED_BACKGROUND))
-                                        .text_color(
-                                            theme.paint_color(color::LIST_SELECTED_FOREGROUND),
-                                        )
-                                })
-                                .when(!is_selected, |row| {
-                                    row.hover(|style| {
-                                        style.bg(theme.paint_color(color::LIST_HOVER_BACKGROUND))
-                                    })
-                                })
-                                .child(line)
-                                .when_some(entry.detail.clone(), |row, detail| {
-                                    row.child(
-                                        div().truncate().text_xs().text_color(muted).child(detail),
-                                    )
-                                })
-                                .on_click(move |_, _, cx| {
-                                    entity.update(cx, |_, cx| {
-                                        cx.emit(PickerEvent::Confirmed(confirmed))
-                                    });
-                                }),
-                        )
+                    picker_row(
+                        PickerRowContent {
+                            entry,
+                            label_matches: &found.label,
+                            description_matches: &found.description,
+                        },
+                        index,
+                        is_selected,
+                        row_height,
+                        move |_, _, cx| {
+                            entity.update(cx, |_, cx| cx.emit(PickerEvent::Confirmed(confirmed)));
+                        },
+                        cx,
+                    )
                 })
                 .collect()
         })

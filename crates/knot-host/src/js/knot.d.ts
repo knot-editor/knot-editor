@@ -2086,9 +2086,11 @@ declare module "knot" {
   /** Selection or explicit dismissal; dismissal is not an operational failure. */
   export type PickerResult = Readonly<
     { kind: "selected"; id: string } | { kind: "dismissed" }>;
-  /** Accepted text or explicit dismissal. */
+  /** Accepted text or explicit dismissal. `highlighted` is the index of the
+   * completion highlighted when the text was accepted, or null when none was:
+   * no list, or one answering earlier text than the field now holds. */
   export type InputResult = Readonly<
-    { kind: "accepted"; value: string } | { kind: "dismissed" }>;
+    { kind: "accepted"; value: string; highlighted: number | null } | { kind: "dismissed" }>;
   /** Confirmed or dismissed native confirmation. */
   export type ConfirmationResult = Readonly<
     { kind: "confirmed" } | { kind: "dismissed" }>;
@@ -2152,12 +2154,16 @@ declare module "knot" {
     /** The whole new field text when the completion is accepted. */
     readonly value: string;
     /** Muted text after the label. */
-    readonly detail?: string;
+    readonly description?: string;
+    /** Right-aligned muted text, such as a keybinding. */
+    readonly hint?: string;
     /** Painted before the label. */
     readonly icon?: IconRef;
     /** UTF-16 ranges of `label` to highlight as matched, as `completion.match`
      * returns them. */
     readonly matches?: readonly (readonly [start: number, end: number])[];
+    /** UTF-16 ranges of `description` to highlight as matched. */
+    readonly descriptionMatches?: readonly (readonly [start: number, end: number])[];
   }
   /** What an input's `onChange` may answer with besides a plain message. */
   export interface InputFeedback {

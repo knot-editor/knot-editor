@@ -403,7 +403,10 @@ it, ordered by the first style that matches, then that style's score, then the
 caller's order. It is native because the picker filters on every keystroke and
 native painting never calls JavaScript synchronously; extensions reach the same
 matcher through `completion.match`, with UTF-16 ranges, and pass the ranges back
-as an input completion's `matches` for highlighting.
+as an input completion's `matches` for highlighting. An input's completion
+list paints with the picker's row element (`picker_row`), so both look the
+same, and accepting the input reports the highlighted completion's index when
+the caller's list answers the accepted text.
 
 Native code keeps only the latest unread highlight, so a slow callback skips
 intermediate items, and a settled picker wins over an unread highlight.

@@ -529,12 +529,18 @@ pub struct InputCompletion {
     pub label: String,
     pub value: String,
     #[serde(default)]
-    pub detail: Option<String>,
+    pub description: Option<String>,
+    /// Right-aligned text.
+    #[serde(default)]
+    pub hint: Option<String>,
     #[serde(default)]
     pub icon: Option<IconRef>,
     /// UTF-16 code unit ranges of the label to highlight as matched.
     #[serde(default, deserialize_with = "unit_ranges")]
     pub matches: Option<Vec<[usize; 2]>>,
+    /// UTF-16 code unit ranges of the description to highlight as matched.
+    #[serde(default, deserialize_with = "unit_ranges")]
+    pub description_matches: Option<Vec<[usize; 2]>>,
 }
 
 /// Ranges of whole numbers, which cross the host boundary as floating point.
@@ -573,8 +579,14 @@ pub struct MatchedCandidate {
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum InputUpdate {
-    Changed { session: u64, value: String },
-    Accepted { value: String },
+    Changed {
+        session: u64,
+        value: String,
+    },
+    Accepted {
+        value: String,
+        highlighted: Option<usize>,
+    },
     Dismissed,
 }
 
@@ -582,7 +594,12 @@ pub enum InputUpdate {
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum InputResult {
-    Accepted { value: String },
+    /// `highlighted` is the index of the completion highlighted for the
+    /// accepted text, when the caller's completions answered it.
+    Accepted {
+        value: String,
+        highlighted: Option<usize>,
+    },
     Dismissed,
 }
 

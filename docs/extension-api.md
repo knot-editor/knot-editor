@@ -844,11 +844,14 @@ const named = await workbench.showInput({
 ```
 
 An `onChange` may instead return `{ message?, items? }`. Each item is
-`{ label, value, detail? }`, and `value` is the **whole new field text**; you
+`{ label, value, description?, hint?, icon?, matches?, descriptionMatches? }`,
+painted like a picker row, and `value` is the **whole new field text**; you
 do the filtering and ordering, and the list shows in your order under the
 field with its first row highlighted. Up, Down, Ctrl-N, and Ctrl-P move the
 highlight, and Tab replaces the field with the row's `value`, which calls
-`onChange` again with the new text. Enter always submits the field as shown.
+`onChange` again with the new text. Enter submits the field as shown, and the
+result's `highlighted` is the index of the row highlighted then in the list
+you last returned, or null when there is no list or it answers older text.
 An empty or missing list hides it. Feedback applies only while the field still
 holds the value it answers; otherwise it is dropped, so Tab never accepts a
 completion for older text:

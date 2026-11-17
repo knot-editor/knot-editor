@@ -21,7 +21,7 @@ test("each window's widget shows its project's name and follows renames and open
   assert.deepEqual(widget(bound), [["Alpha", SWITCH_COMMAND]]);
   assert.deepEqual(widget(unbound), []);
 
-  host.answer("showInput", { kind: "accepted", value: "Renamed" });
+  host.answer("showInput", { kind: "accepted", value: "Renamed", highlighted: null });
   await host.run("projects.rename", { arguments: { id: "a" } });
   assert.deepEqual(widget(bound), [["Renamed", SWITCH_COMMAND]]);
 

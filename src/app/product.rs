@@ -1802,7 +1802,9 @@ impl KnotWindow {
         let subscription = cx.subscribe(&view, |this: &mut Self, _view, event: &InputEvent, cx| {
             this.finish_transient(
                 match event {
-                    InputEvent::Accepted(value) => TransientOutcome::Input(value.clone()),
+                    InputEvent::Accepted { value, highlighted } => {
+                        TransientOutcome::Input(value.clone(), *highlighted)
+                    }
                     InputEvent::Dismissed => TransientOutcome::Dismissed,
                 },
                 cx,

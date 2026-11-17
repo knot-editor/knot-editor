@@ -11,17 +11,17 @@ use std::path::PathBuf;
 
 use gpui::{prelude::*, *};
 
-use super::icons::{AppIcon, ref_definition};
 use super::keys::Keystroke;
 
 use knot_protocol::{CommandInvocationId, ExtensionId, ExtensionLifecycleId, InputCompletion};
 
-use super::picker::{Picker, highlighted};
+use super::picker::{self, Picker, PickerEntry, PickerRowContent, picker_row};
 use super::text_input::{TextInput, TextInputEvent};
 use super::theme::{color, theme};
 use knot_model::matching::byte_ranges;
 
-use super::tokens::list::{PANEL_WIDTH, ROW_HEIGHT};
+use super::tokens::list::PANEL_WIDTH;
+use super::{tokens, zoom};
 
 /// Completion rows visible at once; the highlight scrolls into view.
 const MAX_VISIBLE_ROWS: usize = 8;
@@ -51,7 +51,8 @@ pub(crate) enum TransientSurface {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum TransientOutcome {
     Picker(String),
-    Input(String),
+    /// Accepted text and the index of the completion highlighted for it.
+    Input(String, Option<usize>),
     Confirmed,
     Folder(PathBuf),
     Failed(String),
@@ -61,7 +62,10 @@ pub(crate) enum TransientOutcome {
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum InputEvent {
-    Accepted(String),
+    Accepted {
+        value: String,
+        highlighted: Option<usize>,
+    },
     Dismissed,
 }
 
@@ -154,6 +158,12 @@ impl InputView {
         cx.notify();
     }
 
+    /// Highlight the completion at `index` and accept it.
+    fn accept_row(&mut self, index: usize, cx: &mut Context<Self>) {
+        self.selected = index;
+        self.accept_completion(cx);
+    }
+
     /// Replace the field with the highlighted completion's value. The field
     /// reports the change, so the caller answers with the next list.
     fn accept_completion(&mut self, cx: &mut Context<Self>) {
@@ -223,7 +233,11 @@ impl InputView {
             "escape" => cx.emit(InputEvent::Dismissed),
             "enter" => {
                 let value = self.input.read(cx).text().to_string();
-                cx.emit(InputEvent::Accepted(value));
+                // The list answers the text only once the caller has seen it.
+                let highlighted = (self.answered.as_deref() == Some(value.as_str())
+                    && self.selected < self.items.len())
+                .then_some(self.selected);
+                cx.emit(InputEvent::Accepted { value, highlighted });
             }
             _ => return false,
         }
@@ -244,58 +258,50 @@ impl Render for InputView {
         let zoom = crate::app::zoom::factor(cx);
         let rows = self.items.len();
         let entity = cx.entity();
+        let row_height = picker::row_height(false, zoom);
         let list = (rows > 0).then(|| {
             uniform_list("input-completions", rows, move |range, _, cx| {
                 let view = entity.read(cx);
-                let theme = theme(cx);
-                let muted = theme.paint_color(color::TEXT_MUTED);
-                let matched = theme.paint_color(color::LIST_MATCH_FOREGROUND);
                 range
                     .map(|index| {
-                        let item = &view.items[index];
-                        let selected = index == view.selected;
-                        div()
-                            .id(("input-completion", index))
-                            .h(px(ROW_HEIGHT * zoom))
-                            .px_3()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .gap_3()
-                            .overflow_hidden()
-                            .when(selected, |row| {
-                                row.bg(theme.paint_color(color::LIST_SELECTED_BACKGROUND))
-                                    .text_color(theme.paint_color(color::LIST_SELECTED_FOREGROUND))
-                            })
-                            .when_some(item.icon.as_ref(), |row, icon| {
-                                row.child(
-                                    div()
-                                        .debug_selector(move || format!("completion-icon-{index}"))
-                                        .child(AppIcon::new(ref_definition(icon, false, cx))),
-                                )
-                            })
-                            .child(div().flex_shrink_0().child(highlighted(
-                                item.label.clone(),
-                                &item.matches.as_deref().map_or_else(Vec::new, |ranges| {
-                                    byte_ranges(&item.label, ranges)
-                                }),
-                                matched,
-                            )))
-                            .when_some(item.detail.clone(), |row, detail| {
-                                row.child(
-                                    div()
-                                        .flex_1()
-                                        .truncate()
-                                        .text_sm()
-                                        .text_color(muted)
-                                        .child(detail),
-                                )
-                            })
+                        let completion = &view.items[index];
+                        let entry = PickerEntry {
+                            label: completion.label.clone(),
+                            description: completion.description.clone(),
+                            hint: completion.hint.clone(),
+                            icon: completion.icon.clone(),
+                            ..PickerEntry::default()
+                        };
+                        let ranges = |text: &str, ranges: &Option<Vec<[usize; 2]>>| {
+                            ranges
+                                .as_deref()
+                                .map_or_else(Vec::new, |ranges| byte_ranges(text, ranges))
+                        };
+                        let label_matches = ranges(&completion.label, &completion.matches);
+                        let description_matches = ranges(
+                            completion.description.as_deref().unwrap_or_default(),
+                            &completion.description_matches,
+                        );
+                        let entity = entity.clone();
+                        picker_row(
+                            PickerRowContent {
+                                entry: &entry,
+                                label_matches: &label_matches,
+                                description_matches: &description_matches,
+                            },
+                            index,
+                            index == view.selected,
+                            row_height,
+                            move |_, _, cx| {
+                                entity.update(cx, |view, cx| view.accept_row(index, cx));
+                            },
+                            cx,
+                        )
                     })
                     .collect()
             })
             .track_scroll(&self.scroll)
-            .h(px(rows.min(MAX_VISIBLE_ROWS) as f32 * ROW_HEIGHT * zoom))
+            .h(px(rows.min(MAX_VISIBLE_ROWS) as f32 * row_height))
         });
         div()
             .id("extension-input")
@@ -307,6 +313,7 @@ impl Render for InputView {
             .border_color(theme(cx).paint_color(color::POPOVER_BORDER))
             .bg(theme(cx).paint_color(color::POPOVER_BACKGROUND))
             .shadow_lg()
+            .text_size(zoom::rems(tokens::list::TEXT_SIZE))
             .key_context(super::TRANSIENT_KEY_CONTEXT)
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .child(

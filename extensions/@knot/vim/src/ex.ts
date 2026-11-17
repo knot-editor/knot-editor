@@ -151,7 +151,7 @@ export async function completeEx(text: string): Promise<InputCompletion[]> {
     items.push({
       label: full,
       value: `${head}${full}`,
-      ...(short === "" ? {} : { detail: short }),
+      ...(short === "" ? {} : { description: short }),
       ...(candidates[index] === full ? { matches: ranges } : {}),
     });
   }

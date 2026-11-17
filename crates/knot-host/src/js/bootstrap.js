@@ -881,9 +881,11 @@ function inputCompletion(value) {
   return {
     label: string(value.label, "input completion label must be text"),
     value: string(value.value, "input completion value must be text"),
-    detail: optionalText(value.detail),
+    description: optionalText(value.description),
+    hint: optionalText(value.hint),
     icon: iconRef(value.icon),
     matches: value.matches == null ? null : arrayItems(value.matches, textRange),
+    descriptionMatches: value.descriptionMatches == null ? null : arrayItems(value.descriptionMatches, textRange),
   };
 }
 
@@ -1006,7 +1008,7 @@ export async function showInput(options) {
   }
   if (failure !== null) throw failure.error;
   return update.kind === "accepted"
-    ? Object.freeze({ kind: "accepted", value: update.value })
+    ? Object.freeze({ kind: "accepted", value: update.value, highlighted: update.highlighted })
     : Object.freeze({ kind: "dismissed" });
 }
 
@@ -1396,7 +1398,7 @@ async function editTree(registration, newRow, id, options) {
   }
   if (failure !== null) throw failure.error;
   return update.kind === "accepted"
-    ? Object.freeze({ kind: "accepted", value: update.value })
+    ? Object.freeze({ kind: "accepted", value: update.value, highlighted: update.highlighted })
     : Object.freeze({ kind: "dismissed" });
 }
 

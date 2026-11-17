@@ -1012,7 +1012,7 @@ fn a_label_edit_replaces_the_selection_and_commits_on_enter(cx: &mut TestAppCont
     fixture.press(cx, "enter");
     assert_eq!(
         outcome(&mut session),
-        Some(TransientOutcome::Input("other.txt".into()))
+        Some(TransientOutcome::Input("other.txt".into(), None))
     );
     assert_eq!(fixture.text(cx), None);
 }
@@ -1039,7 +1039,7 @@ fn escape_dismisses_and_focus_loss_commits(cx: &mut TestAppContext) {
     cx.run_until_parked();
     assert_eq!(
         outcome(&mut session),
-        Some(TransientOutcome::Input("kept".into()))
+        Some(TransientOutcome::Input("kept".into(), None))
     );
 }
 
@@ -1082,7 +1082,7 @@ fn a_new_row_edit_expands_its_parent_and_an_empty_commit_dismisses(cx: &mut Test
     fixture.press(cx, "enter");
     assert_eq!(
         outcome(&mut session),
-        Some(TransientOutcome::Input("a/b.txt".into()))
+        Some(TransientOutcome::Input("a/b.txt".into(), None))
     );
 }
 
@@ -1139,7 +1139,7 @@ fn validation_blocks_the_commit_until_the_current_text_is_answered_clean(cx: &mu
     answer(cx, "name2", None);
     assert_eq!(
         outcome(&mut session),
-        Some(TransientOutcome::Input("name2".into()))
+        Some(TransientOutcome::Input("name2".into(), None))
     );
 }
 

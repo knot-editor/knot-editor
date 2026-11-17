@@ -1436,7 +1436,10 @@ await commands.register("test.missing", async () => {
     cx.simulate_keystrokes(native_window, "backspace");
     cx.simulate_keystrokes(native_window, "enter");
     assert_eq!(wait_for_command(rename, cx), CommandOutcome::Completed);
-    clipboard(r#"{"kind":"accepted","value":"a.txt"}"#, cx);
+    clipboard(
+        r#"{"kind":"accepted","value":"a.txt","highlighted":null}"#,
+        cx,
+    );
     assert!(cx.read(|cx| !tree.read(cx).is_editing()));
 
     // A new row shows first among the expanded parent's children.

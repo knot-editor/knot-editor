@@ -101,7 +101,10 @@ fn a_transient_picker_and_input_settle_from_keys(cx: &mut TestAppContext) {
     type_text(&window, "c", cx);
     press_keys(&window, "left x", cx);
     press_keys(&window, "enter", cx);
-    assert_eq!(input.try_recv(), Ok(TransientOutcome::Input("axc".into())));
+    assert_eq!(
+        input.try_recv(),
+        Ok(TransientOutcome::Input("axc".into(), None))
+    );
 
     let (mut input, _) = window
         .update(cx, |window, cx| {
@@ -124,7 +127,10 @@ fn a_transient_picker_and_input_settle_from_keys(cx: &mut TestAppContext) {
     );
     type_text(&window, "b", cx);
     press_keys(&window, "enter", cx);
-    assert_eq!(input.try_recv(), Ok(TransientOutcome::Input("b".into())));
+    assert_eq!(
+        input.try_recv(),
+        Ok(TransientOutcome::Input("b".into(), None))
+    );
     let (mut input, _) = window
         .update(cx, |window, cx| {
             window.begin_input(
