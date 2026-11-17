@@ -9,7 +9,7 @@ const expectCode = async (operation, code) => {
   try { await operation(); } catch (error) { if (error.code === code) return; throw error; }
   throw new Error(`expected ${code}`);
 };
-await commands.register("api.lines", async ({ buffer }) => {
+await commands.register("api.lines", async ({ buffer, editor }) => {
   // "a\r\n" "é😀\n" "third": CRLF and multibyte lines.
   check(await buffer.lineCount() === 3, "line count");
   const range = async (line) => { const value = await buffer.lineRange(line); return [value.startByteOffset, value.endByteOffset]; };
@@ -23,6 +23,27 @@ await commands.register("api.lines", async ({ buffer }) => {
   await expectCode(() => buffer.lineAt(16), "InvalidRange");
   const snapshot = await buffer.snapshot(await buffer.lineRange(1));
   check(snapshot.text === "é😀" && snapshot.byteOffsetAtUtf16(1) === 2, "line snapshot");
+  const shown = (items) => items.map((item) => `${item.line}@${item.startByteOffset}:${item.text}`).join("|");
+  check(shown(await buffer.lines(0, 2)) === "0@0:a|1@3:é😀|2@10:third", "line span");
+  check(shown(await buffer.lines(1, 1)) === "1@3:é😀", "one line");
+  await expectCode(() => buffer.lines(2, 1), "InvalidRange");
+  await expectCode(() => buffer.lines(0, 3), "InvalidRange");
+  // The caret's line and its neighbors, clamped at both ends of the buffer.
+  const around = async (caret, lines) => {
+    await editor.setSelection({ anchor: caret, caret });
+    const read = await editor.selection({ lines });
+    return `${read.caret}/${read.line}/${shown(read.lines)}`;
+  };
+  check(await around(0, 0) === "0/0/0@0:a", "no neighbors");
+  check(await around(0, 1) === "0/0/0@0:a|1@3:é😀", "clamped at the start");
+  check(await around(5, 1) === "5/1/0@0:a|1@3:é😀|2@10:third", "both neighbors");
+  check(await around(15, 1) === "15/2/1@3:é😀|2@10:third", "clamped at the end");
+  check(await around(3, 9) === "3/1/0@0:a|1@3:é😀|2@10:third", "wider than the buffer");
+  const bare = await editor.selection();
+  check(bare.lines === undefined && bare.line === undefined, "no lines unless asked");
+  let rejected = false;
+  try { await editor.selection({ lines: -1 }); } catch (error) { rejected = error instanceof TypeError; }
+  check(rejected, "negative window");
 });
 await commands.register("api.word", async ({ buffer }) => {
   // "é" is two bytes: "foo" 0..3, "." 3..4, "é" 4..6, spaces 6..8, then an empty line.

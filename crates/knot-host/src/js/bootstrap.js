@@ -519,6 +519,9 @@ function bufferFor(handle) {
       const range = await request("lineRange", handle, safeInteger(line));
       return Object.freeze({ startByteOffset: range.startByteOffset, endByteOffset: range.endByteOffset });
     },
+    async lines(first, last) {
+      return lineItems(await request("lines", handle, safeInteger(first), safeInteger(last)));
+    },
     lineAt: (offset) => request("lineAt", handle, safeInteger(offset)),
     async wordAt(offset) {
       const word = await request("wordAt", handle, safeInteger(offset));
@@ -592,11 +595,32 @@ function bufferFor(handle) {
   return buffer;
 }
 
+function lineItems(items) {
+  return Object.freeze(items.map((item) => Object.freeze({
+    line: item.line, startByteOffset: item.startByteOffset, text: item.text,
+  })));
+}
+
+function selectionFromNative(value) {
+  const selection = { anchor: value.anchor, caret: value.caret };
+  if (value.lines !== undefined) {
+    selection.line = value.line;
+    selection.lines = lineItems(value.lines);
+  }
+  return Object.freeze(selection);
+}
+
+function linesOption(options) {
+  if (options?.lines === undefined) return null;
+  const lines = options.lines;
+  if (!Number.isSafeInteger(lines) || lines < 0) throw new TypeError("lines must be a non-negative safe integer");
+  return lines;
+}
+
 function editorFor(authority) {
   return Object.freeze({
-    async selection() {
-      const value = await request("editorSelection", authority);
-      return Object.freeze({ anchor: value.anchor, caret: value.caret });
+    async selection(options) {
+      return selectionFromNative(await request("editorSelection", authority, linesOption(options)));
     },
     async setSelection(selection, options) {
       record(selection, "selection must be an object");
@@ -710,7 +734,7 @@ export async function openEditor(target) {
   if (!livePresentations.has(target)) hostError("InvalidTarget");
   const authority = await request("openEditor", destinationAuthority({ target }));
   const entry = {
-    closed: false, listeners: new Set(), selectionListeners: new Set(), watching: null,
+    closed: false, listeners: new Set(), selectionListeners: new Map(), watching: null,
     barListeners: new Set(), watchingBars: null,
   };
   editorHandles.set(authority, entry);
@@ -731,12 +755,13 @@ export async function openEditor(target) {
       entry.listeners.add(listener);
       return Object.freeze({ dispose: async () => { entry.listeners.delete(listener); } });
     },
-    async onDidChangeSelection(listener) {
+    async onDidChangeSelection(listener, options) {
       if (typeof listener !== "function") throw new TypeError("onDidChangeSelection requires a listener");
+      const lines = linesOption(options);
       owned.assertActive();
       entry.watching ??= request("watchEditorSelection", authority);
       try { await entry.watching; } catch (error) { entry.watching = null; throw error; }
-      entry.selectionListeners.add(listener);
+      entry.selectionListeners.set(listener, lines);
       return Object.freeze({ dispose: async () => { entry.selectionListeners.delete(listener); } });
     },
     async onDidEditBar(listener) {
@@ -764,10 +789,13 @@ globalThis.__knotDispatchEditorEvent = async (authority, kind) => {
     if (failure) throw failure.reason;
   } else if (kind === "selection") {
     // Acknowledge first, so changes during the listeners queue one more turn.
-    const selection = await request("acknowledgeEditorSelection", authority);
+    // The turn reads the widest window any listener asked for.
+    const wanted = [...entry.selectionListeners.values()].filter((lines) => lines !== null);
+    const selection = await request("acknowledgeEditorSelection", authority,
+      wanted.length === 0 ? null : Math.max(...wanted));
     if (selection === null) return;
-    const event = Object.freeze(selection);
-    const listeners = [...entry.selectionListeners];
+    const event = selectionFromNative(selection);
+    const listeners = [...entry.selectionListeners.keys()];
     const results = await Promise.allSettled(listeners.map((listener) => listener(event)));
     const failure = results.find((result) => result.status === "rejected");
     if (failure) throw failure.reason;

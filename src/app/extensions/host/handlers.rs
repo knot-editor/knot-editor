@@ -816,6 +816,47 @@ pub(crate) async fn line_range(
     })?
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct LinesArguments {
+    pub buffer: BufferHandle,
+    pub first: u64,
+    pub last: u64,
+}
+impl HostArguments for LinesArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self {
+            buffer: BufferHandle::new(reader.integer(2)?),
+            first: reader.integer(3)?,
+            last: reader.integer(4)?,
+        })
+    }
+}
+
+/// Lines `first` through `last` (0-based, inclusive), each with its text
+/// without terminator and its byte start.
+#[host_operation("lines")]
+pub(crate) async fn lines(
+    context: HostContext,
+    arguments: LinesArguments,
+) -> Result<Vec<LineItem>, BufferError> {
+    let request = context.request;
+    context.foreground(|host, cx| {
+        let commands = &host.commands;
+        host.buffers.read_model(
+            &request,
+            arguments.buffer,
+            || commands.is_cancelled(request.invocation),
+            cx,
+            |model| {
+                let lines = model
+                    .lines_between(arguments.first, arguments.last)
+                    .ok_or(BufferError::InvalidRange)?;
+                Ok(lines.into_iter().map(LineItem::from).collect())
+            },
+        )
+    })?
+}
+
 /// The 0-based line holding a byte offset on a character boundary.
 #[host_operation("lineAt")]
 pub(crate) async fn line_at(
@@ -3113,7 +3154,7 @@ pub(crate) async fn watch_editor_selection(
 }
 
 /// The selection a notification carries; `None` once the handle is gone.
-#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub(crate) struct AcknowledgedSelection(pub Option<EditorSelection>);
 impl HostSuccess for AcknowledgedSelection {
     fn encode(self) -> Result<EncodedValue, DecodeError> {
@@ -3126,11 +3167,16 @@ impl HostSuccess for AcknowledgedSelection {
 #[host_operation("acknowledgeEditorSelection")]
 pub(crate) async fn acknowledge_editor_selection(
     context: HostContext,
-    arguments: EditorArguments,
+    arguments: SelectionArguments,
 ) -> Result<AcknowledgedSelection, AccessError> {
     let owner = ExtensionKey::new(context.request.extension, context.request.lifecycle);
     context.foreground(|host, cx| {
-        AcknowledgedSelection(host.acknowledge_editor_selection(owner, arguments.authority, cx))
+        AcknowledgedSelection(host.acknowledge_editor_selection(
+            owner,
+            arguments.authority,
+            arguments.lines,
+            cx,
+        ))
     })
 }
 
@@ -3204,11 +3250,17 @@ impl From<AccessError> for EditorError {
     }
 }
 
-/// A selection's ends as UTF-8 byte offsets; equal for a bare caret.
-#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize)]
+/// A selection's ends as UTF-8 byte offsets, equal for a bare caret, with the
+/// caret's line and the lines around it when the read asked for them.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct EditorSelection {
     pub anchor: usize,
     pub caret: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub line: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lines: Option<Vec<LineItem>>,
 }
 impl HostSuccess for EditorSelection {
     fn encode(self) -> Result<EncodedValue, DecodeError> {
@@ -3216,16 +3268,74 @@ impl HostSuccess for EditorSelection {
     }
 }
 
+/// One line of text and where it starts, in UTF-8 bytes.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct LineItem {
+    pub line: usize,
+    pub start_byte_offset: usize,
+    pub text: String,
+}
+impl From<knot_model::buffer::LineText> for LineItem {
+    fn from(line: knot_model::buffer::LineText) -> Self {
+        Self {
+            line: line.line,
+            start_byte_offset: line.start,
+            text: line.text,
+        }
+    }
+}
+
+/// The editor's selection, with `lines` lines around the caret when asked.
+pub(crate) fn read_selection(
+    editor: &Entity<crate::app::editor::Editor>,
+    lines: Option<u64>,
+    cx: &App,
+) -> EditorSelection {
+    let editor = editor.read(cx);
+    let (anchor, caret) = editor.selection(cx);
+    let around = lines.map(|radius| {
+        let radius = usize::try_from(radius).unwrap_or(usize::MAX);
+        editor.model().read(cx).lines_around(caret, radius)
+    });
+    let (line, lines) = match around {
+        Some((line, lines)) => (
+            Some(line),
+            Some(lines.into_iter().map(LineItem::from).collect()),
+        ),
+        None => (None, None),
+    };
+    EditorSelection {
+        anchor,
+        caret,
+        line,
+        lines,
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct SelectionArguments {
+    pub authority: EditorAuthority,
+    pub lines: Option<u64>,
+}
+impl HostArguments for SelectionArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self {
+            authority: EditorAuthority::decode(reader, 2)?,
+            lines: reader.optional_integer(3)?,
+        })
+    }
+}
+
 #[host_operation("editorSelection")]
 pub(crate) async fn editor_selection(
     context: HostContext,
-    arguments: EditorArguments,
+    arguments: SelectionArguments,
 ) -> Result<EditorSelection, AccessError> {
     let request = context.request;
     context.foreground(|host, cx| {
         let editor = host.contextual_editor(&request, arguments.authority, cx)?;
-        let (anchor, caret) = editor.read(cx).selection(cx);
-        Ok(EditorSelection { anchor, caret })
+        Ok(read_selection(&editor, arguments.lines, cx))
     })?
 }
 

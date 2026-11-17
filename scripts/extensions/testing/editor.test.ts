@@ -344,6 +344,28 @@ test("a handle reports selection changes until the listener or handle is dispose
   await assert.rejects(editor.onDidChangeSelection(() => {}), { code: "InvalidTarget" });
 });
 
+test("a selection read and a notification carry the caret's line and its neighbors when asked", async () => {
+  const document = host.addDocument({ text: "one\r\ntwo\nthree" });
+  const window = host.openWindow({ documents: [document] });
+  const editor = await workbench.editor(host.tabTarget(window, 0));
+  const shown = (items: readonly { line: number; startByteOffset: number; text: string }[]) =>
+    items.map((item) => `${item.line}@${item.startByteOffset}:${item.text}`);
+  const heard: string[][] = [];
+  await editor.onDidChangeSelection(({ lines }) => void heard.push(shown(lines)), { lines: 0 });
+  await editor.onDidChangeSelection(() => {}, { lines: 1 });
+  await editor.setSelection({ anchor: 0, caret: 0 });
+  // The handle serves the widest window, so the narrow listener gets it too.
+  assert.deepEqual(heard, [["0@0:one", "1@5:two"]]);
+  assert.deepEqual(await editor.selection(), { anchor: 0, caret: 0 });
+  const read = await editor.selection({ lines: 1 });
+  assert.equal(read.line, 0);
+  assert.deepEqual(shown(read.lines), ["0@0:one", "1@5:two"]);
+  const buffer = (await capture()).buffer!;
+  assert.deepEqual(shown(await buffer.lines(1, 2)), ["1@5:two", "2@9:three"]);
+  await assert.rejects(buffer.lines(2, 1), { code: "InvalidRange" });
+  await assert.rejects(buffer.lines(0, 3), { code: "InvalidRange" });
+});
+
 test("an undo group is open until disposed, and a second one is rejected", async () => {
   const document = host.addDocument({ text: "x" });
   const window = host.openWindow({ documents: [document] });

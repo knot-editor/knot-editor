@@ -45,7 +45,7 @@ type FakeTab = {
   /** Selection listeners of the long-lived handles bound to this tab. The
    * fake runs each one per change; the host's coalescing is covered by
    * product tests. */
-  selectionListeners: Set<(selection: Knot.EditorSelection) => void | Promise<void>>;
+  selectionListeners: Map<(selection: Knot.EditorSelectionWithLines) => void | Promise<void>, number | null>;
   /** The open bars, top to bottom, and the field with the editor's focus. */
   bars: FakeBar[];
   barFocus: { bar: string; field: string } | null;
@@ -619,6 +619,18 @@ function createBuffer(document: FakeDocument): Knot.Buffer {
       if (range === undefined) throw hostError("InvalidRange");
       return range;
     },
+    lines: async (first, last) => {
+      const ranges = lineRanges(document.text);
+      if (!(first <= last) || ranges[last] === undefined) throw hostError("InvalidRange");
+      return Object.freeze(
+        ranges.slice(first, last + 1).map((range, index) =>
+          Object.freeze({
+            line: first + index,
+            startByteOffset: range.startByteOffset,
+            text: slice(document.text, range),
+          })),
+      );
+    },
     lineAt: async (offset) => {
       maybeFail("buffer.lineAt");
       const index = utf16AtByte(document.text, offset);
@@ -845,7 +857,7 @@ export function present(target: Knot.WindowTarget, id: Knot.DocumentId) {
     decorations: [],
     viewportLines: 10,
     closeListeners: new Set(),
-    selectionListeners: new Set(),
+    selectionListeners: new Map(),
     bars: [],
     barFocus: null,
     barListeners: new Set(),
@@ -1433,10 +1445,11 @@ function editor(tab: FakeTab): Knot.Editor {
     return tab;
   };
   return {
-    selection: async () => {
-      const { anchor, caret } = live().view;
-      return { anchor, caret };
-    },
+    selection: (async (options?: { lines: number }) => {
+      maybeFail("editor.selection");
+      const tab = live();
+      return selectionRead(tab, options?.lines ?? null);
+    }) as Knot.Editor["selection"],
     setSelection: async ({ anchor, caret }, options) => {
       const tab = live();
       const length = byteLength(document(tab.document).text);
@@ -1587,17 +1600,35 @@ function editor(tab: FakeTab): Knot.Editor {
   };
 }
 
-async function notifySelection(tab: FakeTab) {
+/** The tab's selection, with `lines` lines around the caret when given. */
+function selectionRead(tab: FakeTab, lines: number | null): Knot.EditorSelection | Knot.EditorSelectionWithLines {
   const { anchor, caret } = tab.view;
-  const selection = Object.freeze({ anchor, caret });
-  for (const listener of [...tab.selectionListeners]) await listener(selection);
+  if (lines === null) return Object.freeze({ anchor, caret });
+  const text = document(tab.document).text;
+  const ranges = lineRanges(text);
+  const line = ranges.filter((range) => range.startByteOffset <= caret).length - 1;
+  const items = ranges
+    .slice(Math.max(0, line - lines), line + lines + 1)
+    .map((range, index) =>
+      Object.freeze({
+        line: Math.max(0, line - lines) + index,
+        startByteOffset: range.startByteOffset,
+        text: slice(text, range),
+      }));
+  return Object.freeze({ anchor, caret, line, lines: Object.freeze(items) });
+}
+
+async function notifySelection(tab: FakeTab) {
+  const wanted = [...tab.selectionListeners.values()].filter((lines) => lines !== null);
+  const selection = selectionRead(tab, wanted.length === 0 ? null : Math.max(...wanted)) as Knot.EditorSelectionWithLines;
+  for (const listener of [...tab.selectionListeners.keys()]) await listener(selection);
 }
 
 function editorHandle(target: Knot.ViewTarget): Knot.EditorHandle {
   const tab = state.windows.flatMap((window) => window.tabs).find((candidate) => candidate.target === target);
   if (tab === undefined) throw hostError("InvalidTarget");
   const listeners = new Set<() => void | Promise<void>>();
-  const selectionListeners = new Set<(selection: Knot.EditorSelection) => void | Promise<void>>();
+  const selectionListeners = new Set<(selection: Knot.EditorSelectionWithLines) => void | Promise<void>>();
   const barListeners = new Set<(edit: Knot.EditorBarEdit) => void | Promise<void>>();
   let disposed = false;
   const live = editor(tab);
@@ -1608,7 +1639,7 @@ function editorHandle(target: Knot.ViewTarget): Knot.EditorHandle {
       return call(...args);
     };
   return {
-    selection: guard(live.selection),
+    selection: guard(live.selection) as Knot.EditorHandle["selection"],
     setSelection: guard(live.setSelection),
     setKeyContext: guard(live.setKeyContext),
     viewport: guard(live.viewport),
@@ -1640,9 +1671,12 @@ function editorHandle(target: Knot.ViewTarget): Knot.EditorHandle {
         },
       };
     },
-    async onDidChangeSelection(listener) {
+    onDidChangeSelection: (async (
+      listener: (selection: Knot.EditorSelectionWithLines) => void | Promise<void>,
+      options?: { lines: number },
+    ) => {
       if (disposed) throw hostError("InvalidTarget");
-      tab.selectionListeners.add(listener);
+      tab.selectionListeners.set(listener, options?.lines ?? null);
       selectionListeners.add(listener);
       return {
         dispose: async () => {
@@ -1650,7 +1684,7 @@ function editorHandle(target: Knot.ViewTarget): Knot.EditorHandle {
           selectionListeners.delete(listener);
         },
       };
-    },
+    }) as Knot.EditorHandle["onDidChangeSelection"],
     async onDidEditBar(listener) {
       if (disposed) throw hostError("InvalidTarget");
       tab.barListeners.add(listener);

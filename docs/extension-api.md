@@ -107,9 +107,14 @@ the revision read from a snapshot. Completion and change callbacks receive an
 explicit buffer to use outside commands.
 
 Buffers answer line lookups directly: `lineCount()`,
-`lineRange(line)` without the line's terminator, and `lineAt(offset)`. Lines
-are 0-based like every other coordinate; snapshot one line's range to work with
-its text, so a large file never crosses the boundary whole.
+`lineRange(line)` without the line's terminator, `lineAt(offset)`, and
+`lines(first, last)`, which returns each line's number, text, and byte start in
+one read. Lines are 0-based like every other coordinate, so a large file never
+crosses the boundary whole.
+
+`editor.selection({ lines: n })` also returns the caret's line and the lines
+from `n` above it to `n` below it, clamped to the buffer, so a motion within
+them needs no further read. Display-cell and fold queries stay editor calls.
 
 `buffer.createMark(offset)` returns a mark that follows edits: it stays with the
 character after it, so text inserted before or at it moves it, and
@@ -188,7 +193,9 @@ it on entering and clears it on leaving.
 
 `editor.onDidChangeSelection(listener)` runs after the selection changes for
 any reason, edits that move the caret included. It receives the selection as
-of when its turn starts, so it needs no `editor.selection()` read.
+of when its turn starts, so it needs no `editor.selection()` read;
+`onDidChangeSelection(listener, { lines: n })` adds the nearby lines as
+`selection({ lines: n })` does.
 Notifications coalesce, so a burst of changes runs the listener once with the
 final selection, and a listener still busy when more changes arrive gets one
 further call, not a queue.

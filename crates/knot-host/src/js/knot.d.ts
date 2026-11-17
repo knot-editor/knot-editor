@@ -1516,6 +1516,12 @@ declare module "knot" {
      */
     lineRange(line: number): Promise<ByteRange>;
     /**
+     * Lines `first` through `last` (0-based, inclusive) in one read.
+     * @throws HostError with BufferClosed, InvalidRange unless `first <= last` and `last` is below lineCount(), or
+     * Cancelled on teardown.
+     */
+    lines(first: number, last: number): Promise<readonly BufferLine[]>;
+    /**
      * The 0-based line holding a byte offset; the buffer length is the last line.
      * @throws HostError with BufferClosed, InvalidRange for an offset past the
      * end or splitting a UTF-8 scalar, or Cancelled on teardown.
@@ -1589,6 +1595,12 @@ declare module "knot" {
   export type FoldRange = Readonly<{ start: number; end: number }>;
   /** A selection's ends as UTF-8 byte offsets; equal for a bare caret. */
   export type EditorSelection = Readonly<{ anchor: number; caret: number }>;
+  /** One line of a buffer: its 0-based number, the UTF-8 byte offset where it starts, and its text without the
+   * `\n` or `\r\n` terminator. */
+  export type BufferLine = Readonly<{ line: number; startByteOffset: number; text: string }>;
+  /** A selection read with `lines`: the caret's 0-based line and the lines from that many above it to that many
+   * below it, clamped to the buffer, in order. */
+  export type EditorSelectionWithLines = EditorSelection & Readonly<{ line: number; lines: readonly BufferLine[] }>;
   /** How an editor draws its caret. */
   export type CursorStyle = "bar" | "block" | "underline";
   export interface SetSelectionOptions {
@@ -1657,8 +1669,13 @@ declare module "knot" {
    * InvalidTarget once the editor's tab closes or moves, or the command ends.
    */
   export interface Editor {
-    /** @throws HostError with InvalidTarget or Cancelled. */
+    /**
+     * The selection; with `lines`, also the caret's line and the lines around it, so a motion needs no further
+     * read for them.
+     * @throws HostError with InvalidTarget or Cancelled.
+     */
     selection(): Promise<EditorSelection>;
+    selection(options: { lines: number }): Promise<EditorSelectionWithLines>;
     /**
      * Move the selection. Not an edit: it ends the current typing undo group,
      * as other caret moves do, and changes no revision.
@@ -2643,6 +2660,14 @@ declare module "knot" {
      * reported. @throws HostError with InvalidTarget or Cancelled.
      */
     onDidChangeSelection(listener: (selection: EditorSelection) => void | Promise<void>): Promise<Disposable>;
+    /**
+     * As above, and `lines` asks for the lines around the caret as `Editor.selection` does. A handle reads the
+     * widest window any of its listeners asked for, so a listener may receive more lines than it asked for.
+     */
+    onDidChangeSelection(
+      listener: (selection: EditorSelectionWithLines) => void | Promise<void>,
+      options: { lines: number },
+    ): Promise<Disposable>;
     /**
      * Runs after the user edits a field of one of the caller's bars on this
      * editor, by typing, deleting, or pasting, with the bar's field texts at

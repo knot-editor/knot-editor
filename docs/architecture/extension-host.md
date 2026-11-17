@@ -294,8 +294,10 @@ compare the selection with the last one it saw. Each handle has at most one
 pending notification: the flag stays set until the listener turn starts and
 acknowledges it, so changes in between join that turn, and changes while
 listeners run queue exactly one more. The acknowledgement returns the selection
-at that moment, which listeners receive. The foreground only compares two offsets and enqueues a root, so
-painting and input never wait on JavaScript. The observation ends with the
+at that moment, which listeners receive, with the lines around the caret when a
+listener asked for them: the runtime passes the widest window any of the
+handle's listeners asked for. The foreground only compares two offsets and
+enqueues a root, so painting and input never wait on JavaScript. The observation ends with the
 handle.
 
 ## Settings

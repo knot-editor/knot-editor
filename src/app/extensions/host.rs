@@ -1565,6 +1565,7 @@ impl ProductExtensionHost {
         &mut self,
         owner: ExtensionKey,
         authority: handlers::EditorAuthority,
+        lines: Option<u64>,
         cx: &App,
     ) -> Option<handlers::EditorSelection> {
         let handlers::EditorAuthority::Handle(id) = authority else {
@@ -1575,8 +1576,8 @@ impl ProductExtensionHost {
             .get_mut(&id)
             .filter(|handle| handle.owner == owner)?;
         handle.selection.as_mut()?.pending = false;
-        let (anchor, caret) = handle.tab.editor(cx)?.read(cx).selection(cx);
-        Some(handlers::EditorSelection { anchor, caret })
+        let editor = handle.tab.editor(cx)?;
+        Some(handlers::read_selection(&editor, lines, cx))
     }
 
     /// Start notifying the handle's owner when the user edits a field of one
