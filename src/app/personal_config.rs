@@ -136,7 +136,15 @@ impl ConfigSources {
     }
 }
 
+/// Makes `user_config_root` answer a test directory.
+#[cfg(test)]
+pub(crate) static TEST_ROOT: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex::new(None);
+
 pub(crate) fn user_config_root() -> Result<PathBuf, String> {
+    #[cfg(test)]
+    if let Some(root) = TEST_ROOT.lock().unwrap().clone() {
+        return Ok(root);
+    }
     let dirs = ProjectDirs::from("", "", "Knot")
         .ok_or_else(|| "cannot determine the user configuration directory".to_owned())?;
     let base = BaseDirs::new();

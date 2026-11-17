@@ -34,14 +34,15 @@ impl EditorView {
     /// Resolve the metrics for the current settings, zoom, and the scale
     /// factor of the last window painted in. Scrolling is in rows, so the
     /// same line stays at the top when the line height changes.
-    pub(super) fn update_metrics(&mut self, cx: &App) {
+    pub(super) fn update_metrics(&mut self, cx: &mut Context<Self>) {
         let editor = self.editor.read(cx);
         let scope = editor.settings_scope(self.model.read(cx), cx);
         let font_settings = settings::font_settings(&scope, cx);
         let font = crate::app::typography::font(&font_settings);
         let font_size = settings::font_size(&scope, cx) * crate::app::zoom::factor(cx);
-        let text = cx.text_system();
-        crate::app::typography::report_missing_family("editor", &font_settings, text);
+        let text = cx.text_system().clone();
+        crate::app::typography::report_missing_family("editor", &font_settings, &text, cx);
+        let text = &text;
         let font_id = text.resolve_font(&font);
         let size = px(font_size);
         let metrics = EditorMetrics {

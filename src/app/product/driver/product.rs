@@ -338,7 +338,8 @@ impl TestProduct {
         TestEditor::over(document, model, (0, 0), cx)
     }
 
-    /// The messages of the notices in the history, oldest first.
+    /// The messages of the notices in the history, oldest first, without the
+    /// configuration warnings the test platform's missing fonts raise.
     pub fn notice_messages(&self, cx: &mut TestAppContext) -> Vec<String> {
         cx.read(|cx| {
             cx.try_global::<crate::app::notifications::ApplicationNotifications>()
@@ -347,6 +348,7 @@ impl TestProduct {
                         .0
                         .notices()
                         .iter()
+                        .filter(|notice| notice.title.as_deref() != Some("Configuration warning"))
                         .map(|notice| notice.message.clone())
                         .collect()
                 })

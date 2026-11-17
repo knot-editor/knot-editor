@@ -2630,6 +2630,7 @@ impl ProductExtensionHost {
 
     pub(crate) fn report_setting_warning(&mut self, warning: String, cx: &mut Context<Self>) {
         tracing::warn!(target: "knot::config", "{warning}");
+        crate::app::notifications::raise_config_warning(warning.clone(), cx);
         self.setting_warnings.push(warning);
         cx.notify();
     }

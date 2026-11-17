@@ -605,6 +605,16 @@ pub(crate) async fn open_log(
         .await
 }
 
+#[command("app.open-personal-config", title = "Knot: Open Personal Configuration", description = "Open the post-init.js of the personal configuration directory.", id = OPEN_PERSONAL_CONFIG_COMMAND, participant = Workbench)]
+pub(crate) async fn open_personal_config(
+    context: CommandContext,
+    (): (),
+) -> Result<CommandOutcome, CommandOutcome> {
+    context
+        .pending(super::application_log::dispatch_open_personal_config)
+        .await
+}
+
 #[command("app.reveal-log-folder", title = "Knot: Reveal Log Folder", description = "Show the application log folder in the file manager.", id = REVEAL_LOG_FOLDER_COMMAND, participant = Workbench)]
 pub(crate) async fn reveal_log_folder(
     context: CommandContext,

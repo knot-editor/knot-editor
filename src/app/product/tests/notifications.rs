@@ -421,3 +421,91 @@ fn extensions_raise_read_dismiss_and_clear_notices(cx: &mut TestAppContext) {
     cx.run_until_parked();
     cx.read(|cx| assert_eq!(cx.global::<ApplicationNotifications>().0.notices().len(), 1));
 }
+
+fn config_warnings(cx: &mut TestAppContext) -> Vec<crate::app::notifications::Notice> {
+    cx.read(|cx| cx.global::<ApplicationNotifications>().0.notices().to_vec())
+}
+
+fn assert_config_warning(notice: &crate::app::notifications::Notice, message: &str) {
+    assert!(notice.message.contains(message), "{}", notice.message);
+    assert_eq!(notice.severity, Severity::Warning);
+    assert!(!notice.auto_dismiss && notice.target.is_none() && !notice.read);
+    let actions: Vec<_> = notice
+        .actions
+        .iter()
+        .map(|action| action.command.name.as_str())
+        .collect();
+    assert_eq!(actions, ["app.open-personal-config", "app.open-log"]);
+}
+
+#[gpui::test]
+fn a_setting_warning_raises_a_sticky_notice_that_waits_for_the_first_window(
+    cx: &mut TestAppContext,
+) {
+    let documents = install_globals(cx);
+    let host = cx.update(crate::app::extensions::host::install);
+    host.update(cx, |host, cx| {
+        host.report_setting_warning("Setting demo.flag: dropped the value".into(), cx)
+    });
+    let warnings = config_warnings(cx);
+    assert_eq!(warnings.len(), 1);
+    assert_config_warning(&warnings[0], "demo.flag");
+
+    let (window, _) = new_window(&documents, cx);
+    assert_eq!(shown(&window, cx), [warnings[0].id]);
+}
+
+#[gpui::test]
+fn a_missing_font_family_raises_one_sticky_notice(cx: &mut TestAppContext) {
+    install_globals(cx);
+    for _ in 0..3 {
+        cx.update(|cx| {
+            crate::app::typography::report_replaced(
+                "notice-test",
+                "Knot Missing Test Family",
+                || Some("Menlo".into()),
+                cx,
+            );
+        });
+        cx.run_until_parked();
+    }
+    let warnings = config_warnings(cx);
+    assert_eq!(warnings.len(), 1, "{warnings:?}");
+    assert_config_warning(&warnings[0], "Knot Missing Test Family");
+}
+
+#[gpui::test]
+fn open_personal_configuration_opens_post_init(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    let directory = tempfile::tempdir().unwrap();
+    std::fs::write(directory.path().join("post-init.js"), "// personal\n").unwrap();
+    *crate::app::personal_config::TEST_ROOT.lock().unwrap() = Some(directory.path().to_path_buf());
+    let mut filesystems = FileSystemProviderRegistry::default();
+    filesystems
+        .register(
+            "file",
+            Arc::new(
+                knot_model::filesystem::LocalFileSystemProvider::unrestricted_with_scratch_trash(),
+            ),
+        )
+        .unwrap();
+    cx.set_global(ApplicationFileSystems(Arc::new(filesystems)));
+    let (window, native_window) = super::operations::empty_product_window(&documents, cx);
+    let execution = dispatch_product_command(
+        &window,
+        native_window,
+        super::super::commands::OPEN_PERSONAL_CONFIG_COMMAND,
+        cx,
+    );
+    assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
+    *crate::app::personal_config::TEST_ROOT.lock().unwrap() = None;
+    cx.run_until_parked();
+    let texts = cx.read(|cx| {
+        documents
+            .read(cx)
+            .documents()
+            .map(|document| document.model().read(cx).text())
+            .collect::<Vec<_>>()
+    });
+    assert!(texts.contains(&"// personal\n".to_string()), "{texts:?}");
+}

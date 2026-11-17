@@ -2,7 +2,7 @@
 
 use std::{collections::HashSet, sync::Mutex};
 
-use gpui::{Font, FontFallbacks, FontFeatures, FontWeight, Pixels, TextSystem, px};
+use gpui::{App, Font, FontFallbacks, FontFeatures, FontWeight, Pixels, TextSystem, px};
 use knot_model::typography::FontSettings;
 
 /// The reference text size, which chrome and text inputs scale from.
@@ -30,38 +30,72 @@ pub(crate) fn report_missing_family(
     scope: &'static str,
     settings: &FontSettings,
     text: &TextSystem,
+    cx: &mut App,
 ) {
-    warn_when_replaced(scope, &settings.family, || {
-        let font = font(settings);
-        text.get_font_for_id(text.resolve_font(&font))
-            .map(|resolved| resolved.family.to_string())
-    });
+    report_replaced(
+        scope,
+        &settings.family,
+        || {
+            let font = font(settings);
+            text.get_font_for_id(text.resolve_font(&font))
+                .map(|resolved| resolved.family.to_string())
+        },
+        cx,
+    );
+}
+
+/// Log, and tell the user once, that `resolve`, which names the family the
+/// platform drew with, differs from `family`.
+pub(crate) fn report_replaced(
+    scope: &'static str,
+    family: &str,
+    resolve: impl FnOnce() -> Option<String>,
+    cx: &mut App,
+) {
+    let family = family.to_owned();
+    if let Some(fallback) = warn_when_replaced(scope, &family, resolve) {
+        // Painting calls this, so the notice waits until the frame is done.
+        cx.defer(move |cx| {
+            crate::app::notifications::raise_config_warning(
+                format!("The {scope} font \"{family}\" is not installed; using {fallback}."),
+                cx,
+            );
+        });
+    }
 }
 
 /// Warn when `resolve`, which names the family the platform drew with, differs
 /// from `family`; it runs only for the first check of a scope and family.
-fn warn_when_replaced(scope: &'static str, family: &str, resolve: impl FnOnce() -> Option<String>) {
+/// Returns the fallback family a warning named.
+fn warn_when_replaced(
+    scope: &'static str,
+    family: &str,
+    resolve: impl FnOnce() -> Option<String>,
+) -> Option<String> {
     let first_report = REPORTED_FAMILIES
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
         .get_or_insert_default()
         .insert((scope, family.to_owned()));
     if !first_report {
-        return;
+        return None;
     }
     let resolved = resolve();
     if resolved
         .as_deref()
         .is_none_or(|resolved| !resolved.eq_ignore_ascii_case(family))
     {
+        let fallback = resolved.unwrap_or_else(|| "unknown".into());
         tracing::warn!(
             target: "knot::config",
             scope,
             family,
-            fallback = resolved.as_deref().unwrap_or("unknown"),
+            fallback = fallback.as_str(),
             "font.family is not installed; using the fallback font",
         );
+        return Some(fallback);
     }
+    None
 }
 
 pub(crate) fn bold(font: &Font) -> Font {

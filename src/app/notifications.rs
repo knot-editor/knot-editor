@@ -30,3 +30,32 @@ pub(crate) fn update<R>(cx: &mut App, change: impl FnOnce(&mut NotificationStore
 pub(crate) fn raise(spec: NoticeSpec, cx: &mut App) -> u64 {
     update(cx, |store| store.raise(spec, SystemTime::now()))
 }
+
+/// Record a sticky `warning` notice for a configuration problem the user can
+/// fix, with actions that open the personal configuration and the log. It has
+/// no target, so every window shows it, and one raised before any window
+/// exists pops up when the first opens.
+pub(crate) fn raise_config_warning(message: String, cx: &mut App) -> u64 {
+    let action = |title: &str, name: &str| NoticeAction {
+        title: title.into(),
+        command: knot_model::status_bar::StatusCommand {
+            name: name.into(),
+            arguments: knot_protocol::CommandArgumentValue::Null,
+        },
+    };
+    raise(
+        NoticeSpec {
+            message,
+            title: Some("Configuration warning".into()),
+            severity: Severity::Warning,
+            auto_dismiss: Some(false),
+            actions: vec![
+                action("Open Personal Configuration", "app.open-personal-config"),
+                action("Open Log", "app.open-log"),
+            ],
+            target: None,
+            source: "Knot".into(),
+        },
+        cx,
+    )
+}

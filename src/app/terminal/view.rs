@@ -1052,7 +1052,7 @@ impl Element for TerminalElement {
     ) -> Self::PrepaintState {
         let font_settings = font_settings(cx);
         let font = typography::font(&font_settings);
-        typography::report_missing_family("terminal", &font_settings, window.text_system());
+        typography::report_missing_family("terminal", &font_settings, window.text_system(), cx);
         let layout =
             TerminalLayout::measure(window, &font, px(font_size(cx)), font_settings.line_height);
         let size = layout.grid_size(bounds);
