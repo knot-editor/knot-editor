@@ -56,6 +56,18 @@ test("the position follows the selection, counting characters and a tab as one",
   assert.equal(texts(window)[0], "Ln 1, Col 1 (13 selected)");
 });
 
+test("a document closing while the position refreshes clears the position", async () => {
+  const document = host.addDocument({ text: TEXT });
+  const window = host.openWindow({ documents: [document] });
+  await start();
+  const editor = await editorOf(window);
+  host.failNext("buffer.lineAt", "BufferClosed");
+  await editor.setSelection({ anchor: 3, caret: 3 });
+  assert.equal(texts(window).some((text) => text.startsWith("Ln ")), false);
+  await editor.setSelection({ anchor: 3, caret: 3 });
+  assert.equal(texts(window)[0], "Ln 1, Col 4");
+});
+
 test("the language shows plain text and falls back to an unregistered ID", async () => {
   const plain = host.addDocument({ text: "" });
   const first = host.openWindow({ documents: [plain] });

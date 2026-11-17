@@ -90,7 +90,15 @@ export async function start() {
       await show("position", window, null);
       return;
     }
-    await show("position", window, await caretText(follow.handle, follow.buffer));
+    try {
+      await show("position", window, await caretText(follow.handle, follow.buffer));
+    } catch (error) {
+      // The editor or document closed meanwhile; the presentation event that
+      // follows moves the window to its new target.
+      const code = (error as { code?: string }).code;
+      if (code !== "InvalidTarget" && code !== "BufferClosed") throw error;
+      await show("position", window, null);
+    }
   };
 
   // Shows the document's indentation and language, from `info` when the

@@ -587,6 +587,7 @@ function createBuffer(document: FakeDocument): Knot.Buffer {
       return range;
     },
     lineAt: async (offset) => {
+      maybeFail("buffer.lineAt");
       const index = utf16AtByte(document.text, offset);
       if (index === undefined) throw hostError("InvalidRange");
       return document.text.slice(0, index).split("\n").length - 1;
