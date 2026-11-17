@@ -1,6 +1,6 @@
 # D117: Non-modal notifications
 
-Status: 🚧 approved, checkpoints 1 to 4 done. Roadmap item [D117](../roadmap.md).
+Status: 🚧 approved, checkpoints 1 to 4 done, 5 awaiting review. Roadmap item [D117](../roadmap.md).
 
 ## Outcome
 
@@ -195,7 +195,17 @@ Implementation context:
 - A new tree primitive goes through `src/app/tree_view.rs`,
   `src/app/extensions/semantics.rs`, and `knot.d.ts`.
 
-### 5. Configuration warnings and docs
+### 5. Configuration warnings and docs ✅ (awaiting review)
+
+Done: `notifications::raise_config_warning` raises the sticky notice from
+`report_setting_warning` and `typography::report_replaced` (deferred past the
+frame, since painting calls it), with actions for the new `app.open-personal-config`
+command and `app.open-log`. Product tests cover both sites, the wait for the
+first window, and the command. The architecture, decision, development, and
+roadmap docs are updated; the plan is removed after the review gate passes.
+The product driver's `notice_messages` skips configuration warnings, which the
+test platform's missing fonts raise. The `Try:` commands are in the personal
+`post-init.js`.
 
 Deliverables: notices at every `knot::config` warning site, held until the first
 window; the Open Personal Configuration command; architecture, decision, and

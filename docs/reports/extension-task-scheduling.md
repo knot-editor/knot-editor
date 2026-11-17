@@ -91,7 +91,7 @@ but the command itself stays queued.
 A language client (D067) receives responses out of order, notifications
 while a request is pending, and server-to-client requests that must be
 answered before the server replies. Streaming the output of a spawned process (spawning
-arrives with D087) and progress reporting (D117) have the same shape. None fits one root at a time.
+arrives with D087) and progress reporting (D200) have the same shape. None fits one root at a time.
 
 ## What serial roots provide
 
