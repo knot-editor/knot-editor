@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
 import * as host from "knot/testing";
-import { completeEx, directoryOf, parseEx, resolvePath } from "../src/ex.js";
+import { completeEx, directoryOf, fileCompletionTarget, parseEx, pathOfUri, resolvePath } from "../src/ex.js";
 
 test("commands take Vim's abbreviations and a bang", () => {
   for (const line of ["w", "wr", "write", ":w", "  w  "]) assert.deepEqual(parseEx(line), { kind: "write" });
@@ -103,4 +103,18 @@ test(":set keeps no and inv prefixes and earlier arguments", async () => {
   assert.deepEqual(await values("set invwr"), ["set invwrap"]);
   assert.deepEqual(await values("set ts=2 sw"), ["set ts=2 shiftwidth"]);
   assert.ok((await values("set no")).every((value) => value.startsWith("set no")));
+});
+
+test(":e lists files for the path typed after it, and nothing else does", () => {
+  assert.deepEqual(fileCompletionTarget("e"), { head: "e", query: "" });
+  assert.deepEqual(fileCompletionTarget(":e "), { head: ":e", query: "" });
+  assert.deepEqual(fileCompletionTarget(" : edit!  src/ma"), { head: " : edit!", query: "src/ma" });
+  for (const line of ["", "ex", "exit", "eds x", "set e", "w e", "2"]) {
+    assert.equal(fileCompletionTarget(line), null, line);
+  }
+});
+
+test("a file row's URI becomes the path the line takes", () => {
+  assert.equal(pathOfUri("file:///work/my%20dir/a.ts"), "/work/my dir/a.ts");
+  assert.equal(pathOfUri("memory://notes"), "memory://notes");
 });

@@ -1,17 +1,69 @@
 // Runs the Ex line `:` opens in one followed editor, over native commands
 // and document-scoped settings, and returns the message it leaves.
-import { commands, documents, settings, workbench, workspaces } from "knot";
-import { type BooleanOption, completeEx, directoryOf, type ExCommand, parseEx, resolvePath, type SetArgument } from "./ex.js";
+import { commands, documents, providers, settings, workbench, workspaces } from "knot";
+import type { IconRef, InputCompletion } from "knot";
+import {
+  type BooleanOption, completeEx, directoryOf, type ExCommand, fileCompletionTarget, parseEx, pathOfUri, resolvePath,
+  type SetArgument,
+} from "./ex.js";
 import { run, type State } from "./normal.js";
 
-/** Asks for a command line and runs it; returns a message to show, or null. */
+/** A row of the `workspace.files` provider's list, the contract Vim expects
+ * of it; the row's ID is the file's URI. */
+interface FileRow {
+  readonly id: string;
+  readonly label: string;
+  readonly description?: string | null;
+  readonly hint?: string | null;
+  readonly icon?: IconRef | null;
+  readonly labelMatches?: readonly (readonly [number, number])[] | null;
+  readonly descriptionMatches?: readonly (readonly [number, number])[] | null;
+}
+
+/** The files `query` lists, or none when no package provides the list or its
+ * call fails, as when it is restarting. */
+async function fileRows(query: string): Promise<readonly FileRow[]> {
+  try {
+    const provider = await providers.get<{ rows(query: string): Promise<FileRow[]> }>("workspace.files");
+    return provider === null ? [] : await provider.rows(query);
+  } catch {
+    return [];
+  }
+}
+
+/** The completion that puts `row`'s path in the line that began with `head`. */
+function fileCompletion(head: string, row: FileRow): InputCompletion {
+  return {
+    label: row.label,
+    value: `${head} ${pathOfUri(row.id)}`,
+    ...(row.description == null ? {} : { description: row.description }),
+    ...(row.hint == null ? {} : { hint: row.hint }),
+    ...(row.icon == null ? {} : { icon: row.icon }),
+    ...(row.labelMatches == null ? {} : { matches: row.labelMatches }),
+    ...(row.descriptionMatches == null ? {} : { descriptionMatches: row.descriptionMatches }),
+  };
+}
+
+/** Asks for a command line and runs it; returns a message to show, or null.
+ * Under `:e`, the list is the files provider's, and Enter on a row opens it. */
 export async function commandLine(state: State): Promise<string | null> {
+  let files: readonly FileRow[] = [];
   const input = await workbench.showInput({
     title: "Ex Command",
     prompt: ":",
-    onChange: async (line) => ({ items: await completeEx(line) }),
+    onChange: async (line) => {
+      const target = fileCompletionTarget(line);
+      if (target === null) {
+        files = [];
+        return { items: await completeEx(line) };
+      }
+      files = await fileRows(target.query);
+      return { items: files.map((row) => fileCompletion(target.head, row)) };
+    },
   });
   if (input.kind === "dismissed") return null;
+  const row = input.highlighted === null ? undefined : files[input.highlighted];
+  if (row !== undefined) return open(row.id, row.label);
   const command = parseEx(input.value);
   if (command.kind === "none") return null;
   state.shared.registers.set(":", { text: input.value.replace(/^[\s:]+/, "").trimEnd(), linewise: false });
@@ -58,19 +110,20 @@ async function baseDirectory(state: State): Promise<string | null> {
   return (await workspaces.get(state.target.window))?.roots[0]?.uri ?? null;
 }
 
-/** `:e`: opens `path` in the base directory, or without one starts Go to
- * File, the picker the editor opens files with. */
+/** `:e`: opens `path` in the base directory; without one it does nothing. */
 async function edit(state: State, path: string | null): Promise<string | null> {
-  if (path === null) {
-    await commands.invoke("workspace.go-to-file");
-    return null;
-  }
+  if (path === null) return null;
   const resolved = resolvePath(path, await baseDirectory(state));
   if (resolved === null) return `No directory to open ${path} in`;
+  return open(resolved, path);
+}
+
+/** Opens the resource `uri`, named `name` in a failure message. */
+async function open(uri: string, name: string): Promise<string | null> {
   try {
-    await documents.open(resolved);
+    await documents.open(uri);
   } catch (error) {
-    return `Cannot open ${path}: ${(error as { code?: string }).code ?? String(error)}`;
+    return `Cannot open ${name}: ${(error as { code?: string }).code ?? String(error)}`;
   }
   return null;
 }

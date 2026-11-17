@@ -158,6 +158,18 @@ export async function completeEx(text: string): Promise<InputCompletion[]> {
   return items;
 }
 
+/** The `:e` line `text` lists files for: the line up to the path, and the path
+ * typed so far. `:e` alone lists files too; null for any other line. */
+export function fileCompletionTarget(text: string): { readonly head: string; readonly query: string } | null {
+  const match = /^(\s*:?\s*(?:e|ed|edi|edit)!?)(?:\s+(.*))?$/.exec(text);
+  return match === null ? null : { head: match[1]!, query: match[2] ?? "" };
+}
+
+/** The text `:e` takes for the resource `uri`: a file's path, or the URI. */
+export function pathOfUri(uri: string): string {
+  return uri.startsWith("file://") ? decodeURIComponent(uri.slice("file://".length)) : uri;
+}
+
 /** The URI `:e` opens for `path`: a URI as it is, an absolute path as a
  * file URI, and a relative one in `directory`, a directory URI, or null
  * when there is none. */

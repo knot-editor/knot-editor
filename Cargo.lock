@@ -3846,8 +3846,10 @@ dependencies = [
  "gpui-pre",
  "knot",
  "knot-bundled",
+ "knot-ext-workbench",
  "serde",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]
