@@ -289,21 +289,11 @@ hold the analyses that support some items.
 
 ### Extension platform and language tooling
 
-- **D198 — Extension providers** 🚧
-  - Depends on: none
-  - Description: A package cannot reuse another package's feature, only run
-    its commands, which return no data; Vim's `:e` cannot show Go to File's
-    list under the Ex line. Add named providers that packages register and
-    others look up and call across isolates, with Go to File providing its
-    lists, Vim's `:e` as the first consumer, and editor completion providers
-    moved onto the same registry.
-    [Plan](plans/d198-extension-providers.md).
-
 - **D199 — Importing another package's code**
-  - Depends on: D198
-  - Description: A package reuses another only through named providers
-    (D198), with JSON calls and a contract each consumer declares locally. Do
-    it when provider contracts grow large enough that untyped names and local
+  - Depends on: none
+  - Description: A package reuses another only through named providers, with
+    JSON calls and a contract each consumer declares locally. Do it when
+    provider contracts grow large enough that untyped names and local
     interfaces cause mistakes: let a package import a dependency's exports as
     a module whose functions call into the dependency's isolate, typed from
     the dependency's declarations.
@@ -354,7 +344,7 @@ hold the analyses that support some items.
     pipeline it hooks into exists.
 
 - **D022 — Editor autocompletion**
-  - Depends on: D198
+  - Depends on: none
   - Description: Completion providers register, aggregate, and show in a native
     list, but completion only opens on request, and no bundled package provides
     candidates. Open completion while typing, with triggers and a delay, show
@@ -364,8 +354,8 @@ hold the analyses that support some items.
     inline suggestions, in the style of GitHub Copilot, fits it: slow and
     streamed results, cancellation as the user types, and a multi-line
     suggestion shown as virtual text (D145) rather than in the list.
-    Completion providers register as `editor.completion` extension providers
-    (D198); measure the provider call's latency while typing, and add the
+    Completion providers register as `editor.completion` extension providers;
+    measure the provider call's latency while typing, and add the
     current line's text to the request if reading the buffer costs too much.
 
 - **D067 — Language servers and semantic tokens**

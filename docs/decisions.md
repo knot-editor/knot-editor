@@ -131,6 +131,8 @@ touches.
   escape hatch reusing terminating unload.
 - [Personal configuration](decisions/extension-host.md#personal-configuration):
   one config directory with pre- and post-init modules; failure is fatal.
+- [Extension providers](decisions/extension-host.md#extension-providers): named
+  JSON-call providers; consumer picks one or many; rejects calls that deadlock.
 - [Application observation](decisions/extension-host.md#application-observation):
   atomic registration, snapshot, and watermark; no second catalog.
 - [Extension record storage](decisions/extension-host.md#extension-record-storage):

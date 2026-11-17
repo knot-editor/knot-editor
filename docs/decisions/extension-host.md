@@ -222,6 +222,29 @@ installed-package failures stay independent.
 References: [extension host](../architecture/extension-host.md#package-admission-and-startup)
 and [product launch](../architecture/workbench-and-lifecycle.md#product-application-launch).
 
+## Extension providers
+
+A package reuses another's feature through named providers that packages
+register and others call by name, rather than through commands, which return no
+data, or shared modules. Names are free strings the packages agree on; the
+application interprets only `editor.completion`, so completion registers
+through the same registry instead of a separate one. One or many is the
+consumer's choice (`get` the latest, `all` in order). A `declare("single" |
+"multiple")` step was rejected: a second registration of a single provider must
+still be accepted so personal config can override one, so a declaration would
+only document intent while adding questions of who declares and in what order.
+
+Calls cross isolates as a root in the provider's package with a JSON argument
+and result and the caller's window, so a provider sees the window a command
+there would. Callbacks, handles, and targets do not cross as values, which
+keeps contracts declarable locally by each consumer and typed imports for
+later (D199). A package runs one root at a time (D182), so a call that would
+wait on a root waiting for the caller rejects `ProviderBusy` rather than
+deadlock; the cost is that a command run from Go to File's own palette cannot
+call its providers. Re-entrant roots would lift that and were left to D182.
+
+Reference: [extension host](../architecture/extension-host.md#providers).
+
 ## Application observation
 
 Atomic registration, initial snapshot, and watermark prevent gaps. Metadata is
