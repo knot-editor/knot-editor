@@ -7,7 +7,7 @@
 //! which is part of a larger leaf, never matches, and a token whose parent
 //! lacks the partner, as inside a parse error, has none.
 
-use std::ops::Range;
+use std::{ops::Range, sync::Arc};
 
 use tree_sitter::Node;
 
@@ -58,16 +58,10 @@ impl SyntaxState {
     }
 
     /// The layers whose parsed ranges contain `offset`, deepest first.
-    fn layers_at(&self, offset: usize) -> Vec<&Layer> {
-        let mut layers = vec![&self.root];
-        let mut layer = &self.root;
-        while let Some(injection) = layer
-            .injections
-            .iter()
-            .find(|injection| injection.parses(offset))
-        {
+    fn layers_at(&self, offset: usize) -> Vec<Arc<Layer>> {
+        let mut layers = vec![Arc::clone(&self.root)];
+        while let Some(injection) = layers[layers.len() - 1].injection_at(offset) {
             layers.push(injection);
-            layer = injection;
         }
         layers.reverse();
         layers

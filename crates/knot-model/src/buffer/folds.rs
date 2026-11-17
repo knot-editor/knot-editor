@@ -68,7 +68,11 @@ impl BufferModel {
             .syntax
             .as_ref()
             .filter(|syntax| syntax.has_fold_query())
-            .map(|syntax| syntax.fold_regions_starting_in(&self.buffer.snapshot(), lines.clone()));
+            .map(|syntax| {
+                let start = self.byte_of_line(lines.start);
+                let end = self.byte_of_line(lines.end + 1);
+                syntax.fold_regions_starting_in(&self.buffer.snapshot(), lines.clone(), start..end)
+            });
         let mut starts: Vec<usize> = match queried {
             Some(regions) => regions
                 .into_iter()
@@ -93,6 +97,15 @@ impl BufferModel {
         starts.sort_unstable();
         starts.dedup();
         starts
+    }
+
+    /// Where `line` starts, or the end of the text past the last line.
+    fn byte_of_line(&self, line: usize) -> usize {
+        if line < self.line_count() {
+            self.buffer.line_start(line)
+        } else {
+            self.buffer.len()
+        }
     }
 
     /// Leave the trailing blank lines of `region` visible.

@@ -143,8 +143,8 @@ BufferModel commit
         |
 BufferEdit log ---> AnchoredRangeStore::stabilize
         |
-        +---------> SyntaxState: edit every affected tree, reparse within
-                    a 1 ms foreground budget
+        +---------> SyntaxState: edit the root tree, reparse within a
+                    1 ms foreground budget
                             |
                     out of budget: BackgroundParse over a TextSnapshot
                             |
@@ -165,6 +165,13 @@ BufferEdit log ---> AnchoredRangeStore::stabilize
 - A reparse reruns a layer's injection query only over its changed and edited
   ranges, and an injection found again where a stale one of the same
   language was reuses its tree, so typing inside a fence stays incremental.
+- An edit touches only the root layer's tree. Each injection applies the
+  edits it is behind when something reads or reparses it, so the cost of a
+  commit does not grow with the number of layers, and layers are shared
+  between the state and a background parse until one of them changes.
+- A foreground attempt that runs out of budget makes the state skip the
+  foreground until a background parse finishes within that budget, so a
+  document whose reparse never fits goes straight to the background.
 - Each state has a globally unique generation that advances when its trees
   change; views cache visible-range highlight queries by it.
 - Which language a buffer parses is application policy: the

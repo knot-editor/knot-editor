@@ -61,8 +61,9 @@ impl SyntaxState {
         &self,
         text: &TextSnapshot,
         lines: Range<usize>,
+        bytes: Range<usize>,
     ) -> Vec<Range<usize>> {
-        self.fold_regions_and_layers_reached(text, lines).0
+        self.fold_regions_and_layers_reached(text, lines, bytes).0
     }
 
     /// [`Self::fold_regions_starting_in`] and how many layers reached `lines`.
@@ -70,9 +71,14 @@ impl SyntaxState {
         &self,
         text: &TextSnapshot,
         lines: Range<usize>,
+        bytes: Range<usize>,
     ) -> (Vec<Range<usize>>, usize) {
         let mut regions = Vec::new();
-        let reached = collect(&self.root, text, Some(&lines), &mut regions);
+        let reach = Reach {
+            lines: &lines,
+            bytes: &bytes,
+        };
+        let reached = collect(&self.root, text, Some(&reach), &mut regions);
         regions.retain(|region| lines.contains(&region.start));
         (regions, reached)
     }
@@ -88,17 +94,25 @@ fn starts_line(node: Node, text: &TextSnapshot) -> bool {
         .is_empty()
 }
 
+/// The part of the text whose regions are wanted: the lines, and the bytes
+/// they span, which layers still behind on edits are tested against.
+struct Reach<'a> {
+    lines: &'a Range<usize>,
+    bytes: &'a Range<usize>,
+}
+
 /// Push the regions of `layer` and its injections, only those of nodes that
 /// reach `lines` when given, and return how many layers reached them.
 fn collect(
     layer: &Layer,
     text: &TextSnapshot,
-    lines: Option<&Range<usize>>,
+    reach: Option<&Reach>,
     regions: &mut Vec<Range<usize>>,
 ) -> usize {
     // A region may start on the line before its node, at a colon, so the
     // node may start one line past `lines`.
-    let rows = lines.map(|lines| Point::new(lines.start, 0)..Point::new(lines.end + 1, 0));
+    let rows =
+        reach.map(|reach| Point::new(reach.lines.start, 0)..Point::new(reach.lines.end + 1, 0));
     if let (Some(rows), Some(tree)) = (&rows, &layer.tree) {
         let root = tree.root_node();
         if root.end_position() < rows.start || root.start_position() >= rows.end {
@@ -157,7 +171,13 @@ fn collect(
         }
     }
     for injection in &layer.injections {
-        reached += collect(injection, text, lines, regions);
+        if let Some(reach) = reach {
+            let host = layer.host_of(injection);
+            if host.start >= reach.bytes.end || reach.bytes.start >= host.end {
+                continue;
+            }
+        }
+        reached += collect(&layer.current(injection), text, reach, regions);
     }
     reached
 }

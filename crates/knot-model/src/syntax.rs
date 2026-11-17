@@ -63,6 +63,9 @@ const DEFAULT_PRIORITY: u32 = 100;
 /// language cannot recurse without bound.
 const MAX_INJECTION_DEPTH: usize = 8;
 
+/// How many edits a layer collects before its injections catch up with them.
+const MAX_PENDING_EDITS: usize = 64;
+
 /// Issues the identity that matches a background result to the parse that
 /// started it.
 static NEXT_PARSE: AtomicU64 = AtomicU64::new(1);
@@ -245,7 +248,7 @@ impl SyntaxLanguage {
 /// One buffer's parse layers and the parse that keeps them current.
 pub struct SyntaxState {
     /// The buffer's own language, edited forward to the current text.
-    root: Layer,
+    root: Arc<Layer>,
     resolver: LanguageResolver,
     parser: Parser,
     /// Ranges of the current text that edits touched since `root` was last a
@@ -254,6 +257,10 @@ pub struct SyntaxState {
     /// Whether `root` is a parse of the current text rather than an edited
     /// parse of older text.
     current: bool,
+    /// The budget the last foreground attempt ran out of. Further attempts
+    /// would fail the same way, so parsing goes straight to the background
+    /// until a background parse takes less than that budget.
+    overran: Option<Duration>,
     /// Changes whenever the highlights may have changed, and is never shared
     /// with another state, so a view's cache cannot outlive a replacement.
     generation: u64,
@@ -270,7 +277,16 @@ struct Layer {
     host: Range<usize>,
     /// `None` until the first parse.
     tree: Option<Tree>,
-    injections: Vec<Layer>,
+    injections: Vec<Arc<Layer>>,
+    /// The edits applied to this layer, from the `base`th, that some
+    /// injection has not applied yet. Editing a layer leaves its injections
+    /// alone, so an edit costs the same however many it has; each catches up
+    /// when something reads or reparses it.
+    edits: Vec<InputEdit>,
+    base: usize,
+    /// How many of the parent's edits, counting from its first, this layer
+    /// has applied.
+    applied: usize,
 }
 
 /// An injection a query found, before its layer is parsed.
@@ -315,7 +331,7 @@ struct RunningParse {
 /// that started it except for cancellation when that state is dropped.
 pub struct BackgroundParse {
     id: u64,
-    root: Layer,
+    root: Arc<Layer>,
     edited: Vec<Range<usize>>,
     resolver: LanguageResolver,
     text: TextSnapshot,
@@ -325,7 +341,9 @@ pub struct BackgroundParse {
 /// The result of a `BackgroundParse`.
 pub struct ParsedTree {
     id: u64,
-    root: Layer,
+    root: Arc<Layer>,
+    /// How long the parse ran.
+    took: Duration,
 }
 
 impl SyntaxState {
@@ -333,11 +351,12 @@ impl SyntaxState {
     /// their languages through `resolver`.
     pub fn new(language: Arc<SyntaxLanguage>, resolver: LanguageResolver) -> Self {
         Self {
-            root: Layer::new(language, 0..usize::MAX),
+            root: Arc::new(Layer::new(language, 0..usize::MAX)),
             resolver,
             parser: Parser::new(),
             edited: Vec::new(),
             current: false,
+            overran: None,
             generation: next_generation(),
             background: None,
         }
@@ -360,18 +379,15 @@ impl SyntaxState {
 
     /// The language of the deepest layer that parses the text at `offset`,
     /// such as a code fence's language inside Markdown.
-    pub fn language_at(&self, offset: usize) -> &Arc<SyntaxLanguage> {
-        &self.layer_at(offset).language
+    pub fn language_at(&self, offset: usize) -> Arc<SyntaxLanguage> {
+        Arc::clone(&self.layer_at(offset).language)
     }
 
-    /// The deepest layer that parses the text at `offset`.
-    fn layer_at(&self, offset: usize) -> &Layer {
-        let mut layer = &self.root;
-        while let Some(injection) = layer
-            .injections
-            .iter()
-            .find(|injection| injection.parses(offset))
-        {
+    /// The deepest layer that parses the text at `offset`, up to date with
+    /// the edits.
+    fn layer_at(&self, offset: usize) -> Arc<Layer> {
+        let mut layer = Arc::clone(&self.root);
+        while let Some(injection) = layer.injection_at(offset) {
             layer = injection;
         }
         layer
@@ -438,7 +454,7 @@ impl SyntaxState {
         let layer = self.layer_at(offset);
         let query = layer.language.indents.as_ref()?;
         let tree = layer.tree.as_ref()?;
-        let injected = !std::ptr::eq(layer, &self.root);
+        let injected = !Arc::ptr_eq(&layer, &self.root);
         let brackets = &layer.language.editing.brackets;
         Some(indent::evaluate(
             tree, query, brackets, text, lines, row, injected,
@@ -510,7 +526,7 @@ impl SyntaxState {
     pub fn edit(&mut self, edits: &[BufferEdit]) {
         for edit in edits {
             let edit = input_edit(edit);
-            self.root.edit(&edit);
+            Arc::make_mut(&mut self.root).edit(&edit);
             record_edit(&mut self.edited, &edit);
             if let Some(running) = &mut self.background {
                 running.pending.push(edit);
@@ -524,24 +540,28 @@ impl SyntaxState {
 
     /// Reparse `text`, the current text, within `budget`. Returns whether the
     /// layers are now current; a running background parse defers reparsing
-    /// to its rebase.
+    /// to its rebase, and so does a state whose last attempt overran.
     pub fn parse_in_foreground(&mut self, text: &TextSnapshot, budget: Duration) -> bool {
         if self.current {
             return true;
         }
-        if self.background.is_some() {
+        if self.overran.is_some() || self.background.is_some() {
             return false;
         }
         // A parse that runs out of budget leaves its layers half updated, so
         // it works on a copy.
-        let mut root = self.root.clone();
+        let mut root = Arc::clone(&self.root);
         let mut parse = LayerParse {
             parser: &mut self.parser,
             text,
             resolver: &self.resolver,
             stop: Stop::At(Instant::now() + budget),
         };
-        if root.parse(&[], &self.edited, 0, &mut parse).is_none() {
+        if Arc::make_mut(&mut root)
+            .parse(&[], &self.edited, 0, &mut parse)
+            .is_none()
+        {
+            self.overran = Some(budget);
             return false;
         }
         self.edited.clear();
@@ -561,7 +581,7 @@ impl SyntaxState {
         });
         BackgroundParse {
             id,
-            root: self.root.clone(),
+            root: Arc::clone(&self.root),
             // From now on `edited` collects only the edits the result is
             // rebased over.
             edited: std::mem::take(&mut self.edited),
@@ -578,16 +598,21 @@ impl SyntaxState {
         let Some(running) = self.background.take_if(|running| running.id == parsed.id) else {
             return false;
         };
+        if self.overran.is_some_and(|budget| parsed.took <= budget) {
+            self.overran = None;
+        }
         let mut root = parsed.root;
         for edit in &running.pending {
-            root.edit(edit);
+            Arc::make_mut(&mut root).edit(edit);
         }
         self.accept(root, running.pending.is_empty());
         true
     }
 
-    fn accept(&mut self, root: Layer, current: bool) {
-        self.root = root;
+    fn accept(&mut self, root: Arc<Layer>, current: bool) {
+        // Freeing every tree of a large document takes milliseconds.
+        let old = std::mem::replace(&mut self.root, root);
+        std::thread::spawn(move || drop(old));
         self.current = current;
         self.generation = next_generation();
     }
@@ -626,6 +651,7 @@ impl BackgroundParse {
             text,
             cancelled,
         } = self;
+        let started = Instant::now();
         let mut parser = Parser::new();
         let mut parse = LayerParse {
             parser: &mut parser,
@@ -633,8 +659,12 @@ impl BackgroundParse {
             resolver: &resolver,
             stop: Stop::When(&cancelled),
         };
-        root.parse(&[], &edited, 0, &mut parse)?;
-        Some(ParsedTree { id, root })
+        Arc::make_mut(&mut root).parse(&[], &edited, 0, &mut parse)?;
+        Some(ParsedTree {
+            id,
+            root,
+            took: started.elapsed(),
+        })
     }
 }
 
@@ -645,30 +675,108 @@ impl Layer {
             host,
             tree: None,
             injections: Vec::new(),
+            edits: Vec::new(),
+            base: 0,
+            applied: 0,
         }
     }
 
-    /// Whether this layer's parsed ranges contain `offset`.
+    /// Whether this layer's parsed ranges contain `offset`. The host span
+    /// holds them, and testing it first spares listing the ranges of every
+    /// sibling.
     fn parses(&self, offset: usize) -> bool {
-        self.tree.as_ref().is_some_and(|tree| {
-            tree.included_ranges()
-                .iter()
-                .any(|range| range.start_byte <= offset && offset < range.end_byte)
-        })
+        self.host.start <= offset
+            && offset < self.host.end
+            && self.tree.as_ref().is_some_and(|tree| {
+                tree.included_ranges()
+                    .iter()
+                    .any(|range| range.start_byte <= offset && offset < range.end_byte)
+            })
     }
 
-    /// Apply a committed edit to this layer's tree and to the injections that
-    /// do not end before it.
+    /// Apply a committed edit to this layer's tree. Its injections apply it
+    /// when they next catch up.
     fn edit(&mut self, edit: &InputEdit) {
         if let Some(tree) = &mut self.tree {
             tree.edit(edit);
         }
-        for injection in &mut self.injections {
-            if injection.host.end >= edit.start_byte {
-                injection.host = edit_range(&injection.host, edit);
-                injection.edit(edit);
+        if self.injections.is_empty() {
+            return;
+        }
+        self.edits.push(*edit);
+        if self.edits.len() > MAX_PENDING_EDITS {
+            self.catch_up_injections();
+        }
+    }
+
+    /// Apply the edits this injection is behind, `log`, of its parent, which
+    /// has applied `end` in all. An edit before the injection leaves it as
+    /// it is.
+    fn catch_up(&mut self, log: &[InputEdit], end: usize) {
+        for edit in log {
+            if self.host.end >= edit.start_byte {
+                self.host = edit_range(&self.host, edit);
+                self.edit(edit);
             }
         }
+        self.applied = end;
+    }
+
+    /// Bring every injection up to date, and drop the edits they applied.
+    fn catch_up_injections(&mut self) {
+        let end = self.base + self.edits.len();
+        for injection in &mut self.injections {
+            let behind = injection.applied < end;
+            if behind || !injection.injections.is_empty() {
+                let applied = injection.applied;
+                let injection = Arc::make_mut(injection);
+                if behind {
+                    injection.catch_up(&self.edits[applied - self.base..], end);
+                }
+                injection.catch_up_injections();
+            }
+        }
+        self.edits.clear();
+        self.base = end;
+    }
+
+    /// The edits `injection` has yet to apply.
+    fn behind(&self, injection: &Layer) -> &[InputEdit] {
+        &self.edits[injection.applied - self.base..]
+    }
+
+    /// The span of `injection`'s host once the edits it is behind apply.
+    fn host_of(&self, injection: &Layer) -> Range<usize> {
+        let mut host = injection.host.clone();
+        for edit in self.behind(injection) {
+            if host.end >= edit.start_byte {
+                host = edit_range(&host, edit);
+            }
+        }
+        host
+    }
+
+    /// `injection` with the edits it is behind applied, shared when there
+    /// are none.
+    fn current(&self, injection: &Arc<Layer>) -> Arc<Layer> {
+        let log = self.behind(injection);
+        if log.is_empty() {
+            return Arc::clone(injection);
+        }
+        let mut layer = Layer::clone(injection);
+        layer.catch_up(log, self.base + self.edits.len());
+        Arc::new(layer)
+    }
+
+    /// The first injection that parses `offset`, up to date.
+    fn injection_at(&self, offset: usize) -> Option<Arc<Layer>> {
+        self.injections.iter().find_map(|injection| {
+            if !self.host_of(injection).contains(&offset) {
+                return None;
+            }
+            let injection = self.current(injection);
+            injection.parses(offset).then_some(injection)
+        })
     }
 
     /// Reparse this layer over `ranges`, or the whole text when empty, then
@@ -685,6 +793,7 @@ impl Layer {
         let LayerParse {
             parser, text, stop, ..
         } = parse;
+        self.catch_up_injections();
         parser
             .set_language(&self.language.grammar)
             .expect("compiled-in grammars match the tree-sitter ABI");
@@ -749,11 +858,12 @@ impl Layer {
             let mut layer = stale
                 .iter()
                 .position(|layer| same(layer) && touches(&layer.host, &found.host))
-                .map(|index| stale.swap_remove(index))
+                .map(|index| Arc::unwrap_or_clone(stale.swap_remove(index)))
                 .unwrap_or_else(|| Layer::new(Arc::clone(&found.language), 0..0));
             layer.host = found.host;
+            layer.applied = self.base + self.edits.len();
             layer.parse(&found.ranges, changed, depth + 1, parse)?;
-            self.injections.push(layer);
+            self.injections.push(Arc::new(layer));
         }
         Some(())
     }
@@ -866,8 +976,10 @@ impl Layer {
             paint(spans, range, highlight);
         }
         for injection in &self.injections {
-            if injection.host.start < range.end && range.start < injection.host.end {
-                injection.paint_highlights(text, range, cursor, spans);
+            let host = self.host_of(injection);
+            if host.start < range.end && range.start < host.end {
+                self.current(injection)
+                    .paint_highlights(text, range, cursor, spans);
             }
         }
     }

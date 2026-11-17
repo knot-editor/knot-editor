@@ -148,11 +148,15 @@ impl Fixture {
         self.state.edit(self.buffer.edits_since(seq));
     }
 
+    /// Bring the layers up to date with the text, in the background when the
+    /// state skips the foreground.
     fn reparse(&mut self) {
-        assert!(
-            self.state
-                .parse_in_foreground(&self.buffer.snapshot(), UNBOUNDED)
-        );
+        let text = self.buffer.snapshot();
+        if !self.state.parse_in_foreground(&text, UNBOUNDED) {
+            let job = self.state.start_background_parse(text);
+            assert!(self.state.finish_background_parse(job.run().unwrap()));
+        }
+        assert!(self.state.is_current());
     }
 
     fn text(&self) -> String {
@@ -404,6 +408,7 @@ fn a_result_for_another_state_is_rejected() {
     let duplicate = ParsedTree {
         id: parsed.id,
         root: parsed.root.clone(),
+        took: parsed.took,
     };
     assert!(state.finish_background_parse(parsed));
     assert!(!state.finish_background_parse(duplicate));
@@ -425,11 +430,64 @@ fn a_parse_over_budget_is_cancelled_and_can_restart() {
     let mut state = SyntaxState::new(language(RUST_HIGHLIGHTS), languages());
     assert!(!state.parse_in_foreground(&buffer.snapshot(), Duration::ZERO));
     assert!(state.needs_parse());
-    assert!(state.parse_in_foreground(&buffer.snapshot(), UNBOUNDED));
+    let job = state.start_background_parse(buffer.snapshot());
+    assert!(state.finish_background_parse(job.run().unwrap()));
+    assert!(state.is_current());
     assert_eq!(
         state.highlights(&buffer.snapshot(), 0..2),
         vec![(0..2, Highlight::named("keyword"))]
     );
+}
+
+#[test]
+fn a_state_that_overran_skips_the_foreground_until_a_parse_fits_the_budget() {
+    let source = "fn f() { let x = call(1, \"s\"); }\n".repeat(2_000);
+    let mut buffer = TextBuffer::from_text(source);
+    let mut state = SyntaxState::new(language(RUST_HIGHLIGHTS), languages());
+    assert!(!state.parse_in_foreground(&buffer.snapshot(), Duration::ZERO));
+    // The attempt would now fit, but the state does not make it.
+    assert!(!state.parse_in_foreground(&buffer.snapshot(), UNBOUNDED));
+
+    // A background parse slower than the overrun budget changes nothing.
+    let job = state.start_background_parse(buffer.snapshot());
+    assert!(state.finish_background_parse(job.run().unwrap()));
+    assert!(state.is_current());
+    let seq = buffer.edit_seq();
+    buffer.replace(0..0, "x");
+    state.edit(buffer.edits_since(seq));
+    assert!(!state.parse_in_foreground(&buffer.snapshot(), UNBOUNDED));
+
+    // One that fits it lets the foreground parse again.
+    state.overran = Some(Duration::from_secs(60));
+    let job = state.start_background_parse(buffer.snapshot());
+    assert!(state.finish_background_parse(job.run().unwrap()));
+    let seq = buffer.edit_seq();
+    buffer.replace(0..0, "y");
+    state.edit(buffer.edits_since(seq));
+    assert!(state.parse_in_foreground(&buffer.snapshot(), UNBOUNDED));
+}
+
+#[test]
+fn an_edit_leaves_the_injections_alone_until_they_are_read() {
+    let unit = "Text.\n\n```rust\nfn f() {}\n```\n\n";
+    let mut fixture = Fixture::of("markdown", &unit.repeat(20));
+    let before: Vec<_> = fixture.state.root.injections.clone();
+    assert!(before.len() >= 20);
+
+    fixture.replace(0..0, "More. ");
+    for (layer, earlier) in fixture.state.root.injections.iter().zip(&before) {
+        assert!(Arc::ptr_eq(layer, earlier), "an edit copied a layer");
+    }
+
+    // Reading finds the last fence where the edit moved it.
+    let code = fixture.buffer.len() - 14;
+    assert!(!Arc::ptr_eq(
+        &fixture.state.language_at(code),
+        fixture.state.language()
+    ));
+    fixture.reparse();
+    let fresh = Fixture::of("markdown", &fixture.text());
+    assert_eq!(fixture.highlights(), fresh.highlights());
 }
 
 fn has(spans: &[(String, &'static str)], text: &str, name: &str) -> bool {
@@ -523,7 +581,11 @@ fn fold_regions_over_a_few_lines_reach_only_the_layers_there() {
     let text = fixture.buffer.snapshot();
     assert_eq!(fixture.state.fold_regions(&text).len(), 100);
     // The fourth unit's function, lines 27 and 28, is the one fence there.
-    let (regions, reached) = fixture.state.fold_regions_and_layers_reached(&text, 26..29);
+    let (regions, reached) = fixture.state.fold_regions_and_layers_reached(
+        &text,
+        26..29,
+        fixture.buffer.line_start(26)..fixture.buffer.line_start(30),
+    );
     assert_eq!(regions, vec![27..29]);
     // The Markdown root and that fence; no other fence or paragraph.
     assert_eq!(reached, 2);
@@ -938,7 +1000,11 @@ fn injection_costs_on_a_large_markdown_file() {
 
 /// The layers of `layer` and every layer injected into it.
 fn layer_count(layer: &Layer) -> usize {
-    1 + layer.injections.iter().map(layer_count).sum::<usize>()
+    1 + layer
+        .injections
+        .iter()
+        .map(|injection| layer_count(injection))
+        .sum::<usize>()
 }
 
 /// The foreground stages of one typed character on the large Markdown
@@ -1017,6 +1083,7 @@ fn typing_stage_costs_on_the_large_markdown_document() {
             mut background,
             mut finish,
             mut query,
+            mut dropped,
         ] = std::array::from_fn(|_| Vec::new());
         for key in 0..KEYS {
             let offset = spot + 2 * key;
@@ -1024,9 +1091,8 @@ fn typing_stage_costs_on_the_large_markdown_document() {
             fixture.buffer.replace(offset..offset, "x");
             let edits = fixture.buffer.edits_since(seq).to_vec();
             timed(&mut edit, || fixture.state.edit(&edits));
-            timed(&mut clone, || {
-                std::hint::black_box(fixture.state.root.clone())
-            });
+            let cloned = timed(&mut clone, || fixture.state.root.clone());
+            timed(&mut dropped, || drop(cloned));
             let snapshot = fixture.buffer.snapshot();
             timed(&mut attempt, || {
                 fixture
@@ -1055,6 +1121,7 @@ fn typing_stage_costs_on_the_large_markdown_document() {
         }
         report("syntax edit", &mut edit);
         report("layer clone", &mut clone);
+        report("layer drop", &mut dropped);
         report("foreground attempt", &mut attempt);
         report("start background parse", &mut start);
         report("background parse (off thread)", &mut background);
