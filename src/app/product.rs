@@ -28,6 +28,7 @@ mod key_routing;
 mod language_mode;
 mod launch;
 mod navigation;
+mod notifications;
 mod open;
 pub(super) mod operations;
 mod recovery_listing;
@@ -635,6 +636,7 @@ pub(crate) struct KnotWindow {
     _appearance_observer: Option<Subscription>,
     /// Repaints the status bar when its items or settings change.
     _status_bar_observers: Vec<Subscription>,
+    notices: notifications::NoticePopups,
     application_focus: Vec<(FocusHandle, Subscription, Subscription)>,
     contributed_views: BTreeMap<String, ContributedView>,
     _contributed_view_release: Option<Subscription>,
@@ -779,6 +781,7 @@ impl KnotWindow {
             application_activation: None,
             _appearance_observer: None,
             _status_bar_observers: Vec::new(),
+            notices: Default::default(),
             application_focus: Vec::new(),
             contributed_views: BTreeMap::new(),
             _contributed_view_release: None,
@@ -934,9 +937,14 @@ impl KnotWindow {
             ),
             cx.observe_global_in::<super::settings::ApplicationSettings>(
                 native_window,
-                |_, window, _| window.refresh(),
+                |this, window, cx| this.sync_notices(window, cx),
+            ),
+            cx.observe_global_in::<super::notifications::ApplicationNotifications>(
+                native_window,
+                |this, window, cx| this.sync_notices(window, cx),
             ),
         ];
+        self.sync_notices(native_window, cx);
         self.observe_application(cx);
     }
 

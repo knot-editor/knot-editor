@@ -20,6 +20,7 @@ mod keybindings;
 mod languages;
 mod menu_bar;
 mod navigation;
+mod notifications;
 mod observation;
 mod operations;
 mod persistence;

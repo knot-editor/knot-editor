@@ -843,6 +843,7 @@ impl Render for KnotWindow {
         let transient = self.render_transient();
         let toolbar = self.render_toolbar_row(cx);
         let status_bar = self.render_status_bar(cx);
+        let notices = self.render_notices(toolbar.is_some(), status_bar.is_some(), cx);
         let dismiss_transient =
             cx.listener(|this: &mut Self, _: &MouseDownEvent, _: &mut Window, cx| {
                 this.finish_transient(TransientOutcome::Dismissed, cx);
@@ -934,6 +935,7 @@ impl Render for KnotWindow {
                         .child(palette),
                 )
             })
+            .children(notices)
             .when_some(extension_report, |root, (report, setting_warnings)| {
                 root.child(render_extension_report(
                     report,

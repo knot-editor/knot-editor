@@ -1,6 +1,6 @@
 # D117: Non-modal notifications
 
-Status: 🚧 approved, not started. Roadmap item [D117](../roadmap.md).
+Status: 🚧 approved, checkpoint 1 implemented and awaiting review. Roadmap item [D117](../roadmap.md).
 
 ## Outcome
 
@@ -120,7 +120,15 @@ listing setting warnings.
 
 ## Checkpoints
 
-### 1. Native store and popups
+### 1. Native store and popups ✅
+
+Implemented, awaiting the review gate. Scope decisions: `notifications.timeout`
+is a number of seconds (default 8) and `notifications.maxVisible` defaults to 3,
+both open to tuning at the review; a timed-out popup hides in its own window
+only, while closing one marks the notice read everywhere; the "+N more" pill
+paints but does nothing until checkpoint 3 wires it to the panel. The review's
+`Try:` commands live in the personal `post-init.js` (positions and popups on or
+off).
 
 Deliverables: the `knot-model` notification store; the application global; the
 popup overlay with severity icons, actions, close, hover pause, timeout, the
