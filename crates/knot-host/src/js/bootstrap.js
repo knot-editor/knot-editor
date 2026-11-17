@@ -1239,6 +1239,7 @@ async function invokeRegisteredCommand(
   const target = capture === null ? null : Object.freeze({
     window: capture.window,
     windowTarget: windowTarget({ window: capture.window }),
+    viewTarget: capture.viewTarget === null ? null : presentationTarget(capture.viewTarget),
     view: capture.view,
     tool: capture.tool,
   });

@@ -1095,6 +1095,68 @@ await commands.register("editor.custom", async (context) => {
 }
 
 #[gpui::test]
+fn a_command_from_an_editor_tab_carries_that_tabs_view_target(cx: &mut TestAppContext) {
+    use knot_protocol::ExtensionKey;
+
+    let documents = install_globals(cx);
+    let host = cx.update(super::super::super::extensions::host::install);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let window = headless_window(document, model, cx);
+    let native_window = Headless;
+    let key = ExtensionKey::new(ExtensionId::new(92), ExtensionLifecycleId::new(1));
+    host.update(cx, |host, cx| {
+        let execution = host
+            .load_test_source(
+                key,
+                r#"
+import * as knot from "knot"; const { commands } = knot;
+await commands.register("editor.view-target", async (context) => {
+  const view = context.target.viewTarget;
+  if (view === null) throw new Error("no view target");
+  const info = await knot.windows.get(context.target.windowTarget);
+  if (view !== info.currentTarget) throw new Error("not the focused tab");
+  if (view.window !== context.target.windowTarget) throw new Error("other window");
+  await commands.list(view);
+});
+"#,
+            )
+            .unwrap();
+        cx.spawn(async move |_, _| {
+            execution.await.unwrap();
+        })
+        .detach();
+    });
+    crate::test_support::wait_until(cx, |cx| {
+        cx.read(|cx| {
+            cx.global::<ApplicationProductCommands>()
+                .0
+                .read(cx)
+                .catalog()
+                .borrow()
+                .resolve("editor.view-target")
+                .is_ok()
+        })
+    });
+    let target = native_window.run(cx, |cx| {
+        window.update(cx, |window, cx| window.focus_active_editor(cx));
+        window.update(cx, |window, cx| window.capture_command_target(cx))
+    });
+    let dispatcher = cx.read(|cx| cx.global::<ApplicationProductCommands>().0.clone());
+    let execution = dispatcher.update(cx, |dispatcher, cx| {
+        dispatcher.dispatch(
+            Command {
+                name: "editor.view-target".into(),
+                arguments: CommandArgumentValue::Null,
+            },
+            target,
+            cx,
+        )
+    });
+    assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
+}
+
+#[gpui::test]
 fn nested_script_waits_for_a_pending_native_command(cx: &mut TestAppContext) {
     use knot_protocol::ExtensionKey;
 

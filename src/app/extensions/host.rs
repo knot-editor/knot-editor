@@ -1938,6 +1938,25 @@ impl ProductExtensionHost {
                                 authority: root,
                                 window: crate::app::product::window_id(target.window.entity_id()),
                                 view: target.view.map(|view| format!("{view:?}")),
+                                view_target: target.tab.map(|tab| {
+                                    Box::new(knot_protocol::PresentationTarget {
+                                        pane: knot_protocol::PaneTarget {
+                                            window: knot_protocol::WindowTarget {
+                                                window: crate::app::product::window_id(
+                                                    target.window.entity_id(),
+                                                ),
+                                            },
+                                            workbench: target
+                                                .workbench
+                                                .entity_id()
+                                                .as_u64()
+                                                .to_string(),
+                                            pane: tab.pane.value().to_string(),
+                                        },
+                                        tab: tab.tab.value().to_string(),
+                                        presentation: tab.presentation.value().to_string(),
+                                    })
+                                }),
                                 tool: target.extension_tool_id(cx),
                                 editor: matches!(
                                     target.command_view(cx),

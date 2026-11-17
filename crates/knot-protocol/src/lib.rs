@@ -1076,10 +1076,13 @@ pub struct HostResponse {
 
 /// Opaque presentation authority shared by one admitted command tree.
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CommandCapture {
     pub authority: CommandInvocationId,
     pub window: String,
     pub view: Option<String>,
+    /// The captured tab presentation, when the command was captured on a tab.
+    pub view_target: Option<Box<PresentationTarget>>,
     /// Stable contribution ID for a captured contributed tool, when any.
     pub tool: Option<String>,
     /// Whether the captured presentation is a document editor.

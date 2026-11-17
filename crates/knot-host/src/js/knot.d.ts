@@ -1135,6 +1135,10 @@ declare module "knot" {
     readonly window: WindowId;
     /** Live target for the same window, accepted by window-targeted operations. */
     readonly windowTarget: WindowTarget;
+    /** The tab presentation the command was captured on, or null when no tab
+     * was focused. It identifies that exact tab; it never follows a later
+     * focus change. */
+    readonly viewTarget: ViewTarget | null;
     /** Captured extension-addressable view, or null when none is available. */
     readonly view: ViewId | null;
     /** Stable contributed view ID, or null for non-contributed surfaces. */

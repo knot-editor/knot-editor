@@ -1,6 +1,6 @@
 # D156 — Fewer host round trips per key
 
-Status: 🚧 checkpoint 2 done. Source: [roadmap](../roadmap.md) D156.
+Status: 🚧 checkpoint 3 awaiting review. Source: [roadmap](../roadmap.md) D156.
 
 ## Goal
 
@@ -90,7 +90,11 @@ to 1.27 s, `tests/edit.rs` 0.42 s to 0.33 s, the budget case 0.13 s to
 `knot-host` rebuild 6.0 s to 4.9 s. No turn profile was taken; the small gain
 suggests the host glue is not what a turn spends its time on.
 
-### 3. View target on the command context
+### 3. View target on the command context ✅
+
+Implemented: `viewTarget` is the captured tab for any tab kind (null only when
+no tab was focused); the extension API test covers an editor tab. The budget
+is now `j` 20, `w` 16, `x` 15.
 
 Deliverables: `CommandTarget.viewTarget`; Vim's `stateOf` uses it and no
 longer calls `windows.get`; the budget test lowers by one per key.

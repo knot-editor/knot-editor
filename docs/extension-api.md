@@ -252,6 +252,8 @@ between docks and hide them, and remembered user layout overrides registration
 defaults in later windows. Programmatic `show`/`hide`/`focus` affects live windows only and never
 changes the fresh-window default. Pass a live `WindowTarget` from
 `context.target.windowTarget` or `windows.*` to target one window.
+`context.target.viewTarget` is the tab the command was captured on, or null
+when no tab was focused.
 
 ### Groups, status, and actions
 

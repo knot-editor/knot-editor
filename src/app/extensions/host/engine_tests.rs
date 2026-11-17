@@ -538,6 +538,7 @@ fn execute_captured_fixture(
                 authority: CommandInvocationId::new(900),
                 window: "fixture-window".into(),
                 view: None,
+                view_target: None,
                 tool: None,
                 editor: false,
             }),

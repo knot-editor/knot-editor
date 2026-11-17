@@ -233,7 +233,9 @@ remove bindings; late results validate instance and lifecycle.
 
 Contextual buffer/selection access validates the live invocation, caller lifecycle,
 target authority, and exact presentation. Roots and children inherit the same
-capture. Activation and unrelated callbacks cannot borrow command focus. A valid
+capture. The context carries the captured tab as `target.viewTarget`, so a
+command needs no `windows.get` to learn which tab it runs in. Activation and
+unrelated callbacks cannot borrow command focus. A valid
 nontext target has a null buffer; contributed-view selection support is
 limited to admitted contributed-view handlers. A document-editor target also
 receives an editor handle whose selection and view-state operations resolve the

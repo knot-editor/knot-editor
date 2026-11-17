@@ -284,10 +284,10 @@ class Vim {
     await state.handle.dispose();
   }
 
-  /** The followed editor a command was invoked in: the window's focused tab. */
+  /** The followed editor a command was invoked in: the tab it was captured on. */
   private async stateOf(context: CommandContext): Promise<Followed | null> {
     const window = context.target.windowTarget;
-    const current = (await windows.get(window))?.currentTarget ?? null;
+    const current = context.target.viewTarget;
     if (current === null) return null;
     const known = this.states.get(current);
     if (known !== undefined) return known;
