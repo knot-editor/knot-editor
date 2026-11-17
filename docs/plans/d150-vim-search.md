@@ -1,6 +1,6 @@
 # D150: Vim search and substitution
 
-Status: 🚧 in progress (checkpoints 1–2 done). Roadmap item [D150](../roadmap.md).
+Status: 🚧 in progress (checkpoints 1–3 done). Roadmap item [D150](../roadmap.md).
 
 ## Goal
 
@@ -129,11 +129,11 @@ them (most recent first, a repeated entry moving to the front).
 Drafts for the `Release-note:` trailers (see
 [development](../development.md#nightly-releases)); revise them to what
 shipped. Checkpoint 1 and 2 add no user-visible behavior beyond what these
-cover.
+cover; checkpoint 3 carried the Find history note.
 
 - Release-note: Vim mode can search with `/`, `?`, `n`, `N`, `*` and `#`, with live match highlighting that stays until `:noh`.
 - Release-note: Vim mode supports `:s` and `:%s` substitution with ranges and flags, as a single undo step.
-- Release-note: The Find bar and the Vim `/`, `?` and `:` prompts recall earlier entries with Up and Down.
+- Release-note: The Vim `/`, `?` and `:` prompts list earlier entries.
 
 
 ## Deferred decisions
@@ -158,12 +158,12 @@ under [editor bars](../architecture/commands.md#editor-bars). A prompt's
 `highlighted` counts only `onChange` items and is null on a history row; a bar
 field's history is the snapshot passed when the bar was opened.
 
-### 3. History in Find
+### 3. History in Find ✅
 
 Deliverables:
 
-- Query and replacement histories in `@knot/find`, added on Enter, step,
-  Replace and Replace All, persisted in the package's storage and capped.
+- Query and replacement histories in `@knot/find`, added on step, Replace and
+  Replace All, persisted in the package's storage and capped.
 - Find tests recalling an earlier query and replacement across a restart of
   the package.
 
