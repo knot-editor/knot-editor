@@ -109,3 +109,31 @@ entries without owners.
 References: [extension host](../architecture/extension-host.md#settings),
 [editor views](../architecture/editor-and-languages.md#editor-views), and
 [languages](../architecture/editor-and-languages.md#syntax-highlighting-and-languages).
+
+## Menu items
+
+Menus are registrations (`menus.add(location, item)`), not hard-coded lists.
+Bundled packages fill the tab and content menus through the API every extension
+uses, so a package can add, reorder, or scope entries without native changes. A
+separate call, rather than a field of `CommandOptions`, lets one command appear
+in several locations with different arguments. Items scope by view kind and key
+context with the keymap's rule, so one scope vocabulary covers keys and menus.
+Order comes from group, order, and title, never activation order, so menus stay
+stable across restarts.
+
+A menu acts on the clicked surface through a captured target and does not move
+focus; the alternative, focusing first, changes what the user was working in
+only to run a command on something else. An unavailable command does nothing,
+and the menu has no disabled states or `when` language, to avoid a second
+availability model beside command outcomes.
+
+The menu bar stays native: it must exist before extensions start and where none
+run (macOS with no window, the config-error window). Contributions join named
+native groups, and the bar is set again when the registry changes. Contributed
+items use a window-only action so they are disabled with no window.
+
+Excluded for want of a consumer: contributions to another package's tree rows
+(row actions belong to the owning provider), submenus, icons, and checkmarks.
+
+References: [context menus](../architecture/commands.md#context-menus) and
+[menus](../architecture/commands.md#menus).

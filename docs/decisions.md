@@ -104,6 +104,9 @@ touches.
   one command namespace, Knot-side key matching, latest-write-wins keymaps.
 - [Application settings](decisions/commands-and-settings.md#application-settings):
   Emacs-like variables in one store rebuilt at launch; scopes as fact sets.
+- [Menu items](decisions/commands-and-settings.md#menu-items): menus are
+  registrations scoped like keybindings; they act on the clicked surface
+  without focusing it; the menu bar stays native and contributions join it.
 
 ## [Extension host](decisions/extension-host.md)
 
