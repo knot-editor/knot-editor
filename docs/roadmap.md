@@ -55,7 +55,7 @@ hold the analyses that support some items.
 
 ## Bugs
 
-- **D202 — Slow typing**
+- **D202 — Slow typing** 🚧
   - Depends on: none
   - Description: Typing in a Markdown file of about 70k lines with fenced code
     lags noticeably, in prose and in fences alike. Each commit spends its 1 ms
@@ -66,7 +66,8 @@ hold the analyses that support some items.
     incremental reparses: Rust 7k lines about 1 ms, 35k about 8 ms; TypeScript
     60k about 3 ms; Python 55k about 5 ms for Enter and 60 ms for `else:`. A
     larger foreground budget for Enter and closing tokens helped only files of
-    7k to 30k lines and didn't change typing latency, so it was dropped.
+    7k to 30k lines and didn't change typing latency, so it was dropped. The
+    [plan](plans/d202-slow-typing.md) measures first, then fixes.
 
 - **D175 — Type-ahead after a held Enter**
   - Depends on: none
