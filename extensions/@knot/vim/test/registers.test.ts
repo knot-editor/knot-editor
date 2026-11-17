@@ -90,3 +90,27 @@ test("registers round-trip through JSON and ignore what they do not know", () =>
   assert.equal(Registers.fromJson({ version: 2 }).get("q"), null);
   assert.equal(Registers.fromJson({ version: 1, registers: { "!": { text: "x", linewise: false } } }).get("!"), null);
 });
+
+test("history keeps entries newest first, moves repeats forward, and is capped", () => {
+  const registers = new Registers();
+  for (const entry of ["a", "b", "a", ""]) registers.remember("search", entry);
+  assert.deepEqual(registers.entries("search"), ["a", "b"]);
+  assert.deepEqual(registers.entries("command"), []);
+  for (let n = 0; n < 150; n++) registers.remember("command", `c${n}`);
+  assert.equal(registers.entries("command").length, 100);
+  assert.equal(registers.entries("command")[0], "c149");
+});
+
+test("history and the search register survive a save, and clear empties them", () => {
+  const registers = new Registers();
+  registers.remember("search", "foo");
+  registers.remember("command", "set ic");
+  registers.set("/", chars("foo"));
+  const restored = Registers.fromJson(registers.toJson());
+  assert.deepEqual(restored.entries("search"), ["foo"]);
+  assert.deepEqual(restored.entries("command"), ["set ic"]);
+  assert.deepEqual(restored.get("/"), chars("foo"));
+  restored.clear();
+  assert.deepEqual(restored.entries("search"), []);
+  assert.equal(restored.get("/"), null);
+});

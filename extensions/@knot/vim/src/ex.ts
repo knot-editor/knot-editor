@@ -2,7 +2,7 @@
 // and the paths `:e` opens; and completes them through the shared matcher.
 import { completion, type InputCompletion } from "knot";
 
-export type BooleanOption = "number" | "relativenumber" | "wrap" | "expandtab";
+export type BooleanOption = "number" | "relativenumber" | "wrap" | "expandtab" | "ignorecase" | "smartcase";
 export type NumberOption = "tabstop" | "shiftwidth";
 
 /** One `:set` argument: turning a boolean option on, off, or over, giving a
@@ -35,6 +35,8 @@ const BOOLEANS: Readonly<Record<string, BooleanOption>> = {
   relativenumber: "relativenumber", rnu: "relativenumber",
   wrap: "wrap",
   expandtab: "expandtab", et: "expandtab",
+  ignorecase: "ignorecase", ic: "ignorecase",
+  smartcase: "smartcase", scs: "smartcase",
 };
 
 const NUMBERS: Readonly<Record<string, NumberOption>> = {
@@ -118,6 +120,7 @@ function parseSet(text: string): ExCommand {
 /** Options completed by `:set`, each under its full name with its short form. */
 const OPTIONS: readonly (readonly [string, string])[] = [
   ["number", "nu"], ["relativenumber", "rnu"], ["wrap", ""], ["expandtab", "et"],
+  ["ignorecase", "ic"], ["smartcase", "scs"],
   ["tabstop", "ts"], ["shiftwidth", "sw"],
 ];
 

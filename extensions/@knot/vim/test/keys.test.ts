@@ -230,3 +230,29 @@ test("a count may precede or follow ctrl-w", () => {
   assert.deepEqual(parse("<c-w>", "1", "0", ">").command, { kind: "window", action: "wider", count: 10 });
   assert.equal(pendingText(parse("<c-w>", "2").pending), "^W2");
 });
+
+test("search keys are motions, with a count and after an operator", () => {
+  assert.deepEqual(parse("/").command, {
+    kind: "motion", motion: { search: "prompt", forward: true }, count: null,
+  });
+  assert.deepEqual(parse("3", "?").command, {
+    kind: "motion", motion: { search: "prompt", forward: false }, count: 3,
+  });
+  assert.deepEqual(parse("n").command, { kind: "motion", motion: { search: "repeat", reverse: false }, count: null });
+  assert.deepEqual(parse("N").command, { kind: "motion", motion: { search: "repeat", reverse: true }, count: null });
+  assert.deepEqual(parse("*").command, {
+    kind: "motion", motion: { search: "word", forward: true, whole: true }, count: null,
+  });
+  assert.deepEqual(parse("g", "#").command, {
+    kind: "motion", motion: { search: "word", forward: false, whole: false }, count: null,
+  });
+  assert.deepEqual(parse("d", "/").command, {
+    kind: "operator", operator: "d", register: null, count: null,
+    target: { kind: "motion", motion: { search: "prompt", forward: true } },
+  });
+  assert.deepEqual(visual("n"), { kind: "motion", motion: { search: "repeat", reverse: false }, count: null });
+});
+
+test("the search register can be named", () => {
+  assert.deepEqual(parse('"', "/", "p").command, { kind: "put", before: false, register: "/", count: 1 });
+});

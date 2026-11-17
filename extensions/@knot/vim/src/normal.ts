@@ -13,6 +13,7 @@ import {
   wordBackward, wordEnd, wordEndBackward, wordForward,
 } from "./motions.js";
 import { type Region, textObject } from "./objects.js";
+import { searchMotion } from "./search.js";
 import type { Register, Registers } from "./registers.js";
 import {
   columnAtByte, firstNonBlank, lastColumn, nextColumn, previousColumn, utf8Length,
@@ -32,6 +33,9 @@ export type Shared = {
   readonly registers: Registers;
   /** The last `f`, `F`, `t`, or `T`, which `;` and `,` repeat. */
   lastFind: { readonly kind: FindKind; readonly char: string } | null;
+  /** The direction of the last search, which `n` follows and `N` reverses,
+   * and whether smartcase applied to it. Its pattern is the `/` register. */
+  search: { readonly forward: boolean; readonly smart: boolean };
   /** Persists the registers after they change. */
   saveRegisters(): void;
   /** Buffer marks `a`–`z`, by document. */
@@ -54,6 +58,9 @@ export type State = {
   readonly shared: Shared;
   language: string;
   mode: Mode;
+  /** What the last command reported, shown in place of the mode until the
+   * next key. */
+  message: string | null;
   /** The screen column `j` and `k` aim for, valid while the caret is still
    * where this package last put it; Infinity after `$`. */
   want: number | null;
@@ -221,6 +228,7 @@ export async function resolve(
   const total = await lines.count();
   const text = await lines.text(from.line);
   if (typeof name !== "string" && "mark" in name) return markMotion(state, lines, name);
+  if (typeof name !== "string" && "search" in name) return searchMotion(state, lines, from, name, count);
   if (typeof name !== "string") {
     state.shared.lastFind = { kind: name.find, char: name.char };
     return find(text, from, name.find, name.char, n, false);
@@ -730,8 +738,8 @@ async function operate(
       const moved = await resolve(state, lines, from, target.motion, count, operator);
       region = moved === null ? null : await motionRegion(lines, from, moved);
       big = target.motion === "match-pair" || target.motion === "paragraph-forward"
-        || target.motion === "paragraph-back" || (typeof target.motion !== "string" && "mark" in target.motion
-          && target.motion.exact);
+        || target.motion === "paragraph-back" || (typeof target.motion !== "string" && "search" in target.motion)
+        || (typeof target.motion !== "string" && "mark" in target.motion && target.motion.exact);
       break;
     }
   }

@@ -49,6 +49,18 @@ test(":set turns options on, off, and over, and sets and shows values", () => {
   assert.deepEqual(parseEx("set"), { kind: "set", arguments: [] });
 });
 
+test(":set takes the case options", () => {
+  assert.deepEqual(parseEx("set ic noscs smartcase? invic"), {
+    kind: "set",
+    arguments: [
+      { option: "ignorecase", action: "on" },
+      { option: "smartcase", action: "off" },
+      { option: "smartcase", action: "show" },
+      { option: "ignorecase", action: "toggle" },
+    ],
+  });
+});
+
 test(":set rejects unknown options and invalid values", () => {
   assert.deepEqual(parseEx("set hlsearch"), { kind: "error", message: "E518: Unknown option: hlsearch" });
   assert.deepEqual(parseEx("set ts=0"), { kind: "error", message: "E474: Invalid argument: ts=0" });

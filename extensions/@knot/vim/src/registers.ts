@@ -11,10 +11,17 @@ export type Register = Readonly<{ text: string; linewise: boolean }>;
 const WRITABLE = /^[a-zA-Z+*_]$/;
 
 /** Registers the model stores and persists. */
-const STORED = /^[a-z0-9:-]$/;
+const STORED = /^[a-z0-9:/-]$/;
+
+/** The most entries a prompt's history keeps. */
+export const HISTORY_LIMIT = 100;
+
+/** The prompts that remember what was submitted: `/` and `?` share one list. */
+export type HistoryList = "search" | "command";
 
 export class Registers {
   private readonly stored = new Map<string, Register>();
+  private readonly history: Record<HistoryList, string[]> = { search: [], command: [] };
   /** What the package last put on the clipboard. */
   private clipboard: Register | null = null;
 
@@ -66,10 +73,27 @@ export class Registers {
     return { text, linewise: this.clipboard?.text === text && this.clipboard.linewise };
   }
 
+  /** The entries submitted to a prompt, newest first. */
+  entries(list: HistoryList): readonly string[] {
+    return this.history[list];
+  }
+
+  /** Adds a submitted entry, moving a repeat to the front. */
+  remember(list: HistoryList, entry: string) {
+    if (entry === "") return;
+    const entries = this.history[list];
+    const at = entries.indexOf(entry);
+    if (at !== -1) entries.splice(at, 1);
+    entries.unshift(entry);
+    entries.length = Math.min(entries.length, HISTORY_LIMIT);
+  }
+
   /** Empties every register and forgets what the package gave the clipboard. */
   clear() {
     this.stored.clear();
     this.clipboard = null;
+    this.history.search = [];
+    this.history.command = [];
   }
 
   toJson(): JsonValue {
@@ -79,6 +103,7 @@ export class Registers {
       version: 1,
       registers,
       clipboard: this.clipboard === null ? null : { ...this.clipboard },
+      history: { search: [...this.history.search], command: [...this.history.command] },
     };
   }
 
@@ -93,6 +118,15 @@ export class Registers {
       }
     }
     registers.clipboard = registerOf(value.clipboard);
+    if (isObject(value.history)) {
+      for (const list of ["search", "command"] as const) {
+        const saved = value.history[list];
+        if (Array.isArray(saved)) {
+          registers.history[list] = saved.filter((entry): entry is string => typeof entry === "string")
+            .slice(0, HISTORY_LIMIT);
+        }
+      }
+    }
     return registers;
   }
 }

@@ -282,7 +282,7 @@ fn run_topic(topic: &str, cx: &mut TestAppContext) {
 topics!(
     package("vim"),
     run_topic;
-    ex, folding, insert, marks, motions, objects, operators, registers, scrolling, visual
+    ex, folding, insert, marks, motions, objects, operators, registers, scrolling, search, visual
 );
 
 #[gpui::test]
@@ -477,6 +477,23 @@ fn registers_persist_across_a_package_restart(cx: &mut TestAppContext) {
     // Linewise text stays linewise, and characterwise text characterwise.
     test_editor.press("j\"ap\"bP", cx);
     assert_eq!(test_editor.marked(cx), "one\ntwo\non‸eone");
+}
+
+#[gpui::test]
+fn the_last_search_and_the_prompt_histories_persist_across_a_package_restart(
+    cx: &mut TestAppContext,
+) {
+    let product = start(cx);
+    let test_editor = open(&product, "a foo b bar c foo", 0, cx);
+    test_editor.press("/bar<cr>:2<cr>gg", cx);
+
+    restart_vim(&product, &test_editor, cx);
+
+    // `n` searches for the last pattern, and `/` lists the earlier ones.
+    test_editor.press("n", cx);
+    assert_eq!(test_editor.marked(cx), "a foo b ‸bar c foo");
+    test_editor.press("gg/<tab><cr>", cx);
+    assert_eq!(test_editor.marked(cx), "a foo b ‸bar c foo");
 }
 
 #[gpui::test]

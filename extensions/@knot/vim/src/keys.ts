@@ -21,7 +21,16 @@ export type FindKind = "f" | "F" | "t" | "T";
  * jump. */
 export type MarkMotion = Readonly<{ mark: string; exact: boolean }>;
 
-export type Motion = SimpleMotion | Readonly<{ find: FindKind; char: string }> | MarkMotion;
+/** A search: `/` and `?` ask for a pattern, `n` and `N` repeat the last
+ * search with or against its direction, and `*`, `#`, `g*`, and `g#` look for
+ * the word at the caret, as a whole word with `whole`. */
+export type SearchMotion = Readonly<
+  | { search: "prompt"; forward: boolean }
+  | { search: "repeat"; reverse: boolean }
+  | { search: "word"; forward: boolean; whole: boolean }
+>;
+
+export type Motion = SimpleMotion | Readonly<{ find: FindKind; char: string }> | MarkMotion | SearchMotion;
 
 /** `zf` creates a closed fold over the lines its target covers. */
 export type Operator = "d" | "c" | "y" | ">" | "<" | "=" | "gu" | "gU" | "g~" | "zf";
@@ -132,6 +141,18 @@ const MOTIONS: Readonly<Record<string, SimpleMotion>> = {
   H: "window-top", M: "window-middle", L: "window-bottom",
 };
 
+const SEARCHES: Readonly<Record<string, SearchMotion>> = {
+  "/": { search: "prompt", forward: true }, "?": { search: "prompt", forward: false },
+  n: { search: "repeat", reverse: false }, N: { search: "repeat", reverse: true },
+  "*": { search: "word", forward: true, whole: true }, "#": { search: "word", forward: false, whole: true },
+};
+
+/** The keys after `g` that search for the word at the caret as part of
+ * longer words too. */
+const G_SEARCHES: Readonly<Record<string, SearchMotion>> = {
+  "*": { search: "word", forward: true, whole: false }, "#": { search: "word", forward: false, whole: false },
+};
+
 const SCROLLS: Readonly<Record<string, Scroll>> = {
   "<c-d>": "half-down", "<c-u>": "half-up", "<c-f>": "page-down", "<c-b>": "page-up",
   "<c-e>": "line-down", "<c-y>": "line-up",
@@ -210,7 +231,7 @@ const VISUAL_SHORTHANDS: Readonly<Record<string, readonly [Operator, boolean]>> 
 const INSERTS = new Set<string>(["i", "a", "I", "A", "o", "O"]);
 
 /** Registers a `"` prefix may name: `"` itself is the unnamed register. */
-const REGISTER = /^[a-zA-Z0-9"+*_%:-]$/;
+const REGISTER = /^[a-zA-Z0-9"+*_%:/-]$/;
 
 /** Marks `'` and `` ` `` may jump to, and `m` may set. */
 const MARK = /^[a-zA-Z'`]$/;
@@ -304,6 +325,8 @@ export function feed(pending: Pending, key: string, visual = false): Fed {
         if (operator === null) return next({ operator: gOperator, prefix: "" });
         return done(null);
       }
+      const gSearch = G_SEARCHES[key];
+      if (gSearch !== undefined) return motion(gSearch);
       const gMotion = G_MOTIONS[key];
       return gMotion === undefined ? done(null) : motion(gMotion);
     }
@@ -327,6 +350,8 @@ export function feed(pending: Pending, key: string, visual = false): Fed {
   if (operator !== null && DOUBLING[operator] === key) return target({ kind: "line" });
   const simple = MOTIONS[key];
   if (simple !== undefined) return motion(simple);
+  const search = SEARCHES[key];
+  if (search !== undefined) return motion(search);
   if (operator !== null) {
     return key === "i" || key === "a" ? next({ prefix: key }) : done(null);
   }

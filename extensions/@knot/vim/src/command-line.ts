@@ -7,6 +7,7 @@ import {
   type SetArgument,
 } from "./ex.js";
 import { run, type State } from "./normal.js";
+import { IGNORE_CASE, SMART_CASE } from "./search.js";
 
 /** A row of the `workspace.files` provider's list, the contract Vim expects
  * of it; the row's ID is the file's URI. */
@@ -51,6 +52,7 @@ export async function commandLine(state: State): Promise<string | null> {
   const input = await workbench.showInput({
     title: "Ex Command",
     prompt: ":",
+    history: state.shared.registers.entries("command"),
     onChange: async (line) => {
       const target = fileCompletionTarget(line);
       if (target === null) {
@@ -66,7 +68,9 @@ export async function commandLine(state: State): Promise<string | null> {
   if (row !== undefined) return open(row.id, row.label);
   const command = parseEx(input.value);
   if (command.kind === "none") return null;
-  state.shared.registers.set(":", { text: input.value.replace(/^[\s:]+/, "").trimEnd(), linewise: false });
+  const line = input.value.replace(/^[\s:]+/, "").trimEnd();
+  state.shared.registers.set(":", { text: line, linewise: false });
+  state.shared.registers.remember("command", line);
   state.shared.saveRegisters();
   return runEx(state, command);
 }
@@ -129,7 +133,9 @@ async function open(uri: string, name: string): Promise<string | null> {
 }
 
 /** The settings each option writes. */
-const BOOLEAN_KEYS = { wrap: "editor.softWrap", expandtab: "editor.insertSpaces" } as const;
+const BOOLEAN_KEYS = {
+  wrap: "editor.softWrap", expandtab: "editor.insertSpaces", ignorecase: IGNORE_CASE, smartcase: SMART_CASE,
+} as const;
 /** Knot has one indentation size, so `tabstop` and `shiftwidth` both set it. */
 const SIZE = "editor.tabSize";
 const LINE_NUMBERS = "editor.lineNumbers";

@@ -15,6 +15,7 @@ import {
   INSERT, isVisual, leaveInsert, type Mode, moveOnto, NORMAL, run, setMode, type Shared, type State,
 } from "./normal.js";
 import { Registers } from "./registers.js";
+import { defineSearchSettings } from "./search.js";
 import { followSelection, runVisual } from "./visual.js";
 
 declare module "knot" {
@@ -68,9 +69,6 @@ type Followed = State & {
   pending: Pending;
   /** Whether the caret shows that an operator is pending. */
   operatorShown: boolean;
-  /** What the last Ex command reported, shown in place of the mode until
-   * the next key. */
-  message: string | null;
 };
 
 /** The tab a window last activated, and the document and language it was
@@ -84,6 +82,7 @@ export async function start() {
     default: false,
     description: "Edit with Vim's modes and keys. Scoped values turn it off for a language or view.",
   });
+  await defineSearchSettings();
   const saved = await storage.read(REGISTERS);
   const registers = Registers.fromJson(saved.found ? saved.value : undefined);
   // Writes go in order without holding up the keys that made them.
@@ -91,6 +90,7 @@ export async function start() {
   const shared: Shared = {
     registers,
     lastFind: null,
+    search: { forward: true, smart: true },
     saveRegisters() {
       const value = registers.toJson();
       saving = saving.then(() => storage.write(REGISTERS, value)).catch(() => {});
@@ -126,6 +126,7 @@ export async function start() {
     await vim.followAfresh();
     registers.clear();
     shared.lastFind = null;
+    shared.search = { forward: true, smart: true };
     for (const buffer of shared.marks.values()) {
       for (const mark of buffer.values()) mark.dispose().catch(() => {});
     }

@@ -352,3 +352,13 @@ export function translateReplacement(text: string, syntax: Syntax): string {
   }
   return out;
 }
+
+/** The pattern that finds `word`, as a whole word when `whole` and the word
+ * begins or ends with a keyword character, in the syntax `syntax`. */
+export function wordPattern(word: string, whole: boolean, syntax: Syntax): string {
+  const keyword = (char: string | undefined) => char !== undefined && /[\p{L}\p{N}_]/u.test(char);
+  const body = word.replace(syntax === "vim" ? /[\\.*$^~[\]]/g : /[\\.+*?()|[\]{}^$#&~-]/g, "\\$&");
+  const start = whole && keyword(word[0]) ? (syntax === "vim" ? "\\<" : "\\b{start}") : "";
+  const end = whole && keyword([...word].at(-1)) ? (syntax === "vim" ? "\\>" : "\\b{end}") : "";
+  return `${start}${body}${end}`;
+}
