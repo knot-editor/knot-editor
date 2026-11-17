@@ -160,18 +160,12 @@ field's history is the snapshot passed when the bar was opened.
 
 ### 3. History in Find ✅
 
-Deliverables:
-
-- Query and replacement histories in `@knot/find`, added on step, Replace and
-  Replace All, persisted in the package's storage and capped.
-- Find tests recalling an earlier query and replacement across a restart of
-  the package.
-
-Implementation context: `showBar`/`showReplaceBar` and the submit paths in
-`extensions/@knot/find/src/extension.ts`; storage as Vim's registers use it
-(`REGISTERS` in `extensions/@knot/vim/src/extension.ts`).
-
-Review gate: try in the real app; `just check` clean.
+Done and approved: `@knot/find` keeps query and replacement histories in its
+storage (100 entries each, newest first, added on step, Replace and Replace
+All) and passes them as the bar fields' `history`. A field that opens with an
+entry, as Find does with its last query, recalls from that entry instead of
+filtering by it
+([extension guide](../extension-api.md)).
 
 ### 4. Search motions, with prompt history
 
