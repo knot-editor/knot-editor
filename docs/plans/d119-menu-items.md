@@ -122,34 +122,13 @@ keys. See [context menus](../architecture/commands.md#context-menus), the
 [status bar and tab menu](../architecture/workbench-and-lifecycle.md#status-bar),
 and the [extension guide](../extension-api.md#add-menu-items).
 
-### 4. Editor and terminal content menus 🚧 awaiting review
+### 4. Editor and terminal content menus ✅
 
-Right-click and Shift+F10 menus for editors, right-click menus for terminals,
-with `@knot/chrome` adding Cut, Copy, Paste, and the terminal's Copy and Paste.
-
-- **Implementation context:**
-  - Editor: right-click handling in `src/app/editor/input.rs`
-    (`on_mouse_down`). Caret placement is model code in
-    `crates/knot-model/src/editor/` with a plain test.
-  - Terminal: `src/app/terminal/mouse.rs`. Open the menu only when the
-    program doesn't own the pointer.
-  - Keyboard: rename `tree.show-context-menu` (`src/app/tree_view.rs`) to
-    `workbench.show-context-menu`, which picks the focused surface's menu.
-    Update the presets in `src/app/commands/keymaps/presets.rs`, keeping the
-    terminal unbind.
-  - Menu: the helper from checkpoint 1, with targets from
-    `capture_command_target`.
-- **Validation:**
-  - Editor tests: caret placement inside and outside the selection.
-  - Product tests: menus open on right-click and Shift+F10 and run against
-    the right editor, and the terminal menu is skipped under mouse reporting.
-  - Package test for the items.
-- **Review gate:** manual check through `Try:` commands. Update the editor
-  views section of `docs/architecture/editor-and-languages.md` and the
-  terminal notes in `workbench-and-lifecycle.md`.
-- **Status:** ✅ implemented, tested, and documented. The terminal's root
-  element no longer occludes the mouse, so the pane's content area sees a
-  right-click it leaves unconsumed. Awaiting the manual check.
+Done and approved. Editors and terminals open a `content` menu on right-click,
+and `workbench.show-context-menu` (Shift+F10) opens the editor's at the caret.
+See [context menus](../architecture/commands.md#context-menus), the
+[editor views](../architecture/editor-and-languages.md#editor-views), and the
+[terminal notes](../architecture/workbench-and-lifecycle.md).
 
 ### 5. Explorer items in the tab menu ✳️ not started
 
