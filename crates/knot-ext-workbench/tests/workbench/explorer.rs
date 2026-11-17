@@ -453,6 +453,98 @@ fn delete_asks_first_then_moves_the_entry_to_the_trash(cx: &mut TestAppContext) 
 }
 
 #[gpui::test]
+fn the_tab_menu_offers_file_actions_on_editor_tabs(cx: &mut TestAppContext) {
+    let directory = fixture();
+    let explorer = Explorer::start(&[&directory.path().join("app")], cx);
+    explorer.wait_for_labels(&["app", "docs", "src", "README.md"], cx);
+    explorer
+        .window
+        .open_path(&directory.path().join("app/src/main.rs"), cx);
+    wait_until(cx, |cx| {
+        explorer.window.document_tabs(cx).len() == 1 && !explorer.window.tab_menu(0, cx).is_empty()
+    });
+    let menu = explorer.window.tab_menu(0, cx);
+    assert_eq!(menu.len(), 1, "the explorer contributes one group");
+    assert_eq!(
+        &menu[0][..3],
+        ["Copy Path", "Copy Relative Path", "Reveal in Explorer"]
+    );
+    assert!(
+        menu[0][3].starts_with("Reveal in "),
+        "the file manager entry is platform-labelled: {:?}",
+        menu[0][3]
+    );
+}
+
+#[gpui::test]
+fn tab_menu_items_act_on_the_clicked_tab_not_the_active_file(cx: &mut TestAppContext) {
+    let directory = fixture();
+    let explorer = Explorer::start(&[&directory.path().join("app")], cx);
+    explorer.wait_for_labels(&["app", "docs", "src", "README.md"], cx);
+    let (window, tree) = (&explorer.window, &explorer.tree);
+    window.open_path(&directory.path().join("app/src/main.rs"), cx);
+    window.open_path(&directory.path().join("app/README.md"), cx);
+    wait_until(cx, |cx| window.document_tabs(cx).len() == 2);
+
+    // Focus the tree, so the clicked tab is unfocused: the items must still
+    // read the clicked tab's document instead of the active file.
+    tree.focus(cx);
+    let main = directory
+        .path()
+        .join("app/src/main.rs")
+        .display()
+        .to_string();
+    assert_eq!(
+        window.run_tab_command(0, "explorer.copy-path", cx),
+        CommandOutcome::Completed
+    );
+    assert_eq!(
+        cx.read_from_clipboard().and_then(|item| item.text()),
+        Some(main)
+    );
+    assert_eq!(
+        window.run_tab_command(0, "explorer.copy-relative-path", cx),
+        CommandOutcome::Completed
+    );
+    assert_eq!(
+        cx.read_from_clipboard().and_then(|item| item.text()),
+        Some("src/main.rs".to_owned())
+    );
+
+    // Revealing the clicked tab selects its file in the tree.
+    assert_eq!(
+        window.run_tab_command(0, "explorer.reveal-active-file", cx),
+        CommandOutcome::Completed
+    );
+    wait_until(cx, |cx| tree.selected(cx).as_deref() == Some("main.rs"));
+    assert!(tree.is_focused(cx));
+
+    // Reveal in Finder opens the operating system's file manager, so the
+    // automated check stops at its menu entry above; the manual check runs it.
+}
+
+#[gpui::test]
+fn tab_menu_items_are_unavailable_on_untitled_documents(cx: &mut TestAppContext) {
+    let directory = fixture();
+    let explorer = Explorer::start(&[&directory.path().join("app")], cx);
+    explorer.wait_for_labels(&["app", "docs", "src", "README.md"], cx);
+    explorer.window.new_document(cx);
+    wait_until(cx, |cx| explorer.window.document_tabs(cx).len() == 1);
+    for command in [
+        "explorer.copy-path",
+        "explorer.copy-relative-path",
+        "explorer.reveal-active-file",
+        "explorer.reveal-in-finder",
+    ] {
+        assert_eq!(
+            explorer.window.run_tab_command(0, command, cx),
+            CommandOutcome::Unavailable,
+            "{command}"
+        );
+    }
+}
+
+#[gpui::test]
 fn roots_cannot_be_renamed_or_deleted(cx: &mut TestAppContext) {
     let directory = fixture();
     let explorer = Explorer::start(&[&directory.path().join("app")], cx);

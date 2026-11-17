@@ -139,6 +139,61 @@ impl TestWindow {
         self.start_command(name, cx).finish(cx)
     }
 
+    /// The labels of the tab menu of the center pane's tab at `index`, by
+    /// group, as the tab menu would show them.
+    pub fn tab_menu(&self, index: usize, cx: &mut TestAppContext) -> Vec<Vec<String>> {
+        in_window(self.native_window, cx, |cx| {
+            self.window.update(cx, |window, cx| {
+                let (pane, tab) = {
+                    let workbench = window.workbench.read(cx);
+                    let id = workbench.center_pane().unwrap();
+                    let pane = workbench.pane(id).unwrap();
+                    (id, pane.tabs()[index].id())
+                };
+                let target = window.capture_tab_target(pane, tab, cx).unwrap();
+                KnotWindow::menu_groups(crate::app::menus::MenuLocation::Tab, &target, cx)
+                    .into_iter()
+                    .map(|group| group.into_iter().map(|entry| entry.title).collect())
+                    .collect()
+            })
+        })
+    }
+
+    /// Run the command `name` against the center pane's tab at `index`, as
+    /// its tab menu would, and wait until it completes.
+    pub fn run_tab_command(
+        &self,
+        index: usize,
+        name: &str,
+        cx: &mut TestAppContext,
+    ) -> CommandOutcome {
+        let target = in_window(self.native_window, cx, |cx| {
+            self.window.update(cx, |window, cx| {
+                let (pane, tab) = {
+                    let workbench = window.workbench.read(cx);
+                    let id = workbench.center_pane().unwrap();
+                    let pane = workbench.pane(id).unwrap();
+                    (id, pane.tabs()[index].id())
+                };
+                window.capture_tab_target(pane, tab, cx).unwrap()
+            })
+        });
+        TestCommand(cx.update(|cx| {
+            let dispatcher = cx.global::<ApplicationProductCommands>().0.clone();
+            dispatcher.update(cx, |dispatcher, cx| {
+                dispatcher.dispatch(
+                    Command {
+                        name: name.into(),
+                        arguments: CommandArgumentValue::Null,
+                    },
+                    target,
+                    cx,
+                )
+            })
+        }))
+        .finish(cx)
+    }
+
     /// Press `keys`, such as `cmd-a enter`, in the window.
     pub fn press(&self, keys: &str, cx: &mut TestAppContext) {
         match self.native_window {
