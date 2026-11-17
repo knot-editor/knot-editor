@@ -128,8 +128,7 @@ the four `notifications.*` settings ([settings](../settings.md)), and the
 `notifications.timeout` is in seconds (default 8) and `notifications.maxVisible`
 defaults to 3. A timed-out popup hides in its own window only; closing one marks
 the notice read everywhere. Still open: the "+N more" pill paints but opens
-nothing until checkpoint 4 wires it to the panel, and checkpoint 2 replaces the
-temporary Developer: Raise Sample Notices command with `Try:` commands.
+nothing until checkpoint 4 wires it to the panel.
 
 ### 2. Extension API ✅
 
