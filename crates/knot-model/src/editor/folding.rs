@@ -242,12 +242,10 @@ impl EditorState {
     /// The foldable lines among `lines` that are not hidden: each with whether
     /// it starts a collapsed fold, in line order.
     pub fn fold_marks(&self, lines: Range<usize>, buffer: &BufferModel) -> Vec<(usize, bool)> {
-        let regions = self.fold_regions(buffer);
-        let first = regions.partition_point(|region| region.start < lines.start);
-        let mut marks: Vec<(usize, bool)> = regions[first..]
-            .iter()
-            .take_while(|region| region.start < lines.end)
-            .map(|region| (region.start, self.is_fold_start(region.start)))
+        let mut marks: Vec<(usize, bool)> = buffer
+            .fold_starts(lines.clone())
+            .into_iter()
+            .map(|start| (start, self.is_fold_start(start)))
             .collect();
         // Manual folds have no region behind them.
         for fold in self.folds() {

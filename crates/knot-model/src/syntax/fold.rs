@@ -10,7 +10,7 @@
 
 use std::ops::Range;
 
-use tree_sitter::{Language, Node, Query, QueryCursor};
+use tree_sitter::{Language, Node, Point, Query, QueryCursor};
 
 use super::{Layer, StreamingIterator, SyntaxLanguageError, SyntaxQuery, SyntaxState, clamp};
 use knot_core::buffer::TextSnapshot;
@@ -51,8 +51,30 @@ impl SyntaxState {
     /// line ranges from the first line to one past the last.
     pub fn fold_regions(&self, text: &TextSnapshot) -> Vec<Range<usize>> {
         let mut regions = Vec::new();
-        collect(&self.root, text, &mut regions);
+        collect(&self.root, text, None, &mut regions);
         regions
+    }
+
+    /// The regions of [`Self::fold_regions`] whose first line is among
+    /// `lines`, querying only the parts of the layers that reach them.
+    pub fn fold_regions_starting_in(
+        &self,
+        text: &TextSnapshot,
+        lines: Range<usize>,
+    ) -> Vec<Range<usize>> {
+        self.fold_regions_and_layers_reached(text, lines).0
+    }
+
+    /// [`Self::fold_regions_starting_in`] and how many layers reached `lines`.
+    pub(super) fn fold_regions_and_layers_reached(
+        &self,
+        text: &TextSnapshot,
+        lines: Range<usize>,
+    ) -> (Vec<Range<usize>>, usize) {
+        let mut regions = Vec::new();
+        let reached = collect(&self.root, text, Some(&lines), &mut regions);
+        regions.retain(|region| lines.contains(&region.start));
+        (regions, reached)
     }
 }
 
@@ -66,9 +88,29 @@ fn starts_line(node: Node, text: &TextSnapshot) -> bool {
         .is_empty()
 }
 
-fn collect(layer: &Layer, text: &TextSnapshot, regions: &mut Vec<Range<usize>>) {
+/// Push the regions of `layer` and its injections, only those of nodes that
+/// reach `lines` when given, and return how many layers reached them.
+fn collect(
+    layer: &Layer,
+    text: &TextSnapshot,
+    lines: Option<&Range<usize>>,
+    regions: &mut Vec<Range<usize>>,
+) -> usize {
+    // A region may start on the line before its node, at a colon, so the
+    // node may start one line past `lines`.
+    let rows = lines.map(|lines| Point::new(lines.start, 0)..Point::new(lines.end + 1, 0));
+    if let (Some(rows), Some(tree)) = (&rows, &layer.tree) {
+        let root = tree.root_node();
+        if root.end_position() < rows.start || root.start_position() >= rows.end {
+            return 0;
+        }
+    }
+    let mut reached = 1;
     if let (Some(folds), Some(tree)) = (&layer.language.folds, &layer.tree) {
         let mut cursor = QueryCursor::new();
+        if let Some(rows) = rows.clone() {
+            cursor.set_point_range(rows);
+        }
         let node_text = |node: Node| {
             text.chunks(clamp(node.byte_range(), text))
                 .map(str::as_bytes)
@@ -115,6 +157,7 @@ fn collect(layer: &Layer, text: &TextSnapshot, regions: &mut Vec<Range<usize>>) 
         }
     }
     for injection in &layer.injections {
-        collect(injection, text, regions);
+        reached += collect(injection, text, lines, regions);
     }
+    reached
 }

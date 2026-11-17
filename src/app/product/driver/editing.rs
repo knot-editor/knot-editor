@@ -30,6 +30,9 @@ pub struct Outcome {
     pub matched: Option<[Range<usize>; 2]>,
     /// The fold regions as line ranges, first line to one past the last.
     pub regions: Vec<Range<usize>>,
+    /// The first lines of the fold regions, asked for three lines at a time
+    /// the way the gutter asks for its visible lines.
+    pub fold_starts: Vec<usize>,
 }
 
 impl Outcome {
@@ -103,5 +106,11 @@ pub fn run(
         caret: state.caret,
         matched,
         regions: model.read_with(cx, |model, _| model.fold_regions().to_vec()),
+        fold_starts: model.read_with(cx, |model, _| {
+            (0..model.line_count())
+                .step_by(3)
+                .flat_map(|first| model.fold_starts(first..first + 3))
+                .collect()
+        }),
     }
 }

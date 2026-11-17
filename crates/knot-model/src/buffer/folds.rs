@@ -34,23 +34,18 @@ impl BufferModel {
             .as_ref()
             .filter(|syntax| syntax.has_fold_query())
             .map(|syntax| syntax.fold_regions(&self.buffer.snapshot()));
-        let text = self.buffer.read_range(0..self.buffer.len());
-        let lines: Vec<&str> = text.split('\n').collect();
         let mut regions = match queried {
             Some(mut regions) => {
                 for region in &mut regions {
-                    // Trailing blank lines stay visible.
-                    while region.end > region.start + 1
-                        && lines
-                            .get(region.end - 1)
-                            .is_some_and(|l| l.trim().is_empty())
-                    {
-                        region.end -= 1;
-                    }
+                    self.trim_trailing_blank_lines(region);
                 }
                 regions
             }
-            None => indentation_regions(&lines),
+            None => {
+                let text = self.buffer.read_range(0..self.buffer.len());
+                let lines: Vec<&str> = text.split('\n').collect();
+                indentation_regions(&lines)
+            }
         };
         regions.retain(|region| region.len() >= 2);
         regions.sort_by_key(|region| (region.start, std::cmp::Reverse(region.end)));
@@ -62,6 +57,56 @@ impl BufferModel {
             regions: Arc::clone(&regions),
         });
         regions
+    }
+
+    /// The first lines of the regions of [`Self::fold_regions`] that start
+    /// among `lines`, in order. The work grows with `lines`, not with the
+    /// text.
+    pub fn fold_starts(&self, lines: Range<usize>) -> Vec<usize> {
+        let lines = lines.start..lines.end.min(self.line_count());
+        let queried = self
+            .syntax
+            .as_ref()
+            .filter(|syntax| syntax.has_fold_query())
+            .map(|syntax| syntax.fold_regions_starting_in(&self.buffer.snapshot(), lines.clone()));
+        let mut starts: Vec<usize> = match queried {
+            Some(regions) => regions
+                .into_iter()
+                .filter_map(|mut region| {
+                    self.trim_trailing_blank_lines(&mut region);
+                    (region.len() >= 2).then_some(region.start)
+                })
+                .collect(),
+            // A line starts an indentation region when the next non-blank
+            // line is indented more.
+            None => lines
+                .filter(|&row| {
+                    let line = self.line_text(row);
+                    !line.trim().is_empty()
+                        && (row + 1..self.line_count())
+                            .map(|next| self.line_text(next))
+                            .find(|next| !next.trim().is_empty())
+                            .is_some_and(|next| indent_width(&next) > indent_width(&line))
+                })
+                .collect(),
+        };
+        starts.sort_unstable();
+        starts.dedup();
+        starts
+    }
+
+    /// Leave the trailing blank lines of `region` visible.
+    fn trim_trailing_blank_lines(&self, region: &mut Range<usize>) {
+        while region.end > region.start + 1
+            && region.end <= self.line_count()
+            && self.line_text(region.end - 1).trim().is_empty()
+        {
+            region.end -= 1;
+        }
+    }
+
+    fn line_text(&self, line: usize) -> String {
+        self.buffer.read_range(self.line_range(line))
     }
 }
 

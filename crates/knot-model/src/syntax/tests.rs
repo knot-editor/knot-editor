@@ -501,6 +501,35 @@ fn html_injects_javascript_and_css() {
 }
 
 #[test]
+fn fold_regions_over_a_few_lines_reach_only_the_layers_there() {
+    let rust = SyntaxLanguage::new("rust", "", "")
+        .unwrap()
+        .with_folds("(block) @fold")
+        .unwrap();
+    let rust = Arc::new(rust);
+    let markdown = Arc::new(SyntaxLanguage::new("markdown", "", MARKDOWN_INJECTIONS).unwrap());
+    let inline = Arc::new(SyntaxLanguage::new("markdown_inline", "", "").unwrap());
+    let resolver: LanguageResolver = Arc::new(move |name| match name {
+        "rust" => Some(Arc::clone(&rust)),
+        "markdown_inline" => Some(Arc::clone(&inline)),
+        _ => None,
+    });
+    let unit = "Text.\n\n```rust\nfn f() {\n    a;\n}\n```\n\n";
+    let fixture = Fixture::parsed(
+        &unit.repeat(100),
+        SyntaxState::new(markdown, resolver),
+        "markdown",
+    );
+    let text = fixture.buffer.snapshot();
+    assert_eq!(fixture.state.fold_regions(&text).len(), 100);
+    // The fourth unit's function, lines 27 and 28, is the one fence there.
+    let (regions, reached) = fixture.state.fold_regions_and_layers_reached(&text, 26..29);
+    assert_eq!(regions, vec![27..29]);
+    // The Markdown root and that fence; no other fence or paragraph.
+    assert_eq!(reached, 2);
+}
+
+#[test]
 fn injections_nest() {
     // Markdown hands the HTML block to HTML, which hands the script to
     // JavaScript.

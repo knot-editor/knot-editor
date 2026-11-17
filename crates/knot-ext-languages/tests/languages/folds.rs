@@ -9,9 +9,17 @@
 use super::bundled::language_packages;
 use super::indents::IndentCase;
 use gpui::TestAppContext;
-use knot::test_support::TestProduct;
 use knot::test_support::cases::{Failures, read_groups, topic_files, unmark};
-use knot::test_support::editing::{Action, run};
+use knot::test_support::editing::{Action, Outcome, run};
+use knot::test_support::{TestProduct, large_documents};
+
+/// The fold marks the gutter asks for over a few lines at a time start where
+/// the regions of the whole text do.
+fn assert_starts_match(outcome: &Outcome, what: &str) {
+    let mut starts: Vec<usize> = outcome.regions.iter().map(|lines| lines.start).collect();
+    starts.dedup();
+    assert_eq!(outcome.fold_starts, starts, "fold starts of {what}");
+}
 
 /// Run every case of this topic on the started `product`.
 pub fn check(product: &TestProduct, cx: &mut TestAppContext) {
@@ -31,6 +39,7 @@ pub fn check(product: &TestProduct, cx: &mut TestAppContext) {
                         .collect::<Vec<_>>()
                         .join("\n");
                     failures.check(&case, &id, &case.value.after.join("\n"), &actual);
+                    assert_starts_match(&outcome, &format!("{id} case {}", case.name));
                 }
             }
         }
@@ -43,6 +52,15 @@ pub fn check(product: &TestProduct, cx: &mut TestAppContext) {
         .filter(|language| language.folds && !tested.contains(&language.id))
         .map(|language| language.id)
         .collect();
+    // The benchmark documents, shortened, add every shape of each unit and
+    // many injections.
+    for document in large_documents::all() {
+        if let Some(language) = document.language {
+            let text: String = document.text.split_inclusive('\n').take(300).collect();
+            let outcome = run(cx, language, &text, None, Action::Inspect);
+            assert_starts_match(&outcome, language);
+        }
+    }
     failures.assert_none();
     assert!(untested.is_empty(), "no fold cases for {untested:?}");
 }

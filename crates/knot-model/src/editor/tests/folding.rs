@@ -248,6 +248,35 @@ fn a_folds_query_gives_regions_that_leave_the_closing_line_visible() {
     assert_eq!(regions(&f), [0..7, 1..4]);
 }
 
+/// The region starts within every window of one to three lines match those
+/// of the whole text's regions there.
+fn assert_starts_match_regions(f: &Fixture) {
+    let regions = regions(f);
+    for size in 1..=3 {
+        for first in 0..f.buffer.line_count() {
+            let lines = first..first + size;
+            let mut expected: Vec<usize> = regions
+                .iter()
+                .map(|region| region.start)
+                .filter(|start| lines.contains(start))
+                .collect();
+            expected.dedup();
+            assert_eq!(f.buffer.fold_starts(lines.clone()), expected, "{lines:?}");
+        }
+    }
+}
+
+#[test]
+fn fold_starts_over_a_few_lines_match_the_regions_of_the_whole_text() {
+    assert_starts_match_regions(&Fixture::new(INDENTED));
+    // A block left with only blank lines once its closing brace stays
+    // visible does not fold.
+    let source = "impl T {\n    fn f() {\n        a;\n    }\n\n    fn e() {\n\n    }\n}\n";
+    let f = rust_regions_editor(source);
+    assert_eq!(regions(&f), [0..8, 1..3]);
+    assert_starts_match_regions(&f);
+}
+
 #[test]
 fn folds_round_trip_through_view_state() {
     let mut f = editor();
