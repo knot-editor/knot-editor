@@ -55,7 +55,7 @@ hold the analyses that support some items.
 
 ## Bugs
 
-- **D183 — Deterministic indentation after Enter and closing tokens**
+- **D183 — Deterministic indentation after Enter and closing tokens** 🚧
   - Depends on: none
   - Description: Enter and a typed closing token such as `}` or `else` leave a
     request for the indent query that waits for a syntax tree of that exact
@@ -67,7 +67,8 @@ hold the analyses that support some items.
     benchmark of incremental reparses on a large file, and keep the deferred
     request only beyond it. Rebasing the request over later typing was
     rejected: the line would shift after the typed text and needs rules for
-    when to give up.
+    when to give up. The [plan](plans/d183-deterministic-indentation.md)
+    holds the design and checkpoints.
 
 - **D175 — Type-ahead after a held Enter**
   - Depends on: none
