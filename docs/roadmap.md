@@ -13,7 +13,7 @@ Every item has the same shape:
 - **Description** says what is missing today and when it becomes worth doing,
   then what to build.
 
-The next unused ID is **D200**; take it for a new item and bump this line.
+The next unused ID is **D201**; take it for a new item and bump this line.
 
 Each section is ordered so that an item comes after the items it depends on,
 wherever the sections allow it. Items with no dependencies are ordered by
@@ -28,7 +28,7 @@ point.
 
 ## Next up
 
-1. D117 — Non-modal notifications and progress: D041 and D181 build on it.
+1. D117 — Non-modal notifications: D041, D181, and D200 build on it.
 2. D022 — Editor autocompletion.
 3. D183 — Deterministic indentation after Enter and closing tokens.
 4. D175 — Type-ahead after a held Enter.
@@ -298,21 +298,26 @@ hold the analyses that support some items.
     a module whose functions call into the dependency's isolate, typed from
     the dependency's declarations.
 
-- **D117 — Non-modal notifications and progress**
+- **D117 — Non-modal notifications** 🚧
   - Depends on: none
-  - Description: Extension messages use the native modal prompt, and native
-    success and progress notices were dropped because their effect is visible.
-    A long-running task, such as starting a language server or indexing, has no
-    non-blocking way to report progress or a passing notice. Add a transient
-    notice and a progress handle with a title, optional percentage, and
-    cancellation, shown through the status bar rather than a new surface. Its
-    consumers are extensions, terminal notifications (D041), and native
-    operation failures (D181). Deliver cancellation through the progress handle
-    to the root that holds it, so it works with serial roots and needs no D182.
-    A further consumer is configuration errors the user can fix, such as a
-    missing `font.family`: the [application log](development.md#application-log) records them
-    as `warn!` records with the target `knot::config`, and this item must raise a
-    notice at every such site, which a search for that target finds.
+  - Description: Extension messages use the native modal prompt, and nothing
+    passes a notice without interrupting. Add notification popups with a
+    history panel; see [the plan](plans/d117-notifications.md). Its consumers
+    are extensions, terminal notifications (D041), native operation failures
+    (D181), and configuration errors the user can fix, which the
+    [application log](development.md#application-log) records with the target
+    `knot::config`.
+
+- **D200 — Progress reporting**
+  - Depends on: D117
+  - Description: A long-running task has no non-blocking way to show progress.
+    Scanning the workspace file index takes about ten seconds on a very large
+    project, and language-server indexing (D067) will too. Add a progress handle
+    with a title, optional percentage, and cancellation, presented alongside
+    D117's notifications, with the file index scan as its first consumer.
+    Deliver cancellation through the handle to the root that holds it: inside
+    that root when it is still active, otherwise as an ordinary queued root, so
+    it works with serial roots and needs no D182.
 
 - **D181 — Native operation failures in the status bar**
   - Depends on: D117
@@ -359,7 +364,7 @@ hold the analyses that support some items.
     current line's text to the request if reading the buffer costs too much.
 
 - **D067 — Language servers and semantic tokens**
-  - Depends on: D182, D087, D145, D117, D115, D022
+  - Depends on: D182, D087, D145, D117, D200, D115, D022
   - Description: No language client exists. The syntax highlighting work
     prepared for one: LSP language IDs, `Send` text snapshots, a highlight
     vocabulary that semantic token types and modifiers map onto, and a
