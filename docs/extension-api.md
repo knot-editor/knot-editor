@@ -1052,6 +1052,11 @@ your own package's code directly, never through `providers`. The full contract
 is `providers` in
 [`knot.d.ts`](../crates/knot-host/src/js/knot.d.ts).
 
+Knot asks providers too: register an `editor.completion` provider, a
+`CompletionProvider` in `knot.d.ts`, to offer editor completion. The editor
+asks every registration and merges their items, so a later one adds to the
+others.
+
 ## Identity and lifetime
 
 | Identity | Ownership and validity | Persist? |

@@ -118,15 +118,17 @@ view-owned controller tracks one-shot provider states and merge policy, and a
 native surface consumes semantic snapshots. Provider objects and request
 machinery never enter surfaces, buffers, or `knot-core`.
 
-The application-owned `CompletionProviderRegistry` assigns monotonic
-registration identities and order to lifecycle-owned, application-wide
-providers. An editor completion invocation snapshots registry membership,
-buffer identity and revision, cursor and prefix range, and a view-local
-generation before the application fans requests out to independent extension
-runtimes.
+A completion provider is an `editor.completion` registration in the
+[provider registry](extension-host.md#providers), so every registration
+contributes, ordered by registration and labelled with its package. An editor
+completion invocation snapshots those registrations, buffer identity and
+revision, cursor and prefix range, and a view-local generation before the
+application fans requests out to independent extension runtimes. A request
+keeps its own typed callback rather than a JSON provider call, so the provider
+receives a live buffer.
 
 ```text
-CompletionProviderRegistry snapshot
+editor.completion registrations
                  |
                  v
 Editor -> CompletionController -> independent extension runtimes

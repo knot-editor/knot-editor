@@ -1,6 +1,6 @@
 # D198 — Extension providers
 
-Status: 🚧 checkpoint 1 complete; checkpoint 2 next. Roadmap item [D198](../roadmap.md).
+Status: 🚧 checkpoint 1 complete; checkpoint 2 ready for review. Roadmap item [D198](../roadmap.md).
 
 ## Goal
 
@@ -109,12 +109,24 @@ product, fake-host, and contract tests; see the
 Choices the later checkpoints rely on:
 - A provider method receives one JSON argument and a call context
   `{ window }`, so `rows(query)` on a handle is `rows(query, context)` in the
-  provider, and `provideCompletions(request, context)` keeps its shape.
+  provider.
 - A package calling its own provider is rejected with `UnsupportedOperation`;
   a disposed or restarted registration rejects with `ProviderNotFound`, and a
   provider's throw with `ProviderFailure` and its message.
 
-### 2. Editor completion on providers
+### 2. Editor completion on providers — 🔍 ready for review
+
+✅ Implemented. Scope decisions:
+- Completion requests keep their own typed callback rather than the JSON
+  provider call, so `provideCompletions(context)` still receives a live
+  `Buffer`; only registration and identity are shared with providers.
+- A completion row's provider label is the registering package's name (or
+  "personal config").
+- ✅ Product test: two packages' `editor.completion` providers both
+  contribute, labelled by package. `just check` passes.
+- Review gate pending: `Try: Add Completion Provider` (run it more than once),
+  `Try: Add Failing Completion Provider`, and `Try: Remove Completion
+  Providers` from personal config, then Show Completions in an editor.
 
 Deliverables: completion providers registered as `editor.completion`
 providers and read by the editor through the provider registry; the

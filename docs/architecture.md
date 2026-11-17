@@ -32,8 +32,8 @@ gpui application and native views
 - `knot-protocol` owns the Knot-owned serde transport types and the typed
   operation declarations, and depends on neither V8 nor gpui.
 - `knot-model` owns editor state and policy that need no gpui, V8, or host:
-  the buffer model, editor state and the native editing commands, completion and extension
-  provider registries, the candidate matcher, the document collection, the workspace file index, the settings store, the language and
+  the buffer model, editor state and the native editing commands, completion sessions, the extension
+  provider registry, the candidate matcher, the document collection, the workspace file index, the settings store, the language and
   theme registries, syntax and the compiled-in grammars, edit history, indentation and language
   editing configuration, key notation, the command catalog, keymap registries
   and matching, theme values, resource URIs and providers, package
