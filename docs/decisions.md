@@ -126,7 +126,8 @@ touches.
   on a fixture language and a reused editor; cheap per-test products, not
   shared ones.
 - [Editor handles](decisions/extension-host.md#editor-handles): bound to one tab
-  presentation; coalesced notifications carrying the current selection; open/close undo groups.
+  presentation; coalesced notifications carrying the current selection; one-request reads
+  of the caret's lines; open/close undo groups.
 - [Extension restart](decisions/extension-host.md#extension-restart): a minimal
   escape hatch reusing terminating unload.
 - [Personal configuration](decisions/extension-host.md#personal-configuration):

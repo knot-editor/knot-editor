@@ -300,6 +300,10 @@ handle's listeners asked for. The foreground only compares two offsets and
 enqueues a root, so painting and input never wait on JavaScript. The observation ends with the
 handle.
 
+A Vim test pins how many foreground host requests the keys `j`, `w`, and `x`
+cost with Vim, the status bar, and word highlight running, so a package change
+that adds round trips fails it.
+
 ## Settings
 
 `app::settings` owns one `ApplicationSettings` global: definitions and value

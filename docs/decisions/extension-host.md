@@ -180,6 +180,16 @@ and set a key context in p50 305 µs, p99 415 µs over 1,000 changes, the same
 order as a key-bound command awaiting `setSelection`; ten changes in separate
 foreground updates cost one listener run in each of 200 bursts.
 
+A key costs foreground requests, each a turn on an extension worker, so a
+motion reads what it needs in one request: a selection read can carry the lines
+around the caret, and a line span is one read, rather than a generic batching
+or pipelining API that every call site would have to compose. Display cells,
+tab expansion, and folds stay native queries, because reimplementing their
+measure in JavaScript would duplicate it. Building the host glue and transport
+crates optimized in debug cut a headless Vim case's turns modestly (the Vim
+suite 1.37 s to 1.27 s); adding `v8`, `serde`, and `serde_json` gave the same
+speedup for a 35 s longer clean rebuild, so they stay unoptimized.
+
 Undo groups are opened and closed rather than scoped to a callback, because a
 Vim-style `ciw…<Esc>` spans extension commands and native typing, which no
 callback can span. The group lives in buffer history, so native typing joins it

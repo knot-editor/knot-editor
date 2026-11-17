@@ -32,14 +32,13 @@ point.
 2. D022 — Editor autocompletion.
 3. D175 — Type-ahead after a held Enter.
 4. D182 — Interleave extension roots at awaits: before D067.
-5. D156 — Fewer host round trips per key.
-6. D087 — Extension entitlements: D085, D126, D067, and D101 need it.
-7. D129 — Refactor builtin language extensions.
-8. D138 — Extension startup report as an untitled document.
-9. D054 — Dedicated read-only generated text surface.
-10. D085 — Cross-file search.
-11. D197 — Diff view: D126 and D174 build on it.
-12. D126 — Git status and changes per root.
+5. D087 — Extension entitlements: D085, D126, D067, and D101 need it.
+6. D129 — Refactor builtin language extensions.
+7. D138 — Extension startup report as an untitled document.
+8. D054 — Dedicated read-only generated text surface.
+9. D085 — Cross-file search.
+10. D197 — Diff view: D126 and D174 build on it.
+11. D126 — Git status and changes per root.
 
 Remove an item from this list when it is done or dropped.
 
@@ -78,22 +77,6 @@ hold the analyses that support some items.
     package, and audit the bundled packages for state assumed stable across an
     await. The [scheduling report](reports/extension-task-scheduling.md) has
     the analysis and proposed checkpoints.
-
-- **D156 — Fewer host round trips per key** 🚧
-  - Depends on: none
-  - Description: Planned in [d156-fewer-host-round-trips](plans/d156-fewer-host-round-trips.md). Found by the headless package tests. A key bound to an
-    extension command costs several foreground requests, each a turn on an
-    extension worker and a response back: a Vim motion reads the selection, a
-    line, and the tab size, writes the caret, and looks up the focused editor's
-    window, and the selection notification and the status bar package read
-    again. Headless Vim cases take about 4.7 ms each on Apple M1 Pro/macOS
-    debug builds, about 40% of it waiting on those turns, and half of each
-    turn is the debug-built host glue. Do it when package cases grow slow
-    enough to matter again, or typing latency in a modal package is noticeable
-    in the release app: give the command context the editor so the window
-    lookup goes, let an editor handle read what a motion needs in one request,
-    and measure whether building the host glue optimized in debug, as a crate
-    of its own, is worth it.
 
 - **D129 — Refactor builtin language extensions**
   - Depends on: none
