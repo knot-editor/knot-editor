@@ -28,20 +28,19 @@ point.
 
 ## Next up
 
-1. D119 — Tab, editor, and extension menu items.
-2. D117 — Non-modal notifications and progress: D041 and D181 build on it.
-3. D022 — Editor autocompletion.
-4. D183 — Deterministic indentation after Enter and closing tokens.
-5. D175 — Type-ahead after a held Enter.
-6. D182 — Interleave extension roots at awaits: before D067.
-7. D156 — Fewer host round trips per key.
-8. D087 — Extension entitlements: D085, D126, D067, and D101 need it.
-9. D129 — Refactor builtin language extensions.
-10. D138 — Extension startup report as an untitled document.
-11. D054 — Dedicated read-only generated text surface.
-12. D085 — Cross-file search.
-13. D197 — Diff view: D126 and D174 build on it.
-14. D126 — Git status and changes per root.
+1. D117 — Non-modal notifications and progress: D041 and D181 build on it.
+2. D022 — Editor autocompletion.
+3. D183 — Deterministic indentation after Enter and closing tokens.
+4. D175 — Type-ahead after a held Enter.
+5. D182 — Interleave extension roots at awaits: before D067.
+6. D156 — Fewer host round trips per key.
+7. D087 — Extension entitlements: D085, D126, D067, and D101 need it.
+8. D129 — Refactor builtin language extensions.
+9. D138 — Extension startup report as an untitled document.
+10. D054 — Dedicated read-only generated text surface.
+11. D085 — Cross-file search.
+12. D197 — Diff view: D126 and D174 build on it.
+13. D126 — Git status and changes per root.
 
 Remove an item from this list when it is done or dropped.
 
@@ -305,18 +304,6 @@ hold the analyses that support some items.
     missing `font.family`: the [application log](development.md#application-log) records them
     as `warn!` records with the target `knot::config`, and this item must raise a
     notice at every such site, which a search for that target finds.
-
-- **D119 — Tab, editor, and extension menu items** 🚧
-  - Depends on: none
-  - Description: Trees and tool stripes have context menus, but tabs and the
-    editor have none, and extension commands reach the palette and keymaps but
-    not the application menus. Give tabs a context menu (close, close others,
-    close to the right, copy path, reveal in the explorer, split) and the
-    editor one (cut, copy, paste), and let a registration place a command in a
-    named menu location, reusing the tree context menus. If more popups then
-    take gpui focus, give "a native popup is open" its own Knot-side focus
-    identity instead of extending the key path's popup exception. Plan:
-    [d119-menu-items.md](plans/d119-menu-items.md).
 
 - **D181 — Native operation failures in the status bar**
   - Depends on: D117
