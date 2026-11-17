@@ -1,6 +1,6 @@
 # D198 — Extension providers
 
-Status: 🚧 checkpoint 1 awaiting review. Roadmap item [D198](../roadmap.md).
+Status: 🚧 checkpoint 1 complete; checkpoint 2 next. Roadmap item [D198](../roadmap.md).
 
 ## Goal
 
@@ -100,62 +100,19 @@ Deleting back to `:` brings back the usual Ex completions.
 
 ## Checkpoints
 
-### 1. Provider registry and cross-package calls — ✅ implemented, review gate pending
+### 1. Provider registry and cross-package calls — ✅ complete
 
-Deliverables: `providers.register`, `providers.get`, and `providers.all` in the
-public API and the in-memory test host, cross-isolate calls with the caller's
-window context, lifecycle cleanup on unload and restart, and the documentation
-of the new contract.
-
-Validation: product tests with two installed packages and personal config
-covering registration, latest-wins `get`, ordered `all`, results and thrown
-errors crossing back, the caller's window context reaching the provider, a
-disposed or restarted provider rejecting stale handles and disappearing from
-lookups, and a consumer running while its provider package failed to start.
-Fake-host tests for the same lookup rules. `just check`.
-
-Review gate: a `post-init.js` registering `try.*` commands that register a
-provider from personal config, call Go to File-independent sample providers,
-and show the results in a message.
-
-Implemented ✅: the registry, calls, cleanup, product tests (including a
-personal-config override), fake-host tests, the contract test, and the
-providers sections in the [extension host](../architecture/extension-host.md#providers)
-and [extension guide](../extension-api.md#share-a-feature-with-other-packages).
-Scope decisions made while implementing:
+`providers.register`, `get`, and `all`, with calls across packages, ship with
+product, fake-host, and contract tests; see the
+[extension host](../architecture/extension-host.md#providers) and the
+[extension guide](../extension-api.md#share-a-feature-with-other-packages).
+Choices the later checkpoints rely on:
 - A provider method receives one JSON argument and a call context
   `{ window }`, so `rows(query)` on a handle is `rows(query, context)` in the
-  provider, and `provideCompletions(request, context)` keeps its shape in
-  checkpoint 2.
-- A package calling its own provider is rejected with `UnsupportedOperation`
-  rather than left to deadlock.
-- A disposed or restarted registration rejects with `ProviderNotFound`; a
-  provider's throw rejects with `ProviderFailure` and its message.
-
-**Implementation context**
-- Mirror editor completion providers for the reverse call path:
-  `registerCompletionProvider` and `globalThis.__knotRequestCompletions` in
-  `crates/knot-host/src/js/bootstrap.js`, their registration in
-  `src/app/extensions/semantics.rs`, and the request fan-out from
-  `src/app/extensions/host.rs`.
-- Host operations go in `src/app/extensions/host/handlers.rs` with
-  `#[host_operation]`; transport types in `crates/knot-protocol/src/lib.rs`;
-  the registry's plain-data rules (ordering, latest wins, ownership by
-  lifecycle) in a new `crates/knot-model/src/providers.rs` with plain tests,
-  wrapped by the extension host's semantics state.
-- Lifecycle cleanup joins the existing teardown that drops completion
-  providers and other registrations on unload and restart
-  (`docs/architecture/extension-host.md`, restart section).
-- Window context: reuse how command contexts carry `windowTarget` and how
-  `windowTarget()` in `bootstrap.js` maps native windows to frozen target
-  objects.
-- Public contract: `crates/knot-host/src/js/knot.d.ts`, `knot.js` exports, and
-  `scripts/extensions/testing/knot.ts` and `host.ts` for the fake host; extend
-  `scripts/extensions/contract.test.ts`.
-- Tests: `src/app/product/tests/extension_api.rs`, `startup.rs`, and
-  `extension_restart.rs` patterns.
-- Docs: a providers section in `docs/architecture/extension-host.md` and
-  `docs/extension-api.md`.
+  provider, and `provideCompletions(request, context)` keeps its shape.
+- A package calling its own provider is rejected with `UnsupportedOperation`;
+  a disposed or restarted registration rejects with `ProviderNotFound`, and a
+  provider's throw with `ProviderFailure` and its message.
 
 ### 2. Editor completion on providers
 
