@@ -696,6 +696,51 @@ fn a_key_costs_few_draws_and_requests(cx: &mut TestAppContext) {
     assert_eq!(test_editor.marked(cx), "one ‸athree\nfour five six\n");
 }
 
+/// Vim with the status bar and word highlight packages, the extensions that
+/// also answer every selection change.
+fn packages_with_chrome() -> &'static [knot_bundled::BundledSource] {
+    let mut packages = knot_ext_vim::PACKAGES.to_vec();
+    packages.extend(knot_ext_workbench::PACKAGES.iter().filter(|package| {
+        ["chrome", "word-highlight"].iter().any(|name| {
+            package
+                .manifest
+                .contains(&format!("\"name\": \"@knot/{name}\""))
+        })
+    }));
+    Box::leak(packages.into_boxed_slice())
+}
+
+/// A motion and an edit cost a bounded number of host requests across every
+/// extension that reacts to the key: Vim's reads and writes, the status
+/// bar's position, and word highlight.
+#[gpui::test]
+fn a_key_costs_a_bounded_number_of_requests_across_extensions(cx: &mut TestAppContext) {
+    let product = TestProduct::start_with_post_init(packages_with_chrome(), Some(ENABLE), cx);
+    let test_editor = product.windowed_editor("one two three\nfour five six\nseven eight\n", cx);
+    assert_eq!(mode(&test_editor, cx), "normal", "Vim follows the editor");
+    // The first key also pays for following the editor.
+    test_editor.work_per_key(&["l"], cx);
+    let keys = ["j", "w", "x"];
+    // At most this many foreground requests per key.
+    let bounds = [21, 17, 16];
+    let counts = test_editor.work_per_key(&keys, cx);
+    let report = keys
+        .iter()
+        .zip(&counts)
+        .map(|(key, counts)| {
+            format!(
+                "{key}: {} requests {:?}",
+                counts.requests.len(),
+                counts.requests
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    for (counts, bound) in counts.iter().zip(bounds) {
+        assert!(counts.requests.len() <= bound, "\n{report}");
+    }
+}
+
 /// A case reusing the editor starts in normal mode with nothing pending and
 /// none of the editor's earlier jumps or visual area.
 #[gpui::test]

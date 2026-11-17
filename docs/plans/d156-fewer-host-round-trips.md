@@ -1,6 +1,6 @@
 # D156 — Fewer host round trips per key
 
-Status: 🚧 approved, not started. Source: [roadmap](../roadmap.md) D156.
+Status: 🚧 checkpoint 1 awaiting review. Source: [roadmap](../roadmap.md) D156.
 
 ## Goal
 
@@ -71,7 +71,7 @@ per-key request counts so they cannot creep back.
 
 ## Checkpoints
 
-### 1. Request counter and baseline
+### 1. Request counter and baseline ✅
 
 Deliverables: a test-support count of foreground host requests on the
 extension host; a Vim test that presses `j`, `w`, and `x` with chrome and
@@ -82,6 +82,14 @@ Validation: the new test; `just check`.
 
 Review gate: the counts match the analysis above, and the counter measures
 what a real key costs.
+
+**Result:** the counter already existed as `work_counts::request`, fed by
+`handle_request` and read through `TestEditor::work_per_key`, so no counter
+code was added. The new Vim test
+`a_key_costs_a_bounded_number_of_requests_across_extensions` runs Vim, chrome,
+and word highlight and pins the baseline of foreground requests per key
+(settled after each): `j` 21, `w` 17, `x` 16. Per-case time: the test runs in
+about 0.13 s in debug.
 
 **Implementation context:** count in `ProductExtensionHost::handle_request`
 (`src/app/extensions/host.rs`) behind `test-support`, exposed through
