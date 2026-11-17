@@ -838,11 +838,42 @@ pub struct WindowInfo {
     pub workspace: WorkspaceInfo,
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq, serde::Serialize)]
+/// A button on a notice, running a command.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NoticeActionInfo {
+    pub title: String,
+    pub command: String,
+    pub arguments: CommandArgumentValue,
+}
+
+/// One notice in the application's history.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NoticeInfo {
+    pub id: u64,
+    pub message: String,
+    pub title: Option<String>,
+    /// `info`, `warning`, or `error`.
+    pub severity: &'static str,
+    pub auto_dismiss: bool,
+    pub actions: Vec<NoticeActionInfo>,
+    /// The window whose popup shows the notice; every window when none.
+    pub target: Option<WindowTarget>,
+    /// The package that raised the notice, or Knot for native ones.
+    pub source: String,
+    /// Milliseconds since the Unix epoch.
+    pub time: u64,
+    pub read: bool,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ApplicationSnapshot {
     pub documents: Vec<DocumentInfo>,
     pub windows: Vec<WindowInfo>,
+    /// The notice history, oldest first.
+    pub notifications: Vec<NoticeInfo>,
     pub active_window: Option<WindowTarget>,
     pub active_target: Option<PresentationTarget>,
     /// Whether startup has committed its restored and requested windows.
@@ -928,7 +959,7 @@ impl EditorEvent {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ApplicationEvent {
     pub sequence: u64,
@@ -936,7 +967,7 @@ pub struct ApplicationEvent {
     pub change: ApplicationChange,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
 #[serde(
     tag = "type",
     rename_all = "camelCase",
@@ -972,11 +1003,15 @@ pub enum ApplicationChange {
     ViewStateChanged {
         window: WindowTarget,
     },
+    /// A notice was added, read, dismissed, or cleared; carries the history.
+    NotificationsChanged {
+        notifications: Vec<NoticeInfo>,
+    },
     /// Startup committed its restored and requested windows; sent once.
     Launched,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkbenchObservation {
     pub subscription: WorkbenchSubscriptionId,

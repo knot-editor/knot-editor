@@ -134,3 +134,41 @@ fn positions_parse_and_fall_back_to_the_bottom_right() {
     assert!(Position::parse("topLeft").is_top());
     assert!(!Position::parse("bottomRight").is_top());
 }
+
+#[test]
+fn observed_info_carries_the_notice_as_data() {
+    let mut store = NotificationStore::default();
+    let id = store.raise(
+        NoticeSpec {
+            message: "Disk full".into(),
+            title: Some("Save failed".into()),
+            severity: Severity::Error,
+            actions: vec![NoticeAction {
+                title: "Open Log".into(),
+                command: StatusCommand {
+                    name: "app.open-log".into(),
+                    arguments: knot_protocol::CommandArgumentValue::Null,
+                },
+            }],
+            target: Some("window-1".into()),
+            source: "@knot/explorer".into(),
+            ..NoticeSpec::default()
+        },
+        at(3),
+    );
+    let info = store.get(id).unwrap().info();
+    assert_eq!(info.severity, "error");
+    assert!(!info.auto_dismiss);
+    assert_eq!(info.time, 3000);
+    assert_eq!(info.actions[0].command, "app.open-log");
+    assert_eq!(info.target.unwrap().window, "window-1");
+    assert!(!info.read);
+}
+
+#[test]
+fn severity_names_round_trip() {
+    for severity in [Severity::Info, Severity::Warning, Severity::Error] {
+        assert_eq!(Severity::parse(severity.name()), Some(severity));
+    }
+    assert_eq!(Severity::parse("fatal"), None);
+}

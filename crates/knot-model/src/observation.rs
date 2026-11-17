@@ -90,6 +90,11 @@ impl ApplicationObservation {
                 active_target: snapshot.active_target.clone(),
             });
         }
+        if snapshot.notifications != self.snapshot.notifications {
+            changes.push(ApplicationChange::NotificationsChanged {
+                notifications: snapshot.notifications.clone(),
+            });
+        }
         if snapshot.launched && !self.snapshot.launched {
             changes.push(ApplicationChange::Launched);
         }
@@ -255,6 +260,7 @@ mod tests {
             active_window: Some(target.clone()),
             active_target: Some(view.clone()),
             launched: false,
+            notifications: vec![],
         };
         let opened = owner.commit(snapshot.clone());
         assert!(matches!(
@@ -328,6 +334,39 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn notice_history_changes_report_the_whole_history_once() {
+        let mut owner = ApplicationObservation::default();
+        let notice = |read| NoticeInfo {
+            id: 1,
+            message: "Saved".into(),
+            title: None,
+            severity: "info",
+            auto_dismiss: true,
+            actions: vec![],
+            target: None,
+            source: "Knot".into(),
+            time: 0,
+            read,
+        };
+        let mut snapshot = ApplicationSnapshot::default();
+        assert!(owner.commit(snapshot.clone()).is_empty());
+        snapshot.notifications = vec![notice(false)];
+        let raised = owner.commit(snapshot.clone());
+        assert_eq!(raised.len(), 1);
+        assert!(
+            matches!(&raised[0].change, ApplicationChange::NotificationsChanged { notifications } if notifications.len() == 1)
+        );
+        assert!(owner.commit(snapshot.clone()).is_empty());
+        snapshot.notifications = vec![notice(true)];
+        assert_eq!(owner.commit(snapshot.clone()).len(), 1);
+        snapshot.notifications.clear();
+        let cleared = owner.commit(snapshot);
+        assert!(
+            matches!(&cleared[0].change, ApplicationChange::NotificationsChanged { notifications } if notifications.is_empty())
+        );
     }
 
     #[test]

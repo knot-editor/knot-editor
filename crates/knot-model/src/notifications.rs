@@ -5,7 +5,12 @@
 //! A notice is also a popup in each window that should show it; popups are
 //! not the history, so hiding one leaves its notice unread.
 
-use std::{collections::HashSet, time::SystemTime};
+use std::{
+    collections::HashSet,
+    time::{SystemTime, UNIX_EPOCH},
+};
+
+use knot_protocol::{NoticeActionInfo, NoticeInfo, WindowTarget};
 
 use crate::status_bar::StatusCommand;
 
@@ -18,6 +23,26 @@ pub enum Severity {
     Info,
     Warning,
     Error,
+}
+
+impl Severity {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Info => "info",
+            Self::Warning => "warning",
+            Self::Error => "error",
+        }
+    }
+
+    /// The severity a name selects, if it is one.
+    pub fn parse(name: &str) -> Option<Self> {
+        match name {
+            "info" => Some(Self::Info),
+            "warning" => Some(Self::Warning),
+            "error" => Some(Self::Error),
+            _ => None,
+        }
+    }
 }
 
 /// Where a window stacks its popups.
@@ -85,6 +110,35 @@ pub struct Notice {
     pub read: bool,
     /// Windows whose popup for this notice timed out.
     hidden_in: HashSet<String>,
+}
+
+impl Notice {
+    /// What extensions observe of the notice.
+    pub fn info(&self) -> NoticeInfo {
+        NoticeInfo {
+            id: self.id,
+            message: self.message.clone(),
+            title: self.title.clone(),
+            severity: self.severity.name(),
+            auto_dismiss: self.auto_dismiss,
+            actions: self
+                .actions
+                .iter()
+                .map(|action| NoticeActionInfo {
+                    title: action.title.clone(),
+                    command: action.command.name.clone(),
+                    arguments: action.command.arguments.clone(),
+                })
+                .collect(),
+            target: self.target.clone().map(|window| WindowTarget { window }),
+            source: self.source.clone(),
+            time: self
+                .time
+                .duration_since(UNIX_EPOCH)
+                .map_or(0, |elapsed| elapsed.as_millis() as u64),
+            read: self.read,
+        }
+    }
 }
 
 /// The popups one window shows.
