@@ -21,6 +21,25 @@ await commands.register("provider.self", async () => {
 });
 "#;
 
+// A command of the provider's package that runs a consumer's command, which
+// calls the provider back while the provider's package is still waiting.
+const PROVIDER_RUNS_CONSUMER: &str = r#"
+import { commands, providers } from "knot";
+await providers.register("sample.greet", { greet(name) { return `hello ${name}`; } });
+await commands.register("provider.run", async () => { await commands.invoke("consumer.call"); });
+"#;
+
+const CONSUMER_CALLS_BACK: &str = r#"
+import { commands, providers, workbench } from "knot";
+await commands.register("consumer.call", async () => {
+  try { await (await providers.get("sample.greet")).greet("knot"); await workbench.writeClipboardText("called"); }
+  catch (error) { await workbench.writeClipboardText(error.code); }
+});
+await commands.register("consumer.direct", async () => {
+  await workbench.writeClipboardText(await (await providers.get("sample.greet")).greet("knot"));
+});
+"#;
+
 const PROVIDER_V2: &str = r#"
 import { providers } from "knot";
 await providers.register("sample.greet", { greet(name) { return { greeting: `v2 ${name}` }; } });
@@ -96,6 +115,20 @@ fn a_call_runs_in_the_provider_package_with_the_callers_window(cx: &mut TestAppC
         fixture.clipboard_after("provider.self", cx),
         "UnsupportedOperation"
     );
+}
+
+#[gpui::test]
+fn a_call_back_into_a_package_waiting_on_the_caller_is_rejected(cx: &mut TestAppContext) {
+    let fixture = start_allowing_failures(
+        &[
+            ("@example/provider", &[], PROVIDER_RUNS_CONSUMER),
+            ("@example/consumer", &[], CONSUMER_CALLS_BACK),
+        ],
+        cx,
+    );
+    assert_eq!(fixture.clipboard_after("provider.run", cx), "ProviderBusy");
+    // Called on its own, the same command reaches the provider.
+    assert_eq!(fixture.clipboard_after("consumer.direct", cx), "hello knot");
 }
 
 #[gpui::test]

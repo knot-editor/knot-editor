@@ -235,7 +235,9 @@ window as its own target, and its JSON result or thrown message settles the
 caller's request. A handle names one registration: once it is disposed, a call
 rejects `ProviderNotFound`. A package runs one root at a time, so a call to its
 own provider would wait on itself; the host rejects it, and a package uses its
-own code directly.
+own code directly. A call also waits on the provider's package when one of that
+package's commands is an ancestor of the caller's command, so the host rejects
+it `ProviderBusy` as `commands.invoke` rejects cycles back to ancestors.
 
 ## Application metadata queries
 

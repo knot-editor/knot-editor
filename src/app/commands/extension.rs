@@ -563,6 +563,28 @@ impl ExtensionCommandBridge {
         }
     }
 
+    /// Whether `invocation` or one of its ancestors runs a handler of the
+    /// package `owner`, whose one root at a time is then busy waiting.
+    pub(crate) fn runs_handler_of(
+        &self,
+        invocation: CommandInvocationId,
+        owner: (ExtensionId, ExtensionLifecycleId),
+    ) -> bool {
+        let mut current = Some(invocation);
+        while let Some(id) = current {
+            let Some(node) = self.invocations.get(&id) else {
+                return false;
+            };
+            if matches!(node.target, InvocationTarget::Extension(handler)
+                if (handler.extension, handler.lifecycle) == owner)
+            {
+                return true;
+            }
+            current = node.parent;
+        }
+        false
+    }
+
     fn root_for(&self, invocation: CommandInvocationId) -> CommandInvocationId {
         let mut current = invocation;
         while let Some(parent) = self.invocations.get(&current).and_then(|node| node.parent) {
