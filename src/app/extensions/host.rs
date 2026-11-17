@@ -2236,10 +2236,14 @@ impl ProductExtensionHost {
         target: ProductCommandTarget,
         cx: &mut Context<Self>,
     ) -> knot_protocol::CommandOutcome {
-        if let Err(outcome) = target.document_id(cx) {
-            return outcome;
-        }
-        let Some(buffer) = self.open_target_buffer(&target, cx) else {
+        let document = match target.document_id(cx) {
+            Ok(document) => document,
+            Err(outcome) => return outcome,
+        };
+        let Some(document) = cx
+            .try_global::<crate::app::documents::ApplicationDocuments>()
+            .and_then(|documents| Some(documents.0.read(cx).get(document)?.identity().to_string()))
+        else {
             return knot_protocol::CommandOutcome::InvalidTarget;
         };
         let Some(workbench) = target.workbench.upgrade() else {
@@ -2255,6 +2259,7 @@ impl ProductExtensionHost {
         else {
             return knot_protocol::CommandOutcome::InvalidTarget;
         };
+        let window = crate::app::product::window_id(target.window.entity_id());
         self.completion_editors
             .retain(|editor| editor.upgrade().is_some());
         if !self
@@ -2264,46 +2269,33 @@ impl ProductExtensionHost {
         {
             self.completion_editors.push(editor.downgrade());
         }
-        let requests = editor.update(cx, |editor, cx| {
-            editor.start_completion(buffer, self.completion_providers(), cx)
-        });
+        let providers = self.completion_providers();
+        let requests = editor.update(cx, |editor, cx| editor.start_completion(providers, cx));
         for (provider, request) in requests {
-            let registration = request.registration;
-            let generation = request.generation;
-            let fallback = request.clone();
-            let execution = self.pool.request_completions(
+            let execution = self.pool.call_provider(
                 ExtensionKey::new(provider.extension, provider.lifecycle),
-                request,
+                knot_protocol::ProviderCallRequest {
+                    registration: request.registration,
+                    method: "provideCompletions".into(),
+                    argument: request.argument(&document),
+                    window: Some(window.clone()),
+                },
             );
+            let generation = request.generation;
             let editor_for_task = editor.clone();
             let task = cx.spawn(async move |_, cx| {
-                let response =
-                    match execution {
-                        Ok(execution) => execution.await.unwrap_or_else(|error| {
-                            knot_protocol::CompletionResponse {
-                                registration: fallback.registration,
-                                revision: fallback.revision,
-                                generation: fallback.generation,
-                                result: Err(knot_protocol::CompletionProviderError {
-                                    message: error.to_string(),
-                                }),
-                            }
-                        }),
-                        Err(error) => knot_protocol::CompletionResponse {
-                            registration: fallback.registration,
-                            revision: fallback.revision,
-                            generation: fallback.generation,
-                            result: Err(knot_protocol::CompletionProviderError {
-                                message: error.to_string(),
-                            }),
-                        },
-                    };
+                let result = match execution {
+                    Ok(execution) => execution
+                        .await
+                        .unwrap_or_else(|error| Err(error.to_string())),
+                    Err(error) => Err(error.to_string()),
+                };
                 editor_for_task.update(cx, |editor, cx| {
-                    editor.apply_completion_response(buffer, response, cx);
+                    editor.apply_completion_response(request.response(result), cx);
                 });
             });
             editor.update(cx, |editor, _| {
-                editor.retain_completion_task(generation, registration, task)
+                editor.retain_completion_task(generation, provider.id, task)
             });
         }
         knot_protocol::CommandOutcome::Completed

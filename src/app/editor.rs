@@ -30,10 +30,7 @@ use layout::*;
 use gpui::{prelude::*, *};
 use unicode_segmentation::UnicodeSegmentation;
 
-use knot_protocol::{
-    BufferHandle, ByteRange, CompletionRequest, CompletionResponse, DecorationStyle,
-    ProviderRegistrationId,
-};
+use knot_protocol::{ByteRange, DecorationStyle, ProviderRegistrationId};
 
 pub(crate) use knot_model::editor::*;
 
@@ -41,7 +38,7 @@ use super::commands::dispatch as commands;
 
 use super::{
     CompletionAccept, CompletionDismiss, CompletionNext, CompletionPrevious, EDITOR_KEY_CONTEXT,
-    completion::CompletionProviderRegistration,
+    completion::{CompletionProviderRegistration, CompletionRequest, CompletionResponse},
     model::{Buffer, BufferModel, ContributionSource},
     settings::{self, ApplicationSettings, SettingsScope},
     theme::{Highlight, Theme, color, theme},
@@ -437,24 +434,22 @@ impl Editor {
     /// providers.
     pub(crate) fn start_completion(
         &mut self,
-        handle: BufferHandle,
         providers: Vec<CompletionProviderRegistration>,
         cx: &mut Context<Self>,
     ) -> Vec<(CompletionProviderRegistration, CompletionRequest)> {
         self.update_state(cx, |editor, buffer| {
-            editor.start_completion(handle, providers, buffer)
+            editor.start_completion(providers, buffer)
         })
     }
 
     pub(crate) fn apply_completion_response(
         &mut self,
-        handle: BufferHandle,
         response: CompletionResponse,
         cx: &mut Context<Self>,
     ) -> bool {
         let applied = self
             .state
-            .apply_completion_response(handle, response, self.model.read(cx));
+            .apply_completion_response(response, self.model.read(cx));
         if applied {
             cx.notify();
         }

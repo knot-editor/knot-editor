@@ -1,5 +1,5 @@
 // API version 1 authoring example.
-import { commands, editor, workbench, keymaps, providers } from "knot";
+import { commands, documents, editor, workbench, keymaps, providers } from "knot";
 
 /** @type {Set<import("knot").Disposable>} */
 const bufferOwnership = new Set();
@@ -82,10 +82,10 @@ const viewCommand = await commands.registerForView("guide.outline", "copy", asyn
 
 /** @type {import("knot").CompletionProvider} */
 const guideCompletion = {
-  async provideCompletions(context) {
-    const snapshot = await context.buffer.snapshot();
-    if (snapshot.revision !== context.revision) return [];
-    return [{ label: `${context.prefix}Guide`, insertText: `${context.prefix}Guide` }];
+  async provideCompletions(request) {
+    const document = await documents.get(request.document);
+    if (document === null || document.revision !== request.revision) return [];
+    return [{ label: `${request.prefix}Guide`, insertText: `${request.prefix}Guide` }];
   },
 };
 const completion = await providers.register("editor.completion", guideCompletion);

@@ -9,7 +9,7 @@ use super::{
 };
 use knot_protocol::{
     BufferChange, BufferHandle, BufferSubscriptionId, CommandInvocation, CommandInvocationId,
-    CompletionRequest, ExtensionKey, HostRequest, HostResponse, TreeChildrenRequest,
+    ExtensionKey, HostRequest, HostResponse, TreeChildrenRequest,
 };
 
 pub use super::engine::{
@@ -173,15 +173,6 @@ impl ExtensionPool {
     ) -> Result<ExtensionProviderExecution<knot_protocol::TreeChildrenResponse>, ExtensionPoolError>
     {
         self.engine.request_tree_children(key, request)
-    }
-
-    pub fn request_completions(
-        &self,
-        key: ExtensionKey,
-        request: CompletionRequest,
-    ) -> Result<ExtensionProviderExecution<knot_protocol::CompletionResponse>, ExtensionPoolError>
-    {
-        self.engine.request_completions(key, request)
     }
 
     pub fn call_provider(

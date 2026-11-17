@@ -1415,40 +1415,6 @@ globalThis.__knotRequestTreeChildren = async (registration, window, instance, pa
   }
 };
 
-// Native completion asks each `editor.completion` registration directly,
-// with a live buffer rather than JSON.
-globalThis.__knotRequestCompletions = async (
-  registration,
-  handle,
-  revision,
-  cursorByteOffset,
-  prefix,
-  generation,
-) => {
-  const provider = providerImplementations.get(registration);
-  if (!provider) {
-    return { error: "completion provider is disposed" };
-  }
-  try {
-    if (typeof provider.provideCompletions !== "function") {
-      throw new TypeError("editor.completion providers require a provideCompletions method");
-    }
-    const provided = await provider.provideCompletions(Object.freeze({
-      buffer: bufferFor(handle), revision, cursorByteOffset, prefix, generation,
-    }));
-    return {
-      items: iterableItems(provided, (item) => {
-        if (typeof item?.label !== "string" || typeof item?.insertText !== "string") {
-          throw new TypeError("completion items require string label and insertText properties");
-        }
-        return Object.freeze({ label: item.label, insertText: item.insertText });
-      }),
-    };
-  } catch (error) {
-    return { error: String(error?.stack ?? error) };
-  }
-};
-
 // The method names a provider offers: its own and inherited functions, not
 // Object's.
 function providerMethods(implementation) {

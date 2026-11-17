@@ -4,11 +4,9 @@ use super::*;
 
 impl EditorState {
     /// Open a completion at the caret over the word before it, asking
-    /// `providers`; returns the requests to send them. `handle` names
-    /// `buffer` to the providers.
+    /// `providers`; returns the requests to send them.
     pub fn start_completion(
         &mut self,
-        handle: BufferHandle,
         providers: Vec<CompletionProviderRegistration>,
         model: &BufferModel,
     ) -> Vec<(CompletionProviderRegistration, CompletionRequest)> {
@@ -32,7 +30,6 @@ impl EditorState {
             .checked_add(1)
             .expect("completion generation space exhausted");
         let controller = CompletionController::new(
-            handle,
             revision,
             cursor_byte_offset,
             prefix_start..cursor_byte_offset,
@@ -46,11 +43,10 @@ impl EditorState {
         requests
     }
 
-    /// Merge a provider's `response` for `handle` into the open completion,
-    /// unless the completion moved on or `buffer` changed since it opened.
+    /// Merge a provider's `response` into the open completion, unless the
+    /// completion moved on or `buffer` changed since it opened.
     pub fn apply_completion_response(
         &mut self,
-        handle: BufferHandle,
         response: CompletionResponse,
         buffer: &BufferModel,
     ) -> bool {
@@ -58,7 +54,7 @@ impl EditorState {
         let Some(controller) = self.completion.as_mut() else {
             return false;
         };
-        if controller.buffer() != handle || controller.revision() != revision {
+        if controller.revision() != revision {
             return false;
         }
         if controller.apply_response(response) {

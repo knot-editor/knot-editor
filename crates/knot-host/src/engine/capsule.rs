@@ -565,13 +565,6 @@ impl RuntimeCapsule {
                 request.registration.value() <= MAX_JS_INTEGER
                     && request.generation <= MAX_JS_INTEGER
             }
-            ProviderCall::Completion { request, .. } => {
-                request.registration.value() <= MAX_JS_INTEGER
-                    && request.buffer.value() <= MAX_JS_INTEGER
-                    && request.revision <= MAX_JS_INTEGER
-                    && request.generation <= MAX_JS_INTEGER
-                    && request.cursor_byte_offset as u64 <= MAX_JS_INTEGER
-            }
             ProviderCall::Call { request, .. } => request.registration.value() <= MAX_JS_INTEGER,
         };
         if !exact {
@@ -628,28 +621,6 @@ impl RuntimeCapsule {
                             window.into(),
                             instance.into(),
                             parent,
-                            v8::Number::new(try_catch, request.generation as f64).into(),
-                        ],
-                    )
-                })();
-                (source, value)
-            }
-            ProviderCall::Completion { request, .. } => {
-                let source = "knot:completion-provider";
-                let value = (|| {
-                    let function = self
-                        .local_state
-                        .callback(try_catch, RuntimeCallback::Completion)?;
-                    let prefix = v8::String::new(try_catch, &request.prefix)?;
-                    function.call(
-                        try_catch,
-                        v8::undefined(try_catch).into(),
-                        &[
-                            v8::Number::new(try_catch, request.registration.value() as f64).into(),
-                            v8::Number::new(try_catch, request.buffer.value() as f64).into(),
-                            v8::Number::new(try_catch, request.revision as f64).into(),
-                            v8::Number::new(try_catch, request.cursor_byte_offset as f64).into(),
-                            prefix.into(),
                             v8::Number::new(try_catch, request.generation as f64).into(),
                         ],
                     )
@@ -736,12 +707,6 @@ impl RuntimeCapsule {
         );
         match active.completion {
             ActiveCompletion::Tree {
-                result, completed, ..
-            } => {
-                completed.store(true, Ordering::Release);
-                let _ = result.send(Err(error));
-            }
-            ActiveCompletion::Completion {
                 result, completed, ..
             } => {
                 completed.store(true, Ordering::Release);
@@ -1172,25 +1137,6 @@ impl RuntimeCapsule {
                         completed.store(true, Ordering::Release);
                         let _ = result.send(Ok(response));
                     }
-                    ActiveCompletion::Completion {
-                        request,
-                        result,
-                        completed,
-                    } => {
-                        let response = rejection.map_or_else(
-                            || completion_response_from_v8(scope, request.clone(), value),
-                            |error| CompletionResponse {
-                                registration: request.registration,
-                                revision: request.revision,
-                                generation: request.generation,
-                                result: Err(CompletionProviderError {
-                                    message: error.to_string(),
-                                }),
-                            },
-                        );
-                        completed.store(true, Ordering::Release);
-                        let _ = result.send(Ok(response));
-                    }
                     ActiveCompletion::Call { result, completed } => {
                         let response = match rejection {
                             None => provider_call_response_from_v8(scope, value),
@@ -1248,21 +1194,6 @@ impl RuntimeCapsule {
                             parent_id: request.parent_id.clone(),
                             generation: request.generation,
                             result: Err(TreeProviderError {
-                                message: error.to_string(),
-                            }),
-                        }));
-                    }
-                    ActiveCompletion::Completion {
-                        request,
-                        result,
-                        completed,
-                    } => {
-                        completed.store(true, Ordering::Release);
-                        let _ = result.send(Ok(CompletionResponse {
-                            registration: request.registration,
-                            revision: request.revision,
-                            generation: request.generation,
-                            result: Err(CompletionProviderError {
                                 message: error.to_string(),
                             }),
                         }));
@@ -1444,12 +1375,6 @@ impl RuntimeCapsule {
                     let _ = result.send(outcome);
                 }
                 ActiveCompletion::Tree {
-                    result, completed, ..
-                } => {
-                    completed.store(true, Ordering::Release);
-                    let _ = result.send(Err(error));
-                }
-                ActiveCompletion::Completion {
                     result, completed, ..
                 } => {
                     completed.store(true, Ordering::Release);

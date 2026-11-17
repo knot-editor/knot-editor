@@ -1167,27 +1167,6 @@ pub(super) fn tree_response_from_v8<'s>(
     }
 }
 
-pub(super) fn completion_response_from_v8<'s>(
-    scope: &mut v8::PinScope<'s, '_>,
-    request: CompletionRequest,
-    value: v8::Local<'s, v8::Value>,
-) -> CompletionResponse {
-    CompletionResponse {
-        registration: request.registration,
-        revision: request.revision,
-        generation: request.generation,
-        result: provider_items_from_v8(scope, value, |scope, value| {
-            let object = v8::Local::<v8::Object>::try_from(value)
-                .map_err(|_| "completion item must be an object")?;
-            Ok(CompletionResultItem {
-                label: string_property(scope, object, "label")?,
-                insert_text: string_property(scope, object, "insertText")?,
-            })
-        })
-        .map_err(|message| CompletionProviderError { message }),
-    }
-}
-
 /// Reads `{ result: text }` or `{ error: text }`, the provider-call callback's
 /// answer.
 pub(super) fn provider_call_response_from_v8<'s>(

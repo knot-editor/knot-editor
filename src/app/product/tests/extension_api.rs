@@ -7,7 +7,7 @@ fn public_api_capture_survives_focus_and_nested_handlers_without_leaking_to_call
 ) {
     use knot_protocol::ExtensionKey;
     const SOURCE: &str = r#"
-import { commands, editor, providers, workbench } from "knot";
+import { commands, documents, editor, providers, workbench } from "knot";
 async function expectCode(operation, code) {
   try { await operation(); } catch (error) { if (error.code === code) return; throw error; }
   throw new Error(`expected ${code}`);
@@ -30,11 +30,12 @@ async getChildren(parentId) {
   } },
 });
 await providers.register("editor.completion", {
-  async provideCompletions(context) {
+  async provideCompletions(request, context) {
 await expectCode(() => editor.activeBuffer(), "ContextUnavailable");
 await expectCode(() => workbench.selectedText(), "ContextUnavailable");
 await expectCode(() => editor.activeBuffer(origin.target), "InvalidTarget");
-await context.buffer.snapshot();
+if (context.window === null) throw new Error("completion without its window");
+await (await documents.get(request.document)).buffer.snapshot();
 return [{ label: "context-free", insertText: "context-free" }];
   },
 });

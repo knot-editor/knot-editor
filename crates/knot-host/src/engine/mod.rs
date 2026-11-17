@@ -38,13 +38,11 @@ use knot_protocol::declarations::{HostError, HostFailure, TransportError};
 use knot_protocol::{
     ApplicationChange, ApplicationEvent, BufferChange, BufferHandle, BufferSubscriptionId,
     ByteRange, Command, CommandArgumentValue, CommandInvocation, CommandInvocationId,
-    CommandOutcome, CompletionProviderError, CompletionRequest, CompletionResponse,
-    CompletionResultItem, Decoration, DecorationStyle, EditorContribution, EditorEvent,
-    ExtensionId, HostRequest, HostResponse, KeybindingMutation, ProviderCallRequest,
-    ProviderCallResponse, ProviderIdentity, RequestId, SettingsSubscriptionId, SnapshotText,
-    TextEdit, TextSnapshot, TreeAction, TreeChildrenRequest, TreeChildrenResponse,
-    TreeCollapsibleState, TreeItem, TreeItemKind, TreeProviderError, WatchSubscriptionId,
-    WorkbenchSubscriptionId,
+    CommandOutcome, Decoration, DecorationStyle, EditorContribution, EditorEvent, ExtensionId,
+    HostRequest, HostResponse, KeybindingMutation, ProviderCallRequest, ProviderCallResponse,
+    ProviderIdentity, RequestId, SettingsSubscriptionId, SnapshotText, TextEdit, TextSnapshot,
+    TreeAction, TreeChildrenRequest, TreeChildrenResponse, TreeCollapsibleState, TreeItem,
+    TreeItemKind, TreeProviderError, WatchSubscriptionId, WorkbenchSubscriptionId,
 };
 
 static V8_INITIALIZATION: Once = Once::new();
@@ -265,7 +263,6 @@ enum RuntimeCallback {
     Command,
     CancelCommand,
     Tree,
-    Completion,
     ProviderCall,
 }
 
@@ -396,11 +393,6 @@ enum ActiveCompletion {
         result: ResultSender<TreeChildrenResponse>,
         completed: Arc<AtomicBool>,
     },
-    Completion {
-        request: CompletionRequest,
-        result: ResultSender<CompletionResponse>,
-        completed: Arc<AtomicBool>,
-    },
     Call {
         result: ResultSender<ProviderCallResponse>,
         completed: Arc<AtomicBool>,
@@ -438,12 +430,6 @@ enum ProviderCall {
         cancelled: Arc<AtomicBool>,
         completed: Arc<AtomicBool>,
     },
-    Completion {
-        request: CompletionRequest,
-        result: ResultSender<CompletionResponse>,
-        cancelled: Arc<AtomicBool>,
-        completed: Arc<AtomicBool>,
-    },
     Call {
         request: ProviderCallRequest,
         result: ResultSender<ProviderCallResponse>,
@@ -455,21 +441,15 @@ enum ProviderCall {
 impl ProviderCall {
     fn cancelled(&self) -> bool {
         match self {
-            Self::Tree { cancelled, .. }
-            | Self::Completion { cancelled, .. }
-            | Self::Call { cancelled, .. } => cancelled.load(Ordering::Acquire),
+            Self::Tree { cancelled, .. } | Self::Call { cancelled, .. } => {
+                cancelled.load(Ordering::Acquire)
+            }
         }
     }
 
     fn complete_with_error(self, error: RuntimeError) {
         match self {
             Self::Tree {
-                result, completed, ..
-            } => {
-                completed.store(true, Ordering::Release);
-                let _ = result.send(Err(error));
-            }
-            Self::Completion {
                 result, completed, ..
             } => {
                 completed.store(true, Ordering::Release);
@@ -492,16 +472,6 @@ impl ProviderCall {
                 completed,
                 ..
             } => ActiveCompletion::Tree {
-                request,
-                result,
-                completed,
-            },
-            Self::Completion {
-                request,
-                result,
-                completed,
-                ..
-            } => ActiveCompletion::Completion {
                 request,
                 result,
                 completed,

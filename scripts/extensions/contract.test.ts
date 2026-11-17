@@ -134,9 +134,11 @@ const badContent: import("knot").ViewContent = { kind: "text", provider: {} };
 const badAction: import("knot").TreeAction = { label: "Missing" };
 void [badContent, badAction];
 const checkCompletion: import("knot").CompletionProvider = {
-  async provideCompletions(context) {
-    await context.buffer.snapshot();
-    return [{ label: context.prefix, insertText: context.prefix }];
+  async provideCompletions(request, context) {
+    const document: import("knot").DocumentInfo | null = await documents.get(request.document);
+    await document?.buffer.snapshot();
+    void context.window;
+    return [{ label: request.prefix, insertText: request.prefix }];
   },
 };
 await providers.register("editor.completion", checkCompletion);

@@ -668,40 +668,6 @@ pub struct TreeChildrenResponse {
     pub result: Result<Vec<TreeItem>, TreeProviderError>,
 }
 
-/// One asynchronous completion request issued by an editor view.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct CompletionRequest {
-    pub registration: ProviderRegistrationId,
-    pub buffer: BufferHandle,
-    pub revision: u64,
-    pub cursor_byte_offset: usize,
-    pub prefix: String,
-    pub generation: u64,
-}
-
-/// One semantic completion candidate returned by an extension provider.
-#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CompletionResultItem {
-    pub label: String,
-    pub insert_text: String,
-}
-
-/// A recoverable completion-provider callback failure.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct CompletionProviderError {
-    pub message: String,
-}
-
-/// One extension callback result returned to an editor completion session.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct CompletionResponse {
-    pub registration: ProviderRegistrationId,
-    pub revision: u64,
-    pub generation: u64,
-    pub result: Result<Vec<CompletionResultItem>, CompletionProviderError>,
-}
-
 /// One call of a provider method from another package, with the caller's
 /// window and the JSON argument as text.
 #[derive(Clone, Debug, Eq, PartialEq)]

@@ -2305,16 +2305,16 @@ declare module "knot" {
     all<T = Record<string, (argument?: JsonValue) => Promise<JsonValue>>>(name: string): Promise<readonly ProviderHandle<T>[]>;
   }>;
 
-  /** Native completion request; use its explicit buffer without borrowing focus. */
-  export interface CompletionContext {
-    readonly buffer: Buffer;
+  /** What the editor asks an `editor.completion` provider for. */
+  export interface CompletionRequest {
+    /** The document being completed; `documents.get(document)` gives its
+     * buffer, which a provider can keep while the document is open. */
+    readonly document: DocumentId;
     readonly revision: number;
     /** Absolute UTF-8 cursor coordinate at revision. */
     readonly cursorByteOffset: number;
-    /** Native text prefix for this request. */
+    /** The word before the cursor that a candidate replaces. */
     readonly prefix: string;
-    /** Request correlation only; not reusable target authority. */
-    readonly generation: number;
   }
   /** Candidate display label and insertion text; both are required strings. */
   export interface CompletionItem { readonly label: string; readonly insertText: string; }
@@ -2326,13 +2326,11 @@ declare module "knot" {
    */
   export interface CompletionProvider {
     /**
-     * Return an iterable of valid candidates, synchronously or asynchronously.
-     * Throws, rejections and invalid items fail only this request. Native revision,
-     * generation and ownership checks discard stale/cancelled results.
-     * There is no public provider cancellation signal; disposal cancels pending
-     * requests without waiting for an executing callback to unwind.
+     * Return the candidates for `request`, in the editor's window. A throw or
+     * an invalid list fails only this provider's part of the completion, and
+     * results for a revision the buffer has left are discarded.
      */
-    provideCompletions(context: CompletionContext): Iterable<CompletionItem> | Promise<Iterable<CompletionItem>>;
+    provideCompletions(request: CompletionRequest, context: ProviderCallContext): readonly CompletionItem[] | Promise<readonly CompletionItem[]>;
   }
   /** Explicit buffers. */
   export const editor: Readonly<{

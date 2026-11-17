@@ -42,14 +42,14 @@ use std::{
 };
 
 use knot_core::anchored_range::AnchoredRangeId;
-use knot_protocol::{
-    BufferHandle, ByteRange, CompletionRequest, CompletionResponse, DecorationStyle,
-    ProviderRegistrationId, TextEdit,
-};
+use knot_protocol::{ByteRange, DecorationStyle, ProviderRegistrationId, TextEdit};
 
 use crate::{
     buffer::{BufferModel, ContributionSource, ResolvedEditorContribution, decoration_precedence},
-    completion::{CompletionController, CompletionProviderRegistration, CompletionSurface},
+    completion::{
+        CompletionController, CompletionProviderRegistration, CompletionRequest,
+        CompletionResponse, CompletionSurface,
+    },
     history::{EditGroupKind, EditGrouping, HistoryViewChange, HistoryViewState},
     indentation::{IndentUnit, leading_whitespace},
 };

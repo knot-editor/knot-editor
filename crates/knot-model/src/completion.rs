@@ -7,10 +7,63 @@ use std::{
     sync::Arc,
 };
 
-use knot_protocol::{
-    BufferHandle, CompletionRequest, CompletionResponse, CompletionResultItem, ExtensionId,
-    ExtensionLifecycleId, ProviderRegistrationId,
-};
+use knot_protocol::{ExtensionId, ExtensionLifecycleId, ProviderRegistrationId};
+
+/// One provider's request of an open completion. The provider receives it as
+/// the JSON argument of `provideCompletions`, with the document it completes.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CompletionRequest {
+    pub registration: ProviderRegistrationId,
+    pub revision: u64,
+    pub cursor_byte_offset: usize,
+    pub prefix: String,
+    pub generation: u64,
+}
+
+impl CompletionRequest {
+    /// The JSON argument `provideCompletions` receives for `document`.
+    pub fn argument(&self, document: &str) -> String {
+        serde_json::json!({
+            "document": document,
+            "revision": self.revision,
+            "cursorByteOffset": self.cursor_byte_offset,
+            "prefix": self.prefix,
+        })
+        .to_string()
+    }
+
+    /// The response a provider call settles this request with: the items of
+    /// its JSON result, or why it failed.
+    pub fn response(&self, result: Result<String, String>) -> CompletionResponse {
+        CompletionResponse {
+            registration: self.registration,
+            revision: self.revision,
+            generation: self.generation,
+            result: result.and_then(|text| {
+                serde_json::from_str(&text).map_err(|error| {
+                    format!("completions must be a list of {{ label, insertText }}: {error}")
+                })
+            }),
+        }
+    }
+}
+
+/// One candidate a provider answers with.
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompletionResultItem {
+    pub label: String,
+    pub insert_text: String,
+}
+
+/// A provider's answer to one request: its items or its failure message.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CompletionResponse {
+    pub registration: ProviderRegistrationId,
+    pub revision: u64,
+    pub generation: u64,
+    pub result: Result<Vec<CompletionResultItem>, String>,
+}
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct CompletionItemId(u64);
@@ -114,7 +167,6 @@ struct SessionProvider {
 }
 
 pub struct CompletionController {
-    buffer: BufferHandle,
     revision: u64,
     cursor_byte_offset: usize,
     prefix_range: Range<usize>,
@@ -127,7 +179,6 @@ pub struct CompletionController {
 
 impl CompletionController {
     pub fn new(
-        buffer: BufferHandle,
         revision: u64,
         cursor_byte_offset: usize,
         prefix_range: Range<usize>,
@@ -149,7 +200,6 @@ impl CompletionController {
             })
             .collect();
         Self {
-            buffer,
             revision,
             cursor_byte_offset,
             prefix_range,
@@ -177,7 +227,6 @@ impl CompletionController {
             .map(|provider| {
                 let request = CompletionRequest {
                     registration: provider.id,
-                    buffer: self.buffer,
                     revision: self.revision,
                     cursor_byte_offset: self.cursor_byte_offset,
                     prefix: self.prefix.clone(),
@@ -198,10 +247,6 @@ impl CompletionController {
 
     pub fn generation(&self) -> u64 {
         self.generation
-    }
-
-    pub fn buffer(&self) -> BufferHandle {
-        self.buffer
     }
 
     pub fn prefix_range(&self) -> Range<usize> {
@@ -241,7 +286,7 @@ impl CompletionController {
                     })
                     .collect(),
             ),
-            Err(error) => ProviderState::Failed(error.message),
+            Err(message) => ProviderState::Failed(message),
         };
         self.rebuild_snapshot();
         true
@@ -341,10 +386,8 @@ mod tests {
         CompletionController, CompletionItem, CompletionItemId, CompletionProviderRegistration,
         CompletionSnapshot, CompletionSurface,
     };
-    use knot_protocol::{
-        BufferHandle, CompletionProviderError, CompletionResponse, CompletionResultItem,
-        ExtensionId, ExtensionLifecycleId, ProviderRegistrationId,
-    };
+    use super::{CompletionRequest, CompletionResponse, CompletionResultItem};
+    use knot_protocol::{ExtensionId, ExtensionLifecycleId, ProviderRegistrationId};
 
     fn provider(id: u64, label: &str) -> CompletionProviderRegistration {
         CompletionProviderRegistration {
@@ -356,11 +399,49 @@ mod tests {
     }
 
     #[test]
+    fn a_request_crosses_as_json_and_its_result_parses_into_items() {
+        let request = CompletionRequest {
+            registration: ProviderRegistrationId::new(4),
+            revision: 2,
+            cursor_byte_offset: 7,
+            prefix: "fo".into(),
+            generation: 3,
+        };
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&request.argument("doc")).unwrap(),
+            serde_json::json!({
+                "document": "doc", "revision": 2, "cursorByteOffset": 7, "prefix": "fo",
+            })
+        );
+        assert_eq!(
+            request.response(Ok(
+                r#"[{"label":"foo","insertText":"foo()","kind":1}]"#.into()
+            )),
+            CompletionResponse {
+                registration: request.registration,
+                revision: 2,
+                generation: 3,
+                result: Ok(vec![CompletionResultItem {
+                    label: "foo".into(),
+                    insert_text: "foo()".into(),
+                }]),
+            }
+        );
+        for invalid in [r#"[{"label":"foo"}]"#, r#""foo""#, "null"] {
+            let message = request.response(Ok(invalid.into())).result.unwrap_err();
+            assert!(message.contains("label, insertText"), "{message}");
+        }
+        assert_eq!(
+            request.response(Err("broke".into())).result,
+            Err("broke".into())
+        );
+    }
+
+    #[test]
     fn merge_is_deterministic_across_arrival_order_and_deduplicates_insertion_text() {
         fn merged(reverse: bool) -> Vec<(String, String)> {
             let (first, second) = (provider(1, "first"), provider(2, "second"));
             let mut controller = CompletionController::new(
-                BufferHandle::new(9),
                 4,
                 3,
                 0..3,
@@ -432,7 +513,6 @@ mod tests {
     fn stale_duplicate_and_failed_responses_are_isolated() {
         let (first, second) = (provider(1, "first"), provider(2, "second"));
         let mut controller = CompletionController::new(
-            BufferHandle::new(1),
             2,
             0,
             0..0,
@@ -466,9 +546,7 @@ mod tests {
             registration: second.id,
             revision: 2,
             generation: 3,
-            result: Err(CompletionProviderError {
-                message: "recoverable".into(),
-            }),
+            result: Err("recoverable".into()),
         }));
 
         assert_eq!(controller.snapshot().items[0].label, "visible");

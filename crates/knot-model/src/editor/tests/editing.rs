@@ -1,12 +1,10 @@
 //! Typing, deletion, movement, undo across editors, composition, completion,
 //! selection reveals, view state, and contribution projection.
 
-use knot_protocol::{
-    CompletionResultItem, Decoration, ExtensionId, ExtensionKey, ExtensionLifecycleId,
-};
+use knot_protocol::{Decoration, ExtensionId, ExtensionKey, ExtensionLifecycleId};
 
 use super::*;
-use crate::completion::CompletionProviderRegistration;
+use crate::completion::{CompletionProviderRegistration, CompletionResponse, CompletionResultItem};
 
 /// The text the last copy or cut put on the clipboard.
 fn clipboard(f: &mut Fixture) -> Option<String> {
@@ -286,15 +284,14 @@ fn completion_acceptance_rechecks_the_captured_revision() {
         lifecycle: ExtensionLifecycleId::new(1),
         label: "fixture".into(),
     }];
-    let open = |f: &mut Fixture, handle: u64| {
+    let open = |f: &mut Fixture| {
         f.editor.cursor_col = 2;
         let request = f
             .editor
-            .start_completion(BufferHandle::new(handle), providers.clone(), &f.buffer)
+            .start_completion(providers.clone(), &f.buffer)
             .remove(0)
             .1;
         assert!(f.editor.apply_completion_response(
-            request.buffer,
             CompletionResponse {
                 registration: request.registration,
                 revision: request.revision,
@@ -309,13 +306,13 @@ fn completion_acceptance_rechecks_the_captured_revision() {
     };
 
     let mut f = Fixture::new("fo");
-    open(&mut f, 1);
+    open(&mut f);
     assert!(f.buffer.replace(0..0, "x").unwrap());
     f.editor.accept_selected_completion(&mut f.buffer);
     assert_eq!(f.text(), "xfo");
 
     let mut f = Fixture::new("fo");
-    open(&mut f, 2);
+    open(&mut f);
     f.editor.accept_selected_completion(&mut f.buffer);
     assert_eq!(f.text(), "foo");
 }

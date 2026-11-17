@@ -416,43 +416,6 @@ impl RuntimePool {
         })
     }
 
-    pub fn request_completions(
-        &self,
-        key: ExtensionKey,
-        request: CompletionRequest,
-    ) -> Result<RuntimeProviderExecution<CompletionResponse>, RuntimePoolError> {
-        let capsule = self.capsule(key)?;
-        let registration = request.registration;
-        let (result_sender, result) = tokio::sync::oneshot::channel();
-        let cancelled = Arc::new(AtomicBool::new(false));
-        let completed = Arc::new(AtomicBool::new(false));
-        let (root, completion) = self.scheduler_handle.enqueue_root(
-            key,
-            EngineTurn {
-                capsule: Arc::clone(&capsule),
-                work: EngineWork::Provider(ProviderCall::Completion {
-                    request,
-                    result: result_sender,
-                    cancelled: Arc::clone(&cancelled),
-                    completed: Arc::clone(&completed),
-                }),
-            },
-        )?;
-        Ok(RuntimeProviderExecution {
-            result: Some(result),
-            completion,
-            cancellation: Some(ProviderCancellation {
-                provider: ProviderIdentity::Named(registration),
-                key,
-                root,
-                capsule,
-                scheduler: self.scheduler_handle.clone(),
-                cancelled,
-                completed,
-            }),
-        })
-    }
-
     /// Runs one provider method in the provider's isolate as one of its roots.
     pub fn call_provider(
         &self,
@@ -917,7 +880,6 @@ pub(super) fn initialize_extension_context(
         (RuntimeCallback::Command, "__knotInvokeCommand"),
         (RuntimeCallback::CancelCommand, "__knotCancelCommand"),
         (RuntimeCallback::Tree, "__knotRequestTreeChildren"),
-        (RuntimeCallback::Completion, "__knotRequestCompletions"),
         (RuntimeCallback::ProviderCall, "__knotCallProvider"),
     ] {
         let name = v8::String::new(scope, name).ok_or_else(RuntimeError::disposed)?;
