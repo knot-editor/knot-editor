@@ -1,156 +1,173 @@
 # D202: Fast typing in large files
 
-Status: 🚧 approved, not started. Roadmap item [D202](../roadmap.md).
+Status: 🚧 checkpoint 1 ready for review. Roadmap item [D202](../roadmap.md).
 
 ## Goal
 
 Typing in a large file feels as immediate as in a small one, whatever the
-language. The benchmark files are the documents the `Try: Indent …` commands
-generate: Markdown 70k lines (5,000 units of a heading, prose, and a `rust`
-fence), Rust 35k, TypeScript 60k, and Python 55k. Plain text of the same size
-is the control, with no syntax at all.
+language. The benchmark files are the documents of
+`knot_model::large_documents`, 5,000 repeated units each: Markdown 50k lines
+(a heading, prose, and a `rust` fence per unit), Rust 35k, TypeScript 40k,
+and Python 40k. Plain text of 50k lines is the control, with no syntax.
 
 The outcome is about how fast typing feels, not about syntax in particular.
-Syntax state is the leading suspect, but every foreground cost per keystroke
-is in scope. Highlights may lag the text while typing, but they settle soon
-after typing stops.
+Every foreground cost per keystroke is in scope. Highlights may lag the text
+while typing, but they settle soon after typing stops.
 
 ## Targets
 
-On a release build, measured by the checkpoint 1 benchmark over typing in
-prose, in a fence or function body, near the start of the file, and near its
-end:
+On a release build, measured by the product benchmark over typing at the
+start, middle, and end of each file and in Markdown prose:
 
-- Foreground time per keystroke, from key dispatch through the next frame's
-  layout and paint, stays within 4 ms at p99 on every benchmark file. Work
-  per keystroke does not grow with file size or with the number of injection
-  layers.
+- Foreground time per keystroke stays within 4 ms at p99 on every benchmark
+  file, both for the key itself (commit and frame) and for the work after it
+  (finishing a background parse and drawing its result). Work per keystroke
+  does not grow with file size or with the number of injection layers.
 - Highlights settle within one background parse of the last keystroke.
-
-The checkpoint 1 review can adjust these numbers once the baseline is known.
 
 ## Design
 
-Measure first and fix second. Checkpoint 1 decides which of the provisional
-checkpoints below happen, in what order, and whether others are needed.
-Reading the code suggests these costs per keystroke (none measured yet):
-
-- `Layer::edit` calls `Tree::edit` on every injected layer after the edit. A
-  70k-line Markdown file has tens of thousands of layers, because inline
-  content is injected too.
-- `SyntaxState::parse_in_foreground` clones the whole layer tree, and every
-  `Tree` copy allocates its included ranges. It then spends the 1 ms budget
-  on a reparse that cannot finish and throws the result away.
-- `finish_background_parse` rebases over the pending edits with the same walk
-  over every layer, tries the foreground again, overruns again, and starts
-  the next background parse.
-- Costs outside syntax are unknown: line index, wrap map, highlight queries
-  after a generation change, recovery capture, document observation, and
-  extension observation. The plain-text control isolates them.
-
-Fixes keep the existing [syntax state](../architecture/core-and-buffers.md#syntax-state)
-contract unless the measurements show it must change: trees follow commits,
+Measure first and fix second. Fixes keep the existing
+[syntax state](../architecture/core-and-buffers.md#syntax-state) contract
+unless the measurements show it must change: trees follow commits,
 background results are rebased or rejected, and painting never calls
 JavaScript.
 
 ## Exclusions
 
-- Fewer extension host round trips per key stays
-  [D156](../roadmap.md). If checkpoint 1 shows host traffic dominates, the
-  review decides whether to pull D156 forward instead.
+- Fewer extension host round trips per key stays [D156](../roadmap.md).
 - Type-ahead after a held Enter stays [D175](../roadmap.md).
 - Indentation budget changes. D183 showed a larger foreground budget doesn't
   change typing latency.
 
 ## Deferred decisions
 
-- Which fixes to make, and how. This depends on checkpoint 1.
-- Whether a timing regression check runs in CI, or the benchmark stays an
-  ignored test with deterministic tests guarding the mechanisms.
+- Whether a timing regression check runs in CI, or the benchmarks stay
+  ignored tests with deterministic tests guarding the mechanisms.
+
+## Findings
+
+Baseline on an M-series Mac, release build.
+
+**Product benchmark** (foreground thread time per key, background parses
+excluded; "after" is the work once the window settles after the key):
+
+| File | Key p50 / p99 | After p50 / p99 |
+| --- | --- | --- |
+| Markdown, 50k lines | 45 / 48 ms | 42 / 48 ms (90 ms when a parse is rebased over a second key) |
+| Rust, 35k | 30 / 34 ms | 29 / 32 ms |
+| TypeScript, 40k | 32 / 34 ms | 32 / 33 ms |
+| Python, 40k | 28 / 29 ms | 27 / 29 ms |
+| Plain text, 50k | 1.4 / 2.1 ms | 0.04 / 0.1 ms |
+
+The cost is the same at the start, middle, and end of each file, so it
+scales with the file, not with the edit.
+
+**Real-app profile** (`samply`, release, `Try: Large Markdown` then
+`Try: Type 200 Characters`): 82% of the foreground while typing is
+`EditorState::fold_marks` → `BufferModel::fold_regions` →
+`syntax::fold::collect`. The gutter asks for fold marks on every paint, and
+the regions are cached per revision and syntax generation, which every key
+and every finished background parse change. Each paint then runs the
+`folds` query over the whole tree of every layer, and reads and splits the
+whole text to trim trailing blank lines. Text shaping and Metal drawing are
+under 1%.
+
+**Model benchmark** (Markdown, 15,001 layers): the rest of the syntax work
+per key grows with layers and with distance from the end of the file.
+
+| Stage | p50 / p99 |
+| --- | --- |
+| Commit with syntax (plain text: 6 µs) | 1.8–4.9 / 2.6–7.8 ms |
+| `SyntaxState::edit`, near the start / end | 3.2 / 0.02 ms |
+| Layer clone, before each foreground attempt and background start | 0.33 / 0.6 ms |
+| Foreground attempt that cannot finish | 1.7 / 2.4 ms |
+| Rebase over one key plus a new foreground attempt | 3.5–11.9 / 5.6–14.2 ms |
+| Background parse (off the foreground) | 8.5–11.6 / 20–56 ms |
+| 60-line highlight query | 0.1 / 0.3 ms |
+
+Smaller costs seen in the profile: bracket matching through
+`SyntaxState::layers_at` (2%), and dropping cloned layers (2%).
+
+**Ranked costs and the checkpoints that follow:**
+
+1. Fold regions over the whole file on every paint: 25–40 ms per key and
+   per settle in every language. Checkpoint 2.
+2. Syntax work over every layer (edit, clone, failing foreground attempt,
+   rebase): 2–14 ms per key in Markdown. Checkpoint 3.
+3. Whatever remains, including bracket matching and settle time, measured
+   again after 2 and 3. Checkpoint 4.
 
 ## Checkpoints
 
-### 1. Measure typing per keystroke
+### 1. Measure typing per keystroke ✅ (review pending)
 
-Deliverables:
-
-- An ignored release benchmark that starts the real product headless, opens
-  each benchmark file and the plain-text control, types bursts of characters
-  at the four positions, and reports p50, p99, and max foreground time per
-  keystroke, including drawing the window.
-- An ignored model-level benchmark that splits one keystroke on the Markdown
-  file into stages: commit and edit-log observers, `SyntaxState::edit`, the
-  foreground parse attempt including its clone, the rebase of a background
-  result, and a visible-range highlight query. It also counts layers.
-- A `samply` profile of the release app typing in the `Try: Indent Markdown`
-  document, covering costs the headless benchmark cannot see, such as text
-  shaping and platform painting.
-- A findings section in this plan with the baseline numbers, the ranked
-  costs, and the resulting fix checkpoints. The provisional checkpoints below
-  are rewritten to match.
-
-Validation: both benchmarks run with
-`cargo test --release … -- --ignored --nocapture`, and their invocations are
-documented on the tests as the existing ones are.
+- ✅ Benchmark documents in `knot_model::large_documents`, exported to
+  product tests through `knot::test_support::large_documents`.
+- ✅ Product benchmark `typing_costs_on_large_documents` in
+  `crates/knot-ext-languages/tests/languages/typing.rs`, through
+  `TestEditor::key_costs`. In tests gpui runs background tasks on the
+  foreground thread, so the driver measures thread CPU time and subtracts
+  the background parses `work_counts` times.
+- ✅ Model benchmark `typing_stage_costs_on_the_large_markdown_document` in
+  `crates/knot-model/src/syntax/tests.rs`.
+- ✅ `samply` profile of the release app, recorded with
+  `samply record --save-only --unstable-presymbolicate target/release/knot`
+  while `Try: Type 200 Characters` typed into `Try: Large Markdown`.
+- ✅ Findings above, and checkpoints 2–5 rewritten to match.
 
 Review gate: agree on the findings, the targets, and the fix checkpoints
 before any optimization.
 
-**Implementation context**
+### 2. Fold marks that do not grow with the file
 
-- Fixture generators: port the `units` of the personal-config
-  `post-init.js` behind the `Try: Indent …` commands into a shared Rust test
-  helper, plus a plain-text unit.
-- Product benchmark: mirror the headless driver in `src/app/product/driver/`.
-  `editor.rs` has `type_input`, and `VisualTestContext` draws the window. Open
-  an untitled document and set its language the way the driver's existing
-  language tests do. Place it beside the product tests under `src/app/` as an
-  `#[ignore]` test.
-- Model benchmark: extend `crates/knot-model/src/syntax/tests.rs` next to
-  `indent_reparse_costs_on_large_files` and
-  `injection_costs_on_a_large_markdown_file`, and reuse their `Fixture`. Time
-  the stages through `BufferModel` in `crates/knot-model/src/buffer.rs`
-  (`observe_committed_edits`, `start_syntax_parse`, `finish_syntax_parse`).
-- Real app: `cargo build --release`, then profile with `samply record` and
-  run the existing `Try:` commands.
+The gutter's fold marks cost only the visible lines: the `folds` query runs
+over the visible range (a query cursor range) and only on layers that
+overlap it, and trailing blank lines are trimmed by reading only the lines a
+region ends on. Commands that need every region (Fold All, toggling a
+recursive fold) keep computing them for the whole file on demand.
 
-### 2. Syntax costs that do not grow with layers (provisional)
+Deterministic tests: marks over a range match the whole-file regions
+restricted to it, across languages with and without a `folds` query and
+with injections; a layer outside the range is not queried. The product
+benchmark confirms the per-key drop in every language.
 
-The likely shape, to be confirmed by checkpoint 1:
+**Implementation context**: `crates/knot-model/src/syntax/fold.rs`
+(`SyntaxState::fold_regions`, `collect`), `crates/knot-model/src/buffer/folds.rs`
+(`BufferModel::fold_regions` and its cache, `indentation_regions`),
+`crates/knot-model/src/editor/folding.rs` (`fold_marks` and the commands
+that use all regions), and the gutter in `src/app/editor/paint.rs`.
 
-- Skip the foreground attempt when it cannot finish. One way is to remember
-  the last reparse duration of the state and go straight to the background
-  when it exceeded the budget.
-- Make `edit`, `clone`, and rebase leave untouched layers alone, for example
-  by shifting layers after the edit lazily rather than editing each tree.
+### 3. Syntax work that does not grow with layers (provisional)
+
+Re-measure after checkpoint 2, then, for what remains:
+
+- Skip a foreground attempt that cannot finish: remember that the last
+  reparse of the state overran the budget and go straight to the background.
+- Make `edit`, the clone before a parse, and the rebase leave untouched
+  layers alone, for example by shifting layers after the edit lazily rather
+  than editing each tree.
 
 Deterministic tests cover each mechanism, such as layers outside an edit
-staying untouched and an overrunning state skipping the foreground. The
-benchmarks confirm the targets.
+staying untouched and an overrunning state skipping the foreground.
 
 **Implementation context**: `crates/knot-model/src/syntax.rs`
-(`SyntaxState::{edit, parse_in_foreground, finish_background_parse}`,
-`Layer::{edit, parse, reinject}`), `crates/knot-model/src/buffer.rs`
-(`observe_committed_edits`, `finish_syntax_parse`), and the parse driver in
-`src/app/model.rs`. Update
+(`SyntaxState::{edit, parse_in_foreground, start_background_parse,
+finish_background_parse}`, `Layer::{edit, parse, reinject}`),
+`crates/knot-model/src/buffer.rs` (`observe_committed_edits`,
+`finish_syntax_parse`), and the parse driver in `src/app/model.rs`. Update
 [core and buffers](../architecture/core-and-buffers.md#syntax-state) if the
 contract changes.
 
-### 3. Costs outside syntax (provisional)
+### 4. Remaining costs (provisional)
 
-The costs per keystroke that checkpoint 1 finds outside syntax, such as
-layout, wrap map, highlight queries, recovery capture, or observation, each
-made independent of file size. Tests sit at the boundary that owns each fix.
-
-### 4. Settle highlights sooner (provisional)
-
-Only if checkpoint 1 shows highlights settling late, for example because of
-the roughly 40 ms incremental Markdown reparse: shorten the background parse
-chain or the reparse itself.
+Whatever the benchmarks still show over target after checkpoints 2 and 3,
+such as bracket matching through `layers_at`, or highlights settling late
+after the Markdown background parse. Skipped if both targets hold.
 
 ### 5. Close out
 
 Record the final numbers and any validated choice in
 [decisions](../decisions/semantic-ui.md#syntax-highlighting) and the relevant
-architecture references. Write a personal-config `post-init.js` with `Try:`
-commands for the final manual check, then remove this plan.
+architecture references, refresh the `Try:` commands for the final manual
+check, then remove this plan.
