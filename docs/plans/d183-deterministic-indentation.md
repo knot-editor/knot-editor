@@ -1,6 +1,6 @@
 # D183: Deterministic indentation after Enter and closing tokens
 
-Status: 🚧 checkpoint 1 awaiting review. Roadmap item [D183](../roadmap.md).
+Status: 🚧 checkpoint 1 done, checkpoint 2 not started. Roadmap item [D183](../roadmap.md).
 Builds on [syntax state](../architecture/core-and-buffers.md#syntax-state),
 [editor views](../architecture/editor-and-languages.md#editor-views), and the
 [indentation decision](../decisions/editing.md#indentation).
@@ -55,24 +55,17 @@ indentation.
 
 - None.
 
-## Checkpoint 1: benchmark and indent budget ✅ (awaiting review)
+## Checkpoint 1: benchmark and indent budget ✅
 
-Deliverables:
+Approved. `indent_reparse_costs_on_large_files` in
+`crates/knot-model/src/syntax/tests.rs` (run with
+`cargo test --release -p knot-model indent_reparse_costs -- --ignored --nocapture`)
+times the incremental reparse after Enter and after a closing token (`}`, or
+`else:` for Python) on generated files of about 7k–70k lines. `INDENT_BUDGET`
+is 8 ms, the half-frame cap, in `crates/knot-model/src/syntax.rs`.
 
-- An `#[ignore]` benchmark test in `knot-model`, run with
-  `cargo test --release -p knot-model -- --ignored --nocapture <name>`, that
-  builds large generated files (about 10k–50k lines) in Rust, TypeScript,
-  Python, and Markdown with code fences, and times the incremental reparse
-  after an Enter edit and a typed `}` at many positions, printing median, p99,
-  and maximum per language and size.
-- Results recorded in this plan, and the indent budget chosen from them as a
-  `knot-model` constant beside `FOREGROUND_BUDGET`.
-
-Validation: the benchmark runs locally in release mode; `just check` passes.
-
-Results ✅ (`indent_reparse_costs_on_large_files` in `syntax/tests.rs`, release,
-200 positions per row, the edit reverted between samples; "close" is `}`, or
-`else:` typed on a whitespace line for Python):
+Evidence (release, 200 positions per row, the edit reverted between samples;
+"close" is `}`, or `else:` typed on a whitespace line for Python):
 
 | Language | Lines | Enter median / p99 / max | Close median / p99 / max |
 | --- | --- | --- | --- |
@@ -85,23 +78,10 @@ Results ✅ (`indent_reparse_costs_on_large_files` in `syntax/tests.rs`, release
 | Markdown | 14k | 6.4 / 8.0 / 28 ms | 6.4 / 13.3 / 14.3 ms |
 | Markdown | 70k | 39.4 / 48.7 / 147 ms | 39.6 / 49.1 / 50.3 ms |
 
-Findings: reparse time grows with file size for flat files (Rust, Markdown),
-not just edit locality. Indent budget chosen: `INDENT_BUDGET` = 8 ms, the cap.
-It covers Enter and `}` through roughly 30k Rust lines, TypeScript at any
-measured size, and Python Enter; Python `else:` (the dedent re-lexes much of
-the file) and the largest Markdown files exceed it and use the deferred
-fallback.
-
-Review gate: the user reviews the numbers and the chosen budget.
-
-**Implementation context:** `FOREGROUND_BUDGET` and
-`SyntaxState::parse_in_foreground` in `crates/knot-model/src/syntax.rs`; the
-benchmark can drive `BufferModel` directly (`from_text`, `set_syntax`,
-`set_syntax_budget(Duration::ZERO)` to keep commits from parsing, then time
-`parse_in_foreground` with an unbounded budget) the way
-`crates/knot-model/src/buffer/tests.rs` drives syntax tests. Grammars come from
-the compiled-in languages in `crates/knot-model/src/languages.rs`; mirror
-how existing syntax tests obtain a `SyntaxState` with an indent query.
+Reparse time grows with file size for flat files, not only with edit locality.
+The budget covers Enter and `}` through roughly 30k Rust lines, TypeScript at
+every measured size, and Python Enter; Python `else:` and the largest Markdown
+files overrun it and use the deferred fallback.
 
 ## Checkpoint 2: indent-budget parse and take-over
 
