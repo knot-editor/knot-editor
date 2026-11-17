@@ -18,6 +18,10 @@ use crate::app::notifications::{self, ApplicationNotifications, Notice, Position
 use crate::app::theme::{chrome, color, theme};
 use crate::app::{settings, tokens, zoom};
 
+/// The command that opens the notification history.
+const SHOW_NOTIFICATIONS_COMMAND: &str = "notifications.show";
+/// The history panel's view, which the popups give way to while it shows.
+const NOTIFICATIONS_VIEW: &str = "builtin.notifications";
 const CARD_WIDTH: f32 = 360.;
 const EDGE_GAP: f32 = 12.;
 const STACK_GAP: f32 = 8.;
@@ -133,7 +137,7 @@ fn paint_arc(
 fn severity_icon(severity: Severity) -> (&'static str, &'static str) {
     match severity {
         Severity::Info => ("info", color::NOTIFICATION_INFO),
-        Severity::Warning => ("triangle-alert", color::NOTIFICATION_WARNING),
+        Severity::Warning => ("circle-alert", color::NOTIFICATION_WARNING),
         Severity::Error => ("circle-x", color::NOTIFICATION_ERROR),
     }
 }
@@ -177,6 +181,10 @@ impl KnotWindow {
         self.notices.cards = cards;
         self.notices.more = popups.more;
 
+        // Hiding the stack under the pointer ends its hover without an event.
+        if self.history_shown(cx) {
+            self.notices.hovered = false;
+        }
         let now = cx.background_executor().now();
         let timeout = Duration::from_secs_f32(
             settings::number(settings::NOTIFICATIONS_TIMEOUT, cx)
@@ -282,6 +290,14 @@ impl KnotWindow {
         self.close_notice(id, cx);
     }
 
+    /// Whether this window shows the notification history panel.
+    fn history_shown(&self, cx: &App) -> bool {
+        let workbench = self.workbench.read(cx);
+        workbench
+            .tool_by_stable_id(NOTIFICATIONS_VIEW)
+            .is_some_and(|tool| workbench.tool_visible(tool))
+    }
+
     /// The popup stack, in the corner `notifications.position` names.
     pub(super) fn render_notices(
         &self,
@@ -289,7 +305,9 @@ impl KnotWindow {
         status_bar: bool,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
-        if self.notices.cards.is_empty() {
+        // The panel lists what the popups would say; they come back with
+        // whatever is still pending when it closes.
+        if self.notices.cards.is_empty() || self.history_shown(cx) {
             return None;
         }
         let position = Position::parse(&settings::text(settings::NOTIFICATIONS_POSITION, cx));
@@ -355,6 +373,20 @@ impl KnotWindow {
         )
     }
 
+    /// Open the notification history in this window, through the command the
+    /// notifications package registers.
+    fn show_notice_history(&mut self, cx: &mut Context<Self>) {
+        let target = self.capture_command_target(cx);
+        self.dispatch_command(
+            knot_protocol::Command {
+                name: SHOW_NOTIFICATIONS_COMMAND.into(),
+                arguments: knot_protocol::CommandArgumentValue::Null,
+            },
+            target,
+            cx,
+        );
+    }
+
     fn render_more_pill(&self, cx: &mut Context<Self>) -> AnyElement {
         let theme = theme(cx);
         div()
@@ -365,6 +397,9 @@ impl KnotWindow {
             .justify_center()
             .child(
                 div()
+                    .id("notice-more-pill")
+                    .cursor_pointer()
+                    .on_click(cx.listener(|this, _, _, cx| this.show_notice_history(cx)))
                     .px(zoom::rems(10.))
                     .py(zoom::rems(3.))
                     .rounded_full()

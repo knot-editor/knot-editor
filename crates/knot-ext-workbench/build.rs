@@ -8,5 +8,6 @@ fn main() {
         "go-to-file",
         "explorer",
         "themes",
+        "notifications",
     ]);
 }

@@ -1,6 +1,6 @@
 # D117: Non-modal notifications
 
-Status: 🚧 approved, checkpoints 1 to 3 done. Roadmap item [D117](../roadmap.md).
+Status: 🚧 approved, checkpoints 1 to 4 done. Roadmap item [D117](../roadmap.md).
 
 ## Outcome
 
@@ -148,7 +148,30 @@ and timer, and leaving resumes from the remaining time. The ring is drawn from
 the countdown state and repainted by a per-window ticker, so it agrees with the
 timer in every window.
 
-### 4. Notifications panel
+### 4. Notifications panel ✅
+
+Approved. `@knot/notifications` has the dock tool
+(bottom, hidden until shown) with Today and Earlier groups, rows, menu-only
+actions and Dismiss, the Mark All Read and Clear All toolbar actions, an empty
+state row, the bell (right side, `bell` item ID), and the Show Notifications,
+Clear Notifications, and Mark All Notifications Read commands. Showing the
+panel, or toggling it from the bell, marks every notice read. The "+N more"
+pill runs `notifications.show` in its window.
+
+The first review found the panel functional but not polished, because the tree
+painted every row at one height with `uniform_list`: groups were as tall as
+messages, one-line messages left dead space, long messages were cut off, and
+rows had no hierarchy. The tree therefore became a variable-height engine
+(gpui `list`), reusable by any view such as a future problems panel, and gained
+generic row options instead of a native notifications panel: `detail` wraps and
+grows its row (`detailMaxLines` caps it), `statusText` sits at the row's top
+right, `bold` weights the label, an action's `showOnHover` shows its button
+only on a pointed-at or selected row, and group headers are short. The panel
+rows are cards built on those options: severity icon, bold unread title (the
+source for an untitled notice), muted wrapped message, time at the top right,
+the first action as a button under the message, laid out like a popup card, and
+Dismiss on hover. While the panel shows in a window, that window paints no
+popups; they return, with the notices still unread, when it closes. ✅
 
 Deliverables: the `@knot/notifications` package with the dock tool, groups,
 rows, context menu actions, toolbar actions, empty state, bell status item,

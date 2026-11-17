@@ -354,6 +354,57 @@ impl TestProduct {
         })
     }
 
+    /// Raise a notice for every window, with one action running `action`
+    /// when given as a title and a command name, and return its ID.
+    pub fn raise_notice(
+        &self,
+        message: &str,
+        severity: &str,
+        action: Option<(&str, &str)>,
+        cx: &mut TestAppContext,
+    ) -> u64 {
+        use crate::app::notifications::{NoticeAction, NoticeSpec, Severity};
+        let spec = NoticeSpec {
+            message: message.into(),
+            severity: match severity {
+                "info" => Severity::Info,
+                "warning" => Severity::Warning,
+                "error" => Severity::Error,
+                other => panic!("no severity {other}"),
+            },
+            source: "Knot".into(),
+            actions: action
+                .map(|(title, command)| NoticeAction {
+                    title: title.into(),
+                    command: crate::app::status_bar::StatusCommand {
+                        name: command.into(),
+                        arguments: knot_protocol::CommandArgumentValue::Null,
+                    },
+                })
+                .into_iter()
+                .collect(),
+            ..NoticeSpec::default()
+        };
+        cx.update(|cx| crate::app::notifications::raise(spec, cx))
+    }
+
+    /// The history as each notice's message and whether it is read, oldest
+    /// first.
+    pub fn notice_states(&self, cx: &mut TestAppContext) -> Vec<(String, bool)> {
+        cx.read(|cx| {
+            cx.try_global::<crate::app::notifications::ApplicationNotifications>()
+                .map(|global| {
+                    global
+                        .0
+                        .notices()
+                        .iter()
+                        .map(|notice| (notice.message.clone(), notice.read))
+                        .collect()
+                })
+                .unwrap_or_default()
+        })
+    }
+
     /// Empty the notice history.
     pub fn clear_notices(&self, cx: &mut TestAppContext) {
         cx.update(|cx| crate::app::notifications::update(cx, |store| store.clear()));

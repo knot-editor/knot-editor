@@ -586,6 +586,36 @@ impl TestEditor {
         self.settle(cx);
     }
 
+    /// The window as a window driver.
+    pub fn window(&self, cx: &mut TestAppContext) -> super::window::TestWindow {
+        super::window::TestWindow::of(self.window.clone(), cx)
+    }
+
+    /// Whether the window paints its notification popups.
+    pub fn popups_shown(&self, cx: &mut TestAppContext) -> bool {
+        let (native_window, _) = self.native_window.as_ref().expect("a native window");
+        let native_window = *native_window;
+        cx.refresh().unwrap();
+        let mut window_cx = VisualTestContext::from_window(native_window, cx);
+        window_cx.debug_bounds("notice-stack").is_some()
+    }
+
+    /// Click the "+N more" pill of the notification stack, and settle.
+    pub fn click_more_notices(&self, cx: &mut TestAppContext) {
+        let (native_window, _) = self.native_window.as_ref().expect("a native window");
+        let native_window = *native_window;
+        cx.update_window(native_window, |_, window, _| window.activate_window())
+            .unwrap();
+        cx.refresh().unwrap();
+        let mut window_cx = VisualTestContext::from_window(native_window, cx);
+        let center = window_cx
+            .debug_bounds("notice-more")
+            .expect("the pill is laid out")
+            .center();
+        window_cx.simulate_click(center, Modifiers::default());
+        self.settle(cx);
+    }
+
     /// Right-click the focused pane's tab at `index`, and settle.
     pub fn right_click_tab(&self, index: usize, cx: &mut TestAppContext) {
         let (native_window, _) = self.native_window.as_ref().expect("a native window");
