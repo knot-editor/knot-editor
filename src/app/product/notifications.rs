@@ -6,7 +6,10 @@
 //! animation ends. Timers are revalidated by notice ID: one that fires for a
 //! notice no longer shown does nothing.
 
-use std::{collections::HashMap, time::Duration};
+use std::{
+    collections::HashMap,
+    time::{Duration, Instant},
+};
 
 use super::*;
 use crate::app::convert::ThemePaint as _;
@@ -25,6 +28,22 @@ const DEFAULT_TIMEOUT: f32 = 8.;
 const MIN_TIMEOUT: f32 = 0.5;
 const DEFAULT_MAX_VISIBLE: usize = 3;
 
+/// How much of an auto-dismissing popup's timeout has passed.
+struct Countdown {
+    /// Time spent running before the current run.
+    elapsed: Duration,
+    /// When the current run began; none while the stack is hovered.
+    since: Option<Instant>,
+    /// Counts runs, so the ring's animation restarts on every resume.
+    run: u64,
+}
+
+impl Countdown {
+    fn elapsed(&self, now: Instant) -> Duration {
+        self.elapsed + self.since.map_or(Duration::ZERO, |since| now - since)
+    }
+}
+
 struct Card {
     notice: Notice,
     /// Whether the card is fading out after leaving the store's popups.
@@ -40,6 +59,9 @@ pub(super) struct NoticePopups {
     /// Whether the pointer is on the stack, which pauses every timer.
     hovered: bool,
     timers: HashMap<u64, Task<()>>,
+    countdowns: HashMap<u64, Countdown>,
+    /// The timeout the countdowns run against.
+    timeout: Duration,
     exits: HashMap<u64, Task<()>>,
 }
 
@@ -58,9 +80,51 @@ impl NoticePopups {
         self.cards.len()
     }
 
+    /// The fraction of a popup's timeout still to run, if it dismisses itself.
+    #[cfg(test)]
+    pub(super) fn remaining(&self, id: u64, now: Instant) -> Option<f32> {
+        self.countdowns.get(&id).map(|countdown| {
+            (1. - countdown.elapsed(now).as_secs_f32() / self.timeout.as_secs_f32()).max(0.)
+        })
+    }
+
     #[cfg(test)]
     pub(super) fn more(&self) -> usize {
         self.more
+    }
+}
+
+/// Stroke the arc that starts at the top and sweeps clockwise over `fraction`
+/// of a full turn.
+fn paint_arc(
+    window: &mut Window,
+    center: Point<Pixels>,
+    radius: Pixels,
+    width: Pixels,
+    fraction: f32,
+    color: Hsla,
+) {
+    if fraction <= 0. {
+        return;
+    }
+    const SEGMENTS: usize = 48;
+    let steps = ((SEGMENTS as f32 * fraction).ceil() as usize).max(1);
+    let mut path = PathBuilder::stroke(width);
+    for step in 0..=steps {
+        let turn = (step as f32 / steps as f32 * fraction).min(1.);
+        let angle = turn * std::f32::consts::TAU - std::f32::consts::FRAC_PI_2;
+        let at = point(
+            center.x + radius * angle.cos(),
+            center.y + radius * angle.sin(),
+        );
+        if step == 0 {
+            path.move_to(at);
+        } else {
+            path.line_to(at);
+        }
+    }
+    if let Ok(path) = path.build() {
+        window.paint_path(path, color);
     }
 }
 
@@ -111,32 +175,45 @@ impl KnotWindow {
         self.notices.cards = cards;
         self.notices.more = popups.more;
 
-        let timed = if self.notices.hovered {
-            Vec::new()
-        } else {
-            self.notices
-                .cards
-                .iter()
-                .filter(|card| !card.leaving && card.notice.auto_dismiss)
-                .map(|card| card.notice.id)
-                .collect()
-        };
-        self.notices.timers.retain(|id, _| timed.contains(id));
+        let now = cx.background_executor().now();
         let timeout = Duration::from_secs_f32(
             settings::number(settings::NOTIFICATIONS_TIMEOUT, cx)
                 .unwrap_or(DEFAULT_TIMEOUT)
                 .max(MIN_TIMEOUT),
         );
+        self.notices.timeout = timeout;
+        let timed = self
+            .notices
+            .cards
+            .iter()
+            .filter(|card| !card.leaving && card.notice.auto_dismiss)
+            .map(|card| card.notice.id)
+            .collect::<Vec<_>>();
+        self.notices.countdowns.retain(|id, _| timed.contains(id));
+        self.notices.timers.retain(|id, _| timed.contains(id));
         for id in timed {
-            if self.notices.timers.contains_key(&id) {
-                continue;
-            }
-            let task = cx.spawn_in(window, async move |this, cx| {
-                cx.background_executor().timer(timeout).await;
-                this.update_in(cx, |this, _, cx| this.expire_notice(id, cx))
-                    .ok();
+            let countdown = self.notices.countdowns.entry(id).or_insert(Countdown {
+                elapsed: Duration::ZERO,
+                since: None,
+                run: 0,
             });
-            self.notices.timers.insert(id, task);
+            if self.notices.hovered {
+                // Pausing keeps what has run and stops the timer.
+                if let Some(since) = countdown.since.take() {
+                    countdown.elapsed += now - since;
+                }
+                self.notices.timers.remove(&id);
+            } else if countdown.since.is_none() {
+                countdown.since = Some(now);
+                countdown.run += 1;
+                let left = timeout.saturating_sub(countdown.elapsed);
+                let task = cx.spawn_in(window, async move |this, cx| {
+                    cx.background_executor().timer(left).await;
+                    this.update_in(cx, |this, _, cx| this.expire_notice(id, cx))
+                        .ok();
+                });
+                self.notices.timers.insert(id, task);
+            }
         }
         for id in newly_leaving {
             let task = cx.spawn_in(window, async move |this, cx| {
@@ -284,11 +361,64 @@ impl KnotWindow {
             .into_any_element()
     }
 
+    /// The ring that drains around the close button of a popup that dismisses
+    /// itself over its timeout; it stands still while the stack is hovered.
+    fn render_countdown_ring(
+        &self,
+        id: u64,
+        accent: &str,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
+        let countdown = self.notices.countdowns.get(&id)?;
+        let theme = theme(cx);
+        let accent = theme.paint_color(accent);
+        let track = theme.paint_color(color::NOTIFICATION_BORDER);
+        let now = cx.background_executor().now();
+        let start = (1.
+            - countdown.elapsed(now).as_secs_f32() / self.notices.timeout.as_secs_f32())
+        .clamp(0., 1.);
+        let ring = move |remaining: f32| {
+            canvas(
+                |_, _, _| {},
+                move |bounds, _, window, _| {
+                    let center = bounds.center();
+                    let radius = bounds.size.width.min(bounds.size.height) / 2. - px(1.);
+                    let width = px(1.5);
+                    paint_arc(window, center, radius, width, 1., track);
+                    paint_arc(window, center, radius, width, remaining, accent);
+                },
+            )
+            .absolute()
+            .top_0()
+            .left_0()
+            .size_full()
+        };
+        let element = div()
+            .absolute()
+            .top_0()
+            .left_0()
+            .size_full()
+            .debug_selector(move || format!("notice-ring-{id}"));
+        Some(if countdown.since.is_some() {
+            let left = self.notices.timeout.mul_f32(start);
+            element
+                .with_animation(
+                    ElementId::NamedInteger(format!("notice-ring-{id}").into(), countdown.run),
+                    Animation::new(left),
+                    move |element, delta| element.child(ring(start * (1. - delta))),
+                )
+                .into_any_element()
+        } else {
+            element.child(ring(start)).into_any_element()
+        })
+    }
+
     fn render_notice(&self, card: &Card, position: Position, cx: &mut Context<Self>) -> AnyElement {
         let Card { notice, leaving } = card;
         let id = notice.id;
-        let theme = theme(cx);
         let (icon_name, accent) = severity_icon(notice.severity);
+        let ring = self.render_countdown_ring(id, accent, cx);
+        let theme = theme(cx);
         let icon = AppIcon::new(
             defined_icon(icon_name, cx)
                 .unwrap_or_else(|| knot_model::icons::IconDefinition::lucide(icon_name)),
@@ -335,10 +465,9 @@ impl KnotWindow {
             .rounded(zoom::rems(tokens::radius::SM))
             .cursor_pointer()
             .text_color(description)
-            .opacity(0.)
-            .group_hover(group.clone(), |style| style.opacity(1.))
             .hover(move |style| style.bg(hover))
             .child("×")
+            .when_some(ring, |button, ring| button.child(ring))
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .on_click(cx.listener(move |this, _, _, cx| this.close_notice(id, cx)));
         let body = div()

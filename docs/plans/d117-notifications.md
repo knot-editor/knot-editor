@@ -139,7 +139,7 @@ Explorer and Projects report failures as `warning` notices. A notice without a
 `target` shows in every window, so those reports no longer stay in the
 command's window. The personal `post-init.js` carries the `Try:` commands.
 
-### 3. Popup countdown ring
+### 3. Popup countdown ring ✅ (awaiting review)
 
 Deliverables: the close button is always visible, replacing the hover-only
 button. On an auto-dismissing popup a thin ring in the severity accent drains
@@ -151,7 +151,9 @@ Validation: a window test that a ring's progress follows the timer, freezes
 while the stack is hovered, resumes after, and is absent on a sticky popup.
 
 Review gate: the user watches popups of each severity and `autoDismiss` setting
-with the `Try: Notice ...` commands, including pointing at the stack.
+with the `Try: Notice ...` commands (the personal `post-init.js` still has
+them), including pointing at the stack. Hovering now resumes the remaining time
+rather than restarting the timeout.
 
 Implementation context:
 - `src/app/product/notifications.rs` owns the cards, timers, and hover pause.

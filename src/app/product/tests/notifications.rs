@@ -158,6 +158,55 @@ fn pointing_at_the_stack_pauses_its_timers(cx: &mut TestAppContext) {
     assert_eq!(shown(&window, cx), Vec::<u64>::new());
 }
 
+fn remaining(window: &Entity<KnotWindow>, id: u64, cx: &mut TestAppContext) -> Option<f32> {
+    cx.run_until_parked();
+    let now = cx.executor().now();
+    cx.read(|cx| window.read(cx).notices.remaining(id, now))
+}
+
+fn point_at(
+    native_window: gpui::AnyWindowHandle,
+    position: gpui::Point<gpui::Pixels>,
+    cx: &mut TestAppContext,
+) {
+    VisualTestContext::from_window(native_window, cx).simulate_mouse_move(
+        position,
+        None,
+        Modifiers::default(),
+    );
+    cx.run_until_parked();
+}
+
+#[gpui::test]
+fn the_countdown_ring_follows_the_timeout_and_stands_still_while_hovered(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    let (window, native_window) = new_window(&documents, cx);
+    set_setting(NOTIFICATIONS_TIMEOUT, serde_json::json!(10), cx);
+    let info = raise(spec("info", Severity::Info), cx);
+    let sticky = raise(spec("sticky", Severity::Warning), cx);
+    let stack = bounds(native_window, "notice-stack", cx).expect("the stack is painted");
+    assert!(bounds(native_window, "notice-ring-1", cx).is_some());
+    assert!(bounds(native_window, "notice-ring-2", cx).is_none());
+    assert!(bounds(native_window, "notice-close-2", cx).is_some());
+    assert_eq!(remaining(&window, sticky, cx), None);
+    assert_eq!(remaining(&window, info, cx), Some(1.));
+
+    cx.executor().advance_clock(Duration::from_secs(4));
+    assert_eq!(remaining(&window, info, cx), Some(0.6));
+
+    point_at(native_window, stack.center(), cx);
+    cx.executor().advance_clock(Duration::from_secs(30));
+    assert_eq!(remaining(&window, info, cx), Some(0.6));
+    assert_eq!(shown(&window, cx), [sticky, info]);
+
+    point_at(native_window, gpui::point(px(1.), px(1.)), cx);
+    cx.executor().advance_clock(Duration::from_secs(3));
+    assert_eq!(remaining(&window, info, cx), Some(0.3));
+    cx.executor().advance_clock(Duration::from_millis(3100));
+    assert_eq!(shown(&window, cx), [sticky]);
+    assert_eq!(remaining(&window, info, cx), None);
+}
+
 #[gpui::test]
 fn closing_a_popup_marks_its_notice_read_everywhere(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
