@@ -159,3 +159,11 @@ opt-level = 3
 
 [profile.dev.package.taffy]
 opt-level = 3
+
+# Every extension turn marshals values through the host glue and the transport;
+# unoptimized, that work dominates a key's cost in product tests and the debug app.
+[profile.dev.package.knot-host]
+opt-level = 3
+
+[profile.dev.package.knot-protocol]
+opt-level = 3
