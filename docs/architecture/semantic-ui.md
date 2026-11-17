@@ -121,11 +121,13 @@ machinery never enter surfaces, buffers, or `knot-core`.
 A completion provider is an `editor.completion` registration in the
 [provider registry](extension-host.md#providers), so every registration
 contributes, ordered by registration and labelled with its package. An editor
-completion invocation snapshots those registrations, buffer identity and
-revision, cursor and prefix range, and a view-local generation before the
-application fans requests out to independent extension runtimes. A request
-keeps its own typed callback rather than a JSON provider call, so the provider
-receives a live buffer.
+completion invocation snapshots those registrations, the buffer revision,
+cursor and prefix range, and a view-local generation before the application
+fans requests out to independent extension runtimes. Each request is an
+ordinary provider call of `provideCompletions` with the editor's window: its
+JSON argument names the document, revision, cursor, and prefix, and the JSON
+result is parsed into items in `knot-model`. A provider that needs the text
+reads the document's buffer itself.
 
 ```text
 editor.completion registrations
@@ -139,8 +141,8 @@ Editor -> CompletionController -> independent extension runtimes
 ```
 
 Responses reach a controller only while the registration and lifecycle remain
-live and weak editor identity, active generation, buffer handle, and public
-revision still match. The controller merges partial results deterministically
+live and weak editor identity, active generation, and public revision still
+match. The controller merges partial results deterministically
 and assigns stable semantic item identities. The native list surface presents
 the current immutable snapshot and tracks selection by item identity, so
 presentation updates never restart provider work. Acceptance

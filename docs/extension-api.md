@@ -1055,7 +1055,8 @@ is `providers` in
 Knot asks providers too: register an `editor.completion` provider, a
 `CompletionProvider` in `knot.d.ts`, to offer editor completion. The editor
 asks every registration and merges their items, so a later one adds to the
-others.
+others. A request names its document; a provider that reads the text gets the
+buffer from `documents.get` and keeps it while the document is open.
 
 ## Identity and lifetime
 

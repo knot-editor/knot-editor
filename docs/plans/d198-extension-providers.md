@@ -117,9 +117,12 @@ Choices the later checkpoints rely on:
 ### 2. Editor completion on providers — 🔍 ready for review
 
 ✅ Implemented. Scope decisions:
-- Completion requests keep their own typed callback rather than the JSON
-  provider call, so `provideCompletions(context)` still receives a live
-  `Buffer`; only registration and identity are shared with providers.
+- Completion requests are ordinary provider calls: `provideCompletions(request,
+  context)` receives `{ document, revision, cursorByteOffset, prefix }` and the
+  editor's window, and returns a JSON list. A provider reads the text through
+  `documents.get(id).buffer`, keeping it while the document is open; the extra
+  await is accepted, and latency is to be measured with D022's completion
+  while typing (adding the line text to the request is the fallback).
 - A completion row's provider label is the registering package's name (or
   "personal config").
 - ✅ Product test: two packages' `editor.completion` providers both

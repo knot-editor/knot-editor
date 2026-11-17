@@ -365,7 +365,8 @@ hold the analyses that support some items.
     streamed results, cancellation as the user types, and a multi-line
     suggestion shown as virtual text (D145) rather than in the list.
     Completion providers register as `editor.completion` extension providers
-    (D198).
+    (D198); measure the provider call's latency while typing, and add the
+    current line's text to the request if reading the buffer costs too much.
 
 - **D067 — Language servers and semantic tokens**
   - Depends on: D182, D087, D145, D117, D115, D022
