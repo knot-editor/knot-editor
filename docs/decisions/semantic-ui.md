@@ -33,9 +33,23 @@ in 206 ms and reparsed at p50 5.4 ms, p99 13.4 ms. Typing that leaves an unclose
 60-line highlight query over the visible range cost about 220 µs. The budget
 therefore keeps ordinary files inline and moves huge files and broken syntax off
 the foreground. Injections are nested layers rather than one combined tree; a
-1,400-line, 21 KiB Markdown file reparsed after typing at p50 115–150 µs, while a
-28,000-line file with 10,000 layers reparsed at p50 6–9 ms, mostly the Markdown
-root and editing later layers' trees.
+1,400-line, 21 KiB Markdown file reparsed after typing at p50 115–150 µs. Typing
+in the 50,000-line, 15,001-layer Markdown benchmark document cost 45 ms per key
+before three choices, and at most 2.4 ms at p99 after them, as did Rust,
+TypeScript, and Python files of 35,000 to 40,000 lines:
+
+- An edit touches only the root layer, and injections apply the edits they are
+  behind when read or reparsed. Editing every later layer's tree cost 1.5–3 ms
+  per key and again per rebase; the profile showed it, not the parse, as the
+  remaining cost.
+- A foreground attempt that overran the budget makes the state skip the
+  foreground until a background parse fits it. A Markdown reparse needs about
+  1.7 ms, so every key paid for an attempt that could not finish. A larger
+  foreground budget for Enter and closing tokens helped only files of 7,000 to
+  30,000 lines and did not change typing latency.
+- The gutter queries fold marks for the visible lines only. Whole-text fold
+  regions on every paint were 82% of the foreground while typing, in every
+  language.
 
 The background path is cheap because snapshots share the original text and
 sealed 16 KiB add-buffer chunks as `Arc<str>` and copy only the piece list. On a

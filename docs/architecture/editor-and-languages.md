@@ -181,7 +181,9 @@ toggles the fold or region starting on that line, Alt-click also its nested
 ones, and never selects. The fold lane draws chevrons on foldable lines while
 the pointer is over the gutter, or always when `editor.showFoldingControls` is
 `"always"`, and always one on a collapsed fold's line; `editor.folding`, resolved
-for the view's scope, turns the lane off. Documents always
+for the view's scope, turns the lane off. The lane asks only for the lines in
+view, which query just the layers reaching them, so painting costs the same
+in any file size. Documents always
 have the gutter, while a contributed text frame has none unless its
 registration asks for one.
 A view without a gutter and a terminal leave a small inset before the text.

@@ -28,20 +28,19 @@ point.
 
 ## Next up
 
-1. D202 — Slow typing.
-2. D150 — Vim search and substitution.
-3. D113 — Command and input recording.
-4. D022 — Editor autocompletion.
-5. D175 — Type-ahead after a held Enter.
-6. D182 — Interleave extension roots at awaits: before D067.
-7. D156 — Fewer host round trips per key.
-8. D087 — Extension entitlements: D085, D126, D067, and D101 need it.
-9. D129 — Refactor builtin language extensions.
-10. D138 — Extension startup report as an untitled document.
-11. D054 — Dedicated read-only generated text surface.
-12. D085 — Cross-file search.
-13. D197 — Diff view: D126 and D174 build on it.
-14. D126 — Git status and changes per root.
+1. D150 — Vim search and substitution.
+2. D113 — Command and input recording.
+3. D022 — Editor autocompletion.
+4. D175 — Type-ahead after a held Enter.
+5. D182 — Interleave extension roots at awaits: before D067.
+6. D156 — Fewer host round trips per key.
+7. D087 — Extension entitlements: D085, D126, D067, and D101 need it.
+8. D129 — Refactor builtin language extensions.
+9. D138 — Extension startup report as an untitled document.
+10. D054 — Dedicated read-only generated text surface.
+11. D085 — Cross-file search.
+12. D197 — Diff view: D126 and D174 build on it.
+13. D126 — Git status and changes per root.
 
 Remove an item from this list when it is done or dropped.
 
@@ -56,20 +55,6 @@ decisions, and remove its plan with it. Reports under [reports/](reports/)
 hold the analyses that support some items.
 
 ## Bugs
-
-- **D202 — Slow typing** 🚧
-  - Depends on: none
-  - Description: Typing in a Markdown file of about 70k lines with fenced code
-    lags noticeably, in prose and in fences alike. Each commit spends its 1 ms
-    foreground reparse attempt and discards it on overrun, an incremental
-    reparse takes about 40 ms, a new background parse starts per edit, and
-    highlights paint from stale trees meanwhile. Profile per keystroke first.
-    `indent_reparse_costs_on_large_files` in `syntax/tests.rs` measures
-    incremental reparses: Rust 7k lines about 1 ms, 35k about 8 ms; TypeScript
-    60k about 3 ms; Python 55k about 5 ms for Enter and 60 ms for `else:`. A
-    larger foreground budget for Enter and closing tokens helped only files of
-    7k to 30k lines and didn't change typing latency, so it was dropped. The
-    [plan](plans/d202-slow-typing.md) measures first, then fixes.
 
 - **D175 — Type-ahead after a held Enter**
   - Depends on: none
