@@ -24,6 +24,8 @@ const STACK_GAP: f32 = 8.;
 const SLIDE: f32 = 28.;
 const ENTER: Duration = Duration::from_millis(240);
 const EXIT: Duration = Duration::from_millis(160);
+/// How often a running ring repaints.
+const RING_FRAME: Duration = Duration::from_millis(50);
 const DEFAULT_TIMEOUT: f32 = 8.;
 const MIN_TIMEOUT: f32 = 0.5;
 const DEFAULT_MAX_VISIBLE: usize = 3;
@@ -34,8 +36,6 @@ struct Countdown {
     elapsed: Duration,
     /// When the current run began; none while the stack is hovered.
     since: Option<Instant>,
-    /// Counts runs, so the ring's animation restarts on every resume.
-    run: u64,
 }
 
 impl Countdown {
@@ -60,6 +60,8 @@ pub(super) struct NoticePopups {
     hovered: bool,
     timers: HashMap<u64, Task<()>>,
     countdowns: HashMap<u64, Countdown>,
+    /// Repaints the rings while any countdown runs.
+    ticker: Option<Task<()>>,
     /// The timeout the countdowns run against.
     timeout: Duration,
     exits: HashMap<u64, Task<()>>,
@@ -195,7 +197,6 @@ impl KnotWindow {
             let countdown = self.notices.countdowns.entry(id).or_insert(Countdown {
                 elapsed: Duration::ZERO,
                 since: None,
-                run: 0,
             });
             if self.notices.hovered {
                 // Pausing keeps what has run and stops the timer.
@@ -205,7 +206,6 @@ impl KnotWindow {
                 self.notices.timers.remove(&id);
             } else if countdown.since.is_none() {
                 countdown.since = Some(now);
-                countdown.run += 1;
                 let left = timeout.saturating_sub(countdown.elapsed);
                 let task = cx.spawn_in(window, async move |this, cx| {
                     cx.background_executor().timer(left).await;
@@ -214,6 +214,23 @@ impl KnotWindow {
                 });
                 self.notices.timers.insert(id, task);
             }
+        }
+        let running = self
+            .notices
+            .countdowns
+            .values()
+            .any(|countdown| countdown.since.is_some());
+        if !running {
+            self.notices.ticker = None;
+        } else if self.notices.ticker.is_none() {
+            self.notices.ticker = Some(cx.spawn_in(window, async move |this, cx| {
+                loop {
+                    cx.background_executor().timer(RING_FRAME).await;
+                    if this.update_in(cx, |_, window, _| window.refresh()).is_err() {
+                        break;
+                    }
+                }
+            }));
         }
         for id in newly_leaving {
             let task = cx.spawn_in(window, async move |this, cx| {
@@ -374,7 +391,7 @@ impl KnotWindow {
         let accent = theme.paint_color(accent);
         let track = theme.paint_color(color::NOTIFICATION_BORDER);
         let now = cx.background_executor().now();
-        let start = (1.
+        let remaining = (1.
             - countdown.elapsed(now).as_secs_f32() / self.notices.timeout.as_secs_f32())
         .clamp(0., 1.);
         let ring = move |remaining: f32| {
@@ -393,24 +410,16 @@ impl KnotWindow {
             .left_0()
             .size_full()
         };
-        let element = div()
-            .absolute()
-            .top_0()
-            .left_0()
-            .size_full()
-            .debug_selector(move || format!("notice-ring-{id}"));
-        Some(if countdown.since.is_some() {
-            let left = self.notices.timeout.mul_f32(start);
-            element
-                .with_animation(
-                    ElementId::NamedInteger(format!("notice-ring-{id}").into(), countdown.run),
-                    Animation::new(left),
-                    move |element, delta| element.child(ring(start * (1. - delta))),
-                )
-                .into_any_element()
-        } else {
-            element.child(ring(start)).into_any_element()
-        })
+        Some(
+            div()
+                .absolute()
+                .top_0()
+                .left_0()
+                .size_full()
+                .debug_selector(move || format!("notice-ring-{id}"))
+                .child(ring(remaining))
+                .into_any_element(),
+        )
     }
 
     fn render_notice(&self, card: &Card, position: Position, cx: &mut Context<Self>) -> AnyElement {
