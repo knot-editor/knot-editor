@@ -295,7 +295,8 @@ hold the analyses that support some items.
     its commands, which return no data; Vim's `:e` cannot show Go to File's
     list under the Ex line. Add named providers that packages register and
     others look up and call across isolates, with Go to File providing its
-    lists and Vim's `:e` as the first consumer.
+    lists, Vim's `:e` as the first consumer, and editor completion providers
+    moved onto the same registry.
     [Plan](plans/d198-extension-providers.md).
 
 - **D199 — Importing another package's code**
@@ -353,7 +354,7 @@ hold the analyses that support some items.
     pipeline it hooks into exists.
 
 - **D022 — Editor autocompletion**
-  - Depends on: none
+  - Depends on: D198
   - Description: Completion providers register, aggregate, and show in a native
     list, but completion only opens on request, and no bundled package provides
     candidates. Open completion while typing, with triggers and a delay, show
@@ -363,8 +364,8 @@ hold the analyses that support some items.
     inline suggestions, in the style of GitHub Copilot, fits it: slow and
     streamed results, cancellation as the user types, and a multi-line
     suggestion shown as virtual text (D145) rather than in the list.
-    Decide whether editor completion providers move onto the extension
-    providers of D198 or keep their native registry.
+    Completion providers register as `editor.completion` extension providers
+    (D198).
 
 - **D067 — Language servers and semantic tokens**
   - Depends on: D182, D087, D145, D117, D115, D022

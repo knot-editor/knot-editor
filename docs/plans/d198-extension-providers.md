@@ -60,6 +60,15 @@ Deleting back to `:` brings back the usual Ex completions.
   dependents; a provider lookup happens when a feature runs, so a consumer
   that can fall back needs no dependency. A consumer that cannot work without
   a provider declares a dependency to get startup ordering and a clear failure.
+- **Editor completion is a provider.** A package offers completion by
+  registering an `editor.completion` provider with `provideCompletions`; the
+  editor reads every registration, as `providers.all` does, and Knot defines
+  that contract. `editor.registerCompletionProvider` and the separate
+  completion registry go away. Merging, stale-result rejection, and
+  per-provider failure stay completion-specific in the completion controller,
+  so the [capability aggregation](../decisions/semantic-ui.md#capability-aggregation)
+  decision still holds; only registration is shared. Completion behaves as
+  before.
 - **Go to File provides its three lists.** `workspace.files`,
   `workspace.buffers`, and `workspace.actions` each offer `rows(query)`,
   returning the picker rows Search Everywhere shows on its Files, Buffers, and
@@ -77,12 +86,10 @@ Deleting back to `:` brings back the usual Ex completions.
 - Importing another package's code as a module (`import { … } from
   "@knot/go-to-file"`) stays a future improvement, [D199](../roadmap.md); it
   would build on these cross-isolate calls.
-- Native editor completion providers stay on their own registry; whether they
-  move onto providers is decided in [D022](../roadmap.md).
 - No streaming results, cancellation signals, or callbacks across packages.
 - No typed contract registry or shared contract-types package: a consumer
   declares the interface it expects locally.
-- No new consumers beyond Vim's `:e`, and no Ex commands contributed by other
+- No new consumers beyond Vim's `:e` and editor completion, and no Ex commands contributed by other
   packages.
 
 ## Deferred decisions
@@ -136,7 +143,41 @@ and show the results in a message.
 - Docs: a providers section in `docs/architecture/extension-host.md` and
   `docs/extension-api.md`.
 
-### 2. Go to File provides its lists
+### 2. Editor completion on providers
+
+Deliverables: completion providers registered as `editor.completion`
+providers and read by the editor through the provider registry; the
+completion registry, `editor.registerCompletionProvider`, its unregister
+operation, and the `CompletionProviderNotFound` error removed; completion
+behavior unchanged.
+
+Validation: the existing completion product and fake-host tests moved to the
+new registration and passing unchanged in behavior, plus a test that a
+completion provider registered after another still contributes (no latest
+wins). `just check`.
+
+Review gate: a `try.*` command that registers an `editor.completion` provider
+from personal config; trigger completion in an editor and see its items merged
+with any other provider's.
+
+**Implementation context**
+- Registry and request path: `CompletionProviderRegistry` in
+  `crates/knot-model/src/completion.rs`, its use in
+  `src/app/extensions/semantics.rs` (`completion_snapshot`) and
+  `src/app/extensions/host.rs` (`start_completion`); snapshot the
+  `editor.completion` registrations from the checkpoint 1 registry instead.
+- JS side: `registerCompletionProvider` and `__knotRequestCompletions` in
+  `crates/knot-host/src/js/bootstrap.js`, which becomes a call to the
+  provider's `provideCompletions` through the generic provider call path;
+  `editor.registerCompletionProvider` and `CompletionProvider` in `knot.d.ts`
+  and `knot.js`; the handlers at `register_completion_provider` in
+  `src/app/extensions/host/handlers.rs`.
+- Tests: completion cases in `src/app/product/tests/extension_api.rs` and
+  `startup.rs`, and `scripts/extensions/testing/completion.test.ts`.
+- Docs: the completion section of `docs/architecture/semantic-ui.md`
+  (registration now through providers) and `docs/extension-api.md`.
+
+### 3. Go to File provides its lists
 
 Deliverables: `workspace.files`, `workspace.buffers`, and `workspace.actions`
 registered by `@knot/go-to-file`, returning the same rows Search Everywhere
@@ -157,7 +198,7 @@ rows, beside running Cmd-P with the same query.
 - Tests next to `extensions/@knot/go-to-file/test/extension.test.ts` and
   `rows.test.ts`.
 
-### 3. Picker rows in the input list
+### 4. Picker rows in the input list
 
 Deliverables: input completions with description and hint, painted by the
 picker's row element, and the accepted input reporting the highlighted
@@ -180,7 +221,7 @@ descriptions and hints and reporting what Enter accepted.
 - Tests in `src/app/product/tests/transient.rs` and
   `scripts/extensions/testing/transient.test.ts`.
 
-### 4. Vim's `:e` uses the files provider
+### 5. Vim's `:e` uses the files provider
 
 Deliverables: `:e` and `:e <query>` list `workspace.files` rows under the Ex
 line; Enter opens the highlighted file or the typed path; Tab fills the
