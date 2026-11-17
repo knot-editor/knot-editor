@@ -4,6 +4,7 @@ import type { FileEntry, TreeAction, TreeItem, WorkspaceRoot } from "knot";
 
 export const VIEW_ID = "builtin.explorer";
 export const ACTIVATE = "explorer.activate";
+export const REVEAL_ACTIVE = "explorer.reveal-active-file";
 export const OPEN_FOLDER = "explorer.open-folder";
 export const OPEN_FOLDER_ROW = "explorer.open-folder-row";
 export const NEW_FILE = "explorer.new-file";

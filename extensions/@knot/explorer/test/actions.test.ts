@@ -4,7 +4,7 @@ import type { WindowTarget } from "knot";
 import * as host from "knot/testing";
 import { start } from "../src/extension.js";
 import {
-  COPY, COPY_NAME, COPY_PATH, COPY_RELATIVE_PATH, CUT, DELETE, NEW_FILE, NEW_FOLDER, PASTE, RENAME, REVEAL, VIEW_ID, parseRowId, rowId,
+  COPY, COPY_NAME, COPY_PATH, COPY_RELATIVE_PATH, CUT, DELETE, NEW_FILE, NEW_FOLDER, PASTE, RENAME, REVEAL, REVEAL_ACTIVE, VIEW_ID, parseRowId, rowId,
 } from "../src/rows.js";
 import { childUri, copyName, pathSegments, renameSelection } from "../src/names.js";
 
@@ -162,6 +162,30 @@ test("path commands copy the path, the path below the root, and the name", async
   assert.equal(host.clipboard(), "main.ts");
   await host.run(REVEAL, { arguments: { id: main.id } });
   assert.deepEqual(host.revealed(), [`${ROOT}/src/main.ts`]);
+});
+
+test("the tab menu offers the file actions on editor tabs", () => {
+  assert.deepEqual(host.menuItems("tab"), [
+    { command: COPY_PATH, group: "3_file", order: 0, view: "editor" },
+    { command: COPY_RELATIVE_PATH, group: "3_file", order: 1, view: "editor" },
+    { command: REVEAL_ACTIVE, title: "Reveal in Explorer", group: "3_file", order: 2, view: "editor" },
+    { command: REVEAL, group: "3_file", order: 3, view: "editor" },
+  ]);
+});
+
+test("path commands act on the selected tab without a row, and not on untitled ones", async () => {
+  assert.equal(await host.run(COPY_PATH), "unavailable");
+  const main = host.addDocument({ uri: `${ROOT}/src/main.ts`, text: "main" });
+  host.present(window, main);
+  await host.run(COPY_PATH);
+  assert.equal(host.clipboard(), "/work/app/src/main.ts");
+  await host.run(COPY_RELATIVE_PATH);
+  assert.equal(host.clipboard(), "src/main.ts");
+
+  const untitled = host.addDocument({ text: "unsaved" });
+  host.present(window, untitled);
+  assert.equal(await host.run(COPY_PATH), "unavailable");
+  assert.equal(await host.run(COPY_RELATIVE_PATH), "unavailable");
 });
 
 test("copies are named before the extension, and the clipboard keys are bound in the view", () => {

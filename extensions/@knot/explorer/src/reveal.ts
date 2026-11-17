@@ -1,6 +1,6 @@
 // Revealing a file in the explorer.
 import { documents, settings, windows, workspaces } from "knot";
-import type { ViewTarget, WindowTarget } from "knot";
+import type { CommandContext, ViewTarget, WindowTarget } from "knot";
 import { idPath, rootOf } from "./rows.js";
 import { AUTO_REVEAL } from "./settings.js";
 import type { ExplorerState } from "./state.js";
@@ -17,6 +17,17 @@ export async function fileOf(target: ViewTarget): Promise<string | null> {
 export async function activeFile(window: WindowTarget): Promise<string | null> {
   const info = await windows.get(window);
   return info?.statusTarget ? fileOf(info.statusTarget) : null;
+}
+
+/** The URI of the document the command's captured tab shows, or null for any
+ * other surface or an untitled document. Buffer wrappers are interned per
+ * buffer, so the captured buffer is identical to its document's. */
+export async function capturedUri(ctx: CommandContext): Promise<string | null> {
+  if (ctx.buffer === null) return null;
+  for (const document of await documents.list()) {
+    if (document.buffer === ctx.buffer) return document.resourceUri;
+  }
+  return null;
 }
 
 /** Select `uri` in the explorer of `window`, expanding the folders above it.

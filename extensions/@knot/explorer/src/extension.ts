@@ -5,6 +5,7 @@ import { icons, settings, workbench } from "knot";
 import { registerActions } from "./actions.js";
 import { registerClipboard } from "./clipboard.js";
 import { registerCommands } from "./commands.js";
+import { registerMenus } from "./menus.js";
 import { followActive } from "./reveal.js";
 import { defineSettings, SHOW_IGNORED } from "./settings.js";
 import { createState } from "./state.js";
@@ -19,6 +20,7 @@ export async function start() {
   await registerCommands(state);
   await registerActions(state);
   await registerClipboard(state);
+  await registerMenus();
   await settings.observe(SHOW_IGNORED, () => refreshAll(state));
   await workbench.observe(async (event) => {
     switch (event.type) {

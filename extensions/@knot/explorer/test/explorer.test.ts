@@ -179,6 +179,12 @@ test("a file outside every root is not revealed", async () => {
   assert.equal(host.view(VIEW_ID).reveals.length, 0);
 });
 
+test("Reveal Active File on an untitled document is unavailable", async () => {
+  const id = host.addDocument({ text: "unsaved" });
+  host.present(window, id);
+  assert.equal(await host.run("explorer.reveal-active-file"), "unavailable");
+});
+
 test("Toggle Explorer toggles the view", async () => {
   const view = host.view(VIEW_ID);
   const shown = view.visible;

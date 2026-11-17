@@ -1,7 +1,7 @@
 import { commands, documents, settings, workspaces } from "knot";
 import type { CommandContext, JsonValue } from "knot";
-import { activeFile, revealFile } from "./reveal.js";
-import { ACTIVATE, OPEN_FOLDER, VIEW_ID } from "./rows.js";
+import { activeFile, capturedUri, revealFile } from "./reveal.js";
+import { ACTIVATE, OPEN_FOLDER, REVEAL_ACTIVE, VIEW_ID } from "./rows.js";
 import { SHOW_IGNORED } from "./settings.js";
 import type { ExplorerState } from "./state.js";
 
@@ -68,11 +68,12 @@ export async function registerCommands(state: ExplorerState) {
     palette: false,
   });
 
-  await commands.register("explorer.reveal-active-file", async ({ target }) => {
-    const uri = await activeFile(target.windowTarget);
-    if (uri === null || state.view === null) return;
-    await state.view.show(target.windowTarget);
-    if (await revealFile(state, target.windowTarget, uri)) await state.view.focus(target.windowTarget);
+  await commands.register(REVEAL_ACTIVE, async (ctx) => {
+    const uri = (await capturedUri(ctx)) ?? (await activeFile(ctx.target.windowTarget));
+    if (uri === null) return commands.unavailable();
+    if (state.view === null) return;
+    await state.view.show(ctx.target.windowTarget);
+    if (await revealFile(state, ctx.target.windowTarget, uri)) await state.view.focus(ctx.target.windowTarget);
   }, { title: "Reveal Active File", description: "Select the active file in the explorer." });
 
   await commands.register("explorer.toggle", async ({ target }) => {

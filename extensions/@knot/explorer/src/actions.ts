@@ -3,7 +3,7 @@
 import { commands, documents, files, keymaps, platform, workbench, workspaces } from "knot";
 import type { CommandContext, JsonValue, WindowTarget } from "knot";
 import { childUri, pathSegments, renameSelection } from "./names.js";
-import { activeFile, revealFile } from "./reveal.js";
+import { activeFile, capturedUri, revealFile } from "./reveal.js";
 import {
   DELETE, idPath, NEW_FILE, NEW_FOLDER, nameOf, parentOf, parseRowId, RENAME, rootOf, rowId, trimmed, VIEW_ID,
 } from "./rows.js";
@@ -38,7 +38,7 @@ export async function rootsOf(window: WindowTarget) {
 }
 
 /** The row a command acts on: the one it names, else the selected one, else
- * the row of the active file. */
+ * the row of the captured tab's document, else the row of the active file. */
 export async function rowFor(ctx: CommandContext, selected: boolean): Promise<string | null> {
   const named = idArgument(ctx.arguments);
   if (named !== null) return named;
@@ -47,7 +47,7 @@ export async function rowFor(ctx: CommandContext, selected: boolean): Promise<st
     if (id !== null) return id;
   }
   const window = ctx.target.windowTarget;
-  const uri = await activeFile(window);
+  const uri = (await capturedUri(ctx)) ?? (await activeFile(window));
   const root = uri === null ? null : rootOf(await rootsOf(window), uri);
   const path = root === null || uri === null ? null : idPath(root, uri);
   return path === null ? null : path[path.length - 1]!;
