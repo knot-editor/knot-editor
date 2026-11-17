@@ -1188,6 +1188,22 @@ pub(super) fn completion_response_from_v8<'s>(
     }
 }
 
+/// Reads `{ result: text }` or `{ error: text }`, the provider-call callback's
+/// answer.
+pub(super) fn provider_call_response_from_v8<'s>(
+    scope: &mut v8::PinScope<'s, '_>,
+    value: v8::Local<'s, v8::Value>,
+) -> ProviderCallResponse {
+    let object = v8::Local::<v8::Object>::try_from(value)
+        .map_err(|_| "provider call result must be an object".to_owned())?;
+    if let Some(error) =
+        optional_text_property(scope, object, "error").map_err(|error| error.to_string())?
+    {
+        return Err(error);
+    }
+    string_property(scope, object, "result").map_err(|error| error.to_string())
+}
+
 pub const MAX_JS_INTEGER: u64 = 9_007_199_254_740_991;
 
 pub(super) fn exact_number<'s>(

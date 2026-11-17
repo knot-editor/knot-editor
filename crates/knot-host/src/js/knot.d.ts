@@ -1225,7 +1225,8 @@ declare module "knot" {
     | "InvalidRange" | "InvalidEditBatch" | "RevisionConflict" | "ContributionSetNotFound"
     | "ViewNotFound" | "ViewIdInUse" | "InvalidViewId"
     | "ViewRegistrationNotFound" | "ContentKindMismatch" | "TreeItemNotFound"
-    | "CompletionProviderNotFound" | "CommandNameInUse" | "CommandNotFound"
+    | "CompletionProviderNotFound" | "ProviderRegistrationNotFound" | "ProviderNotFound"
+    | "CommandNameInUse" | "CommandNotFound"
     | "InvalidUri" | "DocumentNotFound" | "OperationInProgress" | "PersistenceFailed" | "ResourceNotFound" | "ResourceWrongKind" | "ResourceAlreadyExists" | "InvalidUtf8" | "ProviderFailure" | "StorageUnavailable"
     | "CaptureNotFound" | "RecoveryUnavailable" | "SessionConflict"
     | "UnknownGrammar" | "InvalidQuery" | "LanguageRegistrationNotFound"
@@ -2267,6 +2268,41 @@ declare module "knot" {
      * @throws TypeError for an unknown location, a bad item, or a view or
      * context on a menu bar location. */
     add(location: MenuLocation, item: MenuItemOptions): Promise<Disposable>;
+  }>;
+
+  /** What a provider method receives beside its argument. */
+  export interface ProviderCallContext {
+    /** The window of the command the caller runs in; null outside a command
+     * with a window. */
+    readonly window: WindowTarget | null;
+  }
+  /** A provider implementation: methods taking one JSON argument and the call
+   * context, returning JSON or a promise of it. Inherited methods count. */
+  export type ProviderImplementation = object;
+  /** Calls one registration's methods in the provider's package. Each method
+   * takes at most one JSON argument and resolves with the provider's JSON
+   * result, as `T` declares them; a consumer declares `T` locally. A call
+   * rejects with HostError ProviderNotFound once the registration is disposed
+   * (look the provider up again), ProviderFailure with the provider's message
+   * when it throws, and UnsupportedOperation when the provider is the
+   * caller's own. */
+  export type ProviderHandle<T> = Readonly<T>;
+  /**
+   * Named providers: one package registers an object of methods under a name,
+   * others look it up and call it. Names are free strings the packages agree on.
+   * A package calls its own providers directly, never through a handle.
+   */
+  export const providers: Readonly<{
+    /**
+     * Register `implementation` under `name` until the returned handle or the
+     * owning lifecycle is disposed. Later registrations of a name win `get`.
+     * @throws TypeError for an empty name or an object without methods.
+     */
+    register(name: string, implementation: ProviderImplementation): Promise<Disposable>;
+    /** The most recent registration of `name`, or null. */
+    get<T = Record<string, (argument?: JsonValue) => Promise<JsonValue>>>(name: string): Promise<ProviderHandle<T> | null>;
+    /** Every registration of `name`, oldest first. */
+    all<T = Record<string, (argument?: JsonValue) => Promise<JsonValue>>>(name: string): Promise<readonly ProviderHandle<T>[]>;
   }>;
 
   /** Native completion request; use its explicit buffer without borrowing focus. */

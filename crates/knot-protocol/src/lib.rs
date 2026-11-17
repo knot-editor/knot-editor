@@ -146,6 +146,28 @@ impl CompletionProviderRegistrationId {
     }
 }
 
+/// An opaque identity for one extension-provider registration.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct ProviderRegistrationId(u64);
+
+impl ProviderRegistrationId {
+    pub const fn new(value: u64) -> Self {
+        Self(value)
+    }
+
+    pub const fn value(self) -> u64 {
+        self.0
+    }
+}
+
+/// A live provider registration as `providers.get` and `providers.all` report
+/// it: the identity a call addresses and the method names it offers.
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize)]
+pub struct ProviderInfo {
+    pub registration: ProviderRegistrationId,
+    pub methods: Vec<String>,
+}
+
 /// An opaque reference to an editor buffer.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, serde::Serialize)]
 pub struct BufferHandle(u64);
@@ -694,6 +716,19 @@ pub struct CompletionResponse {
     pub result: Result<Vec<CompletionResultItem>, CompletionProviderError>,
 }
 
+/// One call of a provider method from another package, with the caller's
+/// window and the JSON argument as text.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProviderCallRequest {
+    pub registration: ProviderRegistrationId,
+    pub method: String,
+    pub argument: String,
+    pub window: Option<String>,
+}
+
+/// A provider method's JSON result as text, or the message of what it threw.
+pub type ProviderCallResponse = Result<String, String>;
+
 /// Discoverable live product targets, separate from command invocation authority.
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -985,6 +1020,7 @@ pub struct WorkbenchObservation {
 pub enum ProviderIdentity {
     Tree(TreeProviderRegistrationId),
     Completion(CompletionProviderRegistrationId),
+    Call(ProviderRegistrationId),
 }
 
 /// Authority metadata shared by foreground capability implementations.

@@ -247,6 +247,11 @@ impl HostSuccess for crate::TreeProviderRegistrationId {
         encode_json(self)
     }
 }
+impl HostSuccess for crate::ProviderRegistrationId {
+    fn encode(self) -> Result<EncodedValue, DecodeError> {
+        encode_json(self)
+    }
+}
 impl HostSuccess for crate::CompletionProviderRegistrationId {
     fn encode(self) -> Result<EncodedValue, DecodeError> {
         encode_json(self)

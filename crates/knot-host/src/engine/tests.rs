@@ -560,7 +560,8 @@ fn native_dispatch_callbacks_are_not_available_to_extension_code() {
             "private-dispatch.js",
             r#"
         ["__knotNativeBindings", "__knotDispatchBufferChange", "__knotInvokeCommand",
-         "__knotCancelCommand", "__knotRequestTreeChildren", "__knotRequestCompletions"]
+         "__knotCancelCommand", "__knotRequestTreeChildren", "__knotRequestCompletions",
+         "__knotCallProvider"]
             .every((name) => !Object.hasOwn(globalThis, name))
     "#,
         )

@@ -29,6 +29,7 @@ import {
   addMenuItem,
   matchCandidates,
   registerCompletionProvider,
+  registerProvider, getProvider, listProviders,
   registerView,
   registerLanguage,
   associateLanguage,
@@ -86,6 +87,7 @@ export const workbench = Object.freeze({
 });
 
 export const menus = Object.freeze({ add: addMenuItem });
+export const providers = Object.freeze({ register: registerProvider, get: getProvider, all: listProviders });
 export const completion = Object.freeze({ match: matchCandidates });
 export const documents = Object.freeze({ list: listDocuments, get: getDocument, open: openDocument, createUntitled, present: presentDocument, setLanguage: setDocumentLanguage });
 export const languages = Object.freeze({ register: registerLanguage, associate: associateLanguage, get: getLanguage, list: listLanguages, grammars: listGrammars });

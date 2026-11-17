@@ -24,6 +24,7 @@ mod observation;
 mod operations;
 mod persistence;
 mod previews;
+mod providers;
 mod recovery;
 mod reopen;
 mod save_hygiene;

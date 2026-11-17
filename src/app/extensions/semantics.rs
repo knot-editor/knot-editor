@@ -1,4 +1,4 @@
-//! Foreground ownership for extension view and completion providers.
+//! Foreground ownership for extension view, completion, and named providers.
 //!
 //! A contributed view definition and its native instances share one
 //! lifecycle-owned registration. Definitions exist independently of windows;
@@ -8,7 +8,8 @@ use std::collections::{HashMap, HashSet};
 
 use gpui::{App, Entity, WeakEntity};
 
-use knot_protocol::CompletionProviderRegistrationId;
+use knot_model::providers::{ProviderRegistration, ProviderRegistry};
+use knot_protocol::{CompletionProviderRegistrationId, ProviderRegistrationId};
 use knot_protocol::{
     ExtensionId, ExtensionLifecycleId, RequestContext, TreeAction, TreeChildrenResponse,
     TreeProviderRegistrationId, ViewContentKind, ViewId,
@@ -47,6 +48,11 @@ pub(crate) enum SemanticError {
         message = "CompletionProviderNotFound"
     )]
     CompletionProviderNotFound,
+    #[error(
+        code = "ProviderRegistrationNotFound",
+        message = "ProviderRegistrationNotFound"
+    )]
+    ProviderRegistrationNotFound,
     #[error(code = "ContentKindMismatch", message = "ContentKindMismatch")]
     ContentKindMismatch,
 }
@@ -100,6 +106,7 @@ pub(crate) struct ExtensionSemanticBridge {
     next_tree_registration: u64,
     next_default_order: usize,
     completion_providers: CompletionProviderRegistry,
+    providers: ProviderRegistry,
 }
 
 impl ExtensionSemanticBridge {
@@ -112,6 +119,7 @@ impl ExtensionSemanticBridge {
             next_tree_registration: 1,
             next_default_order: 1_000,
             completion_providers: CompletionProviderRegistry::new(),
+            providers: ProviderRegistry::new(),
         }
     }
 
@@ -465,6 +473,41 @@ impl ExtensionSemanticBridge {
         }
         Ok(())
     }
+    pub(crate) fn register_provider(
+        &mut self,
+        request: &RequestContext,
+        name: String,
+        methods: Vec<String>,
+    ) -> Result<ProviderRegistrationId, SemanticError> {
+        self.validate(request)?;
+        Ok(self
+            .providers
+            .register(request.extension, request.lifecycle, name, methods))
+    }
+
+    pub(crate) fn unregister_provider(
+        &mut self,
+        request: &RequestContext,
+        registration: ProviderRegistrationId,
+    ) -> Result<(), SemanticError> {
+        self.validate(request)?;
+        if !self
+            .providers
+            .unregister(registration, request.extension, request.lifecycle)
+        {
+            return Err(SemanticError::ProviderRegistrationNotFound);
+        }
+        Ok(())
+    }
+
+    pub(crate) fn providers(&self) -> &ProviderRegistry {
+        &self.providers
+    }
+
+    pub(crate) fn provider(&self, id: ProviderRegistrationId) -> Option<&ProviderRegistration> {
+        self.providers.registration(id)
+    }
+
     fn owned_tree_kind(
         &self,
         registration: TreeProviderRegistrationId,
@@ -549,6 +592,7 @@ impl ExtensionSemanticBridge {
         }
         self.completion_providers
             .remove_lifecycle(extension, lifecycle);
+        self.providers.remove_lifecycle(extension, lifecycle);
         ids
     }
 }

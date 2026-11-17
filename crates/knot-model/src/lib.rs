@@ -31,6 +31,7 @@ pub mod matching;
 pub mod menus;
 pub mod observation;
 pub mod open;
+pub mod providers;
 pub mod reload;
 pub mod resource;
 pub mod settings;

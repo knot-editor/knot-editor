@@ -45,7 +45,7 @@ await commands.register("switch.go", async () => {
 });
 "#;
 
-struct Fixture {
+pub(super) struct Fixture {
     host: Entity<crate::app::extensions::host::ProductExtensionHost>,
     documents: Entity<DocumentCollection>,
     window: Entity<KnotWindow>,
@@ -55,6 +55,24 @@ struct Fixture {
 }
 
 fn start(packages: &[(&str, &[&str], &str)], cx: &mut TestAppContext) -> Fixture {
+    let fixture = start_allowing_failures(packages, cx);
+    let report = cx.read(|cx| crate::app::extensions::host::startup_report(cx).unwrap());
+    assert!(
+        report
+            .report
+            .entries
+            .iter()
+            .all(|entry| entry.result == LoadResult::Loaded)
+    );
+    fixture
+}
+
+/// Installs and starts `packages` (name, requirements, `main.js`) beside an
+/// empty product window, whatever their load results.
+pub(super) fn start_allowing_failures(
+    packages: &[(&str, &[&str], &str)],
+    cx: &mut TestAppContext,
+) -> Fixture {
     let extensions = tempfile::tempdir().unwrap();
     for (name, requires, source) in packages {
         install_extension(extensions.path(), name, requires, &[("main.js", source)]);
@@ -69,14 +87,7 @@ fn start(packages: &[(&str, &[&str], &str)], cx: &mut TestAppContext) -> Fixture
     host.update(cx, |host, cx| {
         host.start_installed_extensions(extensions.path().to_owned(), cx)
     });
-    let report = wait_for_extension_report(&host, cx);
-    assert!(
-        report
-            .report
-            .entries
-            .iter()
-            .all(|entry| entry.result == LoadResult::Loaded)
-    );
+    wait_for_extension_report(&host, cx);
     Fixture {
         host,
         documents,
@@ -88,22 +99,26 @@ fn start(packages: &[(&str, &[&str], &str)], cx: &mut TestAppContext) -> Fixture
 }
 
 impl Fixture {
-    fn rewrite(&self, name: &str, source: &str) {
+    pub(super) fn rewrite(&self, name: &str, source: &str) {
         std::fs::write(self.extensions.path().join(name).join("main.js"), source).unwrap();
     }
 
-    fn command(&self, name: &'static str, cx: &mut TestAppContext) -> crate::app::CommandExecution {
+    pub(super) fn command(
+        &self,
+        name: &'static str,
+        cx: &mut TestAppContext,
+    ) -> crate::app::CommandExecution {
         dispatch_product_command(&self.window, self.native_window, name, cx)
     }
 
-    fn clipboard_after(&self, name: &'static str, cx: &mut TestAppContext) -> String {
+    pub(super) fn clipboard_after(&self, name: &'static str, cx: &mut TestAppContext) -> String {
         let execution = self.command(name, cx);
         assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
         cx.read(|cx| cx.read_from_clipboard().unwrap().text().unwrap())
     }
 
     /// Restart one package through the native picker and return the prompt.
-    fn restart(&self, name: &str, cx: &mut TestAppContext) -> (String, String) {
+    pub(super) fn restart(&self, name: &str, cx: &mut TestAppContext) -> (String, String) {
         let execution = self.command(super::super::commands::RESTART_EXTENSION_COMMAND, cx);
         assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
         wait_for_api_condition(cx, |cx| self.window.read(cx).transient.is_some());
@@ -116,7 +131,7 @@ impl Fixture {
         prompt
     }
 
-    fn report_entry(&self, name: &str, cx: &TestAppContext) -> LoadResult {
+    pub(super) fn report_entry(&self, name: &str, cx: &TestAppContext) -> LoadResult {
         cx.read(|cx| {
             crate::app::extensions::host::startup_report(cx)
                 .unwrap()

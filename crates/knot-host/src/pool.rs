@@ -184,6 +184,15 @@ impl ExtensionPool {
         self.engine.request_completions(key, request)
     }
 
+    pub fn call_provider(
+        &self,
+        key: ExtensionKey,
+        request: knot_protocol::ProviderCallRequest,
+    ) -> Result<ExtensionProviderExecution<knot_protocol::ProviderCallResponse>, ExtensionPoolError>
+    {
+        self.engine.call_provider(key, request)
+    }
+
     pub fn cancel_command(
         &self,
         key: ExtensionKey,

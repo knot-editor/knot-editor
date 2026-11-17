@@ -382,6 +382,7 @@ const commandHandlers = new Map();
 const bufferChangeListeners = new Map();
 const treeProviders = new Map();
 const completionProviders = new Map();
+const providerImplementations = new Map();
 const activeCommandFrames = [];
 const snapshotTables = new WeakMap();
 const targetAuthorities = new WeakMap();
@@ -1452,6 +1453,73 @@ globalThis.__knotRequestCompletions = async (
     };
   } catch (error) {
     return { error: String(error?.stack ?? error) };
+  }
+};
+
+// The method names a provider offers: its own and inherited functions, not
+// Object's.
+function providerMethods(implementation) {
+  const names = new Set();
+  for (let object = implementation; object !== null && object !== Object.prototype;
+    object = Object.getPrototypeOf(object)) {
+    for (const name of Object.getOwnPropertyNames(object)) {
+      if (name !== "constructor" && typeof implementation[name] === "function") names.add(name);
+    }
+  }
+  return [...names].sort();
+}
+
+export async function registerProvider(name, implementation) {
+  if (typeof name !== "string" || name === "") {
+    throw new TypeError("providers.register requires a provider name");
+  }
+  if (implementation === null || typeof implementation !== "object") {
+    throw new TypeError("providers.register requires an object of methods");
+  }
+  const methods = providerMethods(implementation);
+  if (methods.length === 0) throw new TypeError("providers.register requires at least one method");
+  const registration = await request("registerProvider", name, methods);
+  providerImplementations.set(registration, implementation);
+  const owned = ownership(() => providerImplementations.delete(registration),
+    () => request("unregisterProvider", registration));
+  return Object.freeze({ dispose: () => owned.dispose() });
+}
+
+// A handle calls one registration's methods in the provider's package; each
+// call carries the window of the command it runs in.
+function providerHandle(info) {
+  const handle = {};
+  for (const method of info.methods) {
+    handle[method] = async (...arguments_) => {
+      if (arguments_.length > 1) throw new TypeError("provider methods take at most one argument");
+      const argument = JSON.stringify(validateJsonValue(arguments_[0] ?? null));
+      const window = activeCommandFrames.at(-1)?.capture?.window ?? null;
+      return JSON.parse(await request("callProvider", info.registration, method, argument, window));
+    };
+  }
+  return Object.freeze(handle);
+}
+
+export async function getProvider(name) {
+  if (typeof name !== "string") throw new TypeError("providers.get requires a provider name");
+  const info = await request("getProvider", name);
+  return info === null ? null : providerHandle(info);
+}
+
+export async function listProviders(name) {
+  if (typeof name !== "string") throw new TypeError("providers.all requires a provider name");
+  return Object.freeze((await request("listProviders", name)).map(providerHandle));
+}
+
+globalThis.__knotCallProvider = async (registration, method, argument, window) => {
+  const implementation = providerImplementations.get(registration);
+  if (!implementation) return { error: "the provider is disposed" };
+  try {
+    const context = Object.freeze({ window: window === null ? null : windowTarget({ window }) });
+    const result = await implementation[method](JSON.parse(argument), context);
+    return { result: JSON.stringify(validateJsonValue(result === undefined ? null : result)) };
+  } catch (error) {
+    return { error: String(error?.message ?? error) };
   }
 };
 

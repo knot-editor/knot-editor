@@ -40,10 +40,11 @@ use knot_protocol::{
     ByteRange, Command, CommandArgumentValue, CommandInvocation, CommandInvocationId,
     CommandOutcome, CompletionProviderError, CompletionRequest, CompletionResponse,
     CompletionResultItem, Decoration, DecorationStyle, EditorContribution, EditorEvent,
-    ExtensionId, HostRequest, HostResponse, KeybindingMutation, ProviderIdentity, RequestId,
-    SettingsSubscriptionId, SnapshotText, TextEdit, TextSnapshot, TreeAction, TreeChildrenRequest,
-    TreeChildrenResponse, TreeCollapsibleState, TreeItem, TreeItemKind, TreeProviderError,
-    WatchSubscriptionId, WorkbenchSubscriptionId,
+    ExtensionId, HostRequest, HostResponse, KeybindingMutation, ProviderCallRequest,
+    ProviderCallResponse, ProviderIdentity, RequestId, SettingsSubscriptionId, SnapshotText,
+    TextEdit, TextSnapshot, TreeAction, TreeChildrenRequest, TreeChildrenResponse,
+    TreeCollapsibleState, TreeItem, TreeItemKind, TreeProviderError, WatchSubscriptionId,
+    WorkbenchSubscriptionId,
 };
 
 static V8_INITIALIZATION: Once = Once::new();
@@ -265,6 +266,7 @@ enum RuntimeCallback {
     CancelCommand,
     Tree,
     Completion,
+    ProviderCall,
 }
 
 pub struct RuntimeLocalState {
@@ -399,6 +401,10 @@ enum ActiveCompletion {
         result: ResultSender<CompletionResponse>,
         completed: Arc<AtomicBool>,
     },
+    Call {
+        result: ResultSender<ProviderCallResponse>,
+        completed: Arc<AtomicBool>,
+    },
     Detached(&'static str),
 }
 
@@ -438,14 +444,20 @@ enum ProviderCall {
         cancelled: Arc<AtomicBool>,
         completed: Arc<AtomicBool>,
     },
+    Call {
+        request: ProviderCallRequest,
+        result: ResultSender<ProviderCallResponse>,
+        cancelled: Arc<AtomicBool>,
+        completed: Arc<AtomicBool>,
+    },
 }
 
 impl ProviderCall {
     fn cancelled(&self) -> bool {
         match self {
-            Self::Tree { cancelled, .. } | Self::Completion { cancelled, .. } => {
-                cancelled.load(Ordering::Acquire)
-            }
+            Self::Tree { cancelled, .. }
+            | Self::Completion { cancelled, .. }
+            | Self::Call { cancelled, .. } => cancelled.load(Ordering::Acquire),
         }
     }
 
@@ -458,6 +470,12 @@ impl ProviderCall {
                 let _ = result.send(Err(error));
             }
             Self::Completion {
+                result, completed, ..
+            } => {
+                completed.store(true, Ordering::Release);
+                let _ = result.send(Err(error));
+            }
+            Self::Call {
                 result, completed, ..
             } => {
                 completed.store(true, Ordering::Release);
@@ -488,6 +506,9 @@ impl ProviderCall {
                 result,
                 completed,
             },
+            Self::Call {
+                result, completed, ..
+            } => ActiveCompletion::Call { result, completed },
         }
     }
 }

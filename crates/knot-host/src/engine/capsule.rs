@@ -572,6 +572,7 @@ impl RuntimeCapsule {
                     && request.generation <= MAX_JS_INTEGER
                     && request.cursor_byte_offset as u64 <= MAX_JS_INTEGER
             }
+            ProviderCall::Call { request, .. } => request.registration.value() <= MAX_JS_INTEGER,
         };
         if !exact {
             call.complete_with_error(RuntimeError::fatal(
@@ -655,6 +656,31 @@ impl RuntimeCapsule {
                 })();
                 (source, value)
             }
+            ProviderCall::Call { request, .. } => {
+                let source = "knot:provider";
+                let value = (|| {
+                    let function = self
+                        .local_state
+                        .callback(try_catch, RuntimeCallback::ProviderCall)?;
+                    let method = v8::String::new(try_catch, &request.method)?;
+                    let argument = v8::String::new(try_catch, &request.argument)?;
+                    let window = request.window.as_ref().map_or_else(
+                        || Some(v8::null(try_catch).into()),
+                        |window| v8::String::new(try_catch, window).map(Into::into),
+                    )?;
+                    function.call(
+                        try_catch,
+                        v8::undefined(try_catch).into(),
+                        &[
+                            v8::Number::new(try_catch, request.registration.value() as f64).into(),
+                            method.into(),
+                            argument.into(),
+                            window,
+                        ],
+                    )
+                })();
+                (source, value)
+            }
         };
         let Some(value) = evaluated else {
             let error = self.execution_error(try_catch, source);
@@ -718,6 +744,10 @@ impl RuntimeCapsule {
             ActiveCompletion::Completion {
                 result, completed, ..
             } => {
+                completed.store(true, Ordering::Release);
+                let _ = result.send(Err(error));
+            }
+            ActiveCompletion::Call { result, completed } => {
                 completed.store(true, Ordering::Release);
                 let _ = result.send(Err(error));
             }
@@ -1161,6 +1191,14 @@ impl RuntimeCapsule {
                         completed.store(true, Ordering::Release);
                         let _ = result.send(Ok(response));
                     }
+                    ActiveCompletion::Call { result, completed } => {
+                        let response = match rejection {
+                            None => provider_call_response_from_v8(scope, value),
+                            Some(error) => Err(error.to_string()),
+                        };
+                        completed.store(true, Ordering::Release);
+                        let _ = result.send(Ok(response));
+                    }
                     ActiveCompletion::Detached(label) => {
                         if let Some(error) = rejection {
                             self.report_failure(label, &error);
@@ -1228,6 +1266,10 @@ impl RuntimeCapsule {
                                 message: error.to_string(),
                             }),
                         }));
+                    }
+                    ActiveCompletion::Call { result, completed } => {
+                        completed.store(true, Ordering::Release);
+                        let _ = result.send(Ok(Err(error.to_string())));
                     }
                     ActiveCompletion::Detached(label) => {
                         self.report_failure(label, &error);
@@ -1410,6 +1452,10 @@ impl RuntimeCapsule {
                 ActiveCompletion::Completion {
                     result, completed, ..
                 } => {
+                    completed.store(true, Ordering::Release);
+                    let _ = result.send(Err(error));
+                }
+                ActiveCompletion::Call { result, completed } => {
                     completed.store(true, Ordering::Release);
                     let _ = result.send(Err(error));
                 }
