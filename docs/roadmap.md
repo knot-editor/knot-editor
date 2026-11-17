@@ -79,9 +79,9 @@ hold the analyses that support some items.
     await. The [scheduling report](reports/extension-task-scheduling.md) has
     the analysis and proposed checkpoints.
 
-- **D156 — Fewer host round trips per key**
+- **D156 — Fewer host round trips per key** 🚧
   - Depends on: none
-  - Description: Found by the headless package tests. A key bound to an
+  - Description: Planned in [d156-fewer-host-round-trips](plans/d156-fewer-host-round-trips.md). Found by the headless package tests. A key bound to an
     extension command costs several foreground requests, each a turn on an
     extension worker and a response back: a Vim motion reads the selection, a
     line, and the tab size, writes the caret, and looks up the focused editor's
