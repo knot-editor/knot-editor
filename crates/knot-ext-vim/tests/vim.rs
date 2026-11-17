@@ -496,6 +496,81 @@ fn the_last_search_and_the_prompt_histories_persist_across_a_package_restart(
     assert_eq!(test_editor.marked(cx), "a foo b ‸bar c foo");
 }
 
+/// The byte ranges the editor paints as search matches, in order.
+fn search_matches(test_editor: &TestEditor, cx: &mut TestAppContext) -> Vec<(usize, usize)> {
+    let mut ranges: Vec<_> = test_editor
+        .decorations(cx)
+        .into_iter()
+        .filter(|(_, _, key)| key == "editor.findMatch" || key == "editor.findMatchCurrent")
+        .map(|(start, end, _)| (start, end))
+        .collect();
+    ranges.sort();
+    ranges
+}
+
+#[gpui::test]
+fn a_search_highlights_every_match_until_noh_and_through_edits(cx: &mut TestAppContext) {
+    let product = start(cx);
+    let test_editor = product.windowed_editor("foo bar\nfoo\nbaz foo", cx);
+    assert!(search_matches(&test_editor, cx).is_empty());
+
+    test_editor.press("/foo<cr>", cx);
+    assert_eq!(
+        search_matches(&test_editor, cx),
+        [(0, 3), (8, 11), (16, 19)]
+    );
+
+    // An edit keeps them current.
+    test_editor.press("ggOfoo<esc>", cx);
+    assert_eq!(
+        search_matches(&test_editor, cx),
+        [(0, 3), (4, 7), (12, 15), (20, 23)]
+    );
+
+    // Another editor of the buffer shows them too.
+    let other = test_editor.split(cx);
+    assert_eq!(search_matches(&other, cx).len(), 4);
+
+    test_editor.press(":noh<cr>", cx);
+    assert!(search_matches(&test_editor, cx).is_empty());
+    assert!(search_matches(&other, cx).is_empty());
+    // An edit does not bring them back.
+    test_editor.press("ix<esc>", cx);
+    assert!(search_matches(&test_editor, cx).is_empty());
+
+    // The next search step shows them again.
+    test_editor.press("n", cx);
+    assert_eq!(search_matches(&test_editor, cx).len(), 4);
+}
+
+#[gpui::test]
+fn an_incremental_search_previews_the_match_and_escape_restores_the_view(cx: &mut TestAppContext) {
+    let product = start(cx);
+    let test_editor = open(&product, "one foo\ntwo\nthree foo", 0, cx);
+
+    test_editor.press_unsettled("/fo", cx);
+    wait_until(cx, |cx| {
+        search_matches(&test_editor, cx) == [(4, 6), (18, 20)] && test_editor.caret(cx) == 4
+    });
+    // Another letter narrows the matches, and a pattern the engine rejects
+    // shows none.
+    test_editor.press_unsettled("o", cx);
+    wait_until(cx, |cx| {
+        search_matches(&test_editor, cx) == [(4, 7), (18, 21)]
+    });
+    test_editor.press_unsettled("<bs><bs><bs>\\(", cx);
+    wait_until(cx, |cx| search_matches(&test_editor, cx).is_empty());
+
+    test_editor.press("<esc>", cx);
+    assert!(search_matches(&test_editor, cx).is_empty());
+    assert_eq!(test_editor.caret(cx), 0, "escape returns to where it began");
+
+    test_editor.press_unsettled("/fo<cr>", cx);
+    test_editor.settle(cx);
+    assert_eq!(test_editor.caret(cx), 4);
+    assert_eq!(search_matches(&test_editor, cx), [(4, 6), (18, 20)]);
+}
+
 #[gpui::test]
 fn the_clipboard_pastes_linewise_only_while_it_holds_the_yanked_line(cx: &mut TestAppContext) {
     let product = start(cx);

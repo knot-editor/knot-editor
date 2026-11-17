@@ -3,6 +3,11 @@ import { beforeEach, test } from "node:test";
 import * as host from "knot/testing";
 import { completeEx, directoryOf, fileCompletionTarget, parseEx, pathOfUri, resolvePath } from "../src/ex.js";
 
+test("noh hides the search highlights", () => {
+  for (const line of ["noh", "nohl", "nohlsearch", ":noh"]) assert.deepEqual(parseEx(line), { kind: "nohlsearch" });
+  assert.equal(parseEx("no").kind, "error");
+});
+
 test("commands take Vim's abbreviations and a bang", () => {
   for (const line of ["w", "wr", "write", ":w", "  w  "]) assert.deepEqual(parseEx(line), { kind: "write" });
   assert.deepEqual(parseEx("q"), { kind: "quit", force: false });
@@ -88,10 +93,10 @@ const values = async (line: string) => (await completeEx(line)).map((item) => it
 
 test("command names complete, in the order of the matcher", async () => {
   assert.deepEqual(await values("w"), ["write", "wq"]);
-  assert.deepEqual(await values("se"), ["set"]);
+  assert.deepEqual(await values("se"), ["set", "nohlsearch"]);
   assert.deepEqual(await values(":q"), [":quit", ":wq"]);
   assert.deepEqual(await values("zz"), []);
-  assert.equal((await values("")).length, 7);
+  assert.equal((await values("")).length, 8);
 });
 
 test("line numbers and other arguments get no items", async () => {

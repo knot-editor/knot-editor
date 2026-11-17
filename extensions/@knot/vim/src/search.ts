@@ -3,7 +3,7 @@
 // pattern as a regular expression. The last pattern is the `/` register; the
 // direction is shared by every editor.
 import { settings, workbench } from "knot";
-import type { ByteRange } from "knot";
+import type { ByteRange, EditorViewState } from "knot";
 import type { SearchMotion } from "./keys.js";
 import type { BufferLines } from "./lines.js";
 import type { Position } from "./motions.js";
@@ -61,9 +61,9 @@ export async function searchSettings(state: State) {
 }
 
 /** A search runs a pattern as the engine reads it, or fails with a message. */
-type Compiled = { readonly query: string; readonly caseSensitive: boolean } | { readonly error: string };
+export type Compiled = { readonly query: string; readonly caseSensitive: boolean } | { readonly error: string };
 
-async function compile(state: State, typed: string, smart: boolean): Promise<Compiled> {
+export async function compile(state: State, typed: string, smart: boolean): Promise<Compiled> {
   const { syntax, ignoreCase, smartCase } = await searchSettings(state);
   const translated = translate(typed, syntax);
   if (!translated.ok) return { error: translated.message };
@@ -74,7 +74,7 @@ async function compile(state: State, typed: string, smart: boolean): Promise<Com
 }
 
 /** The engine's message when `error` is an invalid pattern, else null. */
-function invalidPattern(error: unknown): string | null {
+export function invalidPattern(error: unknown): string | null {
   const host = error as { code?: string; message?: string; details?: { message?: string } };
   return host.code === "InvalidQuery" ? (host.details?.message ?? host.message ?? "Invalid pattern") : null;
 }
@@ -95,7 +95,7 @@ export async function searchMotion(
   switch (motion.search) {
     case "prompt": {
       forward = motion.forward;
-      const entered = await prompt(state, forward);
+      const entered = await prompt(state, lines, from, forward);
       if (entered === null) return null;
       if (entered === "") {
         const last = registers.get("/")?.text;
@@ -149,6 +149,7 @@ async function find(
     state.shared.saveRegisters();
     state.shared.search = { forward, smart };
   }
+  await state.shared.highlights.show();
   const compiled = await compile(state, typed, smart);
   if ("error" in compiled) return fail(state, compiled.error);
   const options = { regex: true, caseSensitive: compiled.caseSensitive } as const;
@@ -231,15 +232,73 @@ function fail(state: State, message: string): null {
   return null;
 }
 
-/** Asks for a pattern; null when dismissed, else the text, which is empty to
- * search for the last pattern again. */
-async function prompt(state: State, forward: boolean): Promise<string | null> {
+/** Asks for a pattern, highlighting its matches and showing the first from
+ * `from` as it is typed; null when dismissed, else the text, which is empty
+ * to search for the last pattern again. The editor's view is as it was
+ * afterwards. */
+async function prompt(state: State, lines: BufferLines, from: Position, forward: boolean): Promise<string | null> {
+  const view = await state.handle.viewState();
   const input = await workbench.showInput({
     title: forward ? "Search Forward" : "Search Backward",
     prompt: forward ? "/" : "?",
     history: state.shared.registers.entries("search"),
+    onChange: (text) => preview(state, lines, from, forward, text, view),
   });
-  return input.kind === "dismissed" ? null : input.value;
+  await state.handle.restoreViewState(view);
+  if (!state.mode.startsWith("visual")) state.caret = (await state.handle.selection()).caret;
+  if (input.kind === "dismissed") {
+    await state.shared.highlights.refresh(state);
+    return null;
+  }
+  return input.value;
+}
+
+/** Highlights the matches of the pattern typed so far and moves the caret to
+ * the first one from `from`, or back to the view it started from when there
+ * is none. Returns the message of an invalid pattern. A visual selection
+ * keeps its end. */
+async function preview(
+  state: State,
+  lines: BufferLines,
+  from: Position,
+  forward: boolean,
+  text: string,
+  view: EditorViewState,
+): Promise<string | null> {
+  const { highlights } = state.shared;
+  if (text === "") {
+    await state.handle.restoreViewState(view);
+    await highlights.refresh(state);
+    return null;
+  }
+  const compiled = await compile(state, text, true);
+  if ("error" in compiled) {
+    await highlights.draw(state, null, null);
+    return compiled.error;
+  }
+  const options = { regex: true, caseSensitive: compiled.caseSensitive } as const;
+  let match: Match | null;
+  try {
+    match = forward
+      ? await matchAfter(state, lines, compiled.query, options, from)
+      : await matchBefore(state, lines, compiled.query, options, from);
+  } catch (error) {
+    const message = invalidPattern(error);
+    if (message === null) throw error;
+    await highlights.draw(state, null, null);
+    return message;
+  }
+  const message = await highlights.draw(state, compiled, match?.range ?? null);
+  if (match === null) {
+    await state.handle.restoreViewState(view);
+  } else if (!state.mode.startsWith("visual")) {
+    state.caret = match.range.startByteOffset;
+    await state.handle.setSelection(
+      { anchor: state.caret, caret: state.caret },
+      { reveal: "nearest" },
+    );
+  }
+  return message;
 }
 
 /** The word `*` and `#` search for: the keyword at the caret or the next one

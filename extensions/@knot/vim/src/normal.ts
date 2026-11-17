@@ -13,6 +13,7 @@ import {
   wordBackward, wordEnd, wordEndBackward, wordForward,
 } from "./motions.js";
 import { type Region, textObject } from "./objects.js";
+import type { Highlights } from "./highlight.js";
 import { searchMotion } from "./search.js";
 import type { Register, Registers } from "./registers.js";
 import {
@@ -36,6 +37,8 @@ export type Shared = {
   /** The direction of the last search, which `n` follows and `N` reverses,
    * and whether smartcase applied to it. Its pattern is the `/` register. */
   search: { readonly forward: boolean; readonly smart: boolean };
+  /** The search highlights of every followed editor. */
+  readonly highlights: Highlights;
   /** Persists the registers after they change. */
   saveRegisters(): void;
   /** Buffer marks `a`–`z`, by document. */

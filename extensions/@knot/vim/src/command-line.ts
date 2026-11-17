@@ -103,6 +103,9 @@ async function runEx(state: State, command: ExCommand): Promise<string | null> {
       return edit(state, command.path);
     case "set":
       return set(state, command.arguments);
+    case "nohlsearch":
+      await state.shared.highlights.hide();
+      return null;
   }
 }
 

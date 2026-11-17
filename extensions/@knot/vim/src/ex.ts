@@ -21,6 +21,8 @@ export type ExCommand =
   /** `:<line>`, 1-based, or null for `:$`. */
   | { readonly kind: "line"; readonly line: number | null }
   | { readonly kind: "set"; readonly arguments: readonly SetArgument[] }
+  /** `:noh`, which hides the search highlights until the next search. */
+  | { readonly kind: "nohlsearch" }
   /** An empty line, which does nothing. */
   | { readonly kind: "none" }
   | { readonly kind: "error"; readonly message: string };
@@ -28,6 +30,7 @@ export type ExCommand =
 /** Command names, each with the shortest abbreviation Vim accepts. */
 const NAMES: readonly (readonly [string, number])[] = [
   ["write", 1], ["quit", 1], ["wq", 2], ["xit", 1], ["exit", 3], ["edit", 1], ["set", 2],
+  ["nohlsearch", 3],
 ];
 
 const BOOLEANS: Readonly<Record<string, BooleanOption>> = {
@@ -64,6 +67,7 @@ export function parseEx(text: string): ExCommand {
   if (argument !== "") return error(`E488: Trailing characters: ${argument}`);
   switch (name) {
     case "write": return { kind: "write" };
+    case "nohlsearch": return { kind: "nohlsearch" };
     case "quit": return { kind: "quit", force };
     case "wq": return { kind: "write-quit", ifChanged: false };
     default: return { kind: "write-quit", ifChanged: true };

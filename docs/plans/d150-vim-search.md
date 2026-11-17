@@ -131,7 +131,8 @@ Drafts for the `Release-note:` trailers (see
 shipped. Checkpoint 1 and 2 add no user-visible behavior beyond what these
 cover; checkpoint 3 carried the Find history note.
 
-- Release-note: Vim mode can search with `/`, `?`, `n`, `N`, `*` and `#`, with live match highlighting that stays until `:noh`.
+- Release-note: Vim mode can search with `/`, `?`, `n`, `N`, `*` and `#`, including after operators and in visual mode.
+- Release-note: Vim mode highlights search matches as you type and until `:noh`.
 - Release-note: Vim mode supports `:s` and `:%s` substitution with ranges and flags, as a single undo step.
 - Release-note: The Vim `/`, `?` and `:` prompts list earlier entries.
 
@@ -176,15 +177,16 @@ the word's start. A key typed in the same instant as a prompt's Enter is
 dropped when the command then enters insert mode (`c/foo<cr>x`), so the case
 for `c/` asserts the mode instead.
 
-### 5. Highlights and incremental search
+### 5. Highlights and incremental search (awaiting review)
 
 Deliverables:
 
-- Highlights in every followed editor after a search, kept current through
+- ✅ Highlights in every followed editor after a search, kept current through
   edits, hidden by `:noh` and shown again by the next search, `n` or `N`.
-- Incremental highlights and caret preview in the prompt; Escape restores the
-  view; invalid patterns show their message.
-- Product tests in `crates/knot-ext-vim/tests/vim.rs` reading the editor's
+- ✅ Incremental highlights and caret preview in the prompt; Escape restores the
+  view; invalid patterns show their message. A visual selection keeps its end
+  while typing, so only the highlights preview there.
+- ✅ Product tests in `crates/knot-ext-vim/tests/vim.rs` reading the editor's
   decorations, since the case format checks only text and caret.
 
 Implementation context: refresh loop and decoration calls mirror

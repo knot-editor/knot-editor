@@ -7,6 +7,7 @@
 import { commands, documents, keymaps, settings, storage, windows, workbench } from "knot";
 import type { CommandContext, DocumentId, EditorHandle, JsonValue, StatusItem, ViewTarget, WindowTarget } from "knot";
 import { commandLine } from "./command-line.js";
+import { Highlights } from "./highlight.js";
 import { JumpList } from "./jumps.js";
 import { EMPTY, feed, type Pending, pendingText, type WindowAction } from "./keys.js";
 import { BufferLines } from "./lines.js";
@@ -91,6 +92,7 @@ export async function start() {
     registers,
     lastFind: null,
     search: { forward: true, smart: true },
+    highlights: new Highlights(),
     saveRegisters() {
       const value = registers.toJson();
       saving = saving.then(() => storage.write(REGISTERS, value)).catch(() => {});
@@ -124,6 +126,7 @@ export async function start() {
   // cases.
   await commands.register("vim.reset", async () => {
     await vim.followAfresh();
+    await shared.highlights.hide();
     registers.clear();
     shared.lastFind = null;
     shared.search = { forward: true, smart: true };
@@ -252,8 +255,10 @@ class Vim {
       jumps: new JumpList(), context: null, scroll: null, foldsOff: null,
     };
     this.states.set(target, state);
+    await this.shared.highlights.follow(state);
     handle.onDidClose(() => {
       this.states.delete(target);
+      this.shared.highlights.unfollow(state);
       disposeMarks(state);
     });
     await handle.onDidChangeSelection(async () => {
@@ -269,6 +274,8 @@ class Vim {
 
   private async detach(state: Followed) {
     this.states.delete(state.target);
+    this.shared.highlights.unfollow(state);
+    await this.shared.highlights.draw(state, null, null);
     await state.group?.dispose();
     disposeMarks(state);
     await state.handle.setKeyContext(NORMAL, false);
