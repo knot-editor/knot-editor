@@ -1,6 +1,6 @@
 # D150: Vim search and substitution
 
-Status: 🚧 in progress (checkpoints 1–3 done, 4 awaiting review). Roadmap item [D150](../roadmap.md).
+Status: 🚧 in progress (checkpoints 1–4 done). Roadmap item [D150](../roadmap.md).
 
 ## Goal
 
@@ -167,39 +167,14 @@ entry, as Find does with its last query, recalls from that entry instead of
 filtering by it
 ([extension guide](../extension-api.md)).
 
-### 4. Search motions, with prompt history ✅ (awaiting review)
+### 4. Search motions, with prompt history ✅
 
-Implemented: `pattern.ts` (translation, smartcase, replacement translation, `wordPattern`),
-`search.ts` (settings, prompt, motions), the `/` register and the `/` and `:`
-histories persisted with the registers, and `test/cases/search.jsonc`. Not
-implemented by design: highlights (checkpoint 5). A key typed in the same
-instant as a prompt's Enter is dropped when the command then enters insert
-mode (`c/foo<cr>x`), as for any command that awaits a prompt.
-
-Deliverables:
-
-- `pattern.ts`: Vim-to-Rust translation of patterns and replacements and the
-  smartcase decision, with unit tests over each atom and the unsupported ones.
-- `vim.regex`, `vim.ignoreCase` and `vim.smartCase`, and `:set ic`/`scs`.
-- `/`, `?`, `n`, `N`, `*`, `#`, `g*`, `g#` with counts, as jumps, operator
-  targets (exclusive charwise) and visual extensions; the `/` register; wrap
-  and miss messages. No highlights yet.
-- The search history for `/` and `?`, filled by submitted prompts and by
-  `*`/`#`, and the Ex history for `:`, both persisted with the registers.
-- Cases in a new `test/cases/search.jsonc`, through the real editor,
-  including recalling a search and an Ex line through Tab from the list.
-
-Implementation context: commands and motions in
-`extensions/@knot/vim/src/keys.ts` (parser), `normal.ts` (`run`, jumps via
-`JumpList`), `visual.ts`; the prompt mirrors `commandLine` in
-`command-line.ts`, passing the `history` option from checkpoint 2; settings
-declared by module augmentation as `vim.enabled` is in `extension.ts`; `:set`
-parsing in `ex.ts`; registers in `registers.ts`. Mirror
-`matchFrom`/`matchBefore` from `extensions/@knot/find/src/search.ts`. Case
-topics run from `crates/knot-ext-vim/tests/vim.rs`.
-
-Review gate: try search in the real app through `Try:` commands; `just check`
-clean.
+Done and approved: `pattern.ts` translates Vim patterns and replacements,
+`search.ts` holds the settings, prompt and motions, and the `/` register and
+the `/` and `:` histories persist with the registers. `*` and `#` start from
+the word's start. A key typed in the same instant as a prompt's Enter is
+dropped when the command then enters insert mode (`c/foo<cr>x`), so the case
+for `c/` asserts the mode instead.
 
 ### 5. Highlights and incremental search
 
