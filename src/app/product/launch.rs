@@ -1,6 +1,7 @@
 //! Application launch, windows, the launch gate, menus, and default keys.
 
 use super::*;
+use crate::app::menus::{ApplicationMenus, MenuEntry, MenuLocation, MenuScope};
 
 pub(super) fn product_filesystems() -> Arc<FileSystemProviderRegistry> {
     static FILESYSTEMS: OnceLock<Arc<FileSystemProviderRegistry>> = OnceLock::new();
@@ -683,16 +684,77 @@ pub(super) fn quit_with_last_window(cx: &mut App) {
 
 pub(super) fn install_menus(cx: &mut App) {
     cx.on_action(run_without_window);
-    cx.set_menus(product_menus());
+    set_menus(cx);
     // Menu key equivalents are read when the menus are set, so set them
-    // again whenever the keymap changes.
-    cx.observe_global::<crate::app::commands::keymaps::ApplicationKeymaps>(|cx| {
-        cx.set_menus(product_menus())
-    })
-    .detach();
+    // again whenever the keymap changes, and when a package adds or removes
+    // a menu item.
+    cx.observe_global::<crate::app::commands::keymaps::ApplicationKeymaps>(set_menus)
+        .detach();
+    cx.observe_global::<ApplicationMenus>(set_menus).detach();
 }
 
-fn product_menus() -> Vec<Menu> {
+fn set_menus(cx: &mut App) {
+    let menus = product_menus(cx);
+    cx.set_menus(menus);
+}
+
+/// The items packages placed at `location`, in menu order with their groups.
+fn contributions(
+    location: MenuLocation,
+    titles: &std::collections::HashMap<String, String>,
+    cx: &App,
+) -> Vec<(Option<String>, MenuEntry)> {
+    cx.try_global::<ApplicationMenus>()
+        .map(|menus| {
+            menus.0.entries(location, MenuScope::default(), |command| {
+                titles
+                    .get(command)
+                    .cloned()
+                    .unwrap_or_else(|| command.to_owned())
+            })
+        })
+        .unwrap_or_default()
+}
+
+/// A menu's native items in named groups, joined by `contributed` items of
+/// the same group name or followed by their own groups. Groups sort by name,
+/// ungrouped items last, with a separator between groups.
+fn merge_groups(
+    native: Vec<(&'static str, Vec<MenuItem>)>,
+    contributed: Vec<(Option<String>, MenuEntry)>,
+) -> Vec<MenuItem> {
+    let mut groups: Vec<(Option<String>, Vec<MenuItem>)> = native
+        .into_iter()
+        .map(|(name, items)| (Some(name.to_owned()), items))
+        .collect();
+    for (group, entry) in contributed {
+        let item = MenuItem::Action {
+            name: entry.title.into(),
+            action: Box::new(ContributedMenuCommand {
+                name: entry.command.into(),
+                arguments: entry.arguments,
+            }),
+            os_action: None,
+            checked: false,
+            disabled: false,
+        };
+        match groups.iter_mut().find(|(name, _)| *name == group) {
+            Some((_, items)) => items.push(item),
+            None => groups.push((group, vec![item])),
+        }
+    }
+    groups.sort_by_key(|(name, _)| (name.is_none(), name.clone()));
+    let mut items = Vec::new();
+    for (_, group) in groups {
+        if !items.is_empty() {
+            items.push(MenuItem::separator());
+        }
+        items.extend(group);
+    }
+    items
+}
+
+pub(super) fn product_menus(cx: &App) -> Vec<Menu> {
     fn item(title: &'static str, command: &str) -> MenuItem {
         MenuItem::Action {
             name: title.into(),
@@ -702,68 +764,120 @@ fn product_menus() -> Vec<Menu> {
             disabled: false,
         }
     }
-    let menu = |name: &'static str, items| Menu {
+    let titles = if cx.has_global::<ApplicationProductCommands>() {
+        KnotWindow::command_titles(cx)
+    } else {
+        Default::default()
+    };
+    let menu = |name: &'static str, native, location| Menu {
         name: name.into(),
-        items,
+        items: merge_groups(native, contributions(location, &titles, cx)),
         disabled: false,
     };
-    vec![
-        menu(
-            "Knot",
-            vec![
+    let go = menu("Go", Vec::new(), MenuLocation::MenubarGo);
+    let mut menus = vec![
+        Menu {
+            name: "Knot".into(),
+            items: vec![
                 item("Hide Knot", HIDE_COMMAND),
                 item("Hide Others", HIDE_OTHERS_COMMAND),
                 item("Show All", SHOW_ALL_COMMAND),
                 MenuItem::separator(),
                 item("Quit Knot", QUIT_COMMAND),
             ],
-        ),
+            disabled: false,
+        },
         menu(
             "File",
             vec![
-                item("New", NEW_COMMAND),
-                item("New Terminal", NEW_TERMINAL_COMMAND),
-                item("New Blank Window", NEW_WINDOW_COMMAND),
-                item("Open…", OPEN_COMMAND),
-                item("Add Folder to Workspace…", commands::ADD_FOLDER_COMMAND),
-                item("Save", SAVE_COMMAND),
-                item("Save As…", SAVE_AS_COMMAND),
-                item("Recover Unsaved Documents…", commands::RECOVER_COMMAND),
-                item("Close Tab", CLOSE_TAB_COMMAND),
-                item("Close Window", CLOSE_WINDOW_COMMAND),
+                (
+                    "1_new",
+                    vec![
+                        item("New", NEW_COMMAND),
+                        item("New Terminal", NEW_TERMINAL_COMMAND),
+                        item("New Blank Window", NEW_WINDOW_COMMAND),
+                    ],
+                ),
+                (
+                    "2_open",
+                    vec![
+                        item("Open…", OPEN_COMMAND),
+                        item("Add Folder to Workspace…", commands::ADD_FOLDER_COMMAND),
+                    ],
+                ),
+                (
+                    "3_save",
+                    vec![
+                        item("Save", SAVE_COMMAND),
+                        item("Save As…", SAVE_AS_COMMAND),
+                        item("Recover Unsaved Documents…", commands::RECOVER_COMMAND),
+                    ],
+                ),
+                (
+                    "4_close",
+                    vec![
+                        item("Close Tab", CLOSE_TAB_COMMAND),
+                        item("Close Window", CLOSE_WINDOW_COMMAND),
+                    ],
+                ),
             ],
+            MenuLocation::MenubarFile,
         ),
         menu(
             "Edit",
             vec![
-                item("Undo", UNDO_COMMAND),
-                item("Redo", REDO_COMMAND),
-                item("Cut", CUT_COMMAND),
-                item("Copy", COPY_COMMAND),
-                item("Paste", PASTE_COMMAND),
-                item("Select All", SELECT_ALL_COMMAND),
+                (
+                    "1_history",
+                    vec![item("Undo", UNDO_COMMAND), item("Redo", REDO_COMMAND)],
+                ),
+                (
+                    "2_clipboard",
+                    vec![
+                        item("Cut", CUT_COMMAND),
+                        item("Copy", COPY_COMMAND),
+                        item("Paste", PASTE_COMMAND),
+                    ],
+                ),
+                ("3_select", vec![item("Select All", SELECT_ALL_COMMAND)]),
             ],
+            MenuLocation::MenubarEdit,
         ),
         menu(
             "View",
             vec![
-                item("Split Right", SPLIT_HORIZONTAL_COMMAND),
-                item("Split Down", SPLIT_VERTICAL_COMMAND),
-                MenuItem::separator(),
-                item("Zoom In", ZOOM_IN_COMMAND),
-                item("Zoom Out", ZOOM_OUT_COMMAND),
-                item("Reset Zoom", RESET_ZOOM_COMMAND),
+                (
+                    "1_split",
+                    vec![
+                        item("Split Right", SPLIT_HORIZONTAL_COMMAND),
+                        item("Split Down", SPLIT_VERTICAL_COMMAND),
+                    ],
+                ),
+                (
+                    "2_zoom",
+                    vec![
+                        item("Zoom In", ZOOM_IN_COMMAND),
+                        item("Zoom Out", ZOOM_OUT_COMMAND),
+                        item("Reset Zoom", RESET_ZOOM_COMMAND),
+                    ],
+                ),
             ],
+            MenuLocation::MenubarView,
         ),
-        // AppKit adds the list of open windows to the menu named "Window".
-        menu(
-            "Window",
-            vec![
-                item("Minimize", MINIMIZE_WINDOW_COMMAND),
-                item("Zoom", ZOOM_WINDOW_COMMAND),
-            ],
-        ),
-    ]
+    ];
+    // Go has no native items, so it shows only once a package fills it.
+    if !go.items.is_empty() {
+        menus.push(go);
+    }
+    // AppKit adds the list of open windows to the menu named "Window".
+    menus.push(Menu {
+        name: "Window".into(),
+        items: vec![
+            item("Minimize", MINIMIZE_WINDOW_COMMAND),
+            item("Zoom", ZOOM_WINDOW_COMMAND),
+        ],
+        disabled: false,
+    });
+    menus
 }
 
 /// Run a windowless menu command that no window handled: on macOS the

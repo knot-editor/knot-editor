@@ -178,7 +178,14 @@ keyboard. Composition preedit is not queued, since the IME already shows it.
 
 Menus show each command's shown global single-keystroke binding through a
 binding to the menu action in a context no element declares, so it labels the
-menu without dispatching. The menus are set again whenever the keymap changes.
+menu without dispatching. The menus are set again whenever the keymap or the
+menu registry changes. The menu bar stays native, so it exists before
+extensions start; its items sit in named groups (`1_new`, `3_save`, ...), and
+`menubar.file`, `menubar.edit`, `menubar.view`, and `menubar.go` items join the
+native group of the same name or form groups of their own, ordered like context
+menus. Go has no native items and shows once a package fills it. A contributed
+item runs through `ContributedMenuCommand`, which carries its arguments and is
+handled only by a window, so it is disabled with no window open.
 On macOS the application outlives its last window, so Quit, New, New Blank
 Window, and Open… use a separate menu action that an application-level handler
 also takes: with no window open, Quit quits and the others open a window and

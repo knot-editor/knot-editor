@@ -68,6 +68,17 @@ impl KnotWindow {
         }
     }
 
+    /// Each command's title, for items that have none of their own.
+    pub(crate) fn command_titles(cx: &App) -> std::collections::HashMap<String, String> {
+        Self::command_dispatcher(cx)
+            .read(cx)
+            .catalog()
+            .borrow()
+            .definitions()
+            .map(|definition| (definition.name.to_string(), definition.title.clone()))
+            .collect()
+    }
+
     /// The groups of a menu at `location` for the surface `target` captured.
     pub(crate) fn menu_groups(
         location: MenuLocation,
@@ -79,13 +90,7 @@ impl KnotWindow {
         let Some(menus) = cx.try_global::<ApplicationMenus>() else {
             return Vec::new();
         };
-        let titles = Self::command_dispatcher(cx)
-            .read(cx)
-            .catalog()
-            .borrow()
-            .definitions()
-            .map(|definition| (definition.name.to_string(), definition.title.clone()))
-            .collect::<std::collections::HashMap<_, _>>();
+        let titles = Self::command_titles(cx);
         menus.0.groups(
             location,
             MenuScope {

@@ -18,6 +18,7 @@ mod icons;
 mod key_hold;
 mod keybindings;
 mod languages;
+mod menu_bar;
 mod navigation;
 mod observation;
 mod operations;

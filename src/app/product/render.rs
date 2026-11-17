@@ -865,6 +865,9 @@ impl Render for KnotWindow {
             .on_action(cx.listener(|this, source: &ProductCommandSource, _, cx| {
                 this.dispatch_source(source.command(), cx)
             }))
+            .on_action(cx.listener(|this, source: &ContributedMenuCommand, _, cx| {
+                this.dispatch_source(source.command(), cx)
+            }))
             .on_action(
                 cx.listener(|this, source: &ApplicationCommandSource, _, cx| {
                     this.dispatch_source(source.command(), cx)

@@ -182,6 +182,24 @@ impl MenuRegistry {
         scope: MenuScope<'_>,
         title: impl Fn(&str) -> String,
     ) -> Vec<Vec<MenuEntry>> {
+        let mut groups: Vec<(Option<String>, Vec<MenuEntry>)> = Vec::new();
+        for (group, entry) in self.entries(location, scope, title) {
+            match groups.last_mut() {
+                Some((last, entries)) if *last == group => entries.push(entry),
+                _ => groups.push((group, vec![entry])),
+            }
+        }
+        groups.into_iter().map(|(_, entries)| entries).collect()
+    }
+
+    /// The items of a menu at `location` for a surface in `scope`, each with
+    /// its group, in display order.
+    pub fn entries(
+        &self,
+        location: MenuLocation,
+        scope: MenuScope<'_>,
+        title: impl Fn(&str) -> String,
+    ) -> Vec<(Option<String>, MenuEntry)> {
         let mut items = self
             .registrations
             .iter()
@@ -202,19 +220,17 @@ impl MenuRegistry {
                 b_title,
             ))
         });
-        let mut groups: Vec<(Option<&String>, Vec<MenuEntry>)> = Vec::new();
-        for (item, label) in items {
-            let entry = MenuEntry {
-                title: label,
-                command: item.command.clone(),
-                arguments: item.arguments.clone(),
-            };
-            match groups.last_mut() {
-                Some((group, entries)) if *group == item.group.as_ref() => entries.push(entry),
-                _ => groups.push((item.group.as_ref(), vec![entry])),
-            }
-        }
-        groups.into_iter().map(|(_, entries)| entries).collect()
+        items
+            .into_iter()
+            .map(|(item, label)| {
+                let entry = MenuEntry {
+                    title: label,
+                    command: item.command.clone(),
+                    arguments: item.arguments.clone(),
+                };
+                (item.group.clone(), entry)
+            })
+            .collect()
     }
 }
 

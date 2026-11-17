@@ -135,20 +135,15 @@ Explorer View, and a platform-named file manager entry to editor tabs; they act
 on the clicked tab's document. Copy Path stays out of the editor's `content`
 menu.
 
-### 6. Menu-bar contributions ✳️ not started
+### 6. Menu-bar contributions 🔍 ready for review
 
-Contributed items join the native menu bar under `menubar.*`.
+Contributed items join the native menu bar under `menubar.*`. ✅ Native items
+sit in named groups that contributions join or follow, `ContributedMenuCommand`
+carries arguments and is window-only, the Go menu shows once filled, and the
+menus are set again when `ApplicationMenus` changes. ✅ A test covers merged
+groups, arguments reaching the command, and removal by disposal and lifecycle.
+✅ Updated the [menus](../architecture/commands.md#menus) section.
 
-- **Implementation context:** `product_menus` and `install_menus` in
-  `src/app/product/launch.rs`. Give the native items named groups, merge
-  registry items, and set the menus again when `ApplicationMenus` changes
-  (observe it as the keymap is observed). Menu items carry arguments through
-  `crate::app::commands::dispatch::menu_action`, which may need them. A
-  contributed item with no window open is disabled, like other window
-  commands.
-- **Validation:** tests of the menu list that `product_menus` builds,
-  covering merged groups, lifecycle removal, and arguments reaching the
-  command.
-- **Review gate:** manual check of a personal-config menu-bar item. Update
-  the [menus](../architecture/commands.md#menus) section and record the menu
-  design in `docs/decisions/` once validated.
+- **Review gate:** run `Try: Add Menu Bar Items` and check the File, View, and
+  new Go menus, that each item shows its message, and that `Try: Remove Menu
+  Bar Items` removes them. Then record the menu design in `docs/decisions/`.

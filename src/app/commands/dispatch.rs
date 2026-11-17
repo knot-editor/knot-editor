@@ -44,6 +44,25 @@ impl ApplicationCommandSource {
     }
 }
 
+/// A command a package placed in the menu bar, with the arguments it was
+/// placed with. Only a window handles it, so the item is disabled with no
+/// window open, like the other window commands.
+#[derive(Clone, PartialEq, Action)]
+#[action(namespace = knot, no_json)]
+pub(crate) struct ContributedMenuCommand {
+    pub(crate) name: SharedString,
+    pub(crate) arguments: CommandArgumentValue,
+}
+
+impl ContributedMenuCommand {
+    pub(crate) fn command(&self) -> Command {
+        Command {
+            name: self.name.as_ref().into(),
+            arguments: self.arguments.clone(),
+        }
+    }
+}
+
 /// The commands that run from the menu with no window open.
 pub(crate) const WINDOWLESS_COMMANDS: [&str; 7] = [
     QUIT_COMMAND,
