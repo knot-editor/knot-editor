@@ -103,6 +103,9 @@ and `icons.pack` when the user runs Select Icon Pack.
 | Key | Type | Default | Scope | Owner | Description |
 | --- | --- | --- | --- | --- | --- |
 | `vim.enabled` | boolean | `false` | Read with the editor's `document`, `language`, and `view: "editor"`, so scoped values turn Vim off for a language or view | `@knot/vim` | Edit with Vim's modes and keys. |
+| `vim.regex` | string | `"vim"` | Read with the editor's `document`, `language`, and `view: "editor"` | `@knot/vim` | The syntax of search patterns and replacements: `"vim"` or `"rust"`, as Find's regex mode reads them. |
+| `vim.ignoreCase` | boolean | `true` | Read with the editor's `document`, `language`, and `view: "editor"`; `:set ic` writes it for the document | `@knot/vim` | Ignore case when searching. |
+| `vim.smartCase` | boolean | `true` | Read with the editor's `document`, `language`, and `view: "editor"`; `:set scs` writes it for the document | `@knot/vim` | Search case-sensitively when the pattern has an uppercase letter, even while ignoring case. |
 | `wordHighlight.enabled` | boolean | `true` | Global | `@knot/word-highlight` | Highlight every whole-word occurrence of the word at the cursor. |
 | `selectionHighlight.enabled` | boolean | `true` | Global | `@knot/word-highlight` | Highlight the other occurrences of the selected text. |
 | `wordHighlight.delay` | integer | `75` | Global | `@knot/word-highlight` | Milliseconds the cursor rests before the highlights update. |

@@ -1,6 +1,6 @@
 # D150: Vim search and substitution
 
-Status: 🚧 in progress (checkpoints 1–3 done). Roadmap item [D150](../roadmap.md).
+Status: 🚧 in progress (checkpoints 1–3 done, 4 awaiting review). Roadmap item [D150](../roadmap.md).
 
 ## Goal
 
@@ -167,7 +167,14 @@ entry, as Find does with its last query, recalls from that entry instead of
 filtering by it
 ([extension guide](../extension-api.md)).
 
-### 4. Search motions, with prompt history
+### 4. Search motions, with prompt history ✅ (awaiting review)
+
+Implemented: `pattern.ts` (translation, smartcase, replacement translation, `wordPattern`),
+`search.ts` (settings, prompt, motions), the `/` register and the `/` and `:`
+histories persisted with the registers, and `test/cases/search.jsonc`. Not
+implemented by design: highlights (checkpoint 5). A key typed in the same
+instant as a prompt's Enter is dropped when the command then enters insert
+mode (`c/foo<cr>x`), as for any command that awaits a prompt.
 
 Deliverables:
 
