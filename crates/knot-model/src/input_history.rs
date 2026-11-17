@@ -63,6 +63,8 @@ impl Recall {
                 self.position = Some(found);
                 self.shown = history[found].clone();
             }
+            // The walk began at an entry, which the newest entry already shows.
+            None if history.contains(&typed) => return None,
             None => {
                 self.position = None;
                 self.shown = typed;
@@ -156,6 +158,7 @@ mod tests {
         assert_eq!(recall.previous(&history, "baz").as_deref(), Some("foo"));
         assert_eq!(recall.next(&history, "foo").as_deref(), Some("baz"));
         assert_eq!(recall.next(&history, "baz").as_deref(), Some("foo bar"));
+        assert_eq!(recall.next(&history, "foo bar"), None);
     }
 
     #[test]
