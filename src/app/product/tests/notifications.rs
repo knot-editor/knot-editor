@@ -258,3 +258,117 @@ fn disabling_popups_records_notices_without_showing_them(cx: &mut TestAppContext
     assert_eq!(shown(&window, cx), [id]);
     assert!(bounds(native_window, "notice-1", cx).is_some());
 }
+
+const EXTENSION_SOURCE: &str = r#"
+import { commands, workbench } from "knot";
+async function rejects(action, code) {
+  try { await action(); } catch (error) { if (error.code === code) return; throw error; }
+  throw new Error(`expected ${code}`);
+}
+let latest = [];
+const observation = await workbench.observe((event) => {
+  if (event.type === "notificationsChanged") latest = event.notifications;
+});
+await commands.register("notices.raise", async () => {
+  const first = await workbench.showNotice({ message: "saved" });
+  const second = await workbench.showNotice({
+    title: "Careful",
+    message: "check this",
+    severity: "error",
+    actions: [{ title: "Open Log", command: { name: "app.open-log" } }],
+    target: observation.snapshot.windows[0].target,
+  });
+  await rejects(() => workbench.showNotice({ message: "x", target: {} }), "InvalidTarget");
+  try { await workbench.showNotice({ message: "x", severity: "fatal" }); throw new Error("expected TypeError"); }
+  catch (error) { if (!(error instanceof TypeError)) throw error; }
+  await workbench.markNotificationsRead([first]);
+  const third = await workbench.showNotice({ message: "gone" });
+  await workbench.dismissNotification(third);
+  await workbench.writeClipboardText(JSON.stringify({ first, second }));
+});
+await commands.register("notices.clear", async () => workbench.clearNotifications());
+"#;
+
+#[gpui::test]
+fn extensions_raise_read_dismiss_and_clear_notices(cx: &mut TestAppContext) {
+    use knot_protocol::ExtensionKey;
+    let documents = install_globals(cx);
+    let host = cx.update(crate::app::extensions::host::install);
+    let key = ExtensionKey::new(ExtensionId::new(713), ExtensionLifecycleId::new(1));
+    let (window, native_window) = new_window(&documents, cx);
+    host.update(cx, |host, cx| {
+        let execution = host.load_test_source(key, EXTENSION_SOURCE).unwrap();
+        cx.spawn(async move |_, _| {
+            execution.await.unwrap();
+        })
+        .detach();
+    });
+    wait_for_api_condition(cx, |cx| {
+        cx.global::<ApplicationProductCommands>()
+            .0
+            .read(cx)
+            .catalog()
+            .borrow()
+            .resolve("notices.clear")
+            .is_ok()
+    });
+    let raised = dispatch_product_command(&window, native_window, "notices.raise", cx);
+    assert_eq!(wait_for_command(raised, cx), CommandOutcome::Completed);
+    let observed: serde_json::Value =
+        serde_json::from_str(&super::transient::clipboard(cx).expect("the command reported"))
+            .unwrap();
+
+    let (first, second) = (
+        observed["first"].as_u64().unwrap(),
+        observed["second"].as_u64().unwrap(),
+    );
+    cx.read(|cx| {
+        let store = &cx.global::<ApplicationNotifications>().0;
+        assert_eq!(store.notices().len(), 2);
+        let saved = store.get(first).unwrap();
+        assert!(saved.read && saved.auto_dismiss && saved.target.is_none());
+        assert_eq!(saved.source, "Knot");
+        let careful = store.get(second).unwrap();
+        assert_eq!(careful.severity, Severity::Error);
+        assert!(!careful.read && !careful.auto_dismiss);
+        assert_eq!(careful.title.as_deref(), Some("Careful"));
+        assert_eq!(careful.actions[0].command.name, "app.open-log");
+        assert!(careful.target.is_some());
+    });
+    // Observers see the whole history after each change.
+    cx.run_until_parked();
+    let events = host.update(cx, |host, _| host.take_test_application_events());
+    let history = events
+        .iter()
+        .rev()
+        .find_map(|event| match &event.change {
+            knot_protocol::ApplicationChange::NotificationsChanged { notifications } => {
+                Some(notifications.clone())
+            }
+            _ => None,
+        })
+        .expect("a notificationsChanged event");
+    assert_eq!(history.len(), 2);
+    assert!(history[0].read && !history[1].read);
+    assert_eq!(history[1].title.as_deref(), Some("Careful"));
+    assert_eq!(history[1].actions[0].command, "app.open-log");
+    assert_eq!(shown(&window, cx), [second]);
+
+    // Clearing empties the history; the next notice starts a new one.
+    let cleared = dispatch_product_command(&window, native_window, "notices.clear", cx);
+    assert_eq!(wait_for_command(cleared, cx), CommandOutcome::Completed);
+    cx.read(|cx| {
+        assert!(
+            cx.global::<ApplicationNotifications>()
+                .0
+                .notices()
+                .is_empty()
+        )
+    });
+    raise(spec("after", Severity::Info), cx);
+
+    // Unloading the package leaves the history alone.
+    host.update(cx, |host, cx| host.unload(key, cx).unwrap());
+    cx.run_until_parked();
+    cx.read(|cx| assert_eq!(cx.global::<ApplicationNotifications>().0.notices().len(), 1));
+}

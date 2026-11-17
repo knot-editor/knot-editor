@@ -195,24 +195,6 @@ fn input_and_native_prompts_settle_once(cx: &mut TestAppContext) {
         .unwrap();
     cx.simulate_prompt_answer("Cancel");
     assert_eq!(settle(&mut cancelled, cx), TransientOutcome::Dismissed);
-
-    let mut message = cx
-        .update_window(native_window, |_, _, cx| {
-            window.update(cx, |window, cx| {
-                window.begin_message(
-                    owner(None),
-                    PromptText {
-                        title: "Notice".into(),
-                        message: None,
-                    },
-                    cx,
-                )
-            })
-        })
-        .unwrap()
-        .unwrap();
-    cx.simulate_prompt_answer("OK");
-    assert_eq!(settle(&mut message, cx), TransientOutcome::Dismissed);
 }
 
 #[gpui::test]
@@ -378,7 +360,6 @@ async function rejects(action, code) {
 await rejects(() => workbench.showPicker({ title: "Pick", items: [] }), "ContextUnavailable");
 await rejects(() => workbench.showInput({ title: "Name" }), "ContextUnavailable");
 await rejects(() => workbench.showConfirmation({ title: "Sure?" }), "ContextUnavailable");
-await rejects(() => workbench.showMessage({ title: "Notice" }), "ContextUnavailable");
 await commands.register("transient.context-free-ok", () => {});
 "#;
     let _documents = install_globals(cx);
@@ -414,7 +395,7 @@ fn transient_picker(
     )
 }
 
-fn clipboard(cx: &mut TestAppContext) -> Option<String> {
+pub(super) fn clipboard(cx: &mut TestAppContext) -> Option<String> {
     cx.read(|cx| cx.read_from_clipboard().and_then(|item| item.text()))
 }
 

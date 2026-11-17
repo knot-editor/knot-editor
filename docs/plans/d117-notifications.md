@@ -1,6 +1,6 @@
 # D117: Non-modal notifications
 
-Status: 🚧 approved, checkpoint 1 done. Roadmap item [D117](../roadmap.md).
+Status: 🚧 approved, checkpoint 1 done, checkpoint 2 awaiting review. Roadmap item [D117](../roadmap.md).
 
 ## Outcome
 
@@ -131,7 +131,7 @@ the notice read everywhere. Still open: the "+N more" pill paints but opens
 nothing until checkpoint 3 wires it to the panel, and checkpoint 2 replaces the
 temporary Developer: Raise Sample Notices command with `Try:` commands.
 
-### 2. Extension API
+### 2. Extension API ✅ (awaiting review)
 
 Deliverables: `showNotice`, the `notifications` snapshot field and
 `notificationsChanged` event, mark-read, dismiss, and clear; removal of
@@ -144,6 +144,13 @@ Explorer and Projects tests updated for notices.
 
 Review gate: the user runs the `Try:` commands for each severity, actions,
 targets, and positions.
+
+Done: `showNotice` returns the notice ID; the snapshot's `notifications` and
+`notificationsChanged` (carrying the whole history) are derived by comparing
+snapshots; `showMessage` and its native prompt are gone. A notice without a
+`target` shows in every window, so Explorer reports now pop up everywhere
+rather than in the command's window. The personal `post-init.js` has the
+`Try: Notice ...`, `Try: Notices ...`, and `Try: Notifications ...` commands.
 
 Implementation context:
 - Handlers in `src/app/extensions/host/handlers.rs` next to `show_message`
