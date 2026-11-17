@@ -1,6 +1,6 @@
 # D150: Vim search and substitution
 
-Status: 🚧 in progress (checkpoint 1 awaiting review). Roadmap item [D150](../roadmap.md).
+Status: 🚧 in progress (checkpoint 1 done). Roadmap item [D150](../roadmap.md).
 
 ## Goal
 
@@ -143,26 +143,12 @@ cover.
 
 ## Checkpoints
 
-### 1. Native per-line matching and replacement case escapes ✅ (awaiting review)
+### 1. Native per-line matching and replacement case escapes ✅
 
-Deliverables:
-
-- ✅ `perLine` on find and replace, and `\u \U \l \L \e \E` in regex
-  replacement expansion, through `knot-model`, the host, and `knot.d.ts`.
-- ✅ Model tests for both: per-line with multi-line matches, ranges and limits;
-  case escapes over literal text, groups, Unicode, and unterminated `\U`. A
-  Find case for a case-escaped Replace All.
-- ✅ Text search docs and the extension guide updated.
-
-Implementation context: `crates/knot-model/src/buffer/find.rs` (matching and
-`replace_matches` expansion) and `crates/knot-model/src/buffer/tests.rs`;
-the find/replace handlers in `src/app/extensions/host/handlers.rs` and their
-protocol types in `crates/knot-protocol/src/`; `FindOptions` and
-`Buffer.replace` in `crates/knot-host/src/js/knot.d.ts` and
-`docs/schemas/knot.schema.json` if it lists them;
-[text search](../architecture/core-and-buffers.md#text-search).
-
-Review gate: API shape and per-line semantics accepted; `just check` clean.
+Done and approved: `perLine` on find and replace, and `\u \U \l \L \e \E` in
+regex replacements, are documented under
+[text search](../architecture/core-and-buffers.md#text-search) and in the
+[extension guide](../extension-api.md).
 
 ### 2. Input history infrastructure
 
