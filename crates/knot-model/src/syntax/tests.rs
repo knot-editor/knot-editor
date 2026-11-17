@@ -98,6 +98,8 @@ fn languages() -> LanguageResolver {
         ),
         ("html", compile("html", HTML_HIGHLIGHTS, HTML_INJECTIONS)),
         ("css", compile("css", CSS_HIGHLIGHTS, "")),
+        ("typescript", compile("typescript", "", "")),
+        ("python", compile("python", "", "")),
     ]
     .into_iter()
     .collect();
@@ -765,6 +767,70 @@ fn syntax_costs_on_large_rust_files() {
             percentile(&mut queries, 50),
             percentile(&mut queries, 99)
         );
+    }
+}
+
+/// Reparse costs after an Enter and a typed `}` on large files, which set the
+/// indent budget. Run with
+/// `cargo test --release -p knot-model indent_reparse_costs -- --ignored --nocapture`.
+#[test]
+#[ignore]
+fn indent_reparse_costs_on_large_files() {
+    const RUST: &str = "/// Documented.\nfn item(value: &str) -> Result<usize, String> {\n    \
+        let parsed = value.parse::<usize>().map_err(|e| e.to_string())?;\n    \
+        if parsed > 10 { return Ok(parsed * 2); }\n    Ok(parsed)\n}\n\n";
+    const TYPESCRIPT: &str = "export class Item {\n  private values: number[] = [];\n  \
+        add(value: number): void {\n    if (value > 10) {\n      this.values.push(value);\n    }\n  }\n  \
+        total(): number {\n    return this.values.reduce((a, b) => a + b, 0);\n  }\n}\n\n";
+    const PYTHON: &str = "class Item:\n    def add(self, value):\n        if value > 10:\n            \
+        self.values.append(value)\n        \n        return value\n\n    \
+        def total(self):\n        return sum(self.values)\n\n\n";
+    const MARKDOWN: &str = "## Section\n\nA paragraph with *emphasis* and `code`.\n\n```rust\n\
+        fn item(value: &str) -> usize {\n    if value.is_empty() { return 0; }\n    value.len()\n}\n```\n\n\
+        - a list item\n- another item\n\n";
+    // (root, unit, line of the unit to press Enter at the end of, line and text of
+    // the closing or branching token typed at the end of its line)
+    let cases: [(&str, &str, usize, usize, &str); 4] = [
+        ("rust", RUST, 3, 3, "}"),
+        ("typescript", TYPESCRIPT, 3, 4, "}"),
+        ("python", PYTHON, 2, 4, "else:"),
+        ("markdown", MARKDOWN, 6, 7, "}"),
+    ];
+    for (root, unit, enter_line, brace_line, closing) in cases {
+        let unit_lines = unit.lines().count();
+        for units in [1_000, 5_000] {
+            let source = unit.repeat(units);
+            let lines = source.lines().count();
+            let resolver = languages();
+            let language = resolver(root).unwrap();
+            let mut fixture = Fixture::parsed(&source, SyntaxState::new(language, resolver), root);
+            for (label, line, typed) in [
+                ("Enter", enter_line, "\n    "),
+                ("close", brace_line, closing),
+            ] {
+                let mut samples = Vec::new();
+                for sample in 0..200 {
+                    let unit_index = (sample * 37 + 11) % units;
+                    let next = fixture
+                        .buffer
+                        .line_start(unit_index * unit_lines + line + 1);
+                    let offset = next - 1;
+                    fixture.replace(offset..offset, typed);
+                    let started = Instant::now();
+                    fixture.reparse();
+                    samples.push(started.elapsed());
+                    fixture.replace(offset..offset + typed.len(), "");
+                    fixture.reparse();
+                }
+                samples.sort();
+                println!(
+                    "{root:10} {lines:6} lines {label:5} median {:?} p99 {:?} max {:?}",
+                    samples[samples.len() / 2],
+                    samples[samples.len() * 99 / 100],
+                    samples[samples.len() - 1]
+                );
+            }
+        }
     }
 }
 

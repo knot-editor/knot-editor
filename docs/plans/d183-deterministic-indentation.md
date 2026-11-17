@@ -1,6 +1,6 @@
 # D183: Deterministic indentation after Enter and closing tokens
 
-Status: 🚧 approved, not started. Roadmap item [D183](../roadmap.md).
+Status: 🚧 checkpoint 1 awaiting review. Roadmap item [D183](../roadmap.md).
 Builds on [syntax state](../architecture/core-and-buffers.md#syntax-state),
 [editor views](../architecture/editor-and-languages.md#editor-views), and the
 [indentation decision](../decisions/editing.md#indentation).
@@ -55,7 +55,7 @@ indentation.
 
 - None.
 
-## Checkpoint 1: benchmark and indent budget
+## Checkpoint 1: benchmark and indent budget ✅ (awaiting review)
 
 Deliverables:
 
@@ -69,6 +69,28 @@ Deliverables:
   `knot-model` constant beside `FOREGROUND_BUDGET`.
 
 Validation: the benchmark runs locally in release mode; `just check` passes.
+
+Results ✅ (`indent_reparse_costs_on_large_files` in `syntax/tests.rs`, release,
+200 positions per row, the edit reverted between samples; "close" is `}`, or
+`else:` typed on a whitespace line for Python):
+
+| Language | Lines | Enter median / p99 / max | Close median / p99 / max |
+| --- | --- | --- | --- |
+| Rust | 7k | 1.1 / 1.9 / 1.9 ms | 1.1 / 1.9 / 1.9 ms |
+| Rust | 35k | 7.6 / 9.5 / 9.9 ms | 7.4 / 9.5 / 12.6 ms |
+| TypeScript | 12k | 0.3 / 0.7 / 0.7 ms | 0.3 / 0.8 / 0.9 ms |
+| TypeScript | 60k | 2.6 / 4.0 / 4.3 ms | 2.7 / 4.4 / 5.3 ms |
+| Python | 11k | 0.8 / 1.3 / 1.3 ms | 10.0 / 18.7 / 19.0 ms |
+| Python | 55k | 4.8 / 13.3 / 14.3 ms | 60.3 / 99.5 / 100.1 ms |
+| Markdown | 14k | 6.4 / 8.0 / 28 ms | 6.4 / 13.3 / 14.3 ms |
+| Markdown | 70k | 39.4 / 48.7 / 147 ms | 39.6 / 49.1 / 50.3 ms |
+
+Findings: reparse time grows with file size for flat files (Rust, Markdown),
+not just edit locality. Indent budget chosen: `INDENT_BUDGET` = 8 ms, the cap.
+It covers Enter and `}` through roughly 30k Rust lines, TypeScript at any
+measured size, and Python Enter; Python `else:` (the dedent re-lexes much of
+the file) and the largest Markdown files exceed it and use the deferred
+fallback.
 
 Review gate: the user reviews the numbers and the chosen budget.
 
