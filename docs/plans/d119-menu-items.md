@@ -130,7 +130,7 @@ See [context menus](../architecture/commands.md#context-menus), the
 [editor views](../architecture/editor-and-languages.md#editor-views), and the
 [terminal notes](../architecture/workbench-and-lifecycle.md).
 
-### 5. Explorer items in the tab menu ✳️ not started
+### 5. Explorer items in the tab menu 🔍 ready for review
 
 The explorer adds Copy Path, Copy Relative Path, Reveal in Explorer, and
 Reveal in Finder to editor tabs, acting on the captured tab's document.
@@ -141,6 +141,10 @@ Reveal in Finder to editor tabs, acting on the captured tab's document.
   captured `ctx.editor`/`ctx.buffer` document instead. If the API cannot read
   the URI of a captured buffer, add that accessor (host handler and
   `knot.d.ts`).
+- **Status:** ✅ the explorer registers the four items for editor tabs, and
+  their commands read the captured tab's document (`capturedUri`). ✅ Tests
+  cover the menu contents, each item run from an unfocused tab, and
+  unavailable on an untitled document.
 - **Validation:** explorer package tests in
   `crates/knot-ext-workbench/tests/workbench/explorer.rs` run each item from
   an unfocused tab's menu, and an untitled document returns unavailable.
