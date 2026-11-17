@@ -1,6 +1,6 @@
 # D156 — Fewer host round trips per key
 
-Status: 🚧 checkpoint 4 done. Source: [roadmap](../roadmap.md) D156.
+Status: 🚧 checkpoint 5 awaiting review. Source: [roadmap](../roadmap.md) D156.
 
 ## Goal
 
@@ -105,7 +105,7 @@ highlight reads only before its first notification). The budget is `j` 18,
 `w` 14, `x` 15. See [extension host](../architecture/extension-host.md#editor-handle-notifications)
 and the [decision](../decisions/extension-host.md#editor-handles).
 
-### 5. Selection with nearby lines
+### 5. Selection with nearby lines ✅ (awaiting review)
 
 Deliverables: `selection({ lines })`, `onDidChangeSelection(listener,
 { lines })`, and `Buffer.lines(first, last)`; Vim's `BufferLines` seeds
@@ -118,6 +118,18 @@ suites; budget test; `just check`.
 
 Review gate: the final counts per key, and the line read shape is one an
 other modal package would use.
+
+**Done:** `Editor.selection({ lines })` returns `line` and `lines`
+(`{ line, startByteOffset, text }`, clamped to the buffer);
+`onDidChangeSelection(listener, { lines })` is served by the widest window any
+listener of the handle asked for; `Buffer.lines(first, last)` is strict
+(`InvalidRange` unless `first <= last < lineCount()`). `lineRange` stays: other
+packages use it. The logic is `BufferModel::lines_between` and `lines_around`.
+Vim's `motion` reads `selection({ lines: 1 })` and seeds `BufferLines`, which
+answers `position` from loaded lines; chrome and Vim's listener ask for
+`{ lines: 0 }`. Final budget: `j` 10 requests (was 21), `w` 8 (17), `x` 13 (16).
+`j` still reads `folds` twice and `w` reads `cellsBefore`; whether to cache
+`folds` stays deferred.
 
 **Implementation context:** `editor_selection` and `line_range` in
 `src/app/extensions/host/handlers.rs` show the editor and buffer read
