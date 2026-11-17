@@ -941,8 +941,8 @@ await editor.onDidEditBar(({ bar, fields }) => search(bar, fields.query));
 A field may carry `history`, the package's earlier entries for it, newest
 first, as of the call that opened the bar. Up replaces the focused field's text
 with the next older entry that starts with the text typed before recalling
-began, and Down steps back toward newer ones and finally to the typed text;
-each replacement is an edit that `onDidEditBar` reports. A field without
+began (when that text is itself an entry, from that entry on), and Down
+steps back toward newer ones and finally to the typed text; each replacement is an edit that `onDidEditBar` reports. A field without
 history leaves Up and Down to the text.
 
 Icons are names from `icons.define`. A click runs the command with the bar's

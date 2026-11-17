@@ -20,12 +20,16 @@ pub fn matching_entries(history: &[String], text: &str) -> Vec<(usize, Vec<Range
 
 /// Up and Down recall in one bar field: steps through the entries that start
 /// with the text typed before recalling began, and returns to that text
-/// past the newest entry.
+/// past the newest entry. Text that is itself an entry, such as the last
+/// query a field opens with, filters nothing and starts the walk at that
+/// entry.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Recall {
     /// The typed text recalled entries are filtered by, and the text the
     /// field returns to; set while recalling.
     typed: Option<String>,
+    /// The prefix recalled entries must start with.
+    prefix: String,
     /// The index in the history of the entry the field shows.
     position: Option<usize>,
     /// The text the last step put in the field.
@@ -36,10 +40,10 @@ impl Recall {
     /// The text for the field after Up, or `None` when no older entry
     /// matches. `text` is the field's current text.
     pub fn previous(&mut self, history: &[String], text: &str) -> Option<String> {
-        self.sync(text);
-        let typed = self.typed.as_deref().unwrap_or_default();
+        self.sync(history, text);
         let from = self.position.map_or(0, |position| position + 1);
-        let found = (from..history.len()).find(|&index| history[index].starts_with(typed))?;
+        let found =
+            (from..history.len()).find(|&index| history[index].starts_with(&self.prefix))?;
         self.position = Some(found);
         self.shown = history[found].clone();
         Some(self.shown.clone())
@@ -48,12 +52,12 @@ impl Recall {
     /// The text for the field after Down, or `None` when it is not
     /// recalling.
     pub fn next(&mut self, history: &[String], text: &str) -> Option<String> {
-        self.sync(text);
+        self.sync(history, text);
         let position = self.position?;
         let typed = self.typed.clone().unwrap_or_default();
         match (0..position)
             .rev()
-            .find(|&index| history[index].starts_with(&typed))
+            .find(|&index| history[index].starts_with(&self.prefix))
         {
             Some(found) => {
                 self.position = Some(found);
@@ -69,11 +73,16 @@ impl Recall {
 
     /// Start over when the field no longer shows what the last step put in
     /// it, because the user edited it.
-    fn sync(&mut self, text: &str) {
+    fn sync(&mut self, history: &[String], text: &str) {
         if self.typed.is_none() || text != self.shown {
             self.typed = Some(text.to_string());
-            self.position = None;
             self.shown = text.to_string();
+            self.position = history.iter().position(|entry| entry == text);
+            self.prefix = if self.position.is_some() {
+                String::new()
+            } else {
+                text.to_string()
+            };
         }
     }
 }
@@ -138,6 +147,15 @@ mod tests {
         recall.previous(&history, "");
         assert_eq!(recall.previous(&history, "ba").as_deref(), Some("baz"));
         assert_eq!(recall.next(&history, "baz").as_deref(), Some("ba"));
+    }
+
+    #[test]
+    fn text_that_is_an_entry_walks_from_that_entry() {
+        let history = history();
+        let mut recall = Recall::default();
+        assert_eq!(recall.previous(&history, "baz").as_deref(), Some("foo"));
+        assert_eq!(recall.next(&history, "foo").as_deref(), Some("baz"));
+        assert_eq!(recall.next(&history, "baz").as_deref(), Some("foo bar"));
     }
 
     #[test]
