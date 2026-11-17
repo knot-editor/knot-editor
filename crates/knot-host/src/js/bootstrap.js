@@ -245,6 +245,7 @@ function barValue(value) {
       return {
         id: string(field.id, "bar field id must be a string"),
         placeholder: string(placeholder, "bar field placeholder must be a string"),
+        history: historyEntries(field.history),
       };
     }),
     toggles: barList(value.toggles, "toggles").map((toggle) => {
@@ -278,6 +279,10 @@ function revision(options) {
 function arrayItems(items, convert) {
   if (!Array.isArray(items)) throw new TypeError("items must be an array");
   return Array.from(items, convert);
+}
+function historyEntries(value) {
+  if (value == null) return [];
+  return arrayItems(value, (entry) => string(entry, "history entries must be text"));
 }
 function optionalText(value) {
   return value == null ? null : string(value, "expected text or null");
@@ -984,15 +989,16 @@ export async function showInput(options) {
   const title = string(options.title, "input title must be text");
   const value = optionalText(options.value);
   const prompt = optionalText(options.prompt);
+  const history = historyEntries(options.history);
   const onChange = options.onChange;
-  if (onChange == null) return request("showInput", title, value, prompt, target);
+  if (onChange == null) return request("showInput", title, value, prompt, target, history);
   if (typeof onChange !== "function") {
     throw new TypeError("input onChange must be a function");
   }
   // Values are pulled inside this turn, as picker highlights are, and each
   // returned message and completions travel back with the next pull.
   let failure = null;
-  let update = await request("beginInput", title, value, prompt, target);
+  let update = await request("beginInput", title, value, prompt, target, history);
   while (update.kind === "changed") {
     let message = null;
     let items = [];

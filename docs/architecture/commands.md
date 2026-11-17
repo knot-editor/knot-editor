@@ -120,7 +120,8 @@ global bindings still apply. Commands a bar key runs capture the bar's editor
 tab, so `editor` and `buffer` are the bar's. Keys the keymap leaves go to the
 field's text input. Tab and Shift+Tab are native form keys with no command or
 binding: they move focus to the next or previous field across the editor's
-bars, top to bottom, wrapping, and never insert text.
+bars, top to bottom, wrapping, and never insert text. Up and Down in a field
+that has history recall its entries natively, before the text input sees them.
 
 ### Picker tabs
 

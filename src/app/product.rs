@@ -89,7 +89,8 @@ use super::{
     terminal::session::TerminalSession,
     terminal::view::TerminalView,
     transient::{
-        InputEvent, InputView, PromptText, TransientOutcome, TransientOwner, TransientSurface,
+        InputEvent, InputSpec, InputView, PromptText, TransientOutcome, TransientOwner,
+        TransientSurface,
     },
     workbench::{
         Area, CloseRequestOutcome, DockLocation, DocumentCloseDisposition, PaneId, SplitDirection,
@@ -1790,9 +1791,7 @@ impl KnotWindow {
     pub(crate) fn begin_input(
         &mut self,
         owner: TransientOwner,
-        title: String,
-        initial: String,
-        prompt: Option<String>,
+        spec: InputSpec,
         changes: Option<tokio::sync::watch::Sender<Option<String>>>,
         cx: &mut Context<Self>,
     ) -> Result<
@@ -1804,7 +1803,7 @@ impl KnotWindow {
     > {
         self.transient_slot_free()?;
         let restore_focus = self.focus;
-        let view = cx.new(|cx| InputView::new(title, initial, prompt, changes, cx));
+        let view = cx.new(|cx| InputView::new(spec, changes, cx));
         let weak = view.downgrade();
         let focus = view.read(cx).focus_handle(cx);
         let subscription = cx.subscribe(&view, |this: &mut Self, _view, event: &InputEvent, cx| {

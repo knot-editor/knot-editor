@@ -20,6 +20,21 @@ const SOURCE: &str = r#"
       await workbench.writeClipboardText(input.kind === "accepted" ? input.value : "dismissed");
     });
     keymaps.bind("f6", "hold.ask");
+    await commands.register("hold.recall", async () => {
+      const input = await workbench.showInput({
+        title: "Recall",
+        history: ["foo bar", "baz"],
+        onChange: () => ({ items: [{ label: "own", value: "own" }] }),
+      });
+      const highlighted = input.kind === "accepted" ? input.highlighted : "";
+      await workbench.writeClipboardText(input.kind === "accepted" ? `${input.value}|${highlighted}` : "dismissed");
+    });
+    keymaps.bind("f5", "hold.recall");
+    await commands.register("hold.bar", async ({ editor }) => {
+      await editor.openBar("recall", { fields: [{ id: "query", history: ["older", "old"] }] });
+      await editor.focusBarField("recall", "query");
+    });
+    keymaps.bind("f4", "hold.bar");
     keymaps.bind("f8", "hold.home");
     keymaps.bind("f7", "hold.enter");
     keymaps.bind("h", "hold.left", { view: "editor", context: "modal" });
@@ -255,6 +270,44 @@ fn keys_typed_ahead_of_an_input_reach_it(cx: &mut TestAppContext) {
         cx.read(|cx| cx.read_from_clipboard().unwrap().text().unwrap()),
         "ab"
     );
+}
+
+/// An input's history rows head its completion list, and choosing one with the
+/// completion keys fills the field.
+#[gpui::test]
+fn an_input_recalls_history_through_the_extension_api(cx: &mut TestAppContext) {
+    let fixture = fixture("", cx);
+    fixture.keys("f5 f", cx);
+    fixture.settle(cx);
+    fixture.keys("tab", cx);
+    fixture.settle(cx);
+    fixture.keys("enter", cx);
+    wait_for_api_condition(cx, |cx| cx.read_from_clipboard().is_some());
+    assert_eq!(
+        cx.read(|cx| cx.read_from_clipboard().unwrap().text().unwrap()),
+        "foo bar|null"
+    );
+}
+
+/// A bar field's history, validated by the host, answers Up and Down.
+#[gpui::test]
+fn a_bar_field_recalls_history_through_the_extension_api(cx: &mut TestAppContext) {
+    let fixture = fixture("", cx);
+    fixture.keys("f4", cx);
+    fixture.settle(cx);
+    fixture.keys("o up up", cx);
+    let text = cx.read(|cx| {
+        let editor = fixture.editor.read(cx).editor().clone();
+        let field = knot_model::editor::bars::BarFieldRef::new(KEY, "recall", "query");
+        editor
+            .read(cx)
+            .bar_input(&field)
+            .unwrap()
+            .read(cx)
+            .text()
+            .to_owned()
+    });
+    assert_eq!(text, "old");
 }
 
 /// Named keys and text held behind a text-bound command replay in the order

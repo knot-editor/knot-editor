@@ -337,6 +337,7 @@ fn a_window_without_a_native_window_types_into_the_focused_field(cx: &mut TestAp
             fields: vec![BarField {
                 id: "query".into(),
                 placeholder: String::new(),
+                history: Vec::new(),
             }],
             ..BarSpec::default()
         };
@@ -570,4 +571,62 @@ fn bar_fields_resolve_keys_against_the_bar_kind_and_cycle_with_tab(cx: &mut Test
         Some("global:text:editor".into()),
         "the goto bar's binding does not apply in the find bar"
     );
+}
+
+#[gpui::test]
+fn up_and_down_recall_a_bar_fields_history(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    cx.update(super::super::bind_product_keys);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let window = cx.update(|cx| {
+        let workbench = cx.new(|cx| Workbench::new_for_document(document, model.clone(), cx));
+        cx.new(|cx| KnotWindow::new(workbench, cx))
+    });
+    let editor = super::editor_api::active_editor(&window, cx);
+    let owner = ExtensionKey::new(ExtensionId::new(805), ExtensionLifecycleId::new(1));
+    let field = BarFieldRef::new(owner, "find", "query");
+    editor.update(cx, |editor, cx| {
+        let spec = BarSpec {
+            fields: vec![BarField {
+                id: "query".into(),
+                placeholder: String::new(),
+                history: ["foo bar", "baz", "foo"].map(String::from).to_vec(),
+            }],
+            ..BarSpec::default()
+        };
+        editor.open_bar(owner, "find", spec, cx);
+        assert!(editor.focus_bar_field(field.clone(), None, cx));
+    });
+    let press = |key: &str, cx: &mut TestAppContext| {
+        let keystroke = Keystroke::parse(key).unwrap();
+        window.update(cx, |window, cx| window.press_key(keystroke, cx));
+    };
+    let text = |cx: &mut TestAppContext| {
+        cx.read(|cx| {
+            editor
+                .read(cx)
+                .bar_input(&field)
+                .unwrap()
+                .read(cx)
+                .text()
+                .to_owned()
+        })
+    };
+
+    press("f", cx);
+    press("o", cx);
+    press("up", cx);
+    assert_eq!(text(cx), "foo bar");
+    press("up", cx);
+    assert_eq!(text(cx), "foo");
+    press("up", cx);
+    assert_eq!(text(cx), "foo");
+    press("down", cx);
+    assert_eq!(text(cx), "foo bar");
+    press("down", cx);
+    assert_eq!(text(cx), "fo");
+    // Down with nothing recalled leaves the text alone.
+    press("down", cx);
+    assert_eq!(text(cx), "fo");
 }

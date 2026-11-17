@@ -150,17 +150,21 @@ regex replacements, are documented under
 [text search](../architecture/core-and-buffers.md#text-search) and in the
 [extension guide](../extension-api.md).
 
-### 2. Input history infrastructure
+### 2. Input history infrastructure 🚧 (awaiting API review)
 
 Deliverables:
 
-- The `history` option on `showInput` and on bar fields, through the
-  protocol, host, `knot.d.ts` and schema; prompt history rows ahead of
-  `onChange` items, and Up/Down recall in bar fields.
-- Model tests for the prompt list composition and the bar-field recall
+- ✅ The `history` option on `showInput` and on bar fields, through the
+  protocol, host, `knot.d.ts` and schema (which does not describe either);
+  prompt history rows ahead of `onChange` items, and Up/Down recall in bar
+  fields. A prompt's `highlighted` counts only `onChange` items and is null
+  on a history row; a bar field's history is the snapshot passed when the
+  bar was opened.
+- ✅ Model tests for the prompt list composition and the bar-field recall
   (prefix filtering, restoring the typed text); a UI test for each surface's
-  keys.
-- The extension guide's transient-input and editor-bar sections.
+  keys, and one per surface through a real extension.
+- ✅ The extension guide's transient-input and editor-bar sections, and the
+  bar key routing in [commands](../architecture/commands.md#editor-bars).
 
 Implementation context: the input state and its completion list behind
 `workbench.showInput` (find it from the `showInput` handler in

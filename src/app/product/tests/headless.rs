@@ -2,7 +2,7 @@
 //! through its router, unclaimed keys to the surface with Knot-side focus,
 //! and text to that surface's input.
 use super::*;
-use crate::app::transient::{TransientOutcome, TransientOwner};
+use crate::app::transient::{InputSpec, TransientOutcome, TransientOwner};
 use knot_protocol::{ExtensionId, ExtensionLifecycleId, PickerItem};
 
 fn headless_window(
@@ -94,7 +94,7 @@ fn a_transient_picker_and_input_settle_from_keys(cx: &mut TestAppContext) {
 
     let (mut input, _) = window
         .update(cx, |window, cx| {
-            window.begin_input(owner(), "Name".into(), "ab".into(), None, None, cx)
+            window.begin_input(owner(), InputSpec::new("Name", "ab"), None, cx)
         })
         .unwrap();
     press_keys(&window, "backspace", cx);
@@ -108,7 +108,7 @@ fn a_transient_picker_and_input_settle_from_keys(cx: &mut TestAppContext) {
 
     let (mut input, _) = window
         .update(cx, |window, cx| {
-            window.begin_input(owner(), "Name".into(), String::new(), None, None, cx)
+            window.begin_input(owner(), InputSpec::new("Name", ""), None, cx)
         })
         .unwrap();
     press_keys(&window, "escape", cx);
@@ -117,7 +117,7 @@ fn a_transient_picker_and_input_settle_from_keys(cx: &mut TestAppContext) {
     // dismisses on an empty field.
     let (mut input, _) = window
         .update(cx, |window, cx| {
-            window.begin_input(owner(), "Ex".into(), "a".into(), Some(":".into()), None, cx)
+            window.begin_input(owner(), InputSpec::new("Ex", "a").prompt(":"), None, cx)
         })
         .unwrap();
     press_keys(&window, "backspace", cx);
@@ -133,14 +133,7 @@ fn a_transient_picker_and_input_settle_from_keys(cx: &mut TestAppContext) {
     );
     let (mut input, _) = window
         .update(cx, |window, cx| {
-            window.begin_input(
-                owner(),
-                "Ex".into(),
-                String::new(),
-                Some(":".into()),
-                None,
-                cx,
-            )
+            window.begin_input(owner(), InputSpec::new("Ex", "").prompt(":"), None, cx)
         })
         .unwrap();
     press_keys(&window, "backspace", cx);
@@ -148,7 +141,7 @@ fn a_transient_picker_and_input_settle_from_keys(cx: &mut TestAppContext) {
     // An input without a prompt keeps Backspace as a plain edit.
     let (mut input, _) = window
         .update(cx, |window, cx| {
-            window.begin_input(owner(), "Name".into(), String::new(), None, None, cx)
+            window.begin_input(owner(), InputSpec::new("Name", ""), None, cx)
         })
         .unwrap();
     press_keys(&window, "backspace", cx);

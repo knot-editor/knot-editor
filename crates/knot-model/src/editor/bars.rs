@@ -14,6 +14,8 @@ pub struct BarField {
     pub id: String,
     /// Shown while the field is empty.
     pub placeholder: String,
+    /// Earlier entries, newest first, that Up and Down recall into the field.
+    pub history: Vec<String>,
 }
 
 /// The command a click on a toggle or button runs.
@@ -255,6 +257,7 @@ mod tests {
                 .map(|id| BarField {
                     id: (*id).to_owned(),
                     placeholder: String::new(),
+                    history: Vec::new(),
                 })
                 .collect(),
             ..BarSpec::default()

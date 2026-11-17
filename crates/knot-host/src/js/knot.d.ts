@@ -1604,6 +1604,14 @@ declare module "knot" {
     readonly id: string;
     /** Shown while the field is empty. */
     readonly placeholder?: string;
+    /**
+     * Earlier entries, newest first. While the field has focus, Up replaces
+     * its text with the next older entry that starts with the text typed
+     * before recalling began, and Down steps back to newer ones, then to the
+     * typed text. The entries are those of the call that opened the bar;
+     * the extension owns, caps and persists them.
+     */
+    readonly history?: readonly string[];
   }
   /** A command a click on a bar's toggle or button runs, with the bar's
    * editor and buffer captured as the editor's own commands have them. */
@@ -2222,6 +2230,16 @@ declare module "knot" {
      * the input.
      */
     readonly prompt?: string;
+    /**
+     * Earlier entries, newest first. The entries matching the typed text, as
+     * `completion.match` matches, head the completion list in that order,
+     * before what `onChange` returns; an empty field lists the whole history.
+     * They are chosen with the completion keys, and Enter still submits the
+     * field's text. `highlighted` in the result counts only the items
+     * `onChange` returned, and is null while a history row is highlighted.
+     * The extension owns, caps and persists the entries.
+     */
+    readonly history?: readonly string[];
     /**
      * Called with the field's text, first with the initial value and then
      * whenever it changes. Calls are serial; while one runs, later changes

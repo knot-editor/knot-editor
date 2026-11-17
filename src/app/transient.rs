@@ -18,7 +18,8 @@ use knot_protocol::{CommandInvocationId, ExtensionId, ExtensionLifecycleId, Inpu
 use super::picker::{self, Picker, PickerEntry, PickerRowContent, picker_row};
 use super::text_input::{TextInput, TextInputEvent};
 use super::theme::{color, theme};
-use knot_model::matching::byte_ranges;
+use knot_model::input_history::matching_entries;
+use knot_model::matching::{byte_ranges, utf16_ranges};
 
 use super::tokens::list::PANEL_WIDTH;
 use super::{tokens, zoom};
@@ -69,6 +70,38 @@ pub(crate) enum InputEvent {
     Dismissed,
 }
 
+/// What an input shows before it is typed into.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct InputSpec {
+    pub(crate) title: String,
+    pub(crate) initial: String,
+    /// Fixed text before the field, outside its value.
+    pub(crate) prompt: Option<String>,
+    /// Earlier entries, newest first.
+    pub(crate) history: Vec<String>,
+}
+
+#[cfg(test)]
+impl InputSpec {
+    pub(crate) fn new(title: impl Into<String>, initial: impl Into<String>) -> Self {
+        Self {
+            title: title.into(),
+            initial: initial.into(),
+            ..Self::default()
+        }
+    }
+
+    pub(crate) fn prompt(mut self, prompt: impl Into<String>) -> Self {
+        self.prompt = Some(prompt.into());
+        self
+    }
+
+    pub(crate) fn history(mut self, history: Vec<String>) -> Self {
+        self.history = history;
+        self
+    }
+}
+
 pub(crate) struct InputView {
     title: SharedString,
     /// Fixed text before the field, outside its value; with one, Backspace
@@ -77,26 +110,44 @@ pub(crate) struct InputView {
     input: Entity<TextInput>,
     /// A muted line under the field, set by the interaction's owner.
     message: Option<SharedString>,
-    /// The completions under the field, in the caller's order.
+    /// Earlier entries, newest first, listed ahead of the caller's items.
+    history: Vec<String>,
+    /// What the caller's feedback last offered.
+    caller_items: Vec<InputCompletion>,
+    /// The completions under the field: the matching history rows, then the
+    /// caller's items in its order.
     items: Vec<InputCompletion>,
+    /// How many of `items` are history rows.
+    history_rows: usize,
     selected: usize,
     scroll: UniformListScrollHandle,
     /// The field text the caller's feedback last applied to.
     answered: Option<String>,
     _changes: Option<Subscription>,
+    _history: Option<Subscription>,
 }
 
 impl InputView {
     /// With `changes`, the field's value is published as it changes,
     /// starting with the initial one.
     pub(crate) fn new(
-        title: String,
-        initial: String,
-        prompt: Option<String>,
+        spec: InputSpec,
         changes: Option<tokio::sync::watch::Sender<Option<String>>>,
         cx: &mut Context<Self>,
     ) -> Self {
+        let InputSpec {
+            title,
+            initial,
+            prompt,
+            history,
+        } = spec;
         let input = cx.new(|cx| TextInput::new(initial.clone(), cx));
+        let has_history = !history.is_empty();
+        let history_subscription = has_history.then(|| {
+            cx.subscribe(&input, |this, _, _: &TextInputEvent, cx| {
+                this.compose_items(cx)
+            })
+        });
         let subscription = changes.map(|changes| {
             changes.send_replace(Some(initial));
             cx.subscribe(&input, move |_, input, _: &TextInputEvent, cx| {
@@ -110,17 +161,51 @@ impl InputView {
                 });
             })
         });
-        Self {
+        let mut view = Self {
             title: title.into(),
             prompt: prompt.map(Into::into),
             input,
             message: None,
+            history,
+            caller_items: Vec::new(),
             items: Vec::new(),
+            history_rows: 0,
             selected: 0,
             scroll: UniformListScrollHandle::new(),
             answered: None,
             _changes: subscription,
-        }
+            _history: history_subscription,
+        };
+        view.compose_items(cx);
+        view
+    }
+
+    /// List the history entries matching the field's text, then the caller's
+    /// items, highlighting the first row.
+    fn compose_items(&mut self, cx: &mut Context<Self>) {
+        let text = self.text(cx);
+        let mut items: Vec<InputCompletion> = matching_entries(&self.history, &text)
+            .into_iter()
+            .map(|(index, ranges)| {
+                let entry = self.history[index].clone();
+                InputCompletion {
+                    matches: Some(utf16_ranges(&entry, &ranges))
+                        .filter(|ranges| !ranges.is_empty()),
+                    label: entry.clone(),
+                    value: entry,
+                    description: None,
+                    hint: None,
+                    icon: None,
+                    description_matches: None,
+                }
+            })
+            .collect();
+        self.history_rows = items.len();
+        items.extend(self.caller_items.iter().cloned());
+        self.items = items;
+        self.selected = 0;
+        self.scroll.scroll_to_item(0, ScrollStrategy::Top);
+        cx.notify();
     }
 
     pub(crate) fn focus_handle(&self, cx: &App) -> FocusHandle {
@@ -141,10 +226,8 @@ impl InputView {
     ) {
         self.message = message.map(Into::into);
         self.answered = Some(self.text(cx));
-        self.items = items;
-        self.selected = 0;
-        self.scroll.scroll_to_item(0, ScrollStrategy::Top);
-        cx.notify();
+        self.caller_items = items;
+        self.compose_items(cx);
     }
 
     fn move_selection(&mut self, delta: isize, cx: &mut Context<Self>) {
@@ -234,9 +317,10 @@ impl InputView {
             "enter" => {
                 let value = self.input.read(cx).text().to_string();
                 // The list answers the text only once the caller has seen it.
-                let highlighted = (self.answered.as_deref() == Some(value.as_str())
-                    && self.selected < self.items.len())
-                .then_some(self.selected);
+                let highlighted = (self.answered.as_deref() == Some(value.as_str()))
+                    .then(|| self.selected.checked_sub(self.history_rows))
+                    .flatten()
+                    .filter(|&index| index < self.caller_items.len());
                 cx.emit(InputEvent::Accepted { value, highlighted });
             }
             _ => return false,

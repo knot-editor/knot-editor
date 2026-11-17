@@ -896,6 +896,20 @@ that are not pickers, and `order` takes a key function for items whose identity
 is not `id`. A list keeps the 50 most recent IDs, and `history.forget(name, id)`
 removes one (without `id`, the whole list).
 
+To recall earlier entries, pass `history`, the package's own list of earlier
+submissions, newest first; keeping, capping, and persisting it is the
+package's job. The entries that match the typed text, through the same matcher
+and in the list's order, head the completion list ahead of what `onChange`
+returns, and an empty field lists the whole history. They are chosen with the
+same keys as other rows, and Enter still submits the field's text. The
+result's `highlighted` counts only the rows `onChange` returned, and is null
+while a history row is highlighted.
+
+```js
+const found = await workbench.showInput({ prompt: "/", title: "Search", history: searches });
+if (found.kind === "accepted") searches = [found.value, ...searches.filter((s) => s !== found.value)];
+```
+
 Inputs are single-line and support the usual editing, clipboard, IME, and selection behavior. A `prompt` such as `":"` shows before the field, outside its value, and makes Backspace on an empty field dismiss the input, as a command line does. Confirmation
 and message use the native platform prompt.
 
@@ -923,6 +937,13 @@ await editor.openBar("find", {
 await editor.focusBarField("find", "query", { text: "foo" });
 await editor.onDidEditBar(({ bar, fields }) => search(bar, fields.query));
 ```
+
+A field may carry `history`, the package's earlier entries for it, newest
+first, as of the call that opened the bar. Up replaces the focused field's text
+with the next older entry that starts with the text typed before recalling
+began, and Down steps back toward newer ones and finally to the typed text;
+each replacement is an edit that `onDidEditBar` reports. A field without
+history leaves Up and Down to the text.
 
 Icons are names from `icons.define`. A click runs the command with the bar's
 editor captured; flip a toggle by opening the bar again with the new `active`.

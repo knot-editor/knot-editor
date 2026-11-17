@@ -2,7 +2,7 @@
 use super::operations::{empty_headless_window, empty_product_window};
 use super::*;
 use crate::app::extensions::host::handlers::TransientError;
-use crate::app::transient::{PromptText, TransientOutcome, TransientOwner};
+use crate::app::transient::{InputSpec, PromptText, TransientOutcome, TransientOwner};
 use knot_protocol::{CommandInvocationId, PickerItem};
 
 fn owner(invocation: Option<u64>) -> TransientOwner {
@@ -85,7 +85,7 @@ fn picker_filters_accepts_keyboard_selection_and_restores_focus(cx: &mut TestApp
         .update_window(native_window, |_, _, cx| {
             window.update(cx, |window, cx| {
                 window
-                    .begin_input(owner(None), "Name".into(), String::new(), None, None, cx)
+                    .begin_input(owner(None), InputSpec::new("Name", String::new()), None, cx)
                     .map(|(receiver, _)| receiver)
             })
         })
@@ -123,14 +123,7 @@ fn input_and_native_prompts_settle_once(cx: &mut TestAppContext) {
         .update_window(native_window, |_, _, cx| {
             window.update(cx, |window, cx| {
                 window
-                    .begin_input(
-                        owner(None),
-                        "Add path".into(),
-                        "seed".into(),
-                        None,
-                        None,
-                        cx,
-                    )
+                    .begin_input(owner(None), InputSpec::new("Add path", "seed"), None, cx)
                     .map(|(receiver, _)| receiver)
             })
         })
@@ -1293,4 +1286,52 @@ fn a_binding_in_the_picker_view_switches_tabs(cx: &mut TestAppContext) {
     wait_for_api_condition(cx, |cx| picker_labels(&picker, cx) == ["all"]);
     cx.simulate_keystrokes(native_window, "ctrl-j");
     wait_for_api_condition(cx, |cx| picker_labels(&picker, cx) == ["files"]);
+}
+
+#[gpui::test]
+fn an_input_lists_matching_history_ahead_of_its_own_items(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    let (window, native_window) = empty_product_window(&documents, cx);
+    let (mut receiver, view) = cx
+        .update_window(native_window, |_, _, cx| {
+            window.update(cx, |window, cx| {
+                window.begin_input(
+                    owner(None),
+                    InputSpec::new("Search", "").prompt("/").history(vec![
+                        "foo bar".into(),
+                        "baz".into(),
+                        "foo".into(),
+                    ]),
+                    None,
+                    cx,
+                )
+            })
+        })
+        .unwrap()
+        .unwrap();
+    let view = view.upgrade().unwrap();
+    let labels = |cx: &mut TestAppContext| {
+        cx.read(|cx| {
+            view.read(cx)
+                .items()
+                .iter()
+                .map(|item| item.label.clone())
+                .collect::<Vec<_>>()
+        })
+    };
+    // An empty field lists the whole history.
+    assert_eq!(labels(cx), ["foo bar", "baz", "foo"]);
+
+    cx.simulate_input(native_window, "fo");
+    assert_eq!(labels(cx), ["foo bar", "foo"]);
+    cx.simulate_keystrokes(native_window, "down tab");
+    assert_eq!(cx.read(|cx| view.read(cx).text(cx)), "foo");
+
+    // Enter submits the typed text, not the highlighted row.
+    cx.simulate_input(native_window, "x");
+    cx.simulate_keystrokes(native_window, "enter");
+    assert_eq!(
+        settle(&mut receiver, cx),
+        TransientOutcome::Input("foox".into(), None)
+    );
 }

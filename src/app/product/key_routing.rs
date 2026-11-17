@@ -191,6 +191,14 @@ impl KnotWindow {
                         });
                         return true;
                     }
+                    if matches!(keystroke.key.as_str(), "up" | "down")
+                        && !modifiers.modified()
+                        && editor.update(cx, |editor, cx| {
+                            editor.recall_bar_history(keystroke.key == "up", cx)
+                        })
+                    {
+                        return true;
+                    }
                     input.update(cx, |input, cx| input.key_down(keystroke, cx))
                 }
                 Some(CommandView::Extension(ExtensionView::Text(_))) | None => false,

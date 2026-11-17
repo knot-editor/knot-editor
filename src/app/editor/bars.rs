@@ -4,6 +4,7 @@
 //! [`EditorBars`](knot_model::editor::bars::EditorBars) state.
 
 use knot_model::editor::bars::{BarCommand, BarFieldRef, BarSpec, EditorBar};
+use knot_model::input_history::Recall;
 use knot_protocol::ExtensionKey;
 use knot_protocol::IconRef;
 
@@ -27,6 +28,8 @@ pub(super) struct BarInput {
     /// Changes the editor made itself and still to come back from the field,
     /// which are not edits to report.
     quiet: usize,
+    /// Where Up and Down stand in the field's history.
+    recall: Recall,
     _subscription: Subscription,
 }
 
@@ -86,6 +89,39 @@ impl Editor {
             self.state.bars_mut().focus_text();
             cx.notify();
         }
+    }
+
+    /// Replace the focused field's text with its previous (`older`) or next
+    /// history entry; false when the field has no history to step through.
+    pub(crate) fn recall_bar_history(&mut self, older: bool, cx: &mut Context<Self>) -> bool {
+        let Some(focused) = self.state.bars().focused().cloned() else {
+            return false;
+        };
+        let Some(history) = self
+            .state
+            .bars()
+            .get(focused.owner, &focused.bar)
+            .and_then(|bar| bar.spec.fields.iter().find(|f| f.id == focused.field))
+            .map(|field| field.history.clone())
+            .filter(|history| !history.is_empty())
+        else {
+            return false;
+        };
+        let Some(bar_input) = self.bar_inputs.iter_mut().find(|bar| bar.field == focused) else {
+            return false;
+        };
+        let text = bar_input.input.read(cx).text().to_string();
+        let recalled = if older {
+            bar_input.recall.previous(&history, &text)
+        } else {
+            bar_input.recall.next(&history, &text)
+        };
+        if let Some(recalled) = recalled {
+            bar_input
+                .input
+                .update(cx, |input, cx| input.set_text(recalled, cx));
+        }
+        true
     }
 
     /// Move the editor's focus to the next or previous bar field.
@@ -155,6 +191,7 @@ impl Editor {
                         field,
                         input: input.clone(),
                         quiet: 0,
+                        recall: Recall::default(),
                         _subscription: subscription,
                     });
                     input

@@ -1186,7 +1186,7 @@ use knot_protocol::{
     TreeProviderRegistrationId, ViewContentKind,
 };
 
-use crate::app::transient::{PromptText, TransientOutcome, TransientOwner};
+use crate::app::transient::{InputSpec, PromptText, TransientOutcome, TransientOwner};
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct TreeArguments {
@@ -1344,6 +1344,7 @@ pub(crate) struct InputArguments {
     pub value: Option<String>,
     pub prompt: Option<String>,
     pub target: Option<String>,
+    pub history: Vec<String>,
 }
 impl HostArguments for InputArguments {
     fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
@@ -1352,6 +1353,7 @@ impl HostArguments for InputArguments {
             value: reader.optional_text(3, "input value must be text or null")?,
             prompt: reader.optional_text(4, "input prompt must be text or null")?,
             target: reader.optional_text(5, "window target must be text")?,
+            history: reader.text_list(6)?,
         })
     }
 }
@@ -1740,13 +1742,24 @@ pub(crate) async fn show_input(
         value,
         prompt,
         target,
+        history,
     } = arguments;
     let (receiver, _) = context.foreground(|host, cx| {
         host.with_transient_window(
             &request,
             target.as_deref(),
             move |window, cx| {
-                window.begin_input(owner, title, value.unwrap_or_default(), prompt, None, cx)
+                window.begin_input(
+                    owner,
+                    InputSpec {
+                        title,
+                        initial: value.unwrap_or_default(),
+                        prompt,
+                        history,
+                    },
+                    None,
+                    cx,
+                )
             },
             cx,
         )
@@ -1773,6 +1786,7 @@ pub(crate) async fn begin_input(
         value,
         prompt,
         target,
+        history,
     } = arguments;
     let (sender, changes) = tokio::sync::watch::channel(None);
     let (completion, input) = context.foreground(|host, cx| {
@@ -1782,9 +1796,12 @@ pub(crate) async fn begin_input(
             move |window, cx| {
                 window.begin_input(
                     owner,
-                    title,
-                    value.unwrap_or_default(),
-                    prompt,
+                    InputSpec {
+                        title,
+                        initial: value.unwrap_or_default(),
+                        prompt,
+                        history,
+                    },
                     Some(sender),
                     cx,
                 )
@@ -3455,6 +3472,8 @@ struct BarFieldValue {
     id: String,
     #[serde(default)]
     placeholder: String,
+    #[serde(default)]
+    history: Vec<String>,
 }
 
 fn bar_id(reader: &mut dyn ArgumentReader, index: usize) -> Result<String, DecodeError> {
@@ -3486,6 +3505,7 @@ impl HostArguments for OpenBarArguments {
                 .map(|field| BarField {
                     id: field.id,
                     placeholder: field.placeholder,
+                    history: field.history,
                 })
                 .collect(),
             toggles: value
