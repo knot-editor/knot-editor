@@ -26,6 +26,8 @@ pub mod icons;
 pub mod indentation;
 pub mod keys;
 pub mod languages;
+#[cfg(any(test, feature = "test-support"))]
+pub mod large_documents;
 pub mod launch;
 pub mod matching;
 pub mod menus;

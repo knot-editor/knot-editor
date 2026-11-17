@@ -907,6 +907,133 @@ fn injection_costs_on_a_large_markdown_file() {
     }
 }
 
+/// The layers of `layer` and every layer injected into it.
+fn layer_count(layer: &Layer) -> usize {
+    1 + layer.injections.iter().map(layer_count).sum::<usize>()
+}
+
+/// The foreground stages of one typed character on the large Markdown
+/// benchmark document, by spot: the whole commit with and without syntax,
+/// and, apart, the syntax edit, the layer clone, the foreground attempt that
+/// follows a commit, starting a background parse, the background parse
+/// itself, the rebase of its result over one later key, and a highlight
+/// query over 60 lines. Run with
+/// `cargo test --release -p knot-model typing_stage_costs -- --ignored --nocapture`.
+#[test]
+#[ignore]
+fn typing_stage_costs_on_the_large_markdown_document() {
+    use crate::buffer::BufferModel;
+    use crate::large_documents::document;
+
+    const KEYS: usize = 100;
+    fn report(label: &str, samples: &mut [Duration]) {
+        samples.sort();
+        println!(
+            "  {label:30} p50 {:>10.3?} p99 {:>10.3?} max {:>10.3?}",
+            samples[samples.len() / 2],
+            samples[samples.len() * 99 / 100],
+            samples[samples.len() - 1]
+        );
+    }
+    fn timed<T>(samples: &mut Vec<Duration>, run: impl FnOnce() -> T) -> T {
+        let started = Instant::now();
+        let result = run();
+        samples.push(started.elapsed());
+        result
+    }
+
+    let markdown = document(Some("markdown"));
+    let plain = document(None);
+    let resolver = languages();
+    let mut fixture = Fixture::of("markdown", &markdown.text);
+    let mut model = BufferModel::from_text(markdown.text.as_str());
+    model.set_syntax(Some(SyntaxState::new(
+        resolver("markdown").unwrap(),
+        Arc::clone(&resolver),
+    )));
+    let parse = model.start_syntax_parse().unwrap();
+    assert!(model.finish_syntax_parse(parse.run().unwrap()));
+    let mut plain_model = BufferModel::from_text(plain.text.as_str());
+    println!(
+        "markdown {} lines, {} layers; plain text {} lines",
+        markdown.text.lines().count(),
+        layer_count(&fixture.state.root),
+        plain.text.lines().count()
+    );
+
+    // Plain text types at its middle spot alongside Markdown prose.
+    let plain_spots = plain.spots.iter().chain([&plain.spots[1]]);
+    for (&(label, spot), &(_, plain_spot)) in markdown.spots.iter().zip(plain_spots) {
+        println!(" typing at {label}");
+        let mut commit = Vec::new();
+        let mut plain_commit = Vec::new();
+        for key in 0..KEYS {
+            let offset = spot + key;
+            timed(&mut commit, || model.replace(offset..offset, "x").unwrap());
+            let parse = model.start_syntax_parse().unwrap();
+            assert!(model.finish_syntax_parse(parse.run().unwrap()));
+            let offset = plain_spot + key;
+            timed(&mut plain_commit, || {
+                plain_model.replace(offset..offset, "x").unwrap()
+            });
+        }
+        report("commit, markdown", &mut commit);
+        report("commit, plain text", &mut plain_commit);
+
+        let [
+            mut edit,
+            mut clone,
+            mut attempt,
+            mut start,
+            mut background,
+            mut finish,
+            mut query,
+        ] = std::array::from_fn(|_| Vec::new());
+        for key in 0..KEYS {
+            let offset = spot + 2 * key;
+            let seq = fixture.buffer.edit_seq();
+            fixture.buffer.replace(offset..offset, "x");
+            let edits = fixture.buffer.edits_since(seq).to_vec();
+            timed(&mut edit, || fixture.state.edit(&edits));
+            timed(&mut clone, || {
+                std::hint::black_box(fixture.state.root.clone())
+            });
+            let snapshot = fixture.buffer.snapshot();
+            timed(&mut attempt, || {
+                fixture
+                    .state
+                    .parse_in_foreground(&snapshot, FOREGROUND_BUDGET)
+            });
+            let parse = timed(&mut start, || {
+                fixture.state.start_background_parse(snapshot)
+            });
+            let parsed = timed(&mut background, || parse.run().unwrap());
+            // The next key lands while the parse runs, so its result is
+            // rebased over that key and the foreground tries again.
+            fixture.replace(offset + 1..offset + 1, "x");
+            timed(&mut finish, || {
+                fixture.state.finish_background_parse(parsed);
+                fixture
+                    .state
+                    .parse_in_foreground(&fixture.buffer.snapshot(), FOREGROUND_BUDGET)
+            });
+            fixture.reparse();
+            let line = fixture.buffer.line_of_offset(offset);
+            let range = fixture.buffer.line_start(line)..fixture.buffer.line_start(line + 60);
+            timed(&mut query, || {
+                std::hint::black_box(fixture.state.highlights(&fixture.buffer.snapshot(), range))
+            });
+        }
+        report("syntax edit", &mut edit);
+        report("layer clone", &mut clone);
+        report("foreground attempt", &mut attempt);
+        report("start background parse", &mut start);
+        report("background parse (off thread)", &mut background);
+        report("rebase + foreground attempt", &mut finish);
+        report("60-line highlight query", &mut query);
+    }
+}
+
 /// The syntax family at the `|` in `marked`, parsed as `root`.
 fn family(root: &'static str, marked: &str) -> Option<SyntaxFamily> {
     let offset = marked.find('|').unwrap();
