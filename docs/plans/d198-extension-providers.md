@@ -1,6 +1,6 @@
 # D198 — Extension providers
 
-Status: 🚧 checkpoints 1–3 complete; checkpoint 4 next. Roadmap item [D198](../roadmap.md).
+Status: 🚧 checkpoints 1–3 complete; checkpoint 4 awaits its review gate. Roadmap item [D198](../roadmap.md).
 
 ## Goal
 
@@ -139,11 +139,13 @@ later checkpoints rely on:
   rejects `ProviderBusy`; a command run from the command palette (Go to File's)
   cannot call Go to File's providers.
 
-### 4. Picker rows in the input list
+### 4. Picker rows in the input list — ✅ implemented, awaiting the review gate
 
-Deliverables: input completions with description and hint, painted by the
-picker's row element, and the accepted input reporting the highlighted
-completion.
+✅ Deliverables: input completions with `description` (replacing `detail`),
+`hint`, and `descriptionMatches`, painted by the picker's row element
+(`picker_row`), and an accepted input reporting `highlighted`, the index of the
+completion highlighted for the accepted text, or null when there is no list or
+it answers older text.
 
 Validation: product transient tests for painting data, highlight movement,
 Tab, and Enter reporting the highlighted completion or none; fake-host
