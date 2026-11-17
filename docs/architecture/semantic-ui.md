@@ -390,7 +390,11 @@ last; All lists buffers, then files that are not open buffers, then at most
 eight actions once something is typed. A query of only `:N` lists a single Go
 to line row, and `text:N` opens the chosen row at line N. Actions match titles
 and names, show each command's binding for the origin view, and put commands
-chosen there first.
+chosen there first. The package also registers the providers
+`workspace.files`, `workspace.buffers`, and `workspace.actions`, each with
+`rows(query)` returning the rows of the matching tab for the caller's window,
+with plain row IDs (a file URI, a document ID, a command name); the picker
+builds its tabs from the same functions.
 
 The matcher serves every list that filters by a typed query. Its styles
 (`prefix`, `substring`, `flex`, `orderless`) are the user's ordered

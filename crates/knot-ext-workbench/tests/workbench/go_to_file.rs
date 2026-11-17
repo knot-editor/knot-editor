@@ -128,3 +128,75 @@ fn open_recent_lists_active_files_newest_first_and_drops_deleted_ones(cx: &mut T
         !window.transient_open(cx) && window.document_texts(cx).contains(&"first.rs".to_owned())
     });
 }
+
+/// Go to File plus a package that calls its three list providers.
+fn with_consumer() -> &'static [knot_bundled::BundledSource] {
+    const MANIFEST: &str = r#"{
+  "name": "@knot/list-consumer",
+  "apiVersion": 1,
+  "version": "0.1.0",
+  "main": "dist/main.js",
+}"#;
+    const MAIN: &str = r#"
+import { commands, providers, workbench } from "knot";
+const call = async (name, query) => (await providers.get(name)).rows(query);
+await commands.register("lists.files", async () => {
+  await workbench.writeClipboardText(JSON.stringify(await call("workspace.files", "butt")));
+});
+await commands.register("lists.buffers", async () => {
+  await workbench.writeClipboardText(JSON.stringify(await call("workspace.buffers", "")));
+});
+await commands.register("lists.actions", async () => {
+  await workbench.writeClipboardText(JSON.stringify(await call("workspace.actions", "open rec")));
+});
+"#;
+    let mut packages = only(&["@knot/go-to-file"]).to_vec();
+    packages.push(knot_bundled::BundledSource {
+        manifest: MANIFEST,
+        sources: &[("dist/main.js", MAIN)],
+    });
+    Box::leak(packages.into_boxed_slice())
+}
+
+fn rows_of(
+    command: &str,
+    window: &knot::test_support::TestWindow,
+    cx: &mut TestAppContext,
+) -> Vec<serde_json::Value> {
+    cx.write_to_clipboard(gpui::ClipboardItem::new_string(String::new()));
+    assert_eq!(
+        window.run_command(command, cx),
+        knot::test_support::CommandOutcome::Completed
+    );
+    let text = cx.read(|cx| cx.read_from_clipboard().unwrap().text().unwrap());
+    serde_json::from_str(&text).unwrap()
+}
+
+#[gpui::test]
+fn the_lists_are_offered_to_other_packages_with_plain_row_ids(cx: &mut TestAppContext) {
+    let directory = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(directory.path().join("src/ui")).unwrap();
+    std::fs::write(directory.path().join("src/ui/button.rs"), "struct Button;").unwrap();
+    std::fs::write(directory.path().join("README.md"), "# readme").unwrap();
+
+    let product = TestProduct::launch(with_consumer(), cx);
+    let window = product.active_window(cx);
+    window.set_roots(&[&file_uri(directory.path())], cx);
+    window.open_path(&directory.path().join("README.md"), cx);
+
+    let files = rows_of("lists.files", &window, cx);
+    let uri = file_uri(&directory.path().join("src/ui/button.rs"));
+    assert_eq!(files.len(), 1);
+    assert_eq!(files[0]["id"], uri.as_str());
+    assert_eq!(files[0]["label"], "button.rs");
+    assert_eq!(files[0]["description"], "src/ui");
+
+    let buffers = rows_of("lists.buffers", &window, cx);
+    assert_eq!(buffers.len(), 1);
+    assert_eq!(buffers[0]["label"], "README.md");
+    assert!(!buffers[0]["id"].as_str().unwrap().contains(':'));
+
+    let actions = rows_of("lists.actions", &window, cx);
+    assert_eq!(actions[0]["id"], "workspace.open-recent");
+    assert_eq!(actions[0]["label"], "Open Recent…");
+}

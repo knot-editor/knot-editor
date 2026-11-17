@@ -1,6 +1,6 @@
 # D198 — Extension providers
 
-Status: 🚧 checkpoints 1 and 2 complete; checkpoint 3 next. Roadmap item [D198](../roadmap.md).
+Status: 🚧 checkpoints 1 and 2 complete; checkpoint 3 awaiting review. Roadmap item [D198](../roadmap.md).
 
 ## Goal
 
@@ -126,7 +126,13 @@ and `CompletionProvider` in `knot.d.ts`. Choices the later checkpoints rely on:
   measured in D022.
 - A completion row's provider label is the registering package's name.
 
-### 3. Go to File provides its lists
+### 3. Go to File provides its lists — ✅ implemented, awaiting review
+
+Done: `src/lists.ts` builds the three lists from a window's context for both
+the picker and the providers; tests in `extension.test.ts` compare provider
+rows with the picker tabs, and `go_to_file.rs` calls the providers from
+another package in the real editor. Review gate commands: `Try: Files
+Provider`, `Try: Buffers Provider`, `Try: Actions Provider`.
 
 Deliverables: `workspace.files`, `workspace.buffers`, and `workspace.actions`
 registered by `@knot/go-to-file`, returning the same rows Search Everywhere

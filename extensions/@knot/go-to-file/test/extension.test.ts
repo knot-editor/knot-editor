@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
-import { commands, windows } from "knot";
+import { commands, documents, history, providers, windows } from "knot";
 import * as host from "knot/testing";
 import { COMMAND, GO_TO_BUFFER_COMMAND, SEARCH_EVERYWHERE_COMMAND, SEARCH_ICON, start } from "../src/extension.js";
 
@@ -271,4 +271,60 @@ test("choosing a buffer or file with a line goes there, clamped to the text", as
   host.answer("showPicker", { kind: "selected", id: `file:99:${ROOT}/src/main.ts` });
   await host.run(SEARCH_EVERYWHERE_COMMAND);
   assert.equal(host.editorView().caret, 6);
+});
+
+type Lists = { rows(query: string): Promise<PickerRowLike[]> };
+type PickerRowLike = { id: string; label: string; description?: string | null; labelMatches?: unknown };
+
+async function providerRows(name: string, query: string): Promise<PickerRowLike[]> {
+  return (await providers.get<Lists>(name))!.rows(query);
+}
+
+test("workspace.files lists the rows of the Files tab with file URIs as IDs", async () => {
+  host.query("butt");
+  host.answer("showPicker", { kind: "dismissed" });
+  await host.run(COMMAND);
+  const [, tab] = host.pickerRows();
+
+  const rows = await providerRows("workspace.files", "butt");
+  assert.deepEqual(rows, tab?.map((row) => ({ ...row, id: row.id.replace(/^file::/, "") })));
+  assert.deepEqual(rows.map((row) => row.id), [`${ROOT}/src/ui/button.ts`]);
+});
+
+test("workspace.files puts recent files first and labels several roots", async () => {
+  host.seedFile("file:///work/lib/util.ts", "util");
+  host.setRoots(host.windowTargets()[0]!, [ROOT, "file:///work/lib"]);
+  const recent = `${ROOT}/README.md`;
+  await history.record("recent-files", recent);
+
+  const rows = await providerRows("workspace.files", "");
+  assert.equal(rows[0]?.id, recent);
+  assert.equal(rows[0]?.description, "app");
+  assert.ok(rows.some((row) => row.id === "file:///work/lib/util.ts" && row.description === "lib"));
+});
+
+test("workspace.buffers matches the picker's tab with document IDs", async () => {
+  await documents.open(`${ROOT}/src/main.ts`);
+  host.selectTab("buffers");
+  host.query("main");
+  host.answer("showPicker", { kind: "dismissed" });
+  await host.run(SEARCH_EVERYWHERE_COMMAND);
+  const tab = host.pickerRows().at(-1);
+
+  const rows = await providerRows("workspace.buffers", "main");
+  const [document] = host.documentIds();
+  assert.deepEqual(rows.map((row) => [row.id, row.label]), [[document, "main.ts"]]);
+  assert.deepEqual(rows, tab?.map((row) => ({ ...row, id: row.id.replace(/^buffer::/, "") })));
+});
+
+test("workspace.actions matches the picker's tab with command names", async () => {
+  host.selectTab("actions");
+  host.query("open rec");
+  host.answer("showPicker", { kind: "dismissed" });
+  await host.run(SEARCH_EVERYWHERE_COMMAND);
+  const tab = host.pickerRows().at(-1);
+
+  const rows = await providerRows("workspace.actions", "open rec");
+  assert.equal(rows[0]?.id, "workspace.open-recent");
+  assert.deepEqual(rows, tab?.map((row) => ({ ...row, id: row.id.replace(/^command::/, "") })));
 });
