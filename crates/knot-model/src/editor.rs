@@ -21,6 +21,7 @@ mod gutter;
 mod indentation;
 mod input;
 mod lines;
+mod recording;
 mod rows;
 mod save_hygiene;
 mod text;
@@ -28,6 +29,7 @@ mod wrap;
 
 pub use decorations::ViewDecoration;
 pub use input::unit_range;
+pub use recording::RecordedCommand;
 pub use rows::{DecorationFill, Row, decoration_fills};
 pub use text::*;
 pub use wrap::{WrapWidth, cells_before, index_at_cells, index_at_or_before_cells};
@@ -289,6 +291,8 @@ pub struct EditorState {
     /// Bars lifecycles have opened above the text, and the field among them
     /// that has the editor's focus. Presentation state, never recorded.
     bars: bars::EditorBars,
+    /// The input recordings in progress. Never part of the buffer.
+    recordings: recording::Recordings,
 }
 
 impl EditorState {
@@ -342,6 +346,7 @@ impl EditorState {
             key_contexts: Vec::new(),
             caret_shapes: Vec::new(),
             bars: bars::EditorBars::default(),
+            recordings: recording::Recordings::default(),
         }
     }
 

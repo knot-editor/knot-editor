@@ -46,6 +46,25 @@ impl EditorState {
         }
     }
 
+    /// Type `text` as [`Self::type_text`] does, over the `replace` characters
+    /// before the caret on its line, or over the selection when `replace` is
+    /// zero.
+    pub fn type_text_replacing(&mut self, replace: usize, text: &str, buffer: &mut BufferModel) {
+        if replace == 0 {
+            return self.type_text(None, text, buffer);
+        }
+        let line = line_text(buffer, self.cursor_line);
+        let before = &line[..self.cursor_col.min(line.len())];
+        let start = before
+            .char_indices()
+            .rev()
+            .nth(replace - 1)
+            .map_or(0, |(index, _)| index);
+        let range = to_flat_utf16(buffer, self.cursor_line, start)
+            ..to_flat_utf16(buffer, self.cursor_line, before.len());
+        self.type_text(Some(range), text, buffer);
+    }
+
     /// Replace a UTF-16 range, or the marked text, selection, or caret,
     /// with composing `new_text` and mark it; `new_selected_range`, relative
     /// to the marked text, becomes the selection. Nothing changes in a

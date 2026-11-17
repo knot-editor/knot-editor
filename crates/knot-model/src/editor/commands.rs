@@ -48,6 +48,9 @@ pub const SELECT_PAGE_DOWN_LOGICAL_COMMAND: &str = "editor.select-page-down-logi
 pub const SELECT_DOCUMENT_START_COMMAND: &str = "editor.select-document-start";
 pub const SELECT_DOCUMENT_END_COMMAND: &str = "editor.select-document-end";
 pub const INSERT_NEWLINE_COMMAND: &str = "editor.insert-newline";
+/// Types its `text` argument as the keyboard does, first deleting the
+/// `replace` characters before the caret when given.
+pub const TYPE_COMMAND: &str = "editor.type";
 pub const INSERT_TAB_COMMAND: &str = "editor.insert-tab";
 pub const INDENT_LINES_COMMAND: &str = "editor.indent-lines";
 pub const REINDENT_BUFFER_COMMAND: &str = "editor.reindent-buffer";

@@ -317,6 +317,74 @@ fn completion_acceptance_rechecks_the_captured_revision() {
     assert_eq!(f.text(), "foo");
 }
 
+#[test]
+fn typing_can_replace_the_characters_before_the_caret() {
+    let mut f = Fixture::new("say 😀fo");
+    f.editor.cursor_col = f.buffer.line_range(0).end;
+    f.editor.type_text_replacing(2, "foobar", &mut f.buffer);
+    assert_eq!(f.text(), "say 😀foobar");
+    f.editor.type_text_replacing(7, "x", &mut f.buffer);
+    assert_eq!(f.text(), "say x");
+    // More than the line holds replaces the whole line before the caret.
+    f.editor.type_text_replacing(99, "y", &mut f.buffer);
+    assert_eq!(f.text(), "y");
+}
+
+#[test]
+fn recordings_collect_input_independently() {
+    let mut f = Fixture::new("");
+    f.editor.record_input(RecordedCommand::typed("lost", 0));
+    f.editor.start_recording(1);
+    f.editor.record_input(RecordedCommand::typed("a", 0));
+    f.editor.start_recording(2);
+    f.editor.record_input(RecordedCommand::typed("b", 3));
+    assert!(f.editor.is_recording());
+    let first = f.editor.finish_recording(1).unwrap();
+    assert_eq!(
+        first,
+        vec![
+            RecordedCommand::typed("a", 0),
+            RecordedCommand::typed("b", 3)
+        ]
+    );
+    assert_eq!(f.editor.finish_recording(1), None);
+    assert_eq!(
+        f.editor.finish_recording(2).unwrap(),
+        vec![RecordedCommand::typed("b", 3)]
+    );
+    assert!(!f.editor.is_recording());
+}
+
+#[test]
+fn an_accepted_completion_reports_what_it_typed() {
+    let providers = vec![CompletionProviderRegistration {
+        id: ProviderRegistrationId::new(1),
+        extension: ExtensionId::new(1),
+        lifecycle: ExtensionLifecycleId::new(1),
+        label: "fixture".into(),
+    }];
+    let mut f = Fixture::new("fo");
+    f.editor.cursor_col = 2;
+    let request = f.editor.start_completion(providers, &f.buffer).remove(0).1;
+    f.editor.apply_completion_response(
+        CompletionResponse {
+            registration: request.registration,
+            revision: request.revision,
+            generation: request.generation,
+            result: Ok(vec![CompletionResultItem {
+                label: "foo".into(),
+                insert_text: "foo".into(),
+            }]),
+        },
+        &f.buffer,
+    );
+    assert_eq!(
+        f.editor.accept_selected_completion(&mut f.buffer),
+        Some(RecordedCommand::typed("foo", 2))
+    );
+    assert_eq!(f.editor.accept_selected_completion(&mut f.buffer), None);
+}
+
 fn hundred_lines() -> Fixture {
     let text = (0..100)
         .map(|line| format!("line {line}\n"))

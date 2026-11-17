@@ -88,7 +88,10 @@ impl EditorState {
         }
     }
 
-    pub fn accept_selected_completion(&mut self, buffer: &mut BufferModel) {
+    pub fn accept_selected_completion(
+        &mut self,
+        buffer: &mut BufferModel,
+    ) -> Option<RecordedCommand> {
         let selected = self
             .completion_surface
             .as_ref()
@@ -103,9 +106,13 @@ impl EditorState {
             ))
         });
         self.dismiss_completion();
-        let Some((revision, range, insert_text)) = accepted else {
-            return;
-        };
+        let (revision, range, insert_text) = accepted?;
+        // A stale revision leaves the text alone and records nothing.
+        if revision != buffer.revision() {
+            return None;
+        }
+        let replaced = buffer.read(range.clone()).chars().count();
+        let typed = RecordedCommand::typed(&insert_text, replaced);
         let edit = TextEdit {
             range: ByteRange {
                 start_byte_offset: range.start,
@@ -113,7 +120,6 @@ impl EditorState {
             },
             text: insert_text,
         };
-        // A stale revision leaves the text alone.
-        let _ = buffer.apply_edits(&[edit], revision);
+        buffer.apply_edits(&[edit], revision).ok().map(|_| typed)
     }
 }
