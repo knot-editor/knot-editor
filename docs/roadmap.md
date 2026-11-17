@@ -552,15 +552,16 @@ Kakoune mode could use them too. The
     need replaying keys through the mode, which D113's recording provides, and
     `:g` and `:v` come with D150's pattern matching.
 
-- **D150 — Vim search and substitution**
+- **D150 — Vim search and substitution** 🚧
   - Depends on: none
-  - Description: The first Vim mode ships without search, so that Vim search
-    reuses current-file Find's match layer instead of a second engine, and
-    without substitution, a whole-buffer edit. Missing: `/`, `?`, `n`, `N`, `*`,
-    `#` with match highlights, `:noh`, and `:s` and `:%s` with ranges and flags.
-    Do it when daily Vim use misses search: build search inside the Vim package
-    on Find's matching and highlights, decide how Vim's regex syntax maps onto
-    the engine Find uses, and add substitution as one batch in one undo step.
+  - Description: [Plan](plans/d150-vim-search.md). The first Vim mode ships
+    without search, so that Vim search reuses current-file Find's match layer
+    instead of a second engine, and without substitution, a whole-buffer edit.
+    Missing: `/`, `?`, `n`, `N`, `*`, `#` with match highlights, `:noh`, and
+    `:s` and `:%s` with ranges and flags. Do it when daily Vim use misses
+    search: build search inside the Vim package on Find's matching and
+    highlights, decide how Vim's regex syntax maps onto the engine Find uses,
+    and add substitution as one batch in one undo step.
 
 
 - **D151 — Smaller Vim commands**
