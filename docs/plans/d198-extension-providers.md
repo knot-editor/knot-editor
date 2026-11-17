@@ -135,6 +135,9 @@ providers build rows from the same functions (`src/lists.ts`). Choices the
 later checkpoints rely on:
 - Row IDs are plain: a file URI, a document ID, a command name.
 - A provider called without a window returns no rows.
+- A call into a package that is running an ancestor of the caller's command
+  rejects `ProviderBusy`; a command run from the command palette (Go to File's)
+  cannot call Go to File's providers.
 
 ### 4. Picker rows in the input list
 
