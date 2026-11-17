@@ -3,7 +3,7 @@
 // single-line selection, in the editor each window describes. Highlights are
 // that editor's own, so other views of the buffer never show them.
 import { settings, workbench } from "knot";
-import type { Buffer, ByteRange, Disposable, EditorHandle, ViewTarget, WindowInfo, WindowTarget } from "knot";
+import type { Buffer, ByteRange, Disposable, EditorHandle, EditorSelection, ViewTarget, WindowInfo, WindowTarget } from "knot";
 import { SELECTION_COLOR, WORD_COLOR, decorations, selectionQuery, SELECTION_LIMIT } from "./highlight.js";
 import { DELAY, SELECTION_ENABLED, WORD_ENABLED, defineSettings } from "./settings.js";
 
@@ -13,6 +13,8 @@ type Follow = {
   buffer: Buffer | null;
   handle: EditorHandle | null;
   disposables: Disposable[];
+  /** The selection the last notification carried; read when none has. */
+  selection: EditorSelection | null;
   timer: ReturnType<typeof setTimeout> | null;
   running: boolean;
   /** A change arrived while a run was in flight, joined into one more run. */
@@ -39,8 +41,8 @@ function isGone(error: unknown) {
   return code === "InvalidTarget" || code === "BufferClosed" || code === "Cancelled";
 }
 
-async function wanted(handle: EditorHandle, buffer: Buffer): Promise<Wanted | null> {
-  const { anchor, caret } = await handle.selection();
+async function wanted(handle: EditorHandle, buffer: Buffer, selection: EditorSelection): Promise<Wanted | null> {
+  const { anchor, caret } = selection;
   if (anchor === caret) {
     if (!(await settings.get(WORD_ENABLED))) return null;
     const word = await buffer.wordAt(caret);
@@ -67,7 +69,7 @@ async function wanted(handle: EditorHandle, buffer: Buffer): Promise<Wanted | nu
 async function update(follow: Follow) {
   const { handle, buffer } = follow;
   if (handle === null || buffer === null) return;
-  const want = await wanted(handle, buffer);
+  const want = await wanted(handle, buffer, follow.selection ?? await handle.selection());
   const key = want === null ? null : `${want.color}\u0000${want.text}`;
   if (key === follow.shown) return;
   let items: ReturnType<typeof decorations> = [];
@@ -130,6 +132,7 @@ async function release(follow: Follow) {
   const { handle, buffer } = follow;
   follow.handle = null;
   follow.buffer = null;
+  follow.selection = null;
   follow.shown = null;
   if (handle === null) return;
   try {
@@ -152,7 +155,7 @@ export async function start() {
   const follow = async (info: WindowInfo) => {
     const window = info.target;
     const current: Follow = follows.get(window) ?? {
-      target: null, buffer: null, handle: null, disposables: [], timer: null, running: false, pending: false, shown: null,
+      target: null, buffer: null, handle: null, disposables: [], selection: null, timer: null, running: false, pending: false, shown: null,
     };
     follows.set(window, current);
     if (current.target === info.statusTarget) return;
@@ -167,7 +170,10 @@ export async function start() {
         const handle = await workbench.editor(info.statusTarget);
         current.buffer = buffer;
         current.handle = handle;
-        const changed = () => schedule(current);
+        const changed = (selection: EditorSelection) => {
+          current.selection = selection;
+          schedule(current);
+        };
         current.disposables.push(
           await handle.onDidChangeSelection(changed),
           await buffer.onDidChange(() => {

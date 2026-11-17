@@ -45,7 +45,7 @@ type FakeTab = {
   /** Selection listeners of the long-lived handles bound to this tab. The
    * fake runs each one per change; the host's coalescing is covered by
    * product tests. */
-  selectionListeners: Set<() => void | Promise<void>>;
+  selectionListeners: Set<(selection: Knot.EditorSelection) => void | Promise<void>>;
   /** The open bars, top to bottom, and the field with the editor's focus. */
   bars: FakeBar[];
   barFocus: { bar: string; field: string } | null;
@@ -1588,14 +1588,16 @@ function editor(tab: FakeTab): Knot.Editor {
 }
 
 async function notifySelection(tab: FakeTab) {
-  for (const listener of [...tab.selectionListeners]) await listener();
+  const { anchor, caret } = tab.view;
+  const selection = Object.freeze({ anchor, caret });
+  for (const listener of [...tab.selectionListeners]) await listener(selection);
 }
 
 function editorHandle(target: Knot.ViewTarget): Knot.EditorHandle {
   const tab = state.windows.flatMap((window) => window.tabs).find((candidate) => candidate.target === target);
   if (tab === undefined) throw hostError("InvalidTarget");
   const listeners = new Set<() => void | Promise<void>>();
-  const selectionListeners = new Set<() => void | Promise<void>>();
+  const selectionListeners = new Set<(selection: Knot.EditorSelection) => void | Promise<void>>();
   const barListeners = new Set<(edit: Knot.EditorBarEdit) => void | Promise<void>>();
   let disposed = false;
   const live = editor(tab);

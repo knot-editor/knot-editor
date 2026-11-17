@@ -117,9 +117,9 @@ async function land(state: State, lines: BufferLines, moved: Moved) {
  * outside Vim, as by a mouse drag or Select All, enters visual mode, and
  * clearing it leaves visual mode. In normal mode a bare caret is kept off
  * the line's end. Insert mode is left alone. */
-export async function followSelection(state: State) {
+export async function followSelection(state: State, notified?: EditorSelection) {
   if (state.mode === "insert") return;
-  const selection = await state.handle.selection();
+  const selection = notified ?? await state.handle.selection();
   const bare = selection.anchor === selection.caret;
   if (isVisual(state.mode)) {
     const own = state.selected;

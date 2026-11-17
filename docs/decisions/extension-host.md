@@ -166,10 +166,13 @@ shown. Dropping stale handles on each observation refresh avoids a second
 ownership catalog or per-tab close hook. Handles travel as the same authority
 integer as command captures, so the editor operations stay one set.
 
-Selection notifications carry no payload and coalesce to one pending turn per
-handle. A payload would need the old selection or the cause, which no consumer
-asked for; a queue would let a slow listener grow
-unbounded work, while pulling the current selection is always correct.
+Selection notifications coalesce to one pending turn per handle and carry the
+selection as of when the listener turn starts, read by the acknowledgement the
+turn already makes, so the payload costs no request. A payload of the old
+selection or the cause was rejected because no consumer asked for it, but every
+listener pulled the current selection first, and that read was a host round trip
+on every key. A queue would let a slow listener grow unbounded work, while the
+current selection is always correct.
 Acknowledging when the listener turn starts keeps a long listener from losing a
 change that arrives during it. On Apple M1 Pro/macOS release builds under the
 gpui test dispatcher, a caret change reached a listener that read the selection

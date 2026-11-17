@@ -331,8 +331,8 @@ test("a handle reports selection changes until the listener or handle is dispose
   const window = host.openWindow({ documents: [document] });
   const editor = await workbench.editor(host.tabTarget(window, 0));
   const seen: number[] = [];
-  const subscription = await editor.onDidChangeSelection(async () => {
-    seen.push((await editor.selection()).caret);
+  const subscription = await editor.onDidChangeSelection(async ({ caret }) => {
+    seen.push(caret);
   });
   await editor.setSelection({ anchor: 2, caret: 2 });
   await editor.setSelection({ anchor: 4, caret: 4 });

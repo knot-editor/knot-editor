@@ -3112,14 +3112,26 @@ pub(crate) async fn watch_editor_selection(
     context.foreground(|host, cx| host.watch_editor_selection(&request, arguments.authority, cx))?
 }
 
-/// A selection notification's listener turn began; see `SelectionWatch`.
+/// The selection a notification carries; `None` once the handle is gone.
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize)]
+pub(crate) struct AcknowledgedSelection(pub Option<EditorSelection>);
+impl HostSuccess for AcknowledgedSelection {
+    fn encode(self) -> Result<EncodedValue, DecodeError> {
+        encode_json(self)
+    }
+}
+
+/// A selection notification's listener turn began: returns the selection;
+/// see `SelectionWatch`.
 #[host_operation("acknowledgeEditorSelection")]
 pub(crate) async fn acknowledge_editor_selection(
     context: HostContext,
     arguments: EditorArguments,
-) -> Result<(), AccessError> {
+) -> Result<AcknowledgedSelection, AccessError> {
     let owner = ExtensionKey::new(context.request.extension, context.request.lifecycle);
-    context.foreground(|host, _| host.acknowledge_editor_selection(owner, arguments.authority))
+    context.foreground(|host, cx| {
+        AcknowledgedSelection(host.acknowledge_editor_selection(owner, arguments.authority, cx))
+    })
 }
 
 /// Release a handle. A handle the tab already invalidated is not an error.

@@ -764,9 +764,11 @@ globalThis.__knotDispatchEditorEvent = async (authority, kind) => {
     if (failure) throw failure.reason;
   } else if (kind === "selection") {
     // Acknowledge first, so changes during the listeners queue one more turn.
-    await request("acknowledgeEditorSelection", authority);
+    const selection = await request("acknowledgeEditorSelection", authority);
+    if (selection === null) return;
+    const event = Object.freeze(selection);
     const listeners = [...entry.selectionListeners];
-    const results = await Promise.allSettled(listeners.map((listener) => listener()));
+    const results = await Promise.allSettled(listeners.map((listener) => listener(event)));
     const failure = results.find((result) => result.status === "rejected");
     if (failure) throw failure.reason;
   } else if (kind === "bars") {

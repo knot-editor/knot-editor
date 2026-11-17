@@ -1,6 +1,6 @@
 # D156 — Fewer host round trips per key
 
-Status: 🚧 checkpoint 3 done. Source: [roadmap](../roadmap.md) D156.
+Status: 🚧 checkpoint 4 awaiting review. Source: [roadmap](../roadmap.md) D156.
 
 ## Goal
 
@@ -99,9 +99,10 @@ covers an editor tab; the null case is untested. The budget is `j` 20,
 
 ### 4. Selection notification payload
 
-Deliverables: listeners receive the selection; the acknowledgement returns
-it; Vim, chrome, and word highlight use it; the budget test lowers.
-Lines on the notification arrive in checkpoint 5.
+Deliverables ✅: listeners receive the selection; the acknowledgement returns
+it; Vim, chrome, and word highlight use it (word highlight keeps the last
+payload and reads only before the first); the budget test lowers to `j` 18,
+`w` 14, `x` 15. Lines on the notification arrive in checkpoint 5.
 
 Validation: extension API tests that the payload is the selection at turn
 start, including a change during the listener queueing one more turn with

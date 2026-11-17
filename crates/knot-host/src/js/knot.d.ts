@@ -2635,14 +2635,14 @@ declare module "knot" {
     onDidClose(listener: () => void | Promise<void>): Disposable;
     /**
      * Runs after the selection changes for any reason, including caret motion
-     * caused by edits. The notification has no payload: read `selection()`.
-     * Notifications coalesce: changes while one is queued join it, and a
+     * caused by edits. The listener receives the selection as of when its turn
+     * starts, so it needs no `selection()` read. Notifications coalesce: changes while one is queued join it, and a
      * listener still running when more arrive gets one further notification,
      * never a queue. Native painting and input never wait on a listener.
      * Resolves once the editor is being followed; changes before then are not
      * reported. @throws HostError with InvalidTarget or Cancelled.
      */
-    onDidChangeSelection(listener: () => void | Promise<void>): Promise<Disposable>;
+    onDidChangeSelection(listener: (selection: EditorSelection) => void | Promise<void>): Promise<Disposable>;
     /**
      * Runs after the user edits a field of one of the caller's bars on this
      * editor, by typing, deleting, or pasting, with the bar's field texts at

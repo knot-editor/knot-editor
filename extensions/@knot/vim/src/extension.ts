@@ -261,10 +261,10 @@ class Vim {
       this.shared.highlights.unfollow(state);
       disposeMarks(state);
     });
-    await handle.onDidChangeSelection(async () => {
+    await handle.onDidChangeSelection(async (selection) => {
       if (this.states.get(target) !== state || state.mode === "insert") return;
       const mode = state.mode;
-      await whileOpen(() => followSelection(state));
+      await whileOpen(() => followSelection(state, selection));
       if (state.mode !== mode) await this.showStatus(target.window);
     });
     await setMode(state, "normal");

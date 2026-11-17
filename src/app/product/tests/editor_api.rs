@@ -818,14 +818,15 @@ fn editor_handle_folds_lines_and_counts_only_the_rows_left_visible(cx: &mut Test
 
 const SELECTION_SOURCE: &str = r#"
 import { commands, workbench } from "knot";
-let count = 0;
+const log = [];
 await commands.register("selection.attach", async () => {
   const { snapshot } = await workbench.observe(() => {});
   const handle = await workbench.editor(snapshot.windows[0].panes[0].selected);
-  await handle.onDidChangeSelection(async () => {
-    count += 1;
-    const { caret } = await handle.selection();
-    await workbench.writeClipboardText(`${count}:${caret}`);
+  // Logs the payload's caret beside the caret read after a held request.
+  await handle.onDidChangeSelection(async ({ caret }) => {
+    await workbench.writeClipboardText("busy");
+    log.push(`${caret}:${(await handle.selection()).caret}`);
+    await workbench.writeClipboardText(log.join(" "));
   });
 });
 "#;
@@ -835,7 +836,7 @@ fn clipboard_text(cx: &gpui::App) -> Option<String> {
 }
 
 #[gpui::test]
-fn selection_notifications_coalesce_and_read_the_final_selection(cx: &mut TestAppContext) {
+fn selection_notifications_coalesce_and_carry_the_selection_at_turn_start(cx: &mut TestAppContext) {
     use knot_protocol::ExtensionKey;
     let documents = install_globals(cx);
     let host = cx.update(super::super::super::extensions::host::install);
@@ -875,8 +876,9 @@ fn selection_notifications_coalesce_and_read_the_final_selection(cx: &mut TestAp
     assert_eq!(cx.read(clipboard_text), None);
 
     // The first change starts a listener turn that stays busy; three more
-    // changes meanwhile produce exactly one further notification, which reads
-    // the final caret.
+    // changes meanwhile produce exactly one further notification. Each
+    // payload is the caret when its turn started, while the read after the
+    // held request sees the final one.
     host.update(cx, |host, _| host.hold_clipboard_writes());
     move_to(1, cx);
     wait_for_api_condition(cx, |cx| host.read(cx).pending_view_request_count() == 1);
@@ -885,16 +887,18 @@ fn selection_notifications_coalesce_and_read_the_final_selection(cx: &mut TestAp
     }
     cx.run_until_parked();
     host.update(cx, |host, cx| host.release_view_requests(cx));
-    wait_for_api_condition(cx, |cx| clipboard_text(cx).as_deref() == Some("2:4"));
+    wait_for_api_condition(cx, |cx| clipboard_text(cx).as_deref() == Some("1:4 4:4"));
     cx.run_until_parked();
-    assert_eq!(cx.read(clipboard_text).as_deref(), Some("2:4"));
+    assert_eq!(cx.read(clipboard_text).as_deref(), Some("1:4 4:4"));
 
     // Typing moves the caret, which is a selection change too.
     native_window.run(cx, |cx| {
         window.update(cx, |window, cx| window.focus_active_editor(cx))
     });
     type_text(&window, "x", cx);
-    wait_for_api_condition(cx, |cx| clipboard_text(cx).as_deref() == Some("3:5"));
+    wait_for_api_condition(cx, |cx| {
+        clipboard_text(cx).as_deref() == Some("1:4 4:4 5:5")
+    });
 }
 
 /// Caret change to a listener's effect, and notifications per burst.

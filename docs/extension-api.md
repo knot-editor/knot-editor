@@ -187,10 +187,11 @@ Like a key context it belongs to the package and ends with it, so a mode sets
 it on entering and clears it on leaving.
 
 `editor.onDidChangeSelection(listener)` runs after the selection changes for
-any reason, edits that move the caret included. It carries nothing: read
-`editor.selection()` in the listener. Notifications coalesce, so a burst of
-changes runs the listener once with the final selection, and a listener still
-busy when more changes arrive gets one further call, not a queue.
+any reason, edits that move the caret included. It receives the selection as
+of when its turn starts, so it needs no `editor.selection()` read.
+Notifications coalesce, so a burst of changes runs the listener once with the
+final selection, and a listener still busy when more changes arrive gets one
+further call, not a queue.
 
 `editor.beginUndoGroup()` makes everything committed to the editor's buffer
 until the returned group is disposed one undo step: the package's own edit

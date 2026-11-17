@@ -1558,20 +1558,25 @@ impl ProductExtensionHost {
         }
     }
 
-    /// A selection notification's listener turn has started: later changes
-    /// queue the next one.
+    /// A selection notification's listener turn has started: returns the
+    /// selection as of now, `None` when the handle is gone, and later changes
+    /// queue the next notification.
     pub(super) fn acknowledge_editor_selection(
         &mut self,
         owner: ExtensionKey,
         authority: handlers::EditorAuthority,
-    ) {
-        if let handlers::EditorAuthority::Handle(id) = authority
-            && let Some(handle) = self.editor_handles.get_mut(&id)
-            && handle.owner == owner
-            && let Some(watch) = handle.selection.as_mut()
-        {
-            watch.pending = false;
-        }
+        cx: &App,
+    ) -> Option<handlers::EditorSelection> {
+        let handlers::EditorAuthority::Handle(id) = authority else {
+            return None;
+        };
+        let handle = self
+            .editor_handles
+            .get_mut(&id)
+            .filter(|handle| handle.owner == owner)?;
+        handle.selection.as_mut()?.pending = false;
+        let (anchor, caret) = handle.tab.editor(cx)?.read(cx).selection(cx);
+        Some(handlers::EditorSelection { anchor, caret })
     }
 
     /// Start notifying the handle's owner when the user edits a field of one
