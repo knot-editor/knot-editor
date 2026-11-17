@@ -757,8 +757,8 @@ known.
 
 ## Ask the user transiently
 
-`workbench` exposes window-local pickers, text input, and native confirmation or
-message prompts. Each operation captures an explicit `WindowTarget` or the
+`workbench` exposes window-local pickers, text input, and a native confirmation
+prompt. Each operation captures an explicit `WindowTarget` or the
 admitting command's window, so focus changes during an `await` cannot retarget
 it. Results are typed: acceptance carries a value, dismissal is a normal value,
 and operational failure is a host error.
@@ -776,7 +776,6 @@ if (named.kind === "accepted") await rename(named.value);
 const sure = await workbench.showConfirmation({ title: "Remove knot?" });
 if (sure.kind === "confirmed") await remove();
 
-await workbench.showMessage({ title: "Saved" });
 ```
 
 Picker items are matched locally, label first and then description, in the
@@ -1165,6 +1164,37 @@ observe again when a fresh baseline is needed.
 
 The bundled [project registry](../extensions/@knot/projects/src/) is a
 complete observer: it waits for `launched`, then tracks windows and documents.
+
+## Tell the user without interrupting
+
+`workbench.showNotice` raises a notice: a popup card in the window it targets,
+or in every window when `target` is omitted, and an entry in the notification
+history that outlives the popup and the package. It resolves with the notice's
+ID once the notice is recorded and does not wait for the user. A question that
+needs an answer is `showConfirmation`.
+
+```js
+await workbench.showNotice({
+  title: "Indexing finished",
+  message: "1,204 files in the workspace.",
+  severity: "info", // "info" (default), "warning", or "error"
+  actions: [{ title: "Open Log", command: { name: "app.open-log" } }],
+});
+```
+
+`autoDismiss` defaults to true for `info`, so the popup hides after
+`notifications.timeout`, and to false for `warning` and `error`. An action
+dispatches its command in the popup's window, as a status item click does, and
+closes the popup. Closing a popup or running an action marks the notice read; a
+popup that times out leaves it unread. `markNotificationsRead(ids)`,
+`dismissNotification(id)`, and `clearNotifications()` change the history, which
+keeps the last 100 notices and does not persist across restarts.
+
+`workbench.observe` carries the history: the snapshot's `notifications` and a
+`notificationsChanged` event, sent with the whole history whenever a notice is
+added, read, dismissed, or cleared. A package can mirror the notices in its own
+surface. Setting `notifications.popups` to false records notices without native
+popups, so such a package can replace them with its own presentation.
 
 ## Read files
 

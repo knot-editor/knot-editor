@@ -1096,6 +1096,8 @@ declare module "knot" {
     readonly windows: readonly WindowInfo[];
     readonly activeWindow: WindowTarget | null;
     readonly activeTarget: ViewTarget | null;
+    /** The notice history, oldest first. */
+    readonly notifications: readonly Notice[];
     /** True once startup has committed its restored windows and launch
      * requests. Extensions activate before any window exists; wait for the
      * launched event before reconciling state against startup windows. */
@@ -1112,6 +1114,8 @@ declare module "knot" {
      * pane, dock size, window bounds, or structure. Reported about a second
      * after changes settle; structural changes also report presentationsChanged. */
     | { readonly type: "viewStateChanged"; readonly window: WindowTarget }
+    /** A notice was added, read, dismissed, or cleared; carries the whole history. */
+    | { readonly type: "notificationsChanged"; readonly notifications: readonly Notice[] }
     /** Sent once, when launched becomes true. */
     | { readonly type: "launched" };
   export type ApplicationEvent = ApplicationChange & { readonly sequence: number };
@@ -2229,9 +2233,44 @@ declare module "knot" {
     readonly confirmLabel?: string;
     readonly cancelLabel?: string;
   }
-  export interface MessageOptions extends TransientTargetOptions {
+  export type NoticeSeverity = "info" | "warning" | "error";
+  /** A button on a notice that runs a command in the popup's window. */
+  export interface NoticeAction {
     readonly title: string;
-    readonly message?: string;
+    readonly command: { readonly name: string; readonly arguments?: JsonValue };
+  }
+  export interface NoticeOptions extends TransientTargetOptions {
+    readonly message: string;
+    readonly title?: string;
+    /** Defaults to "info". */
+    readonly severity?: NoticeSeverity;
+    /** Whether the popup hides on its own after `notifications.timeout`.
+     * Defaults to true for "info" and false for the other severities. */
+    readonly autoDismiss?: boolean;
+    readonly actions?: readonly NoticeAction[];
+    /** The window whose popup shows the notice; every window when omitted. */
+    readonly target?: WindowTarget;
+  }
+  /** One notice in the application's history. */
+  export interface Notice {
+    readonly id: number;
+    readonly message: string;
+    readonly title: string | null;
+    readonly severity: NoticeSeverity;
+    readonly autoDismiss: boolean;
+    readonly actions: readonly {
+      readonly title: string;
+      readonly command: string;
+      readonly arguments: JsonValue;
+    }[];
+    /** The window the popup is limited to; null for every window. */
+    readonly target: WindowTarget | null;
+    /** The package that raised the notice, or "Knot" for native ones. */
+    readonly source: string;
+    /** Milliseconds since the Unix epoch. */
+    readonly time: number;
+    /** Whether the user closed its popup, ran an action, or it was marked read. */
+    readonly read: boolean;
   }
   /** What the status bar or toolbar shows for one item. */
   export interface StatusItemOptions {
@@ -2659,11 +2698,21 @@ declare module "knot" {
      */
     showConfirmation(options: ConfirmationOptions): Promise<ConfirmationResult>;
     /**
-     * Present the native message prompt. Resolution carries no result.
-     * @throws TypeError for invalid options; HostError with the same set as
-     * showPicker.
+     * Raise a notice: a popup card in the target window, or every window, and
+     * an entry in the notification history. Resolves with the notice's ID once
+     * it is recorded, without waiting for the user. A `target` that is not a
+     * live window rejects InvalidTarget. Notices outlive the package that
+     * raised them.
+     * @throws TypeError for invalid options; HostError with InvalidTarget or
+     * Cancelled.
      */
-    showMessage(options: MessageOptions): Promise<void>;
+    showNotice(options: NoticeOptions): Promise<number>;
+    /** Mark notices read, which closes their popups. Unknown IDs are ignored. */
+    markNotificationsRead(ids: readonly number[]): Promise<void>;
+    /** Remove a notice from the history. An unknown ID is ignored. */
+    dismissNotification(id: number): Promise<void>;
+    /** Empty the notice history. */
+    clearNotifications(): Promise<void>;
     /**
      * Add an item to the status bar of every window. The latest
      * registration of an ID defines the item and disposing it reveals the

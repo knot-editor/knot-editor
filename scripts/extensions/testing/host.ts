@@ -130,7 +130,8 @@ function emptyState() {
     inputValues: [] as string[],
     inputMessages: [] as (string | null)[],
     inputFeedback: [] as (readonly Knot.InputCompletion[])[],
-    messages: [] as Knot.MessageOptions[],
+    notices: [] as Knot.Notice[],
+    nextNotice: 1,
     clipboard: null as string | null,
     revealed: [] as string[],
     files: new Map<string, string>(),
@@ -1067,9 +1068,18 @@ export function prompts(): readonly Prompt[] {
   return state.prompts;
 }
 
-/** Messages shown so far, as `title: message` strings. */
+/** The messages of the notices in the history, oldest first. */
 export function messages(): string[] {
-  return state.messages.map((options) => options.message ?? options.title);
+  return state.notices.map((notice) => notice.message);
+}
+
+/** The notice history, oldest first. */
+export function notices(): readonly Knot.Notice[] {
+  return state.notices;
+}
+
+async function noticesChanged() {
+  await emit({ type: "notificationsChanged", notifications: [...state.notices] });
 }
 
 /**
@@ -2423,6 +2433,7 @@ export const api: KnotApi = {
             state.windows.find((window) => window.target === state.focused)?.tabs[
               state.windows.find((window) => window.target === state.focused)!.selected
             ]?.target ?? null,
+          notifications: [...state.notices],
           launched: state.launched,
         },
         watermark: state.sequence,
@@ -2516,8 +2527,39 @@ export const api: KnotApi = {
       return result;
     },
     showConfirmation: async (options) => prompt("showConfirmation", options),
-    showMessage: async (options) => {
-      state.messages.push(options);
+    showNotice: async (options) => {
+      const severity = options.severity ?? "info";
+      const notice: Knot.Notice = {
+        id: state.nextNotice++,
+        message: options.message,
+        title: options.title ?? null,
+        severity,
+        autoDismiss: options.autoDismiss ?? severity === "info",
+        actions: (options.actions ?? []).map((action) => ({
+          title: action.title,
+          command: action.command.name,
+          arguments: action.command.arguments ?? null,
+        })),
+        target: options.target ?? null,
+        source: "test",
+        time: Date.now(),
+        read: false,
+      };
+      state.notices.push(notice);
+      await noticesChanged();
+      return notice.id;
+    },
+    markNotificationsRead: async (ids) => {
+      state.notices = state.notices.map((notice) => (ids.includes(notice.id) ? { ...notice, read: true } : notice));
+      await noticesChanged();
+    },
+    dismissNotification: async (id) => {
+      state.notices = state.notices.filter((notice) => notice.id !== id);
+      await noticesChanged();
+    },
+    clearNotifications: async () => {
+      state.notices = [];
+      await noticesChanged();
     },
     registerStatusItem: async (id, options) => {
       const entry: FakeStatusItem = { id, value: { ...options }, windows: new Map() };

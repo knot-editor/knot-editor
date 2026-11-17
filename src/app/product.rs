@@ -1875,43 +1875,6 @@ impl KnotWindow {
         Ok(receiver)
     }
 
-    /// Present the native message prompt. Resolution carries no result, but the
-    /// interaction still occupies the shared slot while it is open.
-    pub(crate) fn begin_message(
-        &mut self,
-        owner: TransientOwner,
-        text: PromptText,
-        cx: &mut Context<Self>,
-    ) -> Result<tokio::sync::oneshot::Receiver<TransientOutcome>, TransientError> {
-        self.transient_slot_free()?;
-        let restore_focus = self.focus;
-        let prompt = self.prompt(
-            PromptLevel::Info,
-            text.title,
-            text.message,
-            vec![PromptButton::new("OK")],
-            cx,
-        );
-        let (completion, receiver) = tokio::sync::oneshot::channel();
-        self.transient = Some(ActiveTransient {
-            owner: Some(owner),
-            surface: None,
-            focus: None,
-            completion: Some(completion),
-            restore_focus,
-            _subscription: None,
-        });
-        cx.spawn(async move |this, cx| {
-            let _ = prompt.await;
-            let _ = this.update(cx, |this, cx| {
-                this.finish_transient(TransientOutcome::Dismissed, cx)
-            });
-        })
-        .detach();
-        cx.notify();
-        Ok(receiver)
-    }
-
     /// Present the native directory prompt, settling the shared slot when it is
     /// answered. Path validation and normalization belong to the caller.
     pub(crate) fn begin_folder_picker(

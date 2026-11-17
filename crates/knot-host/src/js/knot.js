@@ -24,7 +24,10 @@ import {
   showPicker,
   showInput,
   showConfirmation,
-  showMessage,
+  showNotice,
+  markNotificationsRead,
+  dismissNotification,
+  clearNotifications,
   registerStatusItem,
   addMenuItem,
   matchCandidates,
@@ -80,7 +83,10 @@ export const workbench = Object.freeze({
   showPicker,
   showInput,
   showConfirmation,
-  showMessage,
+  showNotice,
+  markNotificationsRead,
+  dismissNotification,
+  clearNotifications,
   registerStatusItem,
 });
 

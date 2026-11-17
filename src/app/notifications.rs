@@ -13,12 +13,17 @@ pub(crate) struct ApplicationNotifications(pub(crate) NotificationStore);
 
 impl Global for ApplicationNotifications {}
 
-/// Change the store, which redraws every window's popups.
+/// Change the store, which redraws every window's popups and lets extensions
+/// observe the new history.
 pub(crate) fn update<R>(cx: &mut App, change: impl FnOnce(&mut NotificationStore) -> R) -> R {
     if !cx.has_global::<ApplicationNotifications>() {
         cx.set_global(ApplicationNotifications::default());
     }
-    cx.update_global::<ApplicationNotifications, _>(|notifications, _| change(&mut notifications.0))
+    let result = cx.update_global::<ApplicationNotifications, _>(|notifications, _| {
+        change(&mut notifications.0)
+    });
+    super::application_observation::changed(cx);
+    result
 }
 
 /// Record a notice and return its ID.

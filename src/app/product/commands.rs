@@ -605,62 +605,6 @@ pub(crate) async fn open_log(
         .await
 }
 
-#[command("developer.raise-sample-notices", title = "Developer: Raise Sample Notices", description = "Raise notices of every severity to review their popups.", id = RAISE_SAMPLE_NOTICES_COMMAND, participant = Workbench)]
-pub(crate) async fn raise_sample_notices(
-    context: CommandContext,
-    (): (),
-) -> Result<(), CommandOutcome> {
-    use crate::app::notifications::{NoticeAction, NoticeSpec, Severity};
-    use crate::app::status_bar::StatusCommand;
-    let action = |title: &str, name: &str| NoticeAction {
-        title: title.into(),
-        command: StatusCommand {
-            name: name.into(),
-            arguments: knot_protocol::CommandArgumentValue::Null,
-        },
-    };
-    let spec = |severity, title: Option<&str>, message: &str, actions| NoticeSpec {
-        message: message.into(),
-        title: title.map(str::to_owned),
-        severity,
-        actions,
-        source: "Knot".into(),
-        ..NoticeSpec::default()
-    };
-    let notices = vec![
-        spec(Severity::Info, None, "Settings saved.", Vec::new()),
-        spec(
-            Severity::Info,
-            Some("Indexing finished"),
-            "Knot indexed 1,204 files in the workspace.",
-            Vec::new(),
-        ),
-        spec(
-            Severity::Warning,
-            Some("Font not found"),
-            "The font family \"Nope Mono\" is not installed, so Knot uses the default font instead. Pick an installed family in your settings to remove this warning.",
-            vec![
-                action("Open Log", "app.open-log"),
-                action("About", "app.about"),
-            ],
-        ),
-        spec(
-            Severity::Error,
-            Some("Could not save notes.txt"),
-            "The file is read-only.",
-            vec![action("Open Log", "app.open-log")],
-        ),
-    ];
-    context
-        .foreground(move |_, cx| {
-            for notice in notices {
-                crate::app::notifications::raise(notice, cx);
-            }
-            Ok(())
-        })
-        .await
-}
-
 #[command("app.reveal-log-folder", title = "Knot: Reveal Log Folder", description = "Show the application log folder in the file manager.", id = REVEAL_LOG_FOLDER_COMMAND, participant = Workbench)]
 pub(crate) async fn reveal_log_folder(
     context: CommandContext,

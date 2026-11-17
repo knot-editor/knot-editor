@@ -386,7 +386,20 @@ if (pickedFolder.kind === "selected") {
 void pickedFolder.value;
 // @ts-expect-error target options accept a live window target, not a string
 await workspaces.pickFolder({ target: "window" });
-await workbench.showMessage({ title: "Notice", message: "body" });
+const raised: number = await workbench.showNotice({
+  message: "body",
+  title: "Notice",
+  severity: "warning",
+  autoDismiss: false,
+  actions: [{ title: "Open Log", command: { name: "app.open-log" } }],
+});
+await workbench.markNotificationsRead([raised]);
+await workbench.dismissNotification(raised);
+await workbench.clearNotifications();
+// @ts-expect-error a notice needs a message
+await workbench.showNotice({ title: "No message" });
+// @ts-expect-error severity is one of three names
+await workbench.showNotice({ message: "body", severity: "fatal" });
 // @ts-expect-error picker items require an id
 await workbench.showPicker({ title: "Bad", items: [{ label: "missing" }] });
 // @ts-expect-error onQuery receives the query text
@@ -398,7 +411,7 @@ await workbench.showPicker({ title: "Bad", items: [], onHighlight: (id: number) 
 // @ts-expect-error input title is required
 await workbench.showInput({ value: "no title" });
 // @ts-expect-error command targets are not live window targets
-await workbench.showMessage({ title: "Notice", target: {} as CommandTarget });
+await workbench.showNotice({ message: "body", target: {} as CommandTarget });
 
 // @ts-expect-error plain URIs are not document identities
 await documents.present("file:///tmp/document.txt");
@@ -416,6 +429,10 @@ const observation = await workbench.observe(async (event) => {
     // @ts-expect-error the launch event carries no window
     void event.window;
   }
+  if (event.type === "notificationsChanged") {
+    const unread: number = event.notifications.filter((notice) => !notice.read).length;
+    void unread;
+  }
   if (event.type === "viewStateChanged") {
     const settled: import("knot").WindowLayout = await workbench.captureLayout(event.window);
     void settled;
@@ -426,6 +443,7 @@ const observation = await workbench.observe(async (event) => {
 const watermark: number = observation.watermark;
 const observedWindows: readonly import("knot").WindowInfo[] = observation.snapshot.windows;
 const launchedAlready: boolean = observation.snapshot.launched;
+const observedNotices: readonly import("knot").Notice[] = observation.snapshot.notifications;
 void launchedAlready;
 await observation.dispose();
 void [watermark, observedWindows];

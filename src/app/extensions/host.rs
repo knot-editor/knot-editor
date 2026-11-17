@@ -2425,8 +2425,20 @@ impl ProductExtensionHost {
             .map(|document| application_document_info(document, buffers[&document.id()], cx))
             .collect();
         let active = crate::app::product::active_window(cx).map(|window| window.entity_id());
+        let notifications = cx
+            .try_global::<crate::app::notifications::ApplicationNotifications>()
+            .map(|global| {
+                global
+                    .0
+                    .notices()
+                    .iter()
+                    .map(|notice| notice.info())
+                    .collect()
+            })
+            .unwrap_or_default();
         let mut snapshot = ApplicationSnapshot {
             documents: document_infos,
+            notifications,
             launched: cx.has_global::<ApplicationLaunched>(),
             ..Default::default()
         };

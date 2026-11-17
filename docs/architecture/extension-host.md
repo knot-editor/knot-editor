@@ -266,6 +266,9 @@ not publish metadata events. All documents are tracked independently of author
 buffer lookup. One buffer-commit drain routes text edits to buffer subscribers;
 application observation compares metadata without consuming those edits again.
 
+The snapshot also carries the notice history, and a change to it publishes
+`notificationsChanged` with the whole history.
+
 Two events are not derived from metadata alone. `viewStateChanged` follows a
 window's settled [layout change](workbench-and-lifecycle.md#window-layouts); the
 host commits pending metadata first, so it never precedes the window's own

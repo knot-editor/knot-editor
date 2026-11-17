@@ -1368,22 +1368,6 @@ impl HostArguments for ConfirmationArguments {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) struct MessageArguments {
-    pub title: String,
-    pub message: Option<String>,
-    pub target: Option<String>,
-}
-impl HostArguments for MessageArguments {
-    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
-        Ok(Self {
-            title: reader.text(2, "message title must be text")?,
-            message: reader.optional_text(3, "message body must be text or null")?,
-            target: reader.optional_text(4, "window target must be text")?,
-        })
-    }
-}
-
 fn transient_owner(request: &knot_protocol::RequestContext) -> TransientOwner {
     TransientOwner {
         extension: request.extension,
@@ -2071,32 +2055,6 @@ pub(crate) async fn show_confirmation(
         Ok(TransientOutcome::Confirmed) => Ok(ConfirmationResult::Confirmed),
         Ok(TransientOutcome::Dismissed) => Ok(ConfirmationResult::Dismissed),
         _ => Err(TransientError::Cancelled),
-    }
-}
-
-#[host_operation("showMessage")]
-pub(crate) async fn show_message(
-    context: HostContext,
-    arguments: MessageArguments,
-) -> Result<(), TransientError> {
-    let request = context.request;
-    let owner = transient_owner(&request);
-    let MessageArguments {
-        title,
-        message,
-        target,
-    } = arguments;
-    let receiver = context.foreground(|host, cx| {
-        host.with_transient_window(
-            &request,
-            target.as_deref(),
-            move |window, cx| window.begin_message(owner, PromptText { title, message }, cx),
-            cx,
-        )
-    })??;
-    match receiver.await {
-        Ok(_) => Ok(()),
-        Err(_) => Err(TransientError::Cancelled),
     }
 }
 
@@ -6217,4 +6175,125 @@ mod tests {
         pollster::block_on(pending).unwrap();
         cx.run_until_parked();
     }
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct NoticeActionValue {
+    title: String,
+    command: crate::app::status_bar::StatusCommand,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct NoticeValue {
+    message: String,
+    title: Option<String>,
+    severity: String,
+    auto_dismiss: Option<bool>,
+    actions: Vec<NoticeActionValue>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct NoticeArguments {
+    notice: NoticeValue,
+    target: Option<String>,
+}
+
+impl HostArguments for NoticeArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        let notice = serde_json::from_value(setting_value(reader.command_arguments(2)?))
+            .map_err(|_| DecodeError::Type("invalid notice"))?;
+        Ok(Self {
+            notice,
+            target: reader.optional_text(3, "window target must be text")?,
+        })
+    }
+}
+
+/// Record a notice, which pops up without waiting for the user, and return its
+/// ID.
+#[host_operation("showNotice")]
+pub(crate) async fn show_notice(
+    context: HostContext,
+    arguments: NoticeArguments,
+) -> Result<u64, AccessError> {
+    let request = context.request;
+    let NoticeArguments { notice, target } = arguments;
+    let severity = crate::app::notifications::Severity::parse(&notice.severity)
+        .ok_or(AccessError::InvalidTarget)?;
+    context.foreground(move |host, cx| {
+        if let Some(window) = &target
+            && crate::app::product::find_window(window, cx).is_none()
+        {
+            return Err(AccessError::InvalidTarget);
+        }
+        let source = host
+            .lifecycle_label(ExtensionKey::new(request.extension, request.lifecycle))
+            .unwrap_or_else(|| "Knot".to_owned());
+        let spec = crate::app::notifications::NoticeSpec {
+            message: notice.message,
+            title: notice.title,
+            severity,
+            auto_dismiss: notice.auto_dismiss,
+            actions: notice
+                .actions
+                .into_iter()
+                .map(|action| crate::app::notifications::NoticeAction {
+                    title: action.title,
+                    command: action.command,
+                })
+                .collect(),
+            target,
+            source,
+        };
+        Ok(crate::app::notifications::raise(spec, cx))
+    })?
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct NoticeIds(Vec<u64>);
+
+impl HostArguments for NoticeIds {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        serde_json::from_value(setting_value(reader.command_arguments(2)?))
+            .map(Self)
+            .map_err(|_| DecodeError::Type("notice IDs must be integers"))
+    }
+}
+
+#[host_operation("markNotificationsRead")]
+pub(crate) async fn mark_notifications_read(
+    context: HostContext,
+    arguments: NoticeIds,
+) -> Result<(), AccessError> {
+    context.foreground(move |_, cx| {
+        crate::app::notifications::update(cx, |store| store.mark_read(&arguments.0));
+    })
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct NoticeId(u64);
+
+impl HostArguments for NoticeId {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self(reader.integer(2)?))
+    }
+}
+
+#[host_operation("dismissNotification")]
+pub(crate) async fn dismiss_notification(
+    context: HostContext,
+    arguments: NoticeId,
+) -> Result<(), AccessError> {
+    context.foreground(move |_, cx| {
+        crate::app::notifications::update(cx, |store| store.dismiss(arguments.0));
+    })
+}
+
+#[host_operation("clearNotifications")]
+pub(crate) async fn clear_notifications(context: HostContext, (): ()) -> Result<(), AccessError> {
+    context.foreground(|_, cx| {
+        crate::app::notifications::update(cx, |store| store.clear());
+    })
 }

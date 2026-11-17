@@ -1021,11 +1021,47 @@ export async function showConfirmation(options) {
   return request("showConfirmation", title, message, confirmLabel, cancelLabel, target);
 }
 
-export async function showMessage(options) {
+const NOTICE_SEVERITIES = ["info", "warning", "error"];
+function noticeAction(value) {
+  const action = record(value, "notice action must be an object");
+  const command = record(action.command, "notice action command must be an object");
+  return {
+    title: string(action.title, "notice action title must be text"),
+    command: {
+      name: string(command.name, "notice action command name must be text"),
+      arguments: command.arguments === undefined ? null : validateJsonValue(command.arguments),
+    },
+  };
+}
+export async function showNotice(options) {
   const target = transientTarget(options);
-  const title = string(options.title, "message title must be text");
-  const message = optionalText(options.message);
-  await request("showMessage", title, message, target);
+  const severity = options.severity ?? "info";
+  if (!NOTICE_SEVERITIES.includes(severity)) {
+    throw new TypeError('notice severity must be "info", "warning", or "error"');
+  }
+  if (options.autoDismiss != null && typeof options.autoDismiss !== "boolean") {
+    throw new TypeError("notice autoDismiss must be a boolean");
+  }
+  return request("showNotice", {
+    message: string(options.message, "notice message must be text"),
+    title: optionalText(options.title),
+    severity,
+    autoDismiss: options.autoDismiss ?? null,
+    actions: options.actions == null ? [] : arrayItems(options.actions, noticeAction),
+  }, target);
+}
+function noticeId(value) {
+  if (!Number.isSafeInteger(value) || value < 0) throw new TypeError("notice ID must be an integer");
+  return value;
+}
+export async function markNotificationsRead(ids) {
+  await request("markNotificationsRead", arrayItems(ids, noticeId));
+}
+export async function dismissNotification(id) {
+  await request("dismissNotification", noticeId(id));
+}
+export async function clearNotifications() {
+  await request("clearNotifications");
 }
 
 function statusItemValue(options) {
@@ -2135,8 +2171,16 @@ function applicationSnapshotFromNative(value) {
     windows: Object.freeze(value.windows.map(windowFromNative)),
     activeWindow: value.activeWindow === null ? null : windowTarget(value.activeWindow),
     activeTarget: value.activeTarget === null ? null : presentationTarget(value.activeTarget),
+    notifications: noticesFromNative(value.notifications),
     launched: value.launched,
   });
+}
+function noticesFromNative(notices) {
+  return Object.freeze(notices.map(notice => Object.freeze({
+    ...notice,
+    actions: Object.freeze(notice.actions.map(action => Object.freeze(action))),
+    target: notice.target === null ? null : windowTarget(notice.target),
+  })));
 }
 export async function observeWorkbench(listener) {
   if (typeof listener !== "function") throw new TypeError("observe requires a listener");
@@ -2157,6 +2201,7 @@ globalThis.__knotDispatchApplicationChange = async (subscription, value) => {
     case "windowOpened": case "presentationsChanged": payload = { window: windowFromNative(value.window) }; break;
     case "windowClosed": case "viewStateChanged": payload = { window: windowTarget(value.window) }; break;
     case "launched": payload = {}; break;
+    case "notificationsChanged": payload = { notifications: noticesFromNative(value.notifications) }; break;
     case "workspaceChanged": payload = { workspace: workspaceFromNative(value.workspace) }; break;
     case "activeTargetChanged": payload = {
       activeWindow: value.activeWindow === null ? null : windowTarget(value.activeWindow),
