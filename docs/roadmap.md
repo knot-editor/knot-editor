@@ -28,8 +28,8 @@ point.
 
 ## Next up
 
-1. D022 — Editor autocompletion.
-2. D183 — Deterministic indentation after Enter and closing tokens.
+1. D202 — Slow typing.
+2. D022 — Editor autocompletion.
 3. D175 — Type-ahead after a held Enter.
 4. D182 — Interleave extension roots at awaits: before D067.
 5. D156 — Fewer host round trips per key.
@@ -55,20 +55,18 @@ hold the analyses that support some items.
 
 ## Bugs
 
-- **D183 — Deterministic indentation after Enter and closing tokens** 🚧
+- **D202 — Slow typing**
   - Depends on: none
-  - Description: Enter and a typed closing token such as `}` or `else` leave a
-    request for the indent query that waits for a syntax tree of that exact
-    revision, and any later edit drops it. When the parse exceeds the 1 ms
-    foreground budget and finishes in the background, a key typed first leaves
-    the line at the wrong indentation, so the result depends on timing in large
-    files. Enter between an auto-closed pair is unaffected. Let these two
-    commands parse in the foreground up to a larger budget, chosen from a
-    benchmark of incremental reparses on a large file, and keep the deferred
-    request only beyond it. Rebasing the request over later typing was
-    rejected: the line would shift after the typed text and needs rules for
-    when to give up. The [plan](plans/d183-deterministic-indentation.md)
-    holds the design and checkpoints.
+  - Description: Typing in a Markdown file of about 70k lines with fenced code
+    lags noticeably, in prose and in fences alike. Each commit spends its 1 ms
+    foreground reparse attempt and discards it on overrun, an incremental
+    reparse takes about 40 ms, a new background parse starts per edit, and
+    highlights paint from stale trees meanwhile. Profile per keystroke first.
+    `indent_reparse_costs_on_large_files` in `syntax/tests.rs` measures
+    incremental reparses: Rust 7k lines about 1 ms, 35k about 8 ms; TypeScript
+    60k about 3 ms; Python 55k about 5 ms for Enter and 60 ms for `else:`. A
+    larger foreground budget for Enter and closing tokens helped only files of
+    7k to 30k lines and didn't change typing latency, so it was dropped.
 
 - **D175 — Type-ahead after a held Enter**
   - Depends on: none

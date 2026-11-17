@@ -56,11 +56,6 @@ use crate::theme::Highlight;
 /// continues in the background.
 pub const FOREGROUND_BUDGET: Duration = Duration::from_millis(1);
 
-/// How long a commit that may change a line's indentation (Enter, or typing on
-/// an indented line) may spend reparsing on the foreground, about half a
-/// frame.
-pub const INDENT_BUDGET: Duration = Duration::from_millis(8);
-
 /// Priority of a pattern without a `priority` property, as in Neovim.
 const DEFAULT_PRIORITY: u32 = 100;
 
