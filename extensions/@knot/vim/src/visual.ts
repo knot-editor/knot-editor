@@ -119,7 +119,7 @@ async function land(state: State, lines: BufferLines, moved: Moved) {
  * the line's end. Insert mode is left alone. */
 export async function followSelection(state: State, notified?: EditorSelection) {
   if (state.mode === "insert") return;
-  const selection = notified ?? await state.handle.selection();
+  const selection = notified ?? await state.handle.selection({ lines: 0 });
   const bare = selection.anchor === selection.caret;
   if (isVisual(state.mode)) {
     const own = state.selected;

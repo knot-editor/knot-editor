@@ -60,12 +60,11 @@ test("a document closing while the position refreshes clears the position", asyn
   const document = host.addDocument({ text: TEXT });
   const window = host.openWindow({ documents: [document] });
   await start();
-  const editor = await editorOf(window);
-  host.failNext("buffer.lineAt", "BufferClosed");
-  await editor.setSelection({ anchor: 3, caret: 3 });
+  host.failNext("editor.selection", "InvalidTarget");
+  await changed(window);
   assert.equal(texts(window).some((text) => text.startsWith("Ln ")), false);
-  await editor.setSelection({ anchor: 3, caret: 3 });
-  assert.equal(texts(window)[0], "Ln 1, Col 4");
+  await changed(window);
+  assert.equal(texts(window)[0], "Ln 1, Col 1");
 });
 
 test("the language shows plain text and falls back to an unregistered ID", async () => {

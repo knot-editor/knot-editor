@@ -722,7 +722,7 @@ fn a_key_costs_a_bounded_number_of_requests_across_extensions(cx: &mut TestAppCo
     test_editor.work_per_key(&["l"], cx);
     let keys = ["j", "w", "x"];
     // At most this many foreground requests per key.
-    let bounds = [18, 14, 15];
+    let bounds = [10, 8, 13];
     let counts = test_editor.work_per_key(&keys, cx);
     let report = keys
         .iter()

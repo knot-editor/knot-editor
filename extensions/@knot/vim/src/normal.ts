@@ -110,9 +110,10 @@ export async function setMode(state: State, mode: Mode) {
 /** Puts a caret that sits past its line's last character back on it, as
  * normal mode never rests on a line's end. A selection is left alone. */
 export async function clampCaret(state: State, selection?: EditorSelection) {
-  const { anchor, caret } = selection ?? await state.handle.selection();
+  const read = selection ?? await state.handle.selection({ lines: 0 });
+  const { anchor, caret } = read;
   if (anchor !== caret) return;
-  const lines = new BufferLines(state.buffer);
+  const lines = new BufferLines(state.buffer, read);
   const position = await lines.position(caret);
   const last = lastColumn(await lines.text(position.line));
   if (position.col > last) await moveTo(state, lines, { line: position.line, col: last });
@@ -586,8 +587,10 @@ async function matchingBracket(state: State, lines: BufferLines, from: Position)
 }
 
 async function motion(state: State, name: Motion, count: number | null) {
-  const lines = new BufferLines(state.buffer);
-  const { caret } = await state.handle.selection();
+  // Counts of one or two lines stay within the lines read here.
+  const selection = await state.handle.selection({ lines: 1 });
+  const { caret } = selection;
+  const lines = new BufferLines(state.buffer, selection);
   const from = await lines.position(caret);
   if (typeof name !== "string" && "mark" in name) {
     const global = state.shared.globalMarks.get(name.mark);

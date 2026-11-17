@@ -5,10 +5,18 @@ import type { DocumentInfo, LanguageInfo, TextSnapshot } from "knot";
  * would send the whole selection to JavaScript on every change. */
 export const COUNT_LIMIT = 1 << 20;
 
-/** The 1-based column of a byte offset relative to the snapshot, counted in
- * Unicode scalar values with a tab as one, as Go to Line reads columns. */
-export function columnAt(line: TextSnapshot, offset: number): number {
-  return [...line.text.slice(0, line.utf16OffsetAtByte(offset))].length + 1;
+/** The 1-based column of a byte offset in a line's text, counted in Unicode
+ * scalar values with a tab as one, as Go to Line reads columns. */
+export function columnAt(text: string, offset: number): number {
+  let bytes = 0;
+  let column = 1;
+  for (const character of text) {
+    if (bytes >= offset) break;
+    const code = character.codePointAt(0)!;
+    bytes += code < 0x80 ? 1 : code < 0x800 ? 2 : code < 0x10000 ? 3 : 4;
+    column++;
+  }
+  return column;
 }
 
 /** The selection's size: its characters when the selection is small, else

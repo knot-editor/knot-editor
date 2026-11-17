@@ -5,7 +5,7 @@
 // editors.
 import { commands, documents, languages, settings, workbench, windows } from "knot";
 import type {
-  Buffer, CommandContext, Disposable, DocumentId, DocumentInfo, EditorHandle, EditorSelection, StatusItem,
+  Buffer, CommandContext, Disposable, DocumentId, DocumentInfo, EditorHandle, EditorSelectionWithLines, StatusItem,
   StatusItemOptions, ViewTarget, WindowInfo, WindowTarget,
 } from "knot";
 import { registerMenus } from "./menus.js";
@@ -50,13 +50,11 @@ const options = (name: ItemName, text: string): StatusItemOptions => ({
 async function caretText(
   handle: EditorHandle,
   buffer: Buffer,
-  selection?: EditorSelection,
+  selection?: EditorSelectionWithLines,
 ): Promise<string> {
-  const { anchor, caret } = selection ?? await handle.selection();
-  const line = await buffer.lineAt(caret);
-  const range = await buffer.lineRange(line);
-  const text = await buffer.snapshot(range);
-  const column = columnAt(text, Math.min(caret, range.endByteOffset) - range.startByteOffset);
+  const { anchor, caret, line, lines } = selection ?? await handle.selection({ lines: 0 });
+  const { text, startByteOffset } = lines.find((item) => item.line === line)!;
+  const column = columnAt(text, caret - startByteOffset);
   if (anchor === caret) return positionText(line + 1, column, null);
   const bytes = Math.abs(caret - anchor);
   const selected =
@@ -88,7 +86,7 @@ export async function start() {
     else await items[name].update(options(name, text), { window });
   };
 
-  const refreshPosition = async (window: WindowTarget, selection?: EditorSelection) => {
+  const refreshPosition = async (window: WindowTarget, selection?: EditorSelectionWithLines) => {
     const follow = follows.get(window);
     if (follow?.handle == null || follow.buffer === null) {
       await show("position", window, null);
@@ -155,7 +153,7 @@ export async function start() {
       current.target = null;
       if (info.statusTarget !== null) {
         current.handle = await workbench.editor(info.statusTarget);
-        current.selection = await current.handle.onDidChangeSelection((selection) => refreshPosition(window, selection));
+        current.selection = await current.handle.onDidChangeSelection((selection) => refreshPosition(window, selection), { lines: 0 });
       }
       current.target = info.statusTarget;
     }

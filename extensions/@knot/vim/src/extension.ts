@@ -266,7 +266,7 @@ class Vim {
       const mode = state.mode;
       await whileOpen(() => followSelection(state, selection));
       if (state.mode !== mode) await this.showStatus(target.window);
-    });
+    }, { lines: 0 });
     await setMode(state, "normal");
     await whileOpen(() => followSelection(state));
     return state;
