@@ -23,7 +23,8 @@ use crate::{
     history::{EditGrouping, EditHistory, HistoryViewChange, HistoryViewState},
     indentation::{self, IndentStyle},
     syntax::{
-        BackgroundParse, FOREGROUND_BUDGET, ParsedTree, SyntaxLanguage, SyntaxState,
+        BackgroundParse, DiscardedLayers, FOREGROUND_BUDGET, ParsedTree, SyntaxLanguage,
+        SyntaxState,
         brackets::BracketPair,
         indent::{LineIndent, LineSource},
     },
@@ -826,6 +827,12 @@ impl BufferModel {
             syntax.parse_in_foreground(&self.buffer.snapshot(), self.syntax_budget);
         }
         true
+    }
+
+    /// The layers the last accepted parse replaced, to drop off the
+    /// foreground.
+    pub fn take_replaced_syntax_layers(&mut self) -> Option<DiscardedLayers> {
+        self.syntax.as_mut()?.take_replaced_layers()
     }
 
     /// Identifies the current syntax highlights; `None` without syntax.

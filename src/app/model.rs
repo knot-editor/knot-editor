@@ -56,11 +56,24 @@ impl Buffer {
             let Some(parsed) = parsed else {
                 return Ok(());
             };
-            this.update(cx, |buffer, cx| {
-                if buffer.model.finish_syntax_parse(parsed) {
+            let replaced = this.update(cx, |buffer, cx| {
+                let accepted = buffer.model.finish_syntax_parse(parsed);
+                let replaced = buffer.model.take_replaced_syntax_layers();
+                if accepted {
                     cx.notify();
                 }
-            })
+                replaced
+            })?;
+            if let Some(replaced) = replaced {
+                cx.background_spawn(async move {
+                    #[cfg(any(test, feature = "test-support"))]
+                    crate::app::work_counts::background_parse(|| drop(replaced));
+                    #[cfg(not(any(test, feature = "test-support")))]
+                    drop(replaced);
+                })
+                .detach();
+            }
+            anyhow::Ok(())
         })
         .detach();
     }

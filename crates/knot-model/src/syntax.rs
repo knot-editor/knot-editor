@@ -265,7 +265,14 @@ pub struct SyntaxState {
     /// with another state, so a view's cache cannot outlive a replacement.
     generation: u64,
     background: Option<RunningParse>,
+    /// The layers the last accepted parse replaced, until the caller takes
+    /// them to free off the foreground.
+    replaced: Option<DiscardedLayers>,
 }
+
+/// Layers a parse replaced. Freeing them takes milliseconds in a large
+/// document, so whoever takes them drops them off the foreground.
+pub struct DiscardedLayers(#[expect(dead_code, reason = "held only to be dropped")] Arc<Layer>);
 
 /// A parse tree over the whole text or over the ranges an injection hands to
 /// another language, and the layers injected into it.
@@ -359,6 +366,7 @@ impl SyntaxState {
             overran: None,
             generation: next_generation(),
             background: None,
+            replaced: None,
         }
     }
 
@@ -610,11 +618,16 @@ impl SyntaxState {
     }
 
     fn accept(&mut self, root: Arc<Layer>, current: bool) {
-        // Freeing every tree of a large document takes milliseconds.
-        let old = std::mem::replace(&mut self.root, root);
-        std::thread::spawn(move || drop(old));
+        self.replaced = Some(DiscardedLayers(std::mem::replace(&mut self.root, root)));
         self.current = current;
         self.generation = next_generation();
+    }
+
+    /// The layers the last accepted parse replaced, for the caller to drop off
+    /// the foreground. Until taken they stay shared with the current trees,
+    /// which makes the next edit copy what it touches.
+    pub fn take_replaced_layers(&mut self) -> Option<DiscardedLayers> {
+        self.replaced.take()
     }
 
     /// Sorted, non-overlapping highlights of `text`, the current text, within

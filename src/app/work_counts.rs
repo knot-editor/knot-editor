@@ -8,8 +8,8 @@ use std::{cell::RefCell, time::Duration};
 pub(crate) struct WorkCounts {
     pub(crate) draws: usize,
     pub(crate) requests: Vec<&'static str>,
-    /// The thread time of background syntax parses, which a test executor
-    /// runs on the foreground thread.
+    /// The thread time of background syntax parses and of freeing the layers
+    /// they replace, which a test executor runs on the foreground thread.
     pub(crate) background_parses: Duration,
 }
 
@@ -25,7 +25,7 @@ pub(crate) fn request(operation: &'static str) {
     COUNTS.with(|counts| counts.borrow_mut().requests.push(operation));
 }
 
-/// Run a background syntax parse, counting its thread time.
+/// Run background syntax work, counting its thread time.
 pub(crate) fn background_parse<T>(parse: impl FnOnce() -> T) -> T {
     let started = thread_time();
     let parsed = parse();

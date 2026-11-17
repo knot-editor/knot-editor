@@ -152,8 +152,8 @@ fixed:
   bytes before reading its tree.
 - ✅ `layers_at` and `layer_at` listed the included ranges of every sibling
   layer on each paint; they test the host span first.
-- ✅ Dropping the replaced trees (1.7 ms in Markdown) now happens on a
-  short-lived thread.
+- ✅ Dropping the replaced trees (1.7 ms in Markdown) is handed to the
+  application, which drops it on its background executor.
 
 Deterministic tests: an edit leaves injections shared until they are read, an
 overrunning state skips the foreground until a fitting background parse, and
