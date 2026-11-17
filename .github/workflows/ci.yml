@@ -63,6 +63,8 @@ jobs:
           ./actionlint
       - name: Test cask rendering
         run: scripts/test-render-cask.sh
+      - name: Test release notes
+        run: scripts/test-release-notes.sh
 
   handler-platforms:
     strategy:
