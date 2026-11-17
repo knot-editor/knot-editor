@@ -24,6 +24,7 @@ pub mod filesystem;
 pub mod history;
 pub mod icons;
 pub mod indentation;
+pub mod input_history;
 pub mod keys;
 pub mod languages;
 #[cfg(any(test, feature = "test-support"))]
