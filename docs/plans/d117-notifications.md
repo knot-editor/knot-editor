@@ -1,6 +1,6 @@
 # D117: Non-modal notifications
 
-Status: 🚧 approved, checkpoints 1 and 2 done. Roadmap item [D117](../roadmap.md).
+Status: 🚧 approved, checkpoints 1 to 3 done. Roadmap item [D117](../roadmap.md).
 
 ## Outcome
 
@@ -139,26 +139,14 @@ Explorer and Projects report failures as `warning` notices. A notice without a
 `target` shows in every window, so those reports no longer stay in the
 command's window. The personal `post-init.js` carries the `Try:` commands.
 
-### 3. Popup countdown ring ✅ (awaiting review)
+### 3. Popup countdown ring ✅
 
-Deliverables: the close button is always visible, replacing the hover-only
-button. On an auto-dismissing popup a thin ring in the severity accent drains
-around it over `notifications.timeout`; a sticky popup shows the plain button.
-Pointing at the stack freezes every ring along with its timer, and leaving
-resumes both.
-
-Validation: a window test that a ring's progress follows the timer, freezes
-while the stack is hovered, resumes after, and is absent on a sticky popup.
-
-Review gate: the user watches popups of each severity and `autoDismiss` setting
-with the `Try: Notice ...` commands (the personal `post-init.js` still has
-them), including pointing at the stack. Hovering now resumes the remaining time
-rather than restarting the timeout.
-
-Implementation context:
-- `src/app/product/notifications.rs` owns the cards, timers, and hover pause.
-- Track elapsed time per card rather than only the timer task, so the ring and
-  the pause agree.
+Approved. The close button is always visible. An auto-dismissing popup shows a
+ring in the severity accent that drains over `notifications.timeout`, and a
+sticky popup shows the plain button. Pointing at the stack freezes every ring
+and timer, and leaving resumes from the remaining time. The ring is drawn from
+the countdown state and repainted by a per-window ticker, so it agrees with the
+timer in every window.
 
 ### 4. Notifications panel
 
