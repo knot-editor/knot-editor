@@ -1173,9 +1173,9 @@ pub(crate) async fn dispose_editor_contributions(
 
 use crate::app::extensions::semantics::{SemanticError, ViewPresentation};
 use knot_protocol::{
-    CompletionProviderRegistrationId, ConfirmationResult, FolderPickerResult, InputCompletion,
-    InputResult, InputUpdate, PickerItem, PickerResult, PickerRow, PickerTab, PickerUpdate,
-    ProviderIdentity, TreeAction, TreeProviderRegistrationId, ViewContentKind,
+    ConfirmationResult, FolderPickerResult, InputCompletion, InputResult, InputUpdate, PickerItem,
+    PickerResult, PickerRow, PickerTab, PickerUpdate, ProviderIdentity, TreeAction,
+    TreeProviderRegistrationId, ViewContentKind,
 };
 
 use crate::app::transient::{PromptText, TransientOutcome, TransientOwner};
@@ -1220,17 +1220,6 @@ impl HostArguments for TreeArguments {
             visible: reader.integer(6)? != 0,
             language: reader.optional_text(9, "view language must be text or null")?,
             gutter: reader.integer(10)? != 0,
-        })
-    }
-}
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) struct CompletionArguments {
-    pub label: String,
-}
-impl HostArguments for CompletionArguments {
-    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
-        Ok(Self {
-            label: reader.text(2, "UnsupportedOperation")?,
         })
     }
 }
@@ -1282,20 +1271,6 @@ impl HostArguments for TreeRevealArguments {
     }
     fn provider_mutation(&self) -> Option<ProviderIdentity> {
         Some(ProviderIdentity::Tree(self.registration))
-    }
-}
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) struct CompletionRegistrationArguments {
-    pub registration: CompletionProviderRegistrationId,
-}
-impl HostArguments for CompletionRegistrationArguments {
-    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
-        Ok(Self {
-            registration: CompletionProviderRegistrationId::new(reader.integer(2)?),
-        })
-    }
-    fn provider_mutation(&self) -> Option<ProviderIdentity> {
-        Some(ProviderIdentity::Completion(self.registration))
     }
 }
 
@@ -2668,33 +2643,6 @@ pub(crate) async fn toggle_view(
     })?
 }
 
-#[host_operation("registerCompletionProvider")]
-pub(crate) async fn register_completion_provider(
-    context: HostContext,
-    arguments: CompletionArguments,
-) -> Result<CompletionProviderRegistrationId, SemanticError> {
-    let request = context.request;
-    context.foreground(|host, cx| {
-        host.semantics
-            .register_completion_provider(&request, arguments, cx)
-    })?
-}
-
-#[host_operation("unregisterCompletionProvider")]
-pub(crate) async fn unregister_completion_provider(
-    context: HostContext,
-    arguments: CompletionRegistrationArguments,
-) -> Result<(), SemanticError> {
-    let request = context.request;
-    context.foreground(|host, cx| {
-        let registration = arguments.registration;
-        host.semantics
-            .unregister_completion_provider(&request, arguments, cx)?;
-        host.cancel_completion_provider(registration, cx);
-        Ok(())
-    })?
-}
-
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct RegisterProviderArguments {
     pub name: String,
@@ -2718,6 +2666,9 @@ impl HostArguments for ProviderRegistrationArguments {
         Ok(Self {
             registration: knot_protocol::ProviderRegistrationId::new(reader.integer(2)?),
         })
+    }
+    fn provider_mutation(&self) -> Option<ProviderIdentity> {
+        Some(ProviderIdentity::Named(self.registration))
     }
 }
 
@@ -2793,9 +2744,11 @@ pub(crate) async fn unregister_provider(
     arguments: ProviderRegistrationArguments,
 ) -> Result<(), SemanticError> {
     let request = context.request;
-    context.foreground(|host, _| {
+    context.foreground(|host, cx| {
         host.semantics
-            .unregister_provider(&request, arguments.registration)
+            .unregister_provider(&request, arguments.registration)?;
+        host.cancel_completion_provider(arguments.registration, cx);
+        Ok(())
     })?
 }
 

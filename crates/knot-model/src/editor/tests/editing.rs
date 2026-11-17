@@ -6,7 +6,7 @@ use knot_protocol::{
 };
 
 use super::*;
-use crate::completion::CompletionProviderRegistry;
+use crate::completion::CompletionProviderRegistration;
 
 /// The text the last copy or cut put on the clipboard.
 fn clipboard(f: &mut Fixture) -> Option<String> {
@@ -280,17 +280,17 @@ fn constructs_from_arbitrary_buffer_text() {
 
 #[test]
 fn completion_acceptance_rechecks_the_captured_revision() {
-    let mut registry = CompletionProviderRegistry::new();
-    registry.register(
-        ExtensionId::new(1),
-        ExtensionLifecycleId::new(1),
-        "fixture".into(),
-    );
+    let providers = vec![CompletionProviderRegistration {
+        id: ProviderRegistrationId::new(1),
+        extension: ExtensionId::new(1),
+        lifecycle: ExtensionLifecycleId::new(1),
+        label: "fixture".into(),
+    }];
     let open = |f: &mut Fixture, handle: u64| {
         f.editor.cursor_col = 2;
         let request = f
             .editor
-            .start_completion(BufferHandle::new(handle), registry.snapshot(), &f.buffer)
+            .start_completion(BufferHandle::new(handle), providers.clone(), &f.buffer)
             .remove(0)
             .1;
         assert!(f.editor.apply_completion_response(

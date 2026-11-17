@@ -31,8 +31,8 @@ use gpui::{prelude::*, *};
 use unicode_segmentation::UnicodeSegmentation;
 
 use knot_protocol::{
-    BufferHandle, ByteRange, CompletionProviderRegistrationId, CompletionRequest,
-    CompletionResponse, DecorationStyle,
+    BufferHandle, ByteRange, CompletionRequest, CompletionResponse, DecorationStyle,
+    ProviderRegistrationId,
 };
 
 pub(crate) use knot_model::editor::*;
@@ -110,7 +110,7 @@ pub struct Editor {
     model: Entity<Buffer>,
     /// The in-flight provider requests of the open completion, by its
     /// generation; dropped when the completion closes or moves on.
-    completion_tasks: Vec<(u64, CompletionProviderRegistrationId, Task<()>)>,
+    completion_tasks: Vec<(u64, ProviderRegistrationId, Task<()>)>,
     /// The text field behind each field of the open bars.
     bar_inputs: Vec<bars::BarInput>,
     _model_subscription: Subscription,
@@ -466,7 +466,7 @@ impl Editor {
     pub(crate) fn retain_completion_task(
         &mut self,
         generation: u64,
-        registration: CompletionProviderRegistrationId,
+        registration: ProviderRegistrationId,
         task: Task<()>,
     ) {
         if self.state.completion_generation() == Some(generation) {
@@ -476,7 +476,7 @@ impl Editor {
 
     pub(crate) fn cancel_completion_provider(
         &mut self,
-        registration: CompletionProviderRegistrationId,
+        registration: ProviderRegistrationId,
         cx: &mut Context<Self>,
     ) {
         self.completion_tasks

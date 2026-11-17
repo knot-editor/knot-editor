@@ -1,4 +1,4 @@
-//! Foreground ownership for extension view, completion, and named providers.
+//! Foreground ownership for extension view and named providers.
 //!
 //! A contributed view definition and its native instances share one
 //! lifecycle-owned registration. Definitions exist independently of windows;
@@ -9,21 +9,20 @@ use std::collections::{HashMap, HashSet};
 use gpui::{App, Entity, WeakEntity};
 
 use knot_model::providers::{ProviderRegistration, ProviderRegistry};
-use knot_protocol::{CompletionProviderRegistrationId, ProviderRegistrationId};
+use knot_protocol::ProviderRegistrationId;
 use knot_protocol::{
     ExtensionId, ExtensionLifecycleId, RequestContext, TreeAction, TreeChildrenResponse,
     TreeProviderRegistrationId, ViewContentKind, ViewId,
 };
 
 use crate::app::extensions::host::handlers::{
-    AccessError, CompletionArguments, CompletionRegistrationArguments, ReplaceViewTextArguments,
-    TreeArguments, TreeInvalidationArguments, TreeRegistrationArguments, TreeRevealArguments,
+    AccessError, ReplaceViewTextArguments, TreeArguments, TreeInvalidationArguments,
+    TreeRegistrationArguments, TreeRevealArguments,
 };
 use crate::app::workbench::DockLocation;
 use knot_protocol::declarations::HostError;
 
 use crate::app::{
-    completion::{CompletionProviderRegistration, CompletionProviderRegistry},
     text_view::TextView,
     tree_view::{TreeProviderIdentity, TreeView, TreeViewRegistrationError},
 };
@@ -43,11 +42,6 @@ pub(crate) enum SemanticError {
         message = "ViewRegistrationNotFound"
     )]
     ViewRegistrationNotFound,
-    #[error(
-        code = "CompletionProviderNotFound",
-        message = "CompletionProviderNotFound"
-    )]
-    CompletionProviderNotFound,
     #[error(
         code = "ProviderRegistrationNotFound",
         message = "ProviderRegistrationNotFound"
@@ -105,7 +99,6 @@ pub(crate) struct ExtensionSemanticBridge {
     tree_registrations: HashMap<TreeProviderRegistrationId, TreeRegistration>,
     next_tree_registration: u64,
     next_default_order: usize,
-    completion_providers: CompletionProviderRegistry,
     providers: ProviderRegistry,
 }
 
@@ -118,7 +111,6 @@ impl ExtensionSemanticBridge {
             tree_registrations: HashMap::new(),
             next_tree_registration: 1,
             next_default_order: 1_000,
-            completion_providers: CompletionProviderRegistry::new(),
             providers: ProviderRegistry::new(),
         }
     }
@@ -441,38 +433,6 @@ impl ExtensionSemanticBridge {
         Ok(entry.definition.id.clone())
     }
 
-    pub(crate) fn register_completion_provider(
-        &mut self,
-        request: &RequestContext,
-        arguments: CompletionArguments,
-        _cx: &mut App,
-    ) -> Result<CompletionProviderRegistrationId, SemanticError> {
-        self.validate(request)?;
-        let CompletionArguments { label } = &arguments;
-
-        let registration =
-            self.completion_providers
-                .register(request.extension, request.lifecycle, label.clone());
-        Ok(registration)
-    }
-    pub(crate) fn unregister_completion_provider(
-        &mut self,
-        request: &RequestContext,
-        arguments: CompletionRegistrationArguments,
-        _cx: &mut App,
-    ) -> Result<(), SemanticError> {
-        self.validate(request)?;
-        let CompletionRegistrationArguments { registration } = &arguments;
-
-        if !self.completion_providers.unregister(
-            *registration,
-            request.extension,
-            request.lifecycle,
-        ) {
-            return Err(SemanticError::CompletionProviderNotFound);
-        }
-        Ok(())
-    }
     pub(crate) fn register_provider(
         &mut self,
         request: &RequestContext,
@@ -547,21 +507,6 @@ impl ExtensionSemanticBridge {
             .collect()
     }
 
-    pub(crate) fn completion_snapshot(&self) -> Vec<CompletionProviderRegistration> {
-        self.completion_providers.snapshot()
-    }
-
-    #[cfg(test)]
-    pub(crate) fn owns_completion_provider(
-        &self,
-        registration: CompletionProviderRegistrationId,
-        extension: ExtensionId,
-        lifecycle: ExtensionLifecycleId,
-    ) -> bool {
-        self.completion_providers
-            .owns(registration, extension, lifecycle)
-    }
-
     pub(crate) fn remove_lifecycle(
         &mut self,
         extension: ExtensionId,
@@ -590,8 +535,6 @@ impl ExtensionSemanticBridge {
             self.tree_registrations.remove(&registration);
             ids.push(kind);
         }
-        self.completion_providers
-            .remove_lifecycle(extension, lifecycle);
         self.providers.remove_lifecycle(extension, lifecycle);
         ids
     }
@@ -720,20 +663,18 @@ mod tests {
                 cx,
             ));
 
-            let completion = bridge.register_completion_provider(
-                &request(extension, lifecycle, 2),
-                CompletionArguments {
-                    label: "fixture".into(),
-                },
-                cx,
-            );
-            let completion = completion.unwrap();
-            assert!(bridge.owns_completion_provider(completion, extension, lifecycle));
-            assert_eq!(bridge.completion_snapshot()[0].id, completion);
+            let provider = bridge
+                .register_provider(
+                    &request(extension, lifecycle, 2),
+                    "editor.completion".into(),
+                    vec!["provideCompletions".into()],
+                )
+                .unwrap();
+            assert!(bridge.provider(provider).is_some());
 
             bridge.remove_lifecycle(extension, lifecycle, cx);
             assert_eq!(tree.read(cx).lifecycle_state(), (false, 0, false, 0));
-            assert!(!bridge.owns_completion_provider(completion, extension, lifecycle));
+            assert!(bridge.provider(provider).is_none());
             assert!(bridge.definitions().is_empty());
             assert!(!bridge.apply_tree_response(
                 TreeChildrenResponse {
@@ -919,14 +860,11 @@ mod tests {
                 Err(SemanticError::ViewIdInUse)
             );
             assert_eq!(
-                bridge.unregister_completion_provider(
+                bridge.unregister_provider(
                     &request(extension, lifecycle, 4),
-                    CompletionRegistrationArguments {
-                        registration: CompletionProviderRegistrationId::new(99),
-                    },
-                    cx
+                    ProviderRegistrationId::new(99),
                 ),
-                Err(SemanticError::CompletionProviderNotFound)
+                Err(SemanticError::ProviderRegistrationNotFound)
             );
         });
     }

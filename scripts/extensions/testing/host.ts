@@ -2622,7 +2622,6 @@ export const api: KnotApi = {
   },
   editor: {
     activeBuffer: notFaked("editor.activeBuffer"),
-    registerCompletionProvider: notFaked("editor.registerCompletionProvider"),
   },
   // The fake records bindings without resolving or validating them, selects
   // no preset, and does not know the native Knot preset's bindings.

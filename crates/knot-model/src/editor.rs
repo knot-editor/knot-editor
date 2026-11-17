@@ -43,8 +43,8 @@ use std::{
 
 use knot_core::anchored_range::AnchoredRangeId;
 use knot_protocol::{
-    BufferHandle, ByteRange, CompletionProviderRegistrationId, CompletionRequest,
-    CompletionResponse, DecorationStyle, TextEdit,
+    BufferHandle, ByteRange, CompletionRequest, CompletionResponse, DecorationStyle,
+    ProviderRegistrationId, TextEdit,
 };
 
 use crate::{

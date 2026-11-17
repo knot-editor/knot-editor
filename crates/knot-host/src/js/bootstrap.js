@@ -381,7 +381,6 @@ const buffers = new Map();
 const commandHandlers = new Map();
 const bufferChangeListeners = new Map();
 const treeProviders = new Map();
-const completionProviders = new Map();
 const providerImplementations = new Map();
 const activeCommandFrames = [];
 const snapshotTables = new WeakMap();
@@ -1416,17 +1415,8 @@ globalThis.__knotRequestTreeChildren = async (registration, window, instance, pa
   }
 };
 
-export async function registerCompletionProvider(label, provider) {
-  if (typeof label !== "string" || typeof provider?.provideCompletions !== "function") {
-    throw new TypeError("editor.registerCompletionProvider requires a label and provideCompletions provider");
-  }
-  const registration = await request("registerCompletionProvider", label);
-  completionProviders.set(registration, provider);
-  const owned = ownership(() => completionProviders.delete(registration),
-    () => request("unregisterCompletionProvider", registration));
-  return Object.freeze({ dispose: () => owned.dispose() });
-}
-
+// Native completion asks each `editor.completion` registration directly,
+// with a live buffer rather than JSON.
 globalThis.__knotRequestCompletions = async (
   registration,
   handle,
@@ -1435,11 +1425,14 @@ globalThis.__knotRequestCompletions = async (
   prefix,
   generation,
 ) => {
-  const provider = completionProviders.get(registration);
+  const provider = providerImplementations.get(registration);
   if (!provider) {
     return { error: "completion provider is disposed" };
   }
   try {
+    if (typeof provider.provideCompletions !== "function") {
+      throw new TypeError("editor.completion providers require a provideCompletions method");
+    }
     const provided = await provider.provideCompletions(Object.freeze({
       buffer: bufferFor(handle), revision, cursorByteOffset, prefix, generation,
     }));

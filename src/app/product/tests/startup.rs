@@ -237,7 +237,7 @@ fn post_init_failure_unloads_config_and_installed_extensions(cx: &mut TestAppCon
     let extensions = tempfile::tempdir().unwrap();
     std::fs::write(
         config.path().join("pre-init.js"),
-        "import * as knot from 'knot'; const { commands, editor } = knot; await commands.register('config.before', () => {}); await editor.registerCompletionProvider('config-provider', { provideCompletions() { return []; } });",
+        "import * as knot from 'knot'; const { commands, editor } = knot; await commands.register('config.before', () => {}); await knot.providers.register('editor.completion', { provideCompletions() { return []; } });",
     )
     .unwrap();
     std::fs::write(
@@ -654,7 +654,7 @@ fn on_disk_extensions_load_in_order_invoke_dependencies_and_isolate_failures(
                     text: prefix,
                 }], { ifRevision: snapshot.revision });
             });
-            await editor.registerCompletionProvider('example-provider', {
+            await knot.providers.register('editor.completion', {
                 provideCompletions() { return [{ label: 'Installed', insertText: 'Installed' }]; }
             });
         "#,
@@ -685,7 +685,7 @@ fn on_disk_extensions_load_in_order_invoke_dependencies_and_isolate_failures(
             r#"
             import * as knot from 'knot'; const { commands, editor, workbench } = knot;
             await commands.register('example.shared', async () => {});
-            await editor.registerCompletionProvider('broken-provider', {
+            await knot.providers.register('editor.completion', {
                 provideCompletions() { return []; }
             });
             await workbench.registerView({
@@ -866,7 +866,7 @@ fn extension_startup_rescans_changed_directories_and_cleans_old_registrations(
             r#"
             import * as knot from 'knot'; const { commands, editor } = knot;
             await commands.register('example.old', async () => {});
-            await editor.registerCompletionProvider('old-provider', {
+            await knot.providers.register('editor.completion', {
                 provideCompletions() { return []; }
             });
         "#,

@@ -72,7 +72,7 @@ impl EditorState {
     }
 
     /// Settle provider `registration` as unavailable in the open completion.
-    pub fn cancel_completion_provider(&mut self, registration: CompletionProviderRegistrationId) {
+    pub fn cancel_completion_provider(&mut self, registration: ProviderRegistrationId) {
         if let Some(controller) = self.completion.as_mut()
             && controller.provider_unavailable(registration)
             && let Some(surface) = self.completion_surface.as_mut()

@@ -1,5 +1,5 @@
 // API version 1 authoring example.
-import { commands, editor, workbench, keymaps } from "knot";
+import { commands, editor, workbench, keymaps, providers } from "knot";
 
 /** @type {Set<import("knot").Disposable>} */
 const bufferOwnership = new Set();
@@ -80,13 +80,15 @@ const viewCommand = await commands.registerForView("guide.outline", "copy", asyn
   if (selected !== null) await workbench.writeClipboardText(selected);
 });
 
-const completion = await editor.registerCompletionProvider("guide", {
+/** @type {import("knot").CompletionProvider} */
+const guideCompletion = {
   async provideCompletions(context) {
     const snapshot = await context.buffer.snapshot();
     if (snapshot.revision !== context.revision) return [];
     return [{ label: `${context.prefix}Guide`, insertText: `${context.prefix}Guide` }];
   },
-});
+};
+const completion = await providers.register("editor.completion", guideCompletion);
 
 // These mutations commit together at the end of this V8 turn.
 keymaps.bind("cmd-g", { name: "guide.compose", arguments: { source: "key" } });

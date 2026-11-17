@@ -52,6 +52,20 @@ await commands.register("consumer.all", async () => {
 });
 "#;
 
+const COMPLETION_FIRST: &str = r#"
+import { providers } from "knot";
+await providers.register("editor.completion", {
+  provideCompletions() { return [{ label: "first", insertText: "first" }]; },
+});
+"#;
+
+const COMPLETION_SECOND: &str = r#"
+import { providers } from "knot";
+await providers.register("editor.completion", {
+  provideCompletions() { return [{ label: "second", insertText: "second" }]; },
+});
+"#;
+
 fn json(fixture: &Fixture, command: &'static str, cx: &mut TestAppContext) -> serde_json::Value {
     serde_json::from_str(&fixture.clipboard_after(command, cx)).unwrap()
 }
@@ -208,5 +222,48 @@ fn personal_config_replaces_an_installed_provider_for_every_consumer(cx: &mut Te
     assert_eq!(
         cx.read(|cx| cx.read_from_clipboard().unwrap().text().unwrap()),
         r#"{"greeting":"hi knot"}"#
+    );
+}
+
+#[gpui::test]
+fn every_completion_provider_contributes_not_only_the_latest(cx: &mut TestAppContext) {
+    let fixture = start_allowing_failures(
+        &[
+            ("@example/first", &[], COMPLETION_FIRST),
+            ("@example/second", &["@example/first"], COMPLETION_SECOND),
+        ],
+        cx,
+    );
+    let execution = fixture.command(
+        super::super::super::commands::dispatch::SHOW_COMPLETIONS_COMMAND,
+        cx,
+    );
+    assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
+    let editor = fixture.editor(cx);
+    crate::test_support::wait_until(cx, |cx| {
+        cx.read(|cx| {
+            editor
+                .read(cx)
+                .completion_state()
+                .is_some_and(|(_, pending, _, _)| pending == 0)
+        })
+    });
+    let items = cx.read(|cx| {
+        editor
+            .read(cx)
+            .completion_surface()
+            .unwrap()
+            .snapshot()
+            .items
+            .iter()
+            .map(|item| (item.label.clone(), item.provider_label.clone()))
+            .collect::<Vec<_>>()
+    });
+    assert_eq!(
+        items,
+        vec![
+            ("first".to_owned(), "@example/first".to_owned()),
+            ("second".to_owned(), "@example/second".to_owned()),
+        ]
     );
 }

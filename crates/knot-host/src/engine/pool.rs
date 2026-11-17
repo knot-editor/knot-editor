@@ -442,7 +442,7 @@ impl RuntimePool {
             result: Some(result),
             completion,
             cancellation: Some(ProviderCancellation {
-                provider: ProviderIdentity::Completion(registration),
+                provider: ProviderIdentity::Named(registration),
                 key,
                 root,
                 capsule,
@@ -480,7 +480,7 @@ impl RuntimePool {
             result: Some(result),
             completion,
             cancellation: Some(ProviderCancellation {
-                provider: ProviderIdentity::Call(registration),
+                provider: ProviderIdentity::Named(registration),
                 key,
                 root,
                 capsule,

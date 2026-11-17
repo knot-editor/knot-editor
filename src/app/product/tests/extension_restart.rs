@@ -117,6 +117,19 @@ impl Fixture {
         cx.read(|cx| cx.read_from_clipboard().unwrap().text().unwrap())
     }
 
+    /// The model editor of the window's focused editor view.
+    pub(super) fn editor(&self, cx: &TestAppContext) -> Entity<crate::app::editor::Editor> {
+        cx.read(|cx| {
+            let workbench = self.window.read(cx).workbench.read(cx);
+            workbench
+                .focused_editor()
+                .unwrap()
+                .read(cx)
+                .editor()
+                .clone()
+        })
+    }
+
     /// Restart one package through the native picker and return the prompt.
     pub(super) fn restart(&self, name: &str, cx: &mut TestAppContext) -> (String, String) {
         let execution = self.command(super::super::commands::RESTART_EXTENSION_COMMAND, cx);

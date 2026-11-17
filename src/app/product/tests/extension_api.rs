@@ -7,7 +7,7 @@ fn public_api_capture_survives_focus_and_nested_handlers_without_leaking_to_call
 ) {
     use knot_protocol::ExtensionKey;
     const SOURCE: &str = r#"
-import { commands, editor, workbench } from "knot";
+import { commands, editor, providers, workbench } from "knot";
 async function expectCode(operation, code) {
   try { await operation(); } catch (error) { if (error.code === code) return; throw error; }
   throw new Error(`expected ${code}`);
@@ -29,7 +29,7 @@ async getChildren(parentId) {
 },
   } },
 });
-await editor.registerCompletionProvider("context-free", {
+await providers.register("editor.completion", {
   async provideCompletions(context) {
 await expectCode(() => editor.activeBuffer(), "ContextUnavailable");
 await expectCode(() => workbench.selectedText(), "ContextUnavailable");
@@ -447,7 +447,7 @@ throw new Error("closed buffer accepted operation");
 fn public_api_disposal_and_unload_release_foreground_ownership(cx: &mut TestAppContext) {
     use knot_protocol::ExtensionKey;
     const SOURCE: &str = r#"
-import { commands, editor, workbench, keymaps } from "knot";
+import { commands, editor, providers, workbench, keymaps } from "knot";
 let owned;
 keymaps.bind("cmd-alt-o", "api.owned");
 await commands.register("api.owned-setup", async ({ buffer }) => {
@@ -464,7 +464,7 @@ await workbench.registerView({
     getChildren() { return [{ id: "owned", label: "owned", collapsibleState: "none" }]; },
   } },
 }),
-await editor.registerCompletionProvider("owned", { provideCompletions() { return [{ label: "owned", insertText: "owned" }]; } }),
+await providers.register("editor.completion", { provideCompletions() { return [{ label: "owned", insertText: "owned" }]; } }),
   ];
 });
 await commands.register("api.owned-cleanup", async () => {

@@ -1,4 +1,4 @@
-import { commands, editor, workbench, keymaps, platform } from "knot";
+import { commands, editor, workbench, keymaps, platform, providers } from "knot";
 import type { Buffer, CommandInfo, CommandTarget, Disposable, HostError, HostErrorCode } from "knot";
 
 void commands.register("described", async () => {}, {
@@ -133,12 +133,13 @@ const badContent: import("knot").ViewContent = { kind: "text", provider: {} };
 // @ts-expect-error tree action command is required
 const badAction: import("knot").TreeAction = { label: "Missing" };
 void [badContent, badAction];
-await editor.registerCompletionProvider("check", {
+const checkCompletion: import("knot").CompletionProvider = {
   async provideCompletions(context) {
     await context.buffer.snapshot();
     return [{ label: context.prefix, insertText: context.prefix }];
   },
-});
+};
+await providers.register("editor.completion", checkCompletion);
 const keyResult: void = keymaps.bind("cmd-k", { name: "check", arguments: null }, { view: "editor" });
 keymaps.unbind("cmd-k", null);
 void keyResult;
@@ -164,7 +165,8 @@ await commands.invoke("check", () => {});
 // @ts-expect-error numeric command names are invalid
 await commands.invoke(42);
 // @ts-expect-error completion item requires insertText
-await editor.registerCompletionProvider("bad", { provideCompletions: () => [{ label: "bad" }] });
+const badCompletion: import("knot").CompletionProvider = { provideCompletions: () => [{ label: "bad" }] };
+void badCompletion;
 // @ts-expect-error tree content requires a provider
 await workbench.registerView({ id: "check.bad", title: "Bad", content: { kind: "tree" } });
 // @ts-expect-error tree item requires collapsibleState
@@ -603,7 +605,6 @@ await association.dispose();
 // @ts-expect-error patterns are lists
 await languages.associate("markdown", { fileExtensions: "mdx" });
 
-import { providers } from "knot";
 import type { ProviderCallContext, ProviderHandle } from "knot";
 interface Rows { rows(query: string): Promise<readonly { id: string; label: string }[]> }
 const rowsRegistration: Disposable = await providers.register("check.rows", {

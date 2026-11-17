@@ -1225,7 +1225,7 @@ declare module "knot" {
     | "InvalidRange" | "InvalidEditBatch" | "RevisionConflict" | "ContributionSetNotFound"
     | "ViewNotFound" | "ViewIdInUse" | "InvalidViewId"
     | "ViewRegistrationNotFound" | "ContentKindMismatch" | "TreeItemNotFound"
-    | "CompletionProviderNotFound" | "ProviderRegistrationNotFound" | "ProviderNotFound"
+    | "ProviderRegistrationNotFound" | "ProviderNotFound"
     | "CommandNameInUse" | "CommandNotFound"
     | "InvalidUri" | "DocumentNotFound" | "OperationInProgress" | "PersistenceFailed" | "ResourceNotFound" | "ResourceWrongKind" | "ResourceAlreadyExists" | "InvalidUtf8" | "ProviderFailure" | "StorageUnavailable"
     | "CaptureNotFound" | "RecoveryUnavailable" | "SessionConflict"
@@ -2318,7 +2318,12 @@ declare module "knot" {
   }
   /** Candidate display label and insertion text; both are required strings. */
   export interface CompletionItem { readonly label: string; readonly insertText: string; }
-  /** Native aggregation isolates failures of each completion provider. */
+  /**
+   * An editor completion provider, registered with
+   * `providers.register("editor.completion", provider)`. The editor asks every
+   * registration, oldest first, and merges their items; a later registration
+   * adds to the others rather than replacing them.
+   */
   export interface CompletionProvider {
     /**
      * Return an iterable of valid candidates, synchronously or asynchronously.
@@ -2329,7 +2334,7 @@ declare module "knot" {
      */
     provideCompletions(context: CompletionContext): Iterable<CompletionItem> | Promise<Iterable<CompletionItem>>;
   }
-  /** Explicit buffers and editor completion registration. */
+  /** Explicit buffers. */
   export const editor: Readonly<{
     /**
      * Resolve the originating command's text buffer; a valid nontext capture
@@ -2339,13 +2344,6 @@ declare module "knot" {
      * for forged/stale/closed/replaced captures, or Cancelled after cancellation.
      */
     activeBuffer(target?: CommandTarget): Promise<Buffer | null>;
-    /**
-     * Register a completion provider; label is diagnostic, not identity.
-     * Resolves when native registration exists; teardown races reject with
-     * Cancelled instead of publishing a late callable object.
-     * @throws TypeError for invalid label/provider; HostError on native failure.
-     */
-    registerCompletionProvider(label: string, provider: CompletionProvider): Promise<Disposable>;
   }>;
   /** A command as `commands.list` reports it. */
   export interface CommandInfo {

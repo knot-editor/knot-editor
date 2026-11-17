@@ -8,8 +8,8 @@ use std::{
 };
 
 use knot_protocol::{
-    BufferHandle, CompletionProviderRegistrationId, CompletionRequest, CompletionResponse,
-    CompletionResultItem, ExtensionId, ExtensionLifecycleId,
+    BufferHandle, CompletionRequest, CompletionResponse, CompletionResultItem, ExtensionId,
+    ExtensionLifecycleId, ProviderRegistrationId,
 };
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -121,7 +121,7 @@ pub struct CompletionController {
     prefix: String,
     generation: u64,
     next_item_id: u64,
-    providers: HashMap<CompletionProviderRegistrationId, SessionProvider>,
+    providers: HashMap<ProviderRegistrationId, SessionProvider>,
     snapshot: CompletionSnapshot,
 }
 
@@ -171,7 +171,7 @@ impl CompletionController {
             .values()
             .map(|provider| provider.registration.clone())
             .collect::<Vec<_>>();
-        providers.sort_by_key(|provider| provider.order);
+        providers.sort_by_key(|provider| provider.id.value());
         providers
             .into_iter()
             .map(|provider| {
@@ -247,7 +247,7 @@ impl CompletionController {
         true
     }
 
-    pub fn provider_unavailable(&mut self, registration: CompletionProviderRegistrationId) -> bool {
+    pub fn provider_unavailable(&mut self, registration: ProviderRegistrationId) -> bool {
         if self.providers.remove(&registration).is_none() {
             return false;
         }
@@ -263,7 +263,7 @@ impl CompletionController {
             match &provider.state {
                 ProviderState::Pending => pending_provider_count += 1,
                 ProviderState::Failed(message) => failures.push((
-                    provider.registration.order,
+                    provider.registration.id.value(),
                     CompletionFailure {
                         provider_label: provider.registration.label.clone(),
                         message: message.clone(),
@@ -285,7 +285,7 @@ impl CompletionController {
                         };
                         ranked.push((
                             match_rank,
-                            provider.registration.order,
+                            provider.registration.id.value(),
                             item.local_order,
                             CompletionItem {
                                 id: item.id,
@@ -323,107 +323,14 @@ impl CompletionController {
     }
 }
 
+/// An `editor.completion` provider a completion asks, labelled for its rows
+/// and failures; registration order ranks its items.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CompletionProviderRegistration {
-    pub id: CompletionProviderRegistrationId,
+    pub id: ProviderRegistrationId,
     pub extension: ExtensionId,
     pub lifecycle: ExtensionLifecycleId,
     pub label: String,
-    pub order: u64,
-}
-
-pub struct CompletionProviderRegistry {
-    next_registration: u64,
-    registrations: HashMap<CompletionProviderRegistrationId, CompletionProviderRegistration>,
-}
-
-impl Default for CompletionProviderRegistry {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl CompletionProviderRegistry {
-    pub fn new() -> Self {
-        Self {
-            next_registration: 1,
-            registrations: HashMap::new(),
-        }
-    }
-
-    pub fn register(
-        &mut self,
-        extension: ExtensionId,
-        lifecycle: ExtensionLifecycleId,
-        label: String,
-    ) -> CompletionProviderRegistrationId {
-        let order = self.next_registration;
-        self.next_registration = self
-            .next_registration
-            .checked_add(1)
-            .expect("completion registration space exhausted");
-        let id = CompletionProviderRegistrationId::new(order);
-        self.registrations.insert(
-            id,
-            CompletionProviderRegistration {
-                id,
-                extension,
-                lifecycle,
-                label,
-                order,
-            },
-        );
-        id
-    }
-
-    pub fn unregister(
-        &mut self,
-        id: CompletionProviderRegistrationId,
-        extension: ExtensionId,
-        lifecycle: ExtensionLifecycleId,
-    ) -> bool {
-        if !self.owns(id, extension, lifecycle) {
-            return false;
-        }
-        self.registrations.remove(&id);
-        true
-    }
-
-    pub fn owns(
-        &self,
-        id: CompletionProviderRegistrationId,
-        extension: ExtensionId,
-        lifecycle: ExtensionLifecycleId,
-    ) -> bool {
-        self.registrations.get(&id).is_some_and(|registration| {
-            registration.extension == extension && registration.lifecycle == lifecycle
-        })
-    }
-
-    pub fn snapshot(&self) -> Vec<CompletionProviderRegistration> {
-        let mut registrations = self.registrations.values().cloned().collect::<Vec<_>>();
-        registrations.sort_by_key(|registration| registration.order);
-        registrations
-    }
-
-    pub fn remove_lifecycle(
-        &mut self,
-        extension: ExtensionId,
-        lifecycle: ExtensionLifecycleId,
-    ) -> Vec<CompletionProviderRegistrationId> {
-        let removed = self
-            .registrations
-            .values()
-            .filter(|registration| {
-                registration.extension == extension && registration.lifecycle == lifecycle
-            })
-            .map(|registration| registration.id)
-            .collect::<Vec<_>>();
-        self.registrations.retain(|_, registration| {
-            registration.extension != extension || registration.lifecycle != lifecycle
-        });
-        removed
-    }
 }
 
 #[cfg(test)]
@@ -431,57 +338,27 @@ mod tests {
     use std::sync::Arc;
 
     use super::{
-        CompletionController, CompletionItem, CompletionItemId, CompletionProviderRegistry,
+        CompletionController, CompletionItem, CompletionItemId, CompletionProviderRegistration,
         CompletionSnapshot, CompletionSurface,
     };
     use knot_protocol::{
         BufferHandle, CompletionProviderError, CompletionResponse, CompletionResultItem,
-        ExtensionId, ExtensionLifecycleId,
+        ExtensionId, ExtensionLifecycleId, ProviderRegistrationId,
     };
 
-    #[test]
-    fn registration_snapshot_preserves_registration_order_and_lifecycle_ownership() {
-        let mut registry = CompletionProviderRegistry::new();
-        let first = registry.register(
-            ExtensionId::new(2),
-            ExtensionLifecycleId::new(1),
-            "first".into(),
-        );
-        let second = registry.register(
-            ExtensionId::new(1),
-            ExtensionLifecycleId::new(3),
-            "second".into(),
-        );
-
-        assert_eq!(
-            registry
-                .snapshot()
-                .into_iter()
-                .map(|registration| registration.id)
-                .collect::<Vec<_>>(),
-            vec![first, second]
-        );
-        assert!(!registry.unregister(first, ExtensionId::new(1), ExtensionLifecycleId::new(3)));
-        assert!(registry.owns(first, ExtensionId::new(2), ExtensionLifecycleId::new(1)));
-
-        registry.remove_lifecycle(ExtensionId::new(2), ExtensionLifecycleId::new(1));
-        assert!(!registry.owns(first, ExtensionId::new(2), ExtensionLifecycleId::new(1)));
+    fn provider(id: u64, label: &str) -> CompletionProviderRegistration {
+        CompletionProviderRegistration {
+            id: ProviderRegistrationId::new(id),
+            extension: ExtensionId::new(id),
+            lifecycle: ExtensionLifecycleId::new(1),
+            label: label.into(),
+        }
     }
 
     #[test]
     fn merge_is_deterministic_across_arrival_order_and_deduplicates_insertion_text() {
         fn merged(reverse: bool) -> Vec<(String, String)> {
-            let mut registry = CompletionProviderRegistry::new();
-            let first = registry.register(
-                ExtensionId::new(1),
-                ExtensionLifecycleId::new(1),
-                "first".into(),
-            );
-            let second = registry.register(
-                ExtensionId::new(2),
-                ExtensionLifecycleId::new(2),
-                "second".into(),
-            );
+            let (first, second) = (provider(1, "first"), provider(2, "second"));
             let mut controller = CompletionController::new(
                 BufferHandle::new(9),
                 4,
@@ -489,11 +366,11 @@ mod tests {
                 0..3,
                 "foo".into(),
                 7,
-                registry.snapshot(),
+                vec![first.clone(), second.clone()],
             );
             let responses = [
                 CompletionResponse {
-                    registration: first,
+                    registration: first.id,
                     revision: 4,
                     generation: 7,
                     result: Ok(vec![
@@ -508,7 +385,7 @@ mod tests {
                     ]),
                 },
                 CompletionResponse {
-                    registration: second,
+                    registration: second.id,
                     revision: 4,
                     generation: 7,
                     result: Ok(vec![
@@ -553,17 +430,7 @@ mod tests {
 
     #[test]
     fn stale_duplicate_and_failed_responses_are_isolated() {
-        let mut registry = CompletionProviderRegistry::new();
-        let first = registry.register(
-            ExtensionId::new(1),
-            ExtensionLifecycleId::new(1),
-            "first".into(),
-        );
-        let second = registry.register(
-            ExtensionId::new(2),
-            ExtensionLifecycleId::new(2),
-            "second".into(),
-        );
+        let (first, second) = (provider(1, "first"), provider(2, "second"));
         let mut controller = CompletionController::new(
             BufferHandle::new(1),
             2,
@@ -571,17 +438,17 @@ mod tests {
             0..0,
             String::new(),
             3,
-            registry.snapshot(),
+            vec![first.clone(), second.clone()],
         );
 
         assert!(!controller.apply_response(CompletionResponse {
-            registration: first,
+            registration: first.id,
             revision: 1,
             generation: 3,
             result: Ok(Vec::new()),
         }));
         assert!(controller.apply_response(CompletionResponse {
-            registration: first,
+            registration: first.id,
             revision: 2,
             generation: 3,
             result: Ok(vec![CompletionResultItem {
@@ -590,13 +457,13 @@ mod tests {
             }]),
         }));
         assert!(!controller.apply_response(CompletionResponse {
-            registration: first,
+            registration: first.id,
             revision: 2,
             generation: 3,
             result: Ok(Vec::new()),
         }));
         assert!(controller.apply_response(CompletionResponse {
-            registration: second,
+            registration: second.id,
             revision: 2,
             generation: 3,
             result: Err(CompletionProviderError {

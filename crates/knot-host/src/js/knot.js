@@ -28,7 +28,6 @@ import {
   registerStatusItem,
   addMenuItem,
   matchCandidates,
-  registerCompletionProvider,
   registerProvider, getProvider, listProviders,
   registerView,
   registerLanguage,
@@ -56,7 +55,6 @@ export const keymaps = Object.freeze({
 
 export const editor = Object.freeze({
   activeBuffer,
-  registerCompletionProvider,
 });
 
 export const commands = Object.freeze({

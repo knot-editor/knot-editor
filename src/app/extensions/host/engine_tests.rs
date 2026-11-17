@@ -128,8 +128,8 @@ use knot_protocol::IconRef;
 use knot_protocol::{
     ApplicationChange, ApplicationEvent, BufferChange, BufferHandle, BufferSubscriptionId,
     ByteRange, CommandArgumentValue, CommandInvocation, CommandInvocationId, CommandInvokeDispatch,
-    CommandOutcome, CommandRegistrationId, CompletionProviderRegistrationId, CompletionRequest,
-    Decoration, DecorationStyle, EditorContribution, ExtensionId, HostResponse, KeybindingMutation,
+    CommandOutcome, CommandRegistrationId, CompletionRequest, Decoration, DecorationStyle,
+    EditorContribution, ExtensionId, HostResponse, KeybindingMutation, ProviderRegistrationId,
     RequestId, SnapshotText, TextEdit, TextSnapshot, TreeChildrenRequest,
     TreeProviderRegistrationId, WorkbenchSubscriptionId, declarations::HostFailure,
 };
@@ -683,7 +683,7 @@ fn every_disposer_shares_native_acknowledgement_and_retains_failure() {
             await buffer.onDidChange(() => { throw new Error("disposed listener ran"); }),
             buffer.contributions,
             await workbench.registerView({ id: "example.outline", title: "Outline", content: { kind: "tree", provider: { getChildren() { throw new Error("disposed tree ran"); } } } }),
-            await editor.registerCompletionProvider("owned", { provideCompletions() { throw new Error("disposed completion ran"); } }),
+            await knot.providers.register("editor.completion", { provideCompletions() { throw new Error("disposed completion ran"); } }),
           ];
         "#,
         );
@@ -692,9 +692,7 @@ fn every_disposer_shares_native_acknowledgement_and_retains_failure() {
             success::<declared::register_command>(CommandRegistrationId::new(901)),
             success::<declared::subscribe_buffer_changes>(BufferSubscriptionId::new(902)),
             success::<declared::register_tree_provider>(TreeProviderRegistrationId::new(903)),
-            success::<declared::register_completion_provider>(
-                CompletionProviderRegistrationId::new(904),
-            ),
+            success::<declared::register_provider>(ProviderRegistrationId::new(904)),
         ];
         for value in responses {
             let request = pool.receive_request().unwrap();
@@ -743,8 +741,8 @@ fn every_disposer_shares_native_acknowledgement_and_retains_failure() {
                 test_failure("TreeProviderNotFound"),
             ),
             (
-                success::<declared::unregister_completion_provider>(()),
-                test_failure("CompletionProviderNotFound"),
+                success::<declared::unregister_provider>(()),
+                test_failure("ProviderRegistrationNotFound"),
             ),
         ];
         for (value, error) in operations {
@@ -814,7 +812,7 @@ fn every_disposer_shares_native_acknowledgement_and_retains_failure() {
             .request_completions(
                 runtime,
                 CompletionRequest {
-                    registration: CompletionProviderRegistrationId::new(904),
+                    registration: ProviderRegistrationId::new(904),
                     buffer: BufferHandle::new(3),
                     revision: 0,
                     cursor_byte_offset: 0,
@@ -964,21 +962,19 @@ fn provider_self_disposal_acknowledges_without_waiting_for_its_callback() {
     let runtime = key(194);
     pool.load(runtime, IsolateConfig::default()).unwrap();
     let setup = pool.execute_fixture_module(runtime, "file:///fixtures/self-disposal.js", r#"
-      import { editor, workbench } from "knot";
+      import { editor, providers, workbench } from "knot";
       globalThis.treeCalls = 0;
       globalThis.completionCalls = 0;
       globalThis.tree = await workbench.registerView({ id: "example.outline", title: "Outline", content: { kind: "tree", provider: {
         async getChildren() { treeCalls++; await tree.dispose(); globalThis.treeReleased = true; return []; },
       } } });
-      globalThis.completion = await editor.registerCompletionProvider("self", {
+      globalThis.completion = await providers.register("editor.completion", {
         async provideCompletions() { completionCalls++; await completion.dispose(); globalThis.completionReleased = true; return []; },
       });
     "#).unwrap();
     for value in [
         success::<declared::register_tree_provider>(TreeProviderRegistrationId::new(906)),
-        success::<declared::register_completion_provider>(CompletionProviderRegistrationId::new(
-            907,
-        )),
+        success::<declared::register_provider>(ProviderRegistrationId::new(907)),
     ] {
         let request = pool.receive_request().unwrap();
         pool.respond(HostResponse {
@@ -1048,7 +1044,7 @@ fn provider_self_disposal_acknowledges_without_waiting_for_its_callback() {
         .request_completions(
             runtime,
             CompletionRequest {
-                registration: CompletionProviderRegistrationId::new(907),
+                registration: ProviderRegistrationId::new(907),
                 buffer: BufferHandle::new(3),
                 revision: 0,
                 cursor_byte_offset: 0,
@@ -1061,7 +1057,7 @@ fn provider_self_disposal_acknowledges_without_waiting_for_its_callback() {
     assert!(
         release
             .operation
-            .arguments::<declared::unregister_completion_provider>()
+            .arguments::<declared::unregister_provider>()
             .is_some()
     );
     drop(completion);
@@ -1069,7 +1065,7 @@ fn provider_self_disposal_acknowledges_without_waiting_for_its_callback() {
         extension: runtime.extension,
         lifecycle: runtime.lifecycle,
         id: release.id,
-        result: Ok(success::<declared::unregister_completion_provider>(())),
+        result: Ok(success::<declared::unregister_provider>(())),
     })
     .unwrap();
     assert_eq!(
@@ -1103,7 +1099,7 @@ fn provider_results_require_iterables_and_validate_only_recognized_item_fields()
     let runtime = key(195);
     pool.load(runtime, IsolateConfig::default()).unwrap();
     let setup = pool.execute_fixture_module(runtime, "file:///fixtures/provider-data.js", r#"
-      import { editor, workbench } from "knot";
+      import { editor, providers, workbench } from "knot";
       await workbench.registerView({ id: "example.outline", title: "Outline", content: { kind: "tree", provider: {
         getChildren(parent) {
           if (parent === "prototype") { Object.prototype.error = "ambient error"; Object.prototype.toJSON = () => { throw new Error("ambient toJSON evaluated"); }; }
@@ -1116,7 +1112,7 @@ fn provider_results_require_iterables_and_validate_only_recognized_item_fields()
           return new Set([{ id: "id", label: "label", collapsibleState: "none", unknown: () => {}, toJSON() { throw new Error("unknown item field evaluated"); } }]);
         },
       } } });
-      await editor.registerCompletionProvider("data", {
+      await providers.register("editor.completion", {
         provideCompletions(context) {
           if (context.prefix === "arraylike") return { length: 1, 0: {} };
           if (context.prefix === "string") return "candidates";
@@ -1127,9 +1123,7 @@ fn provider_results_require_iterables_and_validate_only_recognized_item_fields()
     "#).unwrap();
     for value in [
         success::<declared::register_tree_provider>(TreeProviderRegistrationId::new(908)),
-        success::<declared::register_completion_provider>(CompletionProviderRegistrationId::new(
-            909,
-        )),
+        success::<declared::register_provider>(ProviderRegistrationId::new(909)),
     ] {
         let request = pool.receive_request().unwrap();
         pool.respond(HostResponse {
@@ -1177,7 +1171,7 @@ fn provider_results_require_iterables_and_validate_only_recognized_item_fields()
             .request_completions(
                 runtime,
                 CompletionRequest {
-                    registration: CompletionProviderRegistrationId::new(909),
+                    registration: ProviderRegistrationId::new(909),
                     buffer: BufferHandle::new(3),
                     revision: 0,
                     cursor_byte_offset: 0,
@@ -1206,14 +1200,14 @@ fn provider_results_require_iterables_and_validate_only_recognized_item_fields()
 fn registration_response_racing_unload_cannot_publish_late_ownership() {
     for operation in [
         "commands.register('late', () => {})",
-        "editor.registerCompletionProvider('late', { provideCompletions() { return []; } })",
+        "providers.register('editor.completion', { provideCompletions() { return []; } })",
         "workbench.registerView({ id: 'example.outline', title: 'Outline', content: { kind: 'tree', provider: { getChildren() { return []; } } } })",
     ] {
         let pool = RuntimePool::new(PoolConfig::single_worker());
         let runtime = key(196);
         pool.load(runtime, IsolateConfig::default()).unwrap();
         let source = format!(
-            "import {{commands, editor, workbench}} from 'knot'; await {operation}; globalThis.published = true;"
+            "import {{commands, editor, providers, workbench}} from 'knot'; await {operation}; globalThis.published = true;"
         );
         let registration = pool
             .execute_fixture_module(runtime, "file:///fixtures/late-registration.js", source)
@@ -1237,12 +1231,10 @@ fn registration_response_racing_unload_cannot_publish_late_ownership() {
             }
             operation
                 if operation
-                    .arguments::<declared::register_completion_provider>()
+                    .arguments::<declared::register_provider>()
                     .is_some() =>
             {
-                success::<declared::register_completion_provider>(
-                    CompletionProviderRegistrationId::new(1),
-                )
+                success::<declared::register_provider>(ProviderRegistrationId::new(1))
             }
             operation
                 if operation
@@ -2704,7 +2696,7 @@ fn install_semantic_providers(
     pool: &RuntimePool,
     runtime: ExtensionKey,
     tree_registration: TreeProviderRegistrationId,
-    completion_registration: CompletionProviderRegistrationId,
+    completion_registration: ProviderRegistrationId,
 ) {
     let setup = pool
         .execute_fixture_module(
@@ -2741,8 +2733,8 @@ fn install_semantic_providers(
                     },
                   } },
                 });
-                globalThis.completionProvider = await editor.registerCompletionProvider(
-                  "fixture",
+                globalThis.completionProvider = await knot.providers.register(
+                  "editor.completion",
                   {
                     async provideCompletions(context) {
                       globalThis.providerEvents.push(`completion-${context.prefix}`);
@@ -2788,15 +2780,16 @@ fn install_semantic_providers(
         .unwrap();
     assert_eq!(
         completion.operation,
-        operation::<declared::register_completion_provider>(declared::CompletionArguments {
-            label: "fixture".into()
+        operation::<declared::register_provider>(declared::RegisterProviderArguments {
+            name: "editor.completion".into(),
+            methods: vec!["provideCompletions".into()],
         })
     );
     pool.respond(HostResponse {
         extension: runtime.extension,
         lifecycle: runtime.lifecycle,
         id: completion.id,
-        result: Ok(success::<declared::register_completion_provider>(
+        result: Ok(success::<declared::register_provider>(
             completion_registration,
         )),
     })
@@ -2809,7 +2802,7 @@ fn semantic_provider_callbacks_preserve_typed_generations_and_recover_from_failu
     let pool = RuntimePool::new(PoolConfig::single_worker());
     let runtime = key(61);
     let tree_registration = TreeProviderRegistrationId::new(91);
-    let completion_registration = CompletionProviderRegistrationId::new(92);
+    let completion_registration = ProviderRegistrationId::new(92);
     pool.load(runtime, IsolateConfig::default()).unwrap();
     install_semantic_providers(&pool, runtime, tree_registration, completion_registration);
 
@@ -2953,7 +2946,7 @@ fn provider_roots_queue_serially_and_a_waiting_callback_releases_the_worker() {
     let runtime = key(62);
     let neighbor = key(63);
     let tree_registration = TreeProviderRegistrationId::new(93);
-    let completion_registration = CompletionProviderRegistrationId::new(94);
+    let completion_registration = ProviderRegistrationId::new(94);
     pool.load(runtime, IsolateConfig::default()).unwrap();
     pool.load(neighbor, IsolateConfig::default()).unwrap();
     install_semantic_providers(&pool, runtime, tree_registration, completion_registration);
@@ -3026,7 +3019,7 @@ fn dropped_removed_and_unloaded_provider_requests_release_runtime_state() {
     let pool = RuntimePool::new(PoolConfig::single_worker());
     let runtime = key(64);
     let tree_registration = TreeProviderRegistrationId::new(95);
-    let completion_registration = CompletionProviderRegistrationId::new(96);
+    let completion_registration = ProviderRegistrationId::new(96);
     pool.load(runtime, IsolateConfig::default()).unwrap();
     install_semantic_providers(&pool, runtime, tree_registration, completion_registration);
 
@@ -3120,11 +3113,9 @@ fn dropped_removed_and_unloaded_provider_requests_release_runtime_state() {
         operation::<declared::unregister_tree_provider>(declared::TreeRegistrationArguments {
             registration: tree_registration,
         }),
-        operation::<declared::unregister_completion_provider>(
-            declared::CompletionRegistrationArguments {
-                registration: completion_registration,
-            },
-        ),
+        operation::<declared::unregister_provider>(declared::ProviderRegistrationArguments {
+            registration: completion_registration,
+        }),
     ] {
         let request = pool
             .receive_request_timeout(Duration::from_secs(1))
@@ -3140,10 +3131,10 @@ fn dropped_removed_and_unloaded_provider_requests_release_runtime_state() {
             }
             operation
                 if operation
-                    .arguments::<declared::unregister_completion_provider>()
+                    .arguments::<declared::unregister_provider>()
                     .is_some() =>
             {
-                success::<declared::unregister_completion_provider>(())
+                success::<declared::unregister_provider>(())
             }
             _ => unreachable!(),
         };
@@ -3197,7 +3188,7 @@ fn dropped_removed_and_unloaded_provider_requests_release_runtime_state() {
 
     let unload_runtime = key(65);
     let unload_tree = TreeProviderRegistrationId::new(97);
-    let unload_completion = CompletionProviderRegistrationId::new(98);
+    let unload_completion = ProviderRegistrationId::new(98);
     pool.load(unload_runtime, IsolateConfig::default()).unwrap();
     install_semantic_providers(&pool, unload_runtime, unload_tree, unload_completion);
     let pending_unload = pool
@@ -4216,7 +4207,6 @@ fn public_facade_is_semantic_and_private_bindings_are_hidden() {
                 throw new Error("homeUri is neither a file URI nor null");
             }
             if (typeof knot.editor.activeBuffer !== "function"
-                || typeof knot.editor.registerCompletionProvider !== "function"
                 || typeof knot.commands.invalidArguments !== "function"
                 || typeof knot.commands.invoke !== "function"
                 || typeof knot.commands.register !== "function"

@@ -132,20 +132,6 @@ impl TreeProviderRegistrationId {
     }
 }
 
-/// An opaque identity for one completion-provider registration.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, serde::Deserialize, serde::Serialize)]
-pub struct CompletionProviderRegistrationId(u64);
-
-impl CompletionProviderRegistrationId {
-    pub const fn new(value: u64) -> Self {
-        Self(value)
-    }
-
-    pub const fn value(self) -> u64 {
-        self.0
-    }
-}
-
 /// An opaque identity for one extension-provider registration.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct ProviderRegistrationId(u64);
@@ -685,7 +671,7 @@ pub struct TreeChildrenResponse {
 /// One asynchronous completion request issued by an editor view.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CompletionRequest {
-    pub registration: CompletionProviderRegistrationId,
+    pub registration: ProviderRegistrationId,
     pub buffer: BufferHandle,
     pub revision: u64,
     pub cursor_byte_offset: usize,
@@ -710,7 +696,7 @@ pub struct CompletionProviderError {
 /// One extension callback result returned to an editor completion session.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CompletionResponse {
-    pub registration: CompletionProviderRegistrationId,
+    pub registration: ProviderRegistrationId,
     pub revision: u64,
     pub generation: u64,
     pub result: Result<Vec<CompletionResultItem>, CompletionProviderError>,
@@ -1019,8 +1005,7 @@ pub struct WorkbenchObservation {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ProviderIdentity {
     Tree(TreeProviderRegistrationId),
-    Completion(CompletionProviderRegistrationId),
-    Call(ProviderRegistrationId),
+    Named(ProviderRegistrationId),
 }
 
 /// Authority metadata shared by foreground capability implementations.

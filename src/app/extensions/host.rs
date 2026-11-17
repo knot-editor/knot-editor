@@ -62,7 +62,7 @@ await commands.register("knot.fixture.primary", async ({ buffer }) => {
     text: "fixture ",
   }], { ifRevision: snapshot.revision });
 });
-await editor.registerCompletionProvider("fixture-primary", {
+await knot.providers.register("editor.completion", {
   provideCompletions(context) {
     return [{ label: `${context.prefix}Primary`, insertText: `${context.prefix}Primary` }];
   },
@@ -83,7 +83,7 @@ const SECONDARY_FIXTURE: &str = r#"
 import * as knot from "knot"; const { commands, editor } = knot;
 
 await commands.register("knot.fixture.secondary", async () => ({ status: "handled" }));
-await editor.registerCompletionProvider("fixture-secondary", {
+await knot.providers.register("editor.completion", {
   provideCompletions(context) {
     return [{ label: `${context.prefix}Secondary`, insertText: `${context.prefix}Secondary` }];
   },
@@ -250,27 +250,24 @@ pub(crate) fn memory_report(cx: &App) -> String {
     report
 }
 
+/// The provider name editor completion asks.
+const COMPLETION_PROVIDER: &str = "editor.completion";
+
 /// The package name of a live lifecycle, or "personal config".
 pub(crate) fn lifecycle_label(
     extension: ExtensionId,
     lifecycle: ExtensionLifecycleId,
     cx: &App,
 ) -> Option<String> {
-    let host = entity(cx)?.read(cx);
-    let key = ExtensionKey::new(extension, lifecycle);
-    if host.personal_config_key == Some(key) {
-        return Some("personal config".into());
-    }
-    host.package_keys
-        .iter()
-        .find(|(_, package)| **package == key)
-        .map(|(name, _)| name.clone())
+    entity(cx)?
+        .read(cx)
+        .lifecycle_label(ExtensionKey::new(extension, lifecycle))
 }
 
 #[cfg(test)]
 pub(crate) fn completion_provider_count(cx: &App) -> usize {
     entity(cx)
-        .map(|host| host.read(cx).semantics.completion_snapshot().len())
+        .map(|host| host.read(cx).completion_providers().len())
         .unwrap_or_default()
 }
 
@@ -2268,7 +2265,7 @@ impl ProductExtensionHost {
             self.completion_editors.push(editor.downgrade());
         }
         let requests = editor.update(cx, |editor, cx| {
-            editor.start_completion(buffer, self.semantics.completion_snapshot(), cx)
+            editor.start_completion(buffer, self.completion_providers(), cx)
         });
         for (provider, request) in requests {
             let registration = request.registration;
@@ -2312,9 +2309,39 @@ impl ProductExtensionHost {
         knot_protocol::CommandOutcome::Completed
     }
 
+    /// The package name of a live lifecycle, or "personal config".
+    fn lifecycle_label(&self, key: ExtensionKey) -> Option<String> {
+        if self.personal_config_key == Some(key) {
+            return Some("personal config".into());
+        }
+        self.package_keys
+            .iter()
+            .find(|(_, package)| **package == key)
+            .map(|(name, _)| name.clone())
+    }
+
+    /// The `editor.completion` providers a completion asks, oldest first,
+    /// each labelled with its package.
+    fn completion_providers(&self) -> Vec<crate::app::completion::CompletionProviderRegistration> {
+        self.semantics
+            .providers()
+            .all(COMPLETION_PROVIDER)
+            .map(
+                |provider| crate::app::completion::CompletionProviderRegistration {
+                    id: provider.id,
+                    extension: provider.extension,
+                    lifecycle: provider.lifecycle,
+                    label: self
+                        .lifecycle_label(ExtensionKey::new(provider.extension, provider.lifecycle))
+                        .unwrap_or_else(|| provider.name.clone()),
+                },
+            )
+            .collect()
+    }
+
     fn cancel_completion_provider(
         &mut self,
-        registration: knot_protocol::CompletionProviderRegistrationId,
+        registration: knot_protocol::ProviderRegistrationId,
         cx: &mut App,
     ) {
         self.completion_editors.retain(|editor| {
@@ -2997,7 +3024,7 @@ impl ProductExtensionHost {
             .retain(|root, _| self.commands.contains_invocation(*root));
         self.buffers
             .remove_lifecycle(key.extension, key.lifecycle, cx);
-        for provider in self.semantics.completion_snapshot() {
+        for provider in self.completion_providers() {
             if (provider.extension, provider.lifecycle) == (key.extension, key.lifecycle) {
                 self.cancel_completion_provider(provider.id, cx);
             }
@@ -3213,14 +3240,14 @@ mod tests {
         crate::test_support::wait_until(cx, |cx| {
             cx.update(|cx| {
                 let host = host.read(cx);
-                host.semantics.completion_snapshot().len() == 2
+                host.completion_providers().len() == 2
                     && host.semantics.has_definition("@fixture/primary.outline")
             })
         });
         cx.update(|cx| {
             let host = host.read(cx);
             assert_eq!(host.lifecycles.len(), 2);
-            assert_eq!(host.semantics.completion_snapshot().len(), 2);
+            assert_eq!(host.completion_providers().len(), 2);
             let definitions = host.semantics.definitions();
             assert_eq!(definitions.len(), 1);
             assert_eq!(definitions[0].id, "@fixture/primary.outline");
@@ -3244,7 +3271,7 @@ mod tests {
             host.update(cx, |host, cx| {
                 host.unload(first, cx).unwrap();
                 host.unload(second, cx).unwrap();
-                assert!(host.semantics.completion_snapshot().is_empty());
+                assert!(host.completion_providers().is_empty());
                 assert!(host.semantics.definitions().is_empty());
                 assert!(
                     !host.commands.definitions().any(|definition| {
