@@ -24,7 +24,7 @@ function idArgument(value: JsonValue): string | null {
 }
 
 export async function report(message: string) {
-  await workbench.showMessage({ title: "Explorer", message });
+  await workbench.showNotice({ title: "Explorer", message, severity: "warning" });
 }
 
 export function describe(error: unknown): string {

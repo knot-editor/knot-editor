@@ -338,6 +338,27 @@ impl TestProduct {
         TestEditor::over(document, model, (0, 0), cx)
     }
 
+    /// The messages of the notices in the history, oldest first.
+    pub fn notice_messages(&self, cx: &mut TestAppContext) -> Vec<String> {
+        cx.read(|cx| {
+            cx.try_global::<crate::app::notifications::ApplicationNotifications>()
+                .map(|global| {
+                    global
+                        .0
+                        .notices()
+                        .iter()
+                        .map(|notice| notice.message.clone())
+                        .collect()
+                })
+                .unwrap_or_default()
+        })
+    }
+
+    /// Empty the notice history.
+    pub fn clear_notices(&self, cx: &mut TestAppContext) {
+        cx.update(|cx| crate::app::notifications::update(cx, |store| store.clear()));
+    }
+
     /// The value of the setting `key` for a view of kind `view`, such as
     /// `editor`, in no particular document or language.
     pub fn setting(&self, key: &str, view: Option<&str>, cx: &mut TestAppContext) -> Option<Value> {

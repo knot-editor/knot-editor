@@ -18,14 +18,14 @@ export function errorCode(error: unknown): string | null {
 }
 
 /**
- * Shows a message in the command's window, or in an explicit one when a
- * switch closed the command's window.
+ * Raises a warning notice, in an explicit window when given.
  */
 export async function report(message: string, target?: WindowTarget) {
   try {
-    await workbench.showMessage({
+    await workbench.showNotice({
       title: "Projects",
       message,
+      severity: "warning",
       ...(target === undefined ? {} : { target }),
     });
   } catch {

@@ -18,6 +18,18 @@ pub(super) fn wait_for_prompt(cx: &mut TestAppContext) {
     wait_until(cx, |cx| cx.has_pending_prompt());
 }
 
+/// Wait for the notice a failed action raises, and return its message after
+/// emptying the history.
+pub(super) fn take_notice(product: &TestProduct, cx: &mut TestAppContext) -> String {
+    wait_until(cx, |cx| {
+        cx.run_until_parked();
+        !product.notice_messages(cx).is_empty()
+    });
+    let message = product.notice_messages(cx).pop().unwrap();
+    product.clear_notices(cx);
+    message
+}
+
 /// The product launched with the registry shown in its window.
 pub(super) struct Projects {
     pub(super) product: TestProduct,
@@ -240,12 +252,7 @@ fn switching_to_a_project_with_a_missing_root_is_actionable_and_keeps_the_source
 
     std::fs::remove_dir_all(&path).unwrap();
     tree.activate_row(&gone, cx);
-    wait_for_prompt(cx);
-    assert!(
-        cx.pending_prompt()
-            .is_some_and(|(_, message)| message.contains("ResourceNotFound"))
-    );
-    cx.simulate_prompt_answer("OK");
+    assert!(take_notice(&projects.product, cx).contains("ResourceNotFound"));
 
     // The record is retained and the source window stays on its project.
     let listed = projects.list(cx);

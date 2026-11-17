@@ -5,7 +5,7 @@ use serde_json::Value;
 
 use super::projects::{
     Projects, TREE, create_project, file_uri, list_projects, project_id, switch_to_project,
-    wait_for_prompt,
+    take_notice, wait_for_prompt,
 };
 use knot::test_support::{CommandOutcome, wait_until};
 
@@ -315,10 +315,10 @@ fn a_partial_restore_commits_and_reports_what_was_skipped(cx: &mut TestAppContex
     std::fs::remove_file(a.path().join("gone.txt")).unwrap();
 
     projects.switch_to(&a_id, cx);
-    wait_for_prompt(cx);
-    let (_, message) = cx.pending_prompt().unwrap();
-    assert_eq!(message, "Opened A. gone.txt no longer exists.");
-    cx.simulate_prompt_answer("OK");
+    assert_eq!(
+        take_notice(&projects.product, cx),
+        "Opened A. gone.txt no longer exists."
+    );
     projects.follow_roots(&[&file_uri(a.path())], cx);
     assert_eq!(projects.window.document_texts(cx), ["one"]);
 }
@@ -452,8 +452,7 @@ fn a_new_project_window_opens_with_the_project_roots_and_joins_it(cx: &mut TestA
     // A window outside every project has no project to open.
     let blank = projects.product.new_window(cx);
     let refused = blank.start_command("projects.new-window", cx);
-    wait_for_prompt(cx);
-    cx.simulate_prompt_answer("OK");
+    take_notice(&projects.product, cx);
     assert_eq!(refused.finish(cx), CommandOutcome::Completed);
     assert_eq!(projects.product.windows(cx).len(), 3);
 }
