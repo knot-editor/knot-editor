@@ -254,6 +254,13 @@ native_colors! {
     LIST_HOVER_BACKGROUND = "list.hover.background", "A list or tree row under the pointer.", Rgb(0x35373b), Rgb(0xf2f3f6);
     LIST_SELECTED_BACKGROUND = "list.selected.background", "The selected list or tree row.", Rgb(0x2e436e), Rgb(0xd4e2ff);
     LIST_SELECTED_FOREGROUND = "list.selected.foreground", "Text of the selected list or tree row.", Rgb(0xdfe1e5), Key(TEXT);
+    NOTIFICATION_BACKGROUND = "notification.background", "Notification popup cards.", Key(POPOVER_BACKGROUND), Key(POPOVER_BACKGROUND);
+    NOTIFICATION_BORDER = "notification.border", "Border of notification popup cards.", Key(POPOVER_BORDER), Key(POPOVER_BORDER);
+    NOTIFICATION_DESCRIPTION_FOREGROUND = "notification.description.foreground", "The message of a notification popup.", Key(TEXT_MUTED), Key(TEXT_MUTED);
+    NOTIFICATION_ERROR = "notification.error", "The icon of an error notification.", Key(ERROR), Key(ERROR);
+    NOTIFICATION_FOREGROUND = "notification.foreground", "The title of a notification popup.", Key(TEXT), Key(TEXT);
+    NOTIFICATION_INFO = "notification.info", "The icon of an informational notification.", Key(INFO), Key(INFO);
+    NOTIFICATION_WARNING = "notification.warning", "The icon of a warning notification.", Key(WARNING), Key(WARNING);
     POPOVER_BACKGROUND = "popover.background", "Pickers, the command palette, completion, and reports.", Rgb(0x2b2d30), Rgb(0xffffff);
     POPOVER_BORDER = "popover.border", "Border of popovers.", Rgb(0x4e5157), Rgb(0xc9ccd6);
     SCRIM = "scrim", "Dims the window behind a modal surface.", Rgba(0x00000080), Rgba(0x00000040);

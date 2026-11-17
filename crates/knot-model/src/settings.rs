@@ -86,6 +86,15 @@ pub const WORKBENCH_TOOL_STRIPES: &str = "workbench.toolStripes";
 pub const STATUS_BAR_VISIBLE: &str = "statusBar.visible";
 /// IDs of status items the bar skips.
 pub const STATUS_BAR_HIDDEN_ITEMS: &str = "statusBar.hiddenItems";
+/// Whether notices pop up as cards in the window.
+pub const NOTIFICATIONS_POPUPS: &str = "notifications.popups";
+/// The window corner or edge popups stack from: `bottomRight`, `bottomLeft`,
+/// `topRight`, `topLeft`, or `topCenter`.
+pub const NOTIFICATIONS_POSITION: &str = "notifications.position";
+/// Seconds before an auto-dismissed popup hides.
+pub const NOTIFICATIONS_TIMEOUT: &str = "notifications.timeout";
+/// How many popups show at once.
+pub const NOTIFICATIONS_MAX_VISIBLE: &str = "notifications.maxVisible";
 /// Whether new terminals report mouse input to the running program.
 pub const TERMINAL_MOUSE_REPORTING_ENABLED: &str = "terminal.mouseReportingEnabled";
 /// The cursor shape new terminals start with: `block`, `bar`, `underline`, or
@@ -439,6 +448,29 @@ fn native_definitions() -> Vec<SettingDefinition> {
             value_type: SettingType::Strings,
             default: Value::Array(Vec::new()),
             description: "IDs of status bar items the bar skips; hidden items keep running".into(),
+        },
+        SettingDefinition {
+            key: NOTIFICATIONS_POPUPS.into(),
+            value_type: SettingType::Boolean,
+            default: true.into(),
+            description: "Show notices as popup cards; with false they are only recorded".into(),
+        },
+        text(
+            NOTIFICATIONS_POSITION,
+            "bottomRight",
+            "Where popups stack from: \"bottomRight\", \"bottomLeft\", \"topRight\", \"topLeft\", or \"topCenter\"",
+        ),
+        SettingDefinition {
+            key: NOTIFICATIONS_TIMEOUT.into(),
+            value_type: SettingType::Number,
+            default: 8.into(),
+            description: "Seconds before a popup that dismisses itself hides".into(),
+        },
+        SettingDefinition {
+            key: NOTIFICATIONS_MAX_VISIBLE.into(),
+            value_type: SettingType::Integer,
+            default: 3.into(),
+            description: "How many popups show at once; the rest collapse into a count".into(),
         },
         SettingDefinition {
             key: TERMINAL_MOUSE_REPORTING_ENABLED.into(),

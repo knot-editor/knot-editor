@@ -441,6 +441,16 @@ declare module "knot" {
     /** IDs of status items the bar skips. Hidden items keep running, so a
      * package that registered one is unaffected. Native default empty. */
     "statusBar.hiddenItems": readonly string[];
+    /** Whether notices pop up as cards in the window; with false they are
+     * only recorded. Native default true. */
+    "notifications.popups": boolean;
+    /** Where popups stack from. Native default "bottomRight". */
+    "notifications.position": "bottomRight" | "bottomLeft" | "topRight" | "topLeft" | "topCenter";
+    /** Seconds before a popup that dismisses itself hides. Native default 8. */
+    "notifications.timeout": number;
+    /** How many popups show at once; the rest collapse into a count. Native
+     * default 3. */
+    "notifications.maxVisible": number;
     /** Whether new terminals report mouse input to the running program.
      * Native default true. */
     "terminal.mouseReportingEnabled": boolean;
@@ -625,6 +635,20 @@ declare module "knot" {
     readonly "list.selected.background"?: string;
     /** Text of the selected list or tree row. */
     readonly "list.selected.foreground"?: string;
+    /** Notification popup cards. */
+    readonly "notification.background"?: string;
+    /** Border of notification popup cards. */
+    readonly "notification.border"?: string;
+    /** The message of a notification popup. */
+    readonly "notification.description.foreground"?: string;
+    /** The icon of an error notification. */
+    readonly "notification.error"?: string;
+    /** The title of a notification popup. */
+    readonly "notification.foreground"?: string;
+    /** The icon of an informational notification. */
+    readonly "notification.info"?: string;
+    /** The icon of a warning notification. */
+    readonly "notification.warning"?: string;
     /** Pickers, the command palette, completion, and reports. */
     readonly "popover.background"?: string;
     /** Border of popovers. */

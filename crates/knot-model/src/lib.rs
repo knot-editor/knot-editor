@@ -29,6 +29,7 @@ pub mod languages;
 pub mod launch;
 pub mod matching;
 pub mod menus;
+pub mod notifications;
 pub mod observation;
 pub mod open;
 pub mod providers;

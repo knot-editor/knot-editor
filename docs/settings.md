@@ -87,6 +87,10 @@ and `icons.pack` when the user runs Select Icon Pack.
 | `workbench.toolStripes` | boolean | `true` | Global | native | Show a stripe of tool buttons on the left and right window edges. |
 | `statusBar.visible` | boolean | `true` | Global | native | Show the status bar below the workbench. |
 | `statusBar.hiddenItems` | strings | `[]` | Global | native | IDs of status bar items the bar skips; hidden items keep running. |
+| `notifications.popups` | boolean | `true` | Global | native | Show notices as popup cards; with `false` they are only recorded. |
+| `notifications.position` | string | `"bottomRight"` | Global; an unknown value is `bottomRight` | native | Where popups stack from: `"bottomRight"`, `"bottomLeft"`, `"topRight"`, `"topLeft"`, or `"topCenter"`. |
+| `notifications.timeout` | number | `8` | Global | native | Seconds before a popup that dismisses itself hides. |
+| `notifications.maxVisible` | integer | `3` | Global | native | How many popups show at once; the rest collapse into a count. |
 
 ## Completion
 
