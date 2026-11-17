@@ -1,6 +1,6 @@
 # D156 — Fewer host round trips per key
 
-Status: 🚧 checkpoint 5 awaiting review. Source: [roadmap](../roadmap.md) D156.
+Status: ✅ all checkpoints done. Source: [roadmap](../roadmap.md) D156.
 
 ## Goal
 
@@ -26,7 +26,7 @@ per-key request counts so they cannot creep back.
   and the text and UTF-8 byte start of each line from `n` above to `n` below
   the caret, clamped to the buffer. `Buffer.lines(first, last)` returns the
   same shape for any line span in one request, replacing the `lineRange` +
-  `snapshot` pair. `BufferLines` in Vim seeds its cache from the selection
+  `snapshot` pair where text is needed. `BufferLines` in Vim seeds its cache from the selection
   read and loads other lines through `buffer.lines`. Display-cell queries
   (`cellsBefore`, `columnAtCells`) and `folds` stay native requests: their
   measure is native and must not be duplicated in JavaScript.
@@ -105,36 +105,14 @@ highlight reads only before its first notification). The budget is `j` 18,
 `w` 14, `x` 15. See [extension host](../architecture/extension-host.md#editor-handle-notifications)
 and the [decision](../decisions/extension-host.md#editor-handles).
 
-### 5. Selection with nearby lines ✅ (awaiting review)
+### 5. Selection with nearby lines ✅
 
-Deliverables: `selection({ lines })`, `onDidChangeSelection(listener,
-{ lines })`, and `Buffer.lines(first, last)`; Vim's `BufferLines` seeds
-from the selection read and loads through `buffer.lines`; chrome takes the
-caret position from the payload; the budget test reaches its final numbers.
-
-Validation: extension API tests for clamping at buffer ends, CRLF lines,
-multi-byte text, and an invalid span; Vim, chrome, and word-highlight
-suites; budget test; `just check`.
-
-Review gate: the final counts per key, and the line read shape is one an
-other modal package would use.
-
-**Done:** `Editor.selection({ lines })` returns `line` and `lines`
-(`{ line, startByteOffset, text }`, clamped to the buffer);
-`onDidChangeSelection(listener, { lines })` is served by the widest window any
-listener of the handle asked for; `Buffer.lines(first, last)` is strict
-(`InvalidRange` unless `first <= last < lineCount()`). `lineRange` stays: other
-packages use it. The logic is `BufferModel::lines_between` and `lines_around`.
-Vim's `motion` reads `selection({ lines: 1 })` and seeds `BufferLines`, which
-answers `position` from loaded lines; chrome and Vim's listener ask for
-`{ lines: 0 }`. Final budget: `j` 10 requests (was 21), `w` 8 (17), `x` 13 (16).
-`j` still reads `folds` twice and `w` reads `cellsBefore`; whether to cache
-`folds` stays deferred.
-
-**Implementation context:** `editor_selection` and `line_range` in
-`src/app/extensions/host/handlers.rs` show the editor and buffer read
-patterns; the line-span logic is a `knot-model` buffer function with plain
-tests. JavaScript wrappers near `selection()` in `bootstrap.js`; contract in
-`knot.d.ts` and `docs/extension-api.md`. Vim: `lines.ts`, the `motion` and
-`followSelection` paths in `normal.ts` and `visual.ts`; chrome:
-`caretText` in `extensions/@knot/chrome/src/extension.ts`.
+`selection({ lines })` and `onDidChangeSelection(listener, { lines })` carry
+the caret's line and its neighbors (the handle serves the widest window any
+listener asked for), and `Buffer.lines(first, last)` reads a span in one
+request. Vim seeds `BufferLines` from the selection and loads through
+`lines`; chrome takes the position from the payload. `lineRange` stays for
+callers that need only a byte range. The final budget is `j` 10, `w` 8, `x`
+13; `j` still reads `folds` twice and `w` reads `cellsBefore`, and caching
+`folds` stays deferred. See the [extension API](../extension-api.md) and
+[editor handle notifications](../architecture/extension-host.md#editor-handle-notifications).
