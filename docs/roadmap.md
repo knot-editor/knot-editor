@@ -29,17 +29,19 @@ point.
 ## Next up
 
 1. D202 — Slow typing.
-2. D022 — Editor autocompletion.
-3. D175 — Type-ahead after a held Enter.
-4. D182 — Interleave extension roots at awaits: before D067.
-5. D156 — Fewer host round trips per key.
-6. D087 — Extension entitlements: D085, D126, D067, and D101 need it.
-7. D129 — Refactor builtin language extensions.
-8. D138 — Extension startup report as an untitled document.
-9. D054 — Dedicated read-only generated text surface.
-10. D085 — Cross-file search.
-11. D197 — Diff view: D126 and D174 build on it.
-12. D126 — Git status and changes per root.
+2. D150 — Vim search and substitution.
+3. D113 — Command and input recording.
+4. D022 — Editor autocompletion.
+5. D175 — Type-ahead after a held Enter.
+6. D182 — Interleave extension roots at awaits: before D067.
+7. D156 — Fewer host round trips per key.
+8. D087 — Extension entitlements: D085, D126, D067, and D101 need it.
+9. D129 — Refactor builtin language extensions.
+10. D138 — Extension startup report as an untitled document.
+11. D054 — Dedicated read-only generated text surface.
+12. D085 — Cross-file search.
+13. D197 — Diff view: D126 and D174 build on it.
+14. D126 — Git status and changes per root.
 
 Remove an item from this list when it is done or dropped.
 
