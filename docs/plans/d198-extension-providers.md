@@ -1,6 +1,6 @@
 # D198 — Extension providers
 
-Status: 🚧 checkpoint 1 complete; checkpoint 2 ready for review. Roadmap item [D198](../roadmap.md).
+Status: 🚧 checkpoints 1 and 2 complete; checkpoint 3 next. Roadmap item [D198](../roadmap.md).
 
 ## Goal
 
@@ -114,54 +114,17 @@ Choices the later checkpoints rely on:
   a disposed or restarted registration rejects with `ProviderNotFound`, and a
   provider's throw with `ProviderFailure` and its message.
 
-### 2. Editor completion on providers — 🔍 ready for review
+### 2. Editor completion on providers — ✅ complete
 
-✅ Implemented. Scope decisions:
-- Completion requests are ordinary provider calls: `provideCompletions(request,
-  context)` receives `{ document, revision, cursorByteOffset, prefix }` and the
-  editor's window, and returns a JSON list. A provider reads the text through
-  `documents.get(id).buffer`, keeping it while the document is open; the extra
-  await is accepted, and latency is to be measured with D022's completion
-  while typing (adding the line text to the request is the fallback).
-- A completion row's provider label is the registering package's name (or
-  "personal config").
-- ✅ Product test: two packages' `editor.completion` providers both
-  contribute, labelled by package. `just check` passes.
-- Review gate pending: `Try: Add Completion Provider` (run it more than once),
-  `Try: Add Failing Completion Provider`, and `Try: Remove Completion
-  Providers` from personal config, then Show Completions in an editor.
-
-Deliverables: completion providers registered as `editor.completion`
-providers and read by the editor through the provider registry; the
-completion registry, `editor.registerCompletionProvider`, its unregister
-operation, and the `CompletionProviderNotFound` error removed; completion
-behavior unchanged.
-
-Validation: the existing completion product and fake-host tests moved to the
-new registration and passing unchanged in behavior, plus a test that a
-completion provider registered after another still contributes (no latest
-wins). `just check`.
-
-Review gate: a `try.*` command that registers an `editor.completion` provider
-from personal config; trigger completion in an editor and see its items merged
-with any other provider's.
-
-**Implementation context**
-- Registry and request path: `CompletionProviderRegistry` in
-  `crates/knot-model/src/completion.rs`, its use in
-  `src/app/extensions/semantics.rs` (`completion_snapshot`) and
-  `src/app/extensions/host.rs` (`start_completion`); snapshot the
-  `editor.completion` registrations from the checkpoint 1 registry instead.
-- JS side: `registerCompletionProvider` and `__knotRequestCompletions` in
-  `crates/knot-host/src/js/bootstrap.js`, which becomes a call to the
-  provider's `provideCompletions` through the generic provider call path;
-  `editor.registerCompletionProvider` and `CompletionProvider` in `knot.d.ts`
-  and `knot.js`; the handlers at `register_completion_provider` in
-  `src/app/extensions/host/handlers.rs`.
-- Tests: completion cases in `src/app/product/tests/extension_api.rs` and
-  `startup.rs`, and `scripts/extensions/testing/completion.test.ts`.
-- Docs: the completion section of `docs/architecture/semantic-ui.md`
-  (registration now through providers) and `docs/extension-api.md`.
+Completion providers are `editor.completion` registrations, and the editor
+asks each one through the ordinary provider call; see
+[semantic UI](../architecture/semantic-ui.md#completion-ownership-and-aggregation)
+and `CompletionProvider` in `knot.d.ts`. Choices the later checkpoints rely on:
+- `provideCompletions(request, context)` receives `{ document, revision,
+  cursorByteOffset, prefix }` and returns a JSON list; a provider reads the text
+  through `documents.get(id).buffer`. The cost of that await is to be
+  measured in D022.
+- A completion row's provider label is the registering package's name.
 
 ### 3. Go to File provides its lists
 
