@@ -62,11 +62,26 @@ ordinary text math, over line snapshots, stays pure. Indentation, joining, `%`,
 and visual rows invoke native commands so they follow the language. The unnamed
 register is the system clipboard, as `clipboard=unnamedplus` makes it, with a
 remembered linewise flag. `ctrl-w` treats a window as a tab, as other editors'
-Vim modes do, so `c` and `q` close the tab and cycling skips docks. Search, `.`
-repeat, and visual-block wait for Find, recording, and multiple selections.
+Vim modes do, so `c` and `q` close the tab and cycling skips docks. `.` repeat
+and visual-block wait for recording and multiple selections.
 
-References: [extension guide](../extension-api.md#bind-keys-and-modal-contexts) and
-[roadmap](../roadmap.md) (D113, D142, D150, D151).
+Search and substitution run on the buffer's native regex `find` and `replace`
+rather than a second matching engine in JavaScript, so no text crosses the
+host boundary and `:s` is one revision-checked edit and one undo step. Patterns
+are written in Vim's syntax and translated to the engine's by a pure function,
+because Vim users type Vim patterns; a setting selects the engine's own syntax,
+as Find's regex mode reads it. Atoms the engine cannot express (`\zs`, `\ze`,
+lookaround) fail with an error instead of matching differently, and a custom
+engine to cover them was rejected as too costly for their daily use. The
+last pattern and direction are Vim's own, apart from Find's query. Earlier
+entries of the `/`, `?` and `:` prompts and of Find's fields are a generic
+input `history` option, with a separate list per package, since a Vim pattern
+recalled into Find's literal search would be noise.
+
+References: [extension guide](../extension-api.md#bind-keys-and-modal-contexts),
+[text search](../architecture/core-and-buffers.md#text-search),
+[settings](../settings.md#bundled-packages) and
+[roadmap](../roadmap.md) (D113, D142, D151, D201).
 
 ## Bundled explorer
 

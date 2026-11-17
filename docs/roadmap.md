@@ -13,7 +13,7 @@ Every item has the same shape:
 - **Description** says what is missing today and when it becomes worth doing,
   then what to build.
 
-The next unused ID is **D201**; take it for a new item and bump this line.
+The next unused ID is **D202**; take it for a new item and bump this line.
 
 Each section is ordered so that an item comes after the items it depends on,
 wherever the sections allow it. Items with no dependencies are ordered by
@@ -28,19 +28,18 @@ point.
 
 ## Next up
 
-1. D150 — Vim search and substitution.
-2. D113 — Command and input recording.
-3. D022 — Editor autocompletion.
-4. D175 — Type-ahead after a held Enter.
-5. D182 — Interleave extension roots at awaits: before D067.
-6. D156 — Fewer host round trips per key.
-7. D087 — Extension entitlements: D085, D126, D067, and D101 need it.
-8. D129 — Refactor builtin language extensions.
-9. D138 — Extension startup report as an untitled document.
-10. D054 — Dedicated read-only generated text surface.
-11. D085 — Cross-file search.
-12. D197 — Diff view: D126 and D174 build on it.
-13. D126 — Git status and changes per root.
+1. D113 — Command and input recording.
+2. D022 — Editor autocompletion.
+3. D175 — Type-ahead after a held Enter.
+4. D182 — Interleave extension roots at awaits: before D067.
+5. D156 — Fewer host round trips per key.
+6. D087 — Extension entitlements: D085, D126, D067, and D101 need it.
+7. D129 — Refactor builtin language extensions.
+8. D138 — Extension startup report as an untitled document.
+9. D054 — Dedicated read-only generated text surface.
+10. D085 — Cross-file search.
+11. D197 — Diff view: D126 and D174 build on it.
+12. D126 — Git status and changes per root.
 
 Remove an item from this list when it is done or dropped.
 
@@ -541,7 +540,7 @@ Kakoune mode could use them too. The
   - Depends on: D113
   - Description: The first Vim mode implements a core Ex set: `:w`, `:q`,
     `:q!`, `:wq`, `:x`, `:e`, `:<line>`, and `:set` for a few options.
-    Substitution and `:noh` are D150. `:g` and `:v`, `:normal`, `:sort`, `:d`,
+    `:g` and `:v`, `:normal`, `:sort`, `:d`,
     `:m`, `:t` and other range commands, `:reg` and `:marks`, `:map` and its
     variants, and user-defined Ex commands are missing. So are `:w <file>` and
     `:sav <file>`, which need a public save to a given URI without the Save
@@ -550,19 +549,20 @@ Kakoune mode could use them too. The
     add it inside the Vim package over existing primitives, or add the missing
     generic primitive first. `:normal` and `:g` with a normal-mode command also
     need replaying keys through the mode, which D113's recording provides, and
-    `:g` and `:v` come with D150's pattern matching.
+    `:g` and `:v` can reuse the search patterns of `@knot/vim`.
 
-- **D150 — Vim search and substitution** 🚧
+- **D201 — Preview replacement results**
   - Depends on: none
-  - Description: [Plan](plans/d150-vim-search.md). The first Vim mode ships
-    without search, so that Vim search reuses current-file Find's match layer
-    instead of a second engine, and without substitution, a whole-buffer edit.
-    Missing: `/`, `?`, `n`, `N`, `*`, `#` with match highlights, `:noh`, and
-    `:s` and `:%s` with ranges and flags. Do it when daily Vim use misses
-    search: build search inside the Vim package on Find's matching and
-    highlights, decide how Vim's regex syntax maps onto the engine Find uses,
-    and add substitution as one batch in one undo step.
-
+  - Description: Vim's `:s` and Find's Replace change text without showing the
+    result first; the user sees it only after the edit and undoes a wrong
+    pattern. Missing: a live preview of what a replacement would produce while
+    the pattern and replacement are typed, as Neovim's `inccommand` shows for
+    `:s`, and the same for the Find bar's Replace. Do it when wrong
+    substitutions cost daily editing time: compute the replaced text from
+    `buffer.find` matches and the translated replacement, show it as
+    decorations or a generated text surface without touching the buffer, and
+    decide whether the preview needs a native expansion primitive so that it
+    matches what `replace` would write.
 
 - **D151 — Smaller Vim commands**
   - Depends on: D144, D061

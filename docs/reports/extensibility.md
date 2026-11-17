@@ -98,7 +98,7 @@ What is missing for editing-level extensibility:
 | Registers | Extension state plus clipboard read and write | Write only | D109 |
 | Marks, jumplist | Anchored positions without decoration | Only decorated contributions | D109 |
 | `/` search highlights, visual feedback | Decoration styles | `background`, `line`, `underline`, and `wavy` in any color key | D114 |
-| `:s` | Regex over snapshots and an edit batch | Possible in JS; bulk edits are cheap | D150 |
+| `:s` | Regex over snapshots and an edit batch | Possible in JS; bulk edits are cheap | — |
 | Ex command line | Transient input with completion | `showInput` without completion | D058 |
 | Folds | Fold state and commands | None | D066 |
 | Relative line numbers, mode indicator | Gutter lanes, status bar items | `editor.lineNumbers: "relative"`; `workbench.registerStatusItem` | D077 |
