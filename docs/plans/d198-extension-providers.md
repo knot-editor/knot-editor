@@ -1,6 +1,6 @@
 # D198 — Extension providers
 
-Status: 🚧 checkpoints 1 and 2 complete; checkpoint 3 awaiting review. Roadmap item [D198](../roadmap.md).
+Status: 🚧 checkpoints 1–3 complete; checkpoint 4 next. Roadmap item [D198](../roadmap.md).
 
 ## Goal
 
@@ -126,32 +126,15 @@ and `CompletionProvider` in `knot.d.ts`. Choices the later checkpoints rely on:
   measured in D022.
 - A completion row's provider label is the registering package's name.
 
-### 3. Go to File provides its lists — ✅ implemented, awaiting review
+### 3. Go to File provides its lists — ✅ complete
 
-Done: `src/lists.ts` builds the three lists from a window's context for both
-the picker and the providers; tests in `extension.test.ts` compare provider
-rows with the picker tabs, and `go_to_file.rs` calls the providers from
-another package in the real editor. Review gate commands: `Try: Files
-Provider`, `Try: Buffers Provider`, `Try: Actions Provider`.
-
-Deliverables: `workspace.files`, `workspace.buffers`, and `workspace.actions`
-registered by `@knot/go-to-file`, returning the same rows Search Everywhere
-shows, with plain row IDs.
-
-Validation: package tests through the real editor asserting that each
-provider's rows match Search Everywhere's tab for the same query and window,
-including recent files first and multi-root labels. `just check`.
-
-Review gate: `try.*` commands that call each provider for a query and show the
-rows, beside running Cmd-P with the same query.
-
-**Implementation context**
-- `extensions/@knot/go-to-file/src/searchEverywhere.ts` (`bufferRows`,
-  `actionRows`, the tab row building) and `src/fileRows.ts`; split the
-  per-tab row building into functions that take the window context, used by
-  both the picker and the providers. Register in `src/extension.ts` `start()`.
-- Tests next to `extensions/@knot/go-to-file/test/extension.test.ts` and
-  `rows.test.ts`.
+`@knot/go-to-file` registers `workspace.files`, `workspace.buffers`, and
+`workspace.actions`, each with `rows(query)`; see
+[semantic UI](../architecture/semantic-ui.md). The picker and the
+providers build rows from the same functions (`src/lists.ts`). Choices the
+later checkpoints rely on:
+- Row IDs are plain: a file URI, a document ID, a command name.
+- A provider called without a window returns no rows.
 
 ### 4. Picker rows in the input list
 
