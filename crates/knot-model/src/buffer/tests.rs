@@ -1181,6 +1181,43 @@ fn line_content_excludes_terminators_and_rejects_missing_lines() {
 }
 
 #[test]
+fn line_spans_carry_text_and_byte_starts() {
+    let model = BufferModel::from_text("one\r\nt\u{e9}\nthree");
+    let lines = |first, last| {
+        model.lines_between(first, last).map(|lines| {
+            lines
+                .into_iter()
+                .map(|l| (l.line, l.start, l.text))
+                .collect::<Vec<_>>()
+        })
+    };
+    assert_eq!(
+        lines(0, 2),
+        Some(vec![
+            (0, 0, "one".into()),
+            (1, 5, "t\u{e9}".into()),
+            (2, 9, "three".into())
+        ])
+    );
+    assert_eq!(lines(1, 1), Some(vec![(1, 5, "t\u{e9}".into())]));
+    assert_eq!(lines(2, 1), None);
+    assert_eq!(lines(1, 3), None);
+}
+
+#[test]
+fn lines_around_clamp_to_the_buffer() {
+    let model = BufferModel::from_text("a\nb\nc\nd");
+    let around = |offset, radius| {
+        let (line, lines) = model.lines_around(offset, radius);
+        (line, lines.iter().map(|l| l.line).collect::<Vec<_>>())
+    };
+    assert_eq!(around(0, 0), (0, vec![0]));
+    assert_eq!(around(0, 2), (0, vec![0, 1, 2]));
+    assert_eq!(around(4, 1), (2, vec![1, 2, 3]));
+    assert_eq!(around(6, 5), (3, vec![0, 1, 2, 3]));
+}
+
+#[test]
 fn line_at_offset_requires_a_character_boundary_within_the_text() {
     let model = BufferModel::from_text("a\u{e9}\nb");
     assert_eq!(model.line_at_offset(0), Some(0));

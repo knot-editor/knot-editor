@@ -166,6 +166,14 @@ pub struct BufferModel {
     syntax_queries: std::cell::Cell<usize>,
 }
 
+/// A line's 0-based number, byte start, and text without its terminator.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LineText {
+    pub line: usize,
+    pub start: usize,
+    pub text: String,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct HistoryViewRestore {
     pub generation: u64,
@@ -398,6 +406,41 @@ impl BufferModel {
             range.end -= 1;
         }
         Some(range)
+    }
+
+    /// The lines `first..=last` (0-based), each with its text without the
+    /// terminator and its byte start, or `None` unless `first <= last` and
+    /// `last` is a line of the buffer.
+    pub fn lines_between(&self, first: u64, last: u64) -> Option<Vec<LineText>> {
+        if first > last {
+            return None;
+        }
+        let ranges = (first..=last)
+            .map(|line| self.line_content_range(line))
+            .collect::<Option<Vec<_>>>()?;
+        Some(
+            ranges
+                .into_iter()
+                .zip(first..)
+                .map(|(range, line)| LineText {
+                    line: line as usize,
+                    start: range.start,
+                    text: self.read(range),
+                })
+                .collect(),
+        )
+    }
+
+    /// The line holding `offset`, a valid position, and the lines up to
+    /// `radius` on each side of it, clamped to the buffer.
+    pub fn lines_around(&self, offset: usize, radius: usize) -> (usize, Vec<LineText>) {
+        let line = self.line_of_offset(offset);
+        let first = line.saturating_sub(radius);
+        let last = (line + radius).min(self.line_count() - 1);
+        let lines = self
+            .lines_between(first as u64, last as u64)
+            .unwrap_or_default();
+        (line, lines)
     }
 
     /// A byte offset an extension named, or `None` unless it is on a
