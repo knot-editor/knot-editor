@@ -45,7 +45,15 @@ impl Buffer {
             return;
         };
         cx.spawn(async move |this, cx| {
-            let Some(parsed) = cx.background_spawn(async move { parse.run() }).await else {
+            let parsed = cx
+                .background_spawn(async move {
+                    #[cfg(any(test, feature = "test-support"))]
+                    return crate::app::work_counts::background_parse(|| parse.run());
+                    #[cfg(not(any(test, feature = "test-support")))]
+                    parse.run()
+                })
+                .await;
+            let Some(parsed) = parsed else {
                 return Ok(());
             };
             this.update(cx, |buffer, cx| {

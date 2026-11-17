@@ -6,6 +6,8 @@
 //! gone quiet. Keys use the [case](crate::test_support::cases) notation.
 
 use crate::app::documents::DocumentDirty;
+use std::time::Duration;
+
 use gpui::{
     AppContext, Bounds, Entity, Modifiers, MouseButton, Pixels, Point, TestAppContext,
     VisualTestContext,
@@ -48,6 +50,18 @@ pub struct TestEditor {
 pub struct Work {
     pub draws: usize,
     pub requests: Vec<&'static str>,
+}
+
+/// The foreground thread time one typed key cost, as a benchmark reads it.
+#[derive(Clone, Copy, Debug)]
+pub struct KeyCost {
+    /// Dispatching the key, which commits it and draws the window.
+    pub key: Duration,
+    /// Settling after the key, when the window settled after it: finishing
+    /// background parses and drawing their results, and answering
+    /// extension work. Background parses themselves are left out, since
+    /// they run off the foreground outside tests.
+    pub settle: Option<Duration>,
 }
 
 impl TestEditor {
@@ -765,6 +779,41 @@ impl TestEditor {
                     draws: counts.draws,
                     requests: counts.requests,
                 }
+            })
+            .collect()
+    }
+}
+
+impl TestEditor {
+    /// The foreground cost of each of `keys`, typed through the window with
+    /// the window settling after every `settle_every` keys. Settling after
+    /// each key is typing slower than a background parse; settling after
+    /// every second key rebases each parse over a key typed while it ran.
+    pub fn key_costs(
+        &self,
+        keys: &[&str],
+        settle_every: usize,
+        cx: &mut TestAppContext,
+    ) -> Vec<KeyCost> {
+        use crate::app::work_counts::{take, thread_time};
+        let (native_window, _) = self.native_window.as_ref().expect("draws need a window");
+        let native_window = *native_window;
+        self.settle(cx);
+        take();
+        keys.iter()
+            .enumerate()
+            .map(|(index, key)| {
+                let keystroke = keystroke_to_gpui(&Keystroke::parse(key).unwrap());
+                let started = thread_time();
+                cx.dispatch_keystroke(native_window, keystroke);
+                let key = thread_time() - started;
+                let settle = ((index + 1) % settle_every == 0).then(|| {
+                    take();
+                    let started = thread_time();
+                    self.settle(cx);
+                    (thread_time() - started).saturating_sub(take().background_parses)
+                });
+                KeyCost { key, settle }
             })
             .collect()
     }

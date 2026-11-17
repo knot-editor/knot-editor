@@ -5,6 +5,7 @@ mod editing;
 mod folds;
 mod highlights;
 mod indents;
+mod typing;
 
 /// One product runs every topic: starting the language packages compiles
 /// every query, which costs more than all the cases together.

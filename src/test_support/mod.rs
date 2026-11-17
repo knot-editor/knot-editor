@@ -13,9 +13,10 @@
 pub mod cases;
 
 pub use crate::app::driver::application::{HeldReads, Retained};
-pub use crate::app::driver::editor::{TestEditor, Work};
+pub use crate::app::driver::editor::{KeyCost, TestEditor, Work};
 pub use crate::app::driver::product::{Language, LoadEntry, ServedFiles, TestProduct};
 pub use crate::app::driver::window::{EditorTab, TestCommand, TestTree, TestWindow};
+pub use knot_model::large_documents;
 pub use knot_protocol::CommandOutcome;
 
 /// One editing action run in a bare editor, without a session or window.
