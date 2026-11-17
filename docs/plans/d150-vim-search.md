@@ -124,6 +124,18 @@ them (most recent first, a repeated entry moving to the front).
 - `:g`, `:v` and other range commands stay with the Ex commands item.
 - Highlights past the first 1,000 matches, which Find shares.
 
+## Release notes
+
+Drafts for the `Release-note:` trailers (see
+[development](../development.md#nightly-releases)); revise them to what
+shipped. Checkpoint 1 and 2 add no user-visible behavior beyond what these
+cover.
+
+- Release-note: Vim mode can search with `/`, `?`, `n`, `N`, `*` and `#`, with live match highlighting that stays until `:noh`.
+- Release-note: Vim mode supports `:s` and `:%s` substitution with ranges and flags, as a single undo step.
+- Release-note: The Find bar and the Vim `/`, `?` and `:` prompts recall earlier entries with Up and Down.
+
+
 ## Deferred decisions
 
 - Whether highlights follow the viewport instead of the buffer's first

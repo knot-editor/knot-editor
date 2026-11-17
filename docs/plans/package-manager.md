@@ -194,6 +194,16 @@ starting point.
     previous commit removed only after a successful start, and a disappeared
     commit (force-push) reported without losing the installed copy.
 
+## Release notes
+
+Each item's own plan drafts its `Release-note:` trailers (see
+[development](../development.md#nightly-releases)) and lands them on its
+commits. Together the items should read as, at most:
+
+- Release-note: Extensions can be installed from a git repository link, with a lockfile recording what is installed and where it came from.
+- Release-note: A package manager surface installs, updates, and uninstalls extensions, and rolls back a bad update.
+
+
 ## Deferred decisions
 
 - **Signing.** D107 covers keys, a signature format, verified publishers, and

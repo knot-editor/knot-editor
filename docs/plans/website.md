@@ -42,6 +42,12 @@ guide, and a feature tour.
   beyond what the generator provides, a package directory, and analytics.
 - Publishing architecture or decision documents.
 
+## Release notes
+
+None: the site deploys independently of the application build, so its commits
+carry no `Release-note:` trailer.
+
+
 ## Deferred decisions
 
 - Exact generator, confirmed in checkpoint 2.
