@@ -264,7 +264,7 @@ impl EntityInputHandler for EditorView {
             return;
         }
         self.editor
-            .update(cx, |editor, cx| editor.type_text(range, text, cx));
+            .update(cx, |editor, cx| editor.type_input(range, text, cx));
     }
 
     fn replace_and_mark_text_in_range(

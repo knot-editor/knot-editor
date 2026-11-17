@@ -3233,6 +3233,49 @@ pub(crate) async fn editor_end_undo_group(
     context.foreground(|host, cx| host.end_undo_group(owner, arguments.group, cx))
 }
 
+/// Start recording the input the editor receives for the caller's lifecycle,
+/// returning the recording's identity.
+#[host_operation("editorBeginRecording")]
+pub(crate) async fn editor_begin_recording(
+    context: HostContext,
+    arguments: EditorArguments,
+) -> Result<u64, AccessError> {
+    let request = context.request;
+    context.foreground(|host, cx| {
+        let editor = host.contextual_editor(&request, arguments.authority, cx)?;
+        let owner = ExtensionKey::new(request.extension, request.lifecycle);
+        Ok(host.begin_recording(owner, editor, arguments.authority, cx))
+    })?
+}
+
+/// The commands a finished recording collected, as JSON.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct RecordedCommands(pub Vec<knot_model::editor::RecordedCommand>);
+impl HostSuccess for RecordedCommands {
+    fn encode(self) -> Result<EncodedValue, DecodeError> {
+        encode_json(
+            self.0
+                .into_iter()
+                .map(|entry| {
+                    serde_json::json!({ "command": entry.command, "arguments": entry.arguments })
+                })
+                .collect::<Vec<_>>(),
+        )
+    }
+}
+
+/// End a recording and return its entries. A recording that already ended
+/// returns none.
+#[host_operation("editorEndRecording")]
+pub(crate) async fn editor_end_recording(
+    context: HostContext,
+    arguments: UndoGroupArguments,
+) -> Result<RecordedCommands, AccessError> {
+    let owner = ExtensionKey::new(context.request.extension, context.request.lifecycle);
+    context
+        .foreground(|host, cx| RecordedCommands(host.finish_recording(owner, arguments.group, cx)))
+}
+
 #[derive(Debug, HostError)]
 pub(crate) enum EditorError {
     #[error(transparent)]

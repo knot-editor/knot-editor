@@ -1,6 +1,6 @@
 # D113: Command and input recording
 
-Status: 🚧 approved, not started. Roadmap item [D113](../roadmap.md). Builds on
+Status: 🚧 checkpoint 1 awaiting review. Roadmap item [D113](../roadmap.md). Builds on
 [command dispatch](../architecture/commands.md#dispatch),
 [text bindings](../architecture/commands.md#text-bindings),
 [ordered delivery](../architecture/commands.md#ordered-delivery), and the
@@ -76,29 +76,35 @@ commands such as `3ihi<Esc>`.
 
 ## Checkpoints
 
-### 1. Recording primitive and `editor.type`
+### 1. Recording primitive and `editor.type` 🔍 awaiting review
 
 Deliverables:
-- `editor.type { text, replace? }`, a native editor command hidden from the
+- ✅ `editor.type { text, replace? }`, a native editor command hidden from the
   palette, typing as the keyboard does.
-- Recording in the window at the three input points plus completion
+- ✅ Recording in the window at the three input points plus completion
   acceptance; `EditorHandle.record()` and `Recording.stop()` in the public API
   with lifecycle-owned cleanup.
-- [Commands](../architecture/commands.md) gains a Recording section;
+- ✅ [Commands](../architecture/commands.md) gains a Recording section;
   [extension guide](../extension-api.md) documents recording and replay.
 
 Validation:
-- Model tests for `type_text` with `replace` and for the recording buffer.
-- Product tests through the extension API: keys and typed text are recorded in
+- ✅ Model tests for `type_text` with `replace` and for the recording buffer.
+- ✅ Product tests through the extension API: keys and typed text are recorded in
   order with arguments; text-binding commands are recorded as their command;
   palette and child invocations are not; input to another tab is not; two
   recordings overlap independently; tab close, disposal, and teardown end a
   recording; replaying a recording with `commands.invoke` reproduces the
   buffer, including auto-closed brackets and an accepted completion.
-- `just check`.
+- ✅ `just check`.
 
 Review gate: the API shape and the recorded entries for a typical insert
 session, inspected through a `Try:` command that records and replays.
+
+Scope notes: the view and editor record typed text and accepted completions
+(so the fallback needs no window hop), the window records key and text-binding
+commands, and keys in a focused bar field are not recorded. Auto-closed
+brackets are covered by the model's `type_text` tests, since product-test
+buffers have no language.
 
 Implementation context:
 - Input points: `run_key_command` in `src/app/product/key_routing.rs`,

@@ -712,6 +712,26 @@ function editorFor(authority) {
       const owned = ownership(() => {}, () => request("editorEndUndoGroup", group));
       return Object.freeze({ dispose: () => owned.dispose() });
     },
+    async record() {
+      const id = await request("editorBeginRecording", authority);
+      let ended;
+      const end = () => (ended ??= request("editorEndRecording", id));
+      const owned = ownership(() => {}, () => end());
+      let finished = false;
+      return Object.freeze({
+        async stop() {
+          if (finished) return Object.freeze([]);
+          finished = true;
+          const entries = await end();
+          await owned.dispose();
+          return Object.freeze(entries.map((entry) => Object.freeze(entry)));
+        },
+        dispose() {
+          finished = true;
+          return owned.dispose();
+        },
+      });
+    },
     async viewState() {
       const value = await request("editorViewState", authority);
       return Object.freeze({ anchor: value.anchor, caret: value.caret, top: value.top, scrollX: value.scrollX });

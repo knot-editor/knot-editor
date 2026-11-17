@@ -580,6 +580,14 @@ struct UndoGroup {
     handle: Option<u64>,
 }
 
+/// An input recording a lifecycle holds open on one editor. `handle` is the
+/// editor handle it was started through; the recording ends with that handle.
+struct InputRecording {
+    owner: ExtensionKey,
+    editor: gpui::WeakEntity<crate::app::editor::Editor>,
+    handle: Option<u64>,
+}
+
 /// Follows an editor's selection for one handle. At most one notification is
 /// outstanding: `pending` stays set until the listener turn starts and
 /// acknowledges it, so changes in between coalesce into that turn.
@@ -634,6 +642,8 @@ pub(crate) struct ProductExtensionHost {
     /// Open undo groups, ended by disposal, teardown, or their handle's tab.
     undo_groups: HashMap<u64, UndoGroup>,
     next_undo_group: u64,
+    recordings: HashMap<u64, InputRecording>,
+    next_recording: u64,
     #[cfg(any(test, feature = "test-support"))]
     application_events: Vec<knot_protocol::ApplicationEvent>,
     _application_window_closed: Subscription,
@@ -699,6 +709,8 @@ impl ProductExtensionHost {
             editor_handles: HashMap::new(),
             undo_groups: HashMap::new(),
             next_undo_group: 0,
+            recordings: HashMap::new(),
+            next_recording: 0,
             next_editor_handle: 0,
             storage: test_storage(cx),
             storage_owners: HashMap::new(),
@@ -1680,6 +1692,84 @@ impl ProductExtensionHost {
         {
             self.editor_handles.remove(&id);
             self.end_handle_undo_groups(id, cx);
+            self.end_recordings_where(cx, |recording| recording.handle == Some(id));
+        }
+    }
+
+    /// Start recording the input `editor` receives; the id names it to
+    /// [`Self::finish_recording`].
+    pub(super) fn begin_recording(
+        &mut self,
+        owner: ExtensionKey,
+        editor: Entity<crate::app::editor::Editor>,
+        authority: handlers::EditorAuthority,
+        cx: &mut App,
+    ) -> u64 {
+        self.next_recording += 1;
+        let id = self.next_recording;
+        editor.update(cx, |editor, _| editor.start_recording(id));
+        let handle = match authority {
+            handlers::EditorAuthority::Handle(handle) => Some(handle),
+            handlers::EditorAuthority::Command(_) => None,
+        };
+        self.recordings.insert(
+            id,
+            InputRecording {
+                owner,
+                editor: editor.downgrade(),
+                handle,
+            },
+        );
+        id
+    }
+
+    #[cfg(test)]
+    pub(crate) fn open_recording_count(&self) -> usize {
+        self.recordings.len()
+    }
+
+    /// End recording `id` and take what it collected; nothing when it already
+    /// ended.
+    pub(super) fn finish_recording(
+        &mut self,
+        owner: ExtensionKey,
+        id: u64,
+        cx: &mut App,
+    ) -> Vec<knot_model::editor::RecordedCommand> {
+        if self
+            .recordings
+            .get(&id)
+            .is_none_or(|recording| recording.owner != owner)
+        {
+            return Vec::new();
+        }
+        let Some(recording) = self.recordings.remove(&id) else {
+            return Vec::new();
+        };
+        recording
+            .editor
+            .upgrade()
+            .and_then(|editor| editor.update(cx, |editor, _| editor.finish_recording(id)))
+            .unwrap_or_default()
+    }
+
+    fn end_recordings_where(
+        &mut self,
+        cx: &mut App,
+        mut ends: impl FnMut(&InputRecording) -> bool,
+    ) {
+        let ids = self
+            .recordings
+            .iter()
+            .filter(|(_, recording)| ends(recording))
+            .map(|(id, _)| *id)
+            .collect::<Vec<_>>();
+        for id in ids {
+            if let Some(recording) = self.recordings.remove(&id)
+                && let Some(editor) = recording.editor.upgrade()
+            {
+                editor.update(cx, |editor, _| editor.finish_recording(id));
+            }
         }
     }
 
@@ -1773,6 +1863,7 @@ impl ProductExtensionHost {
         for (id, owner) in stale {
             self.editor_handles.remove(&id);
             self.end_handle_undo_groups(id, cx);
+            self.end_recordings_where(cx, |recording| recording.handle == Some(id));
             let _ = self.pool.dispatch_editor_event(
                 owner,
                 handlers::EditorAuthority::handle_wire(id),
@@ -3032,6 +3123,7 @@ impl ProductExtensionHost {
         }
         self.editor_handles.retain(|_, handle| handle.owner != key);
         self.end_undo_groups_where(cx, |group| group.owner == key);
+        self.end_recordings_where(cx, |recording| recording.owner == key);
         for editor in self.owned_editors.remove(&key).unwrap_or_default() {
             if let Some(editor) = editor.upgrade() {
                 editor.update(cx, |editor, cx| editor.remove_owner_state(key, cx));

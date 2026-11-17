@@ -1191,3 +1191,231 @@ fn an_undo_group_ends_when_its_tab_closes(cx: &mut TestAppContext) {
     cx.run_until_parked();
     host.read_with(cx, |host, _| assert_eq!(host.open_undo_group_count(), 0));
 }
+
+const RECORDING_SOURCE: &str = r#"
+import { commands, keymaps, workbench } from "knot";
+let handle;
+const recordings = {};
+let last = [];
+await commands.register("rec.attach", async () => {
+  const { snapshot } = await workbench.observe(() => {});
+  handle = await workbench.editor(snapshot.windows[0].panes[0].selected);
+});
+await commands.register("rec.start", async ({ arguments: { name } }) => {
+  recordings[name] = await handle.record();
+});
+await commands.register("rec.stop", async ({ arguments: { name } }) => {
+  last = await recordings[name].stop();
+  await workbench.writeClipboardText(JSON.stringify(last));
+});
+await commands.register("rec.dispose", async ({ arguments: { name } }) => {
+  await recordings[name].dispose();
+  const entries = await recordings[name].stop();
+  await workbench.writeClipboardText(JSON.stringify(entries));
+});
+await commands.register("rec.replay", async () => {
+  for (const entry of last) await commands.invoke(entry.command, entry.arguments);
+});
+await commands.register("rec.child", async () => {
+  await commands.invoke("editor.type", { text: "child" });
+});
+await commands.register("rec.bound", () => {});
+await commands.register("rec.text", () => {});
+keymaps.bind("f9", "rec.bound");
+"#;
+
+fn recording_fixture(
+    cx: &mut TestAppContext,
+) -> (
+    Entity<crate::app::extensions::host::ProductExtensionHost>,
+    knot_protocol::ExtensionKey,
+    Entity<KnotWindow>,
+    Entity<crate::app::editor::Editor>,
+    Entity<Buffer>,
+) {
+    use knot_protocol::ExtensionKey;
+    let documents = install_globals(cx);
+    cx.update(super::super::bind_product_keys);
+    let host = cx.update(super::super::super::extensions::host::install);
+    let key = ExtensionKey::new(ExtensionId::new(723), ExtensionLifecycleId::new(1));
+    host.update(cx, |host, cx| {
+        let execution = host.load_test_source(key, RECORDING_SOURCE).unwrap();
+        cx.spawn(async move |_, _| execution.await.unwrap())
+            .detach();
+    });
+    wait_for_api_condition(cx, |cx| {
+        cx.global::<ApplicationProductCommands>()
+            .0
+            .read(cx)
+            .catalog()
+            .borrow()
+            .resolve("rec.replay")
+            .is_ok()
+    });
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let window = headless_window(document, model.clone(), cx);
+    cx.run_until_parked();
+    let editor = active_editor(&window, cx);
+    run_recording_command(&window, "rec.attach", None, cx);
+    (host, key, window, editor, model)
+}
+
+fn run_recording_command(
+    window: &Entity<KnotWindow>,
+    name: &'static str,
+    recording: Option<&str>,
+    cx: &mut TestAppContext,
+) {
+    let arguments = recording.map_or(CommandArgumentValue::Null, |recording| {
+        CommandArgumentValue::Object(
+            [(
+                "name".to_owned(),
+                CommandArgumentValue::String(recording.to_owned()),
+            )]
+            .into(),
+        )
+    });
+    let execution = dispatch_product_command_with(window, Headless, name, arguments, cx);
+    assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
+}
+
+fn recorded(cx: &mut TestAppContext) -> serde_json::Value {
+    let text = cx.read(|cx| cx.read_from_clipboard().unwrap().text().unwrap());
+    serde_json::from_str(&text).unwrap()
+}
+
+#[gpui::test]
+fn recordings_collect_keys_text_and_text_bindings_in_order(cx: &mut TestAppContext) {
+    let (_host, _, window, _editor, model) = recording_fixture(cx);
+    run_recording_command(&window, "rec.start", Some("a"), cx);
+    type_text(&window, "f(", cx);
+    press_keys(&window, "enter f9", cx);
+    // A command from the palette or a menu is not input.
+    let execution = dispatch_product_command(&window, Headless, "editor.select-all", cx);
+    wait_for_command(execution, cx);
+    run_recording_command(&window, "rec.stop", Some("a"), cx);
+    assert_eq!(
+        recorded(cx),
+        serde_json::json!([
+            { "command": "editor.type", "arguments": { "text": "f(" } },
+            { "command": "editor.insert-newline", "arguments": null },
+            { "command": "rec.bound", "arguments": null },
+        ])
+    );
+    cx.read(|cx| assert_eq!(model.read(cx).text(), "f(\n"));
+}
+
+#[gpui::test]
+fn replaying_a_recording_reproduces_typing_without_recording_itself(cx: &mut TestAppContext) {
+    let (_host, _, window, _editor, model) = recording_fixture(cx);
+    run_recording_command(&window, "rec.start", Some("a"), cx);
+    type_text(&window, "f(", cx);
+    run_recording_command(&window, "rec.start", Some("b"), cx);
+    run_recording_command(&window, "rec.stop", Some("a"), cx);
+    cx.read(|cx| assert_eq!(model.read(cx).text(), "f("));
+    // Clear the buffer, then replay at the start of it.
+    let execution = dispatch_product_command(&window, Headless, "editor.select-all", cx);
+    wait_for_command(execution, cx);
+    press_keys(&window, "backspace", cx);
+    cx.read(|cx| assert_eq!(model.read(cx).text(), ""));
+    run_recording_command(&window, "rec.replay", None, cx);
+    cx.read(|cx| assert_eq!(model.read(cx).text(), "f("));
+    // The replay, a child invocation, never reached the open recording.
+    run_recording_command(&window, "rec.child", None, cx);
+    run_recording_command(&window, "rec.stop", Some("b"), cx);
+    assert_eq!(
+        recorded(cx),
+        serde_json::json!([
+            { "command": "editor.delete-backward", "arguments": null },
+        ])
+    );
+}
+
+#[gpui::test]
+fn a_recording_keeps_only_its_own_editors_input(cx: &mut TestAppContext) {
+    let (_host, _, window, _editor, _model) = recording_fixture(cx);
+    run_recording_command(&window, "rec.start", Some("a"), cx);
+    let execution = dispatch_product_command(&window, Headless, "file.new", cx);
+    wait_for_command(execution, cx);
+    cx.run_until_parked();
+    type_text(&window, "elsewhere", cx);
+    press_keys(&window, "enter", cx);
+    run_recording_command(&window, "rec.stop", Some("a"), cx);
+    assert_eq!(recorded(cx), serde_json::json!([]));
+}
+
+#[gpui::test]
+fn disposing_a_recording_discards_it(cx: &mut TestAppContext) {
+    let (host, _, window, _editor, _model) = recording_fixture(cx);
+    run_recording_command(&window, "rec.start", Some("a"), cx);
+    host.read_with(cx, |host, _| assert_eq!(host.open_recording_count(), 1));
+    type_text(&window, "x", cx);
+    run_recording_command(&window, "rec.dispose", Some("a"), cx);
+    assert_eq!(recorded(cx), serde_json::json!([]));
+    host.read_with(cx, |host, _| assert_eq!(host.open_recording_count(), 0));
+}
+
+#[gpui::test]
+fn a_recording_ends_with_its_lifecycle_or_its_tab(cx: &mut TestAppContext) {
+    let (host, key, window, editor, _model) = recording_fixture(cx);
+    run_recording_command(&window, "rec.start", Some("a"), cx);
+    host.update(cx, |host, cx| host.unload(key, cx).unwrap());
+    host.read_with(cx, |host, _| assert_eq!(host.open_recording_count(), 0));
+    cx.read(|cx| assert!(!editor.read(cx).is_recording()));
+
+    let (host, _, window, editor, _model) = recording_fixture(cx);
+    run_recording_command(&window, "rec.start", Some("a"), cx);
+    host.read_with(cx, |host, _| assert_eq!(host.open_recording_count(), 1));
+    let execution = dispatch_product_command(&window, Headless, "workbench.close-tab", cx);
+    wait_for_command(execution, cx);
+    cx.run_until_parked();
+    host.read_with(cx, |host, _| assert_eq!(host.open_recording_count(), 0));
+    cx.read(|cx| assert!(!editor.read(cx).is_recording()));
+}
+
+#[gpui::test]
+fn replaying_an_accepted_completion_inserts_its_text(cx: &mut TestAppContext) {
+    use crate::app::completion::{CompletionProviderRegistration, CompletionResponse};
+    use knot_model::completion::CompletionResultItem;
+    let (_host, _, window, editor, model) = recording_fixture(cx);
+    type_text(&window, "fo", cx);
+    run_recording_command(&window, "rec.start", Some("a"), cx);
+    let providers = vec![CompletionProviderRegistration {
+        id: knot_protocol::ProviderRegistrationId::new(1),
+        extension: ExtensionId::new(1),
+        lifecycle: ExtensionLifecycleId::new(1),
+        label: "fixture".into(),
+    }];
+    let (_, request) = editor
+        .update(cx, |editor, cx| editor.start_completion(providers, cx))
+        .remove(0);
+    editor.update(cx, |editor, cx| {
+        assert!(editor.apply_completion_response(
+            CompletionResponse {
+                registration: request.registration,
+                revision: request.revision,
+                generation: request.generation,
+                result: Ok(vec![CompletionResultItem {
+                    label: "foo".into(),
+                    insert_text: "foo".into(),
+                }]),
+            },
+            cx,
+        ));
+        editor.accept_selected_completion(cx);
+    });
+    cx.read(|cx| assert_eq!(model.read(cx).text(), "foo"));
+    run_recording_command(&window, "rec.stop", Some("a"), cx);
+    assert_eq!(
+        recorded(cx),
+        serde_json::json!([
+            { "command": "editor.type", "arguments": { "text": "foo", "replace": 2 } },
+        ])
+    );
+    let execution = dispatch_product_command(&window, Headless, "editor.select-all", cx);
+    wait_for_command(execution, cx);
+    type_text(&window, "fo", cx);
+    run_recording_command(&window, "rec.replay", None, cx);
+    cx.read(|cx| assert_eq!(model.read(cx).text(), "foo"));
+}

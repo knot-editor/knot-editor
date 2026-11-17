@@ -362,6 +362,15 @@ impl KnotWindow {
             target.view = None;
         }
         let editor = Self::target_editor(&target, cx);
+        // A key in a bar field edits the bar, not the document.
+        if let Some(view) = &editor {
+            let editor = view.read(cx).editor().clone();
+            editor.update(cx, |editor, _| {
+                if editor.bars().focused_bar().is_none() {
+                    editor.record_command(&command);
+                }
+            });
+        }
         let dispatcher = Self::command_dispatcher(cx);
         let native = matches!(
             dispatcher

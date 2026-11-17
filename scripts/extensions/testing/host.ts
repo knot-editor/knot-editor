@@ -1592,6 +1592,9 @@ function editor(tab: FakeTab): Knot.Editor {
       undoGroups.add(document);
       return { dispose: async () => void undoGroups.delete(document) };
     },
+    record: async () => {
+      throw new Error("input recording needs the real editor; run the test through the Rust runner");
+    },
     viewState: async () => ({ ...live().view }),
     restoreViewState: async (view) => {
       live().view = { ...view };
@@ -1655,6 +1658,7 @@ function editorHandle(target: Knot.ViewTarget): Knot.EditorHandle {
     setCursorStyle: guard(live.setCursorStyle),
     setDecorations: guard(live.setDecorations),
     beginUndoGroup: guard(live.beginUndoGroup),
+    record: guard(live.record),
     openBar: guard(live.openBar),
     closeBar: guard(live.closeBar),
     focusBarField: guard(live.focusBarField),

@@ -1842,12 +1842,39 @@ declare module "knot" {
      * when the buffer already has an open group.
      */
     beginUndoGroup(): Promise<Disposable>;
+    /**
+     * Start recording the input this editor receives from the keyboard: each
+     * command a key or text binding runs, text typed or committed by an input
+     * method, and each accepted completion, in order. Palette, menu,
+     * scripted, and nested command invocations, mouse input, and composition
+     * preedit are not recorded. Recordings are independent, so several can
+     * be active at once. A recording ends when it is stopped or disposed,
+     * when the editor handle is released, when the handle's tab closes, and
+     * when the caller's lifecycle ends; stopping one that ended resolves with
+     * no entries.
+     * @throws HostError with InvalidTarget or Cancelled.
+     */
+    record(): Promise<Recording>;
     /** Selection and scroll, restorable exactly while the text is unchanged.
      * @throws HostError with InvalidTarget or Cancelled. */
     viewState(): Promise<EditorViewState>;
     /** Apply a view state; offsets clamp to the current text.
      * @throws HostError with InvalidTarget or Cancelled. */
     restoreViewState(state: EditorViewState): Promise<void>;
+  }
+  /** One recorded step of an editor's input, replayable with
+   * `commands.invoke(command, arguments)` on the same editor. Typed text is
+   * `editor.type` with `{ text }`, plus `replace`, the number of characters
+   * before the caret an accepted completion replaced. */
+  export interface RecordedCommand {
+    readonly command: string;
+    readonly arguments?: unknown;
+  }
+  /** An input recording of one editor; see `EditorHandle.record`. */
+  export interface Recording extends Disposable {
+    /** End the recording and resolve with its entries in order. Calling it
+     * again, or after the recording ended, resolves with no entries. */
+    stop(): Promise<readonly RecordedCommand[]>;
   }
   /**
    * Command cancellation signal with the supported interface below.

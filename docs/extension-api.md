@@ -220,6 +220,29 @@ also ends when the package unloads or the handle's tab closes or the handle is
 disposed, so it never outlives its owner. A group with no edits leaves no undo
 step.
 
+`editor.record()` records the input the editor receives from the keyboard as
+plain data, so a package can replay it. `recording.stop()` resolves with the
+entries, in order: each command a key or text binding ran with its arguments,
+text typed or committed by an input method as `editor.type` with `{ text }`,
+and an accepted completion as `editor.type` with `{ text, replace }`, where
+`replace` is the number of characters before the caret it replaced. Palette,
+menu, scripted, and nested command invocations and mouse input are not
+recorded, so replaying never records itself. Several recordings can be active
+at once; each keeps only its own editor's input.
+
+```js
+const recording = await editor.record();
+// ...the user types; later:
+const entries = await recording.stop();
+for (const { command, arguments: args } of entries) {
+  await commands.invoke(command, args); // children target the same editor
+}
+```
+
+A recording ends when it is stopped or disposed, when the handle's tab closes
+or the handle is released, or when the package unloads; stopping a recording
+that ended resolves with no entries.
+
 Registering commands/providers/keymaps is valid during activation. Contextual
 lookup and command invocation require a running command. Await disposal and
 view invalidation to observe completion, and use host error `code` values

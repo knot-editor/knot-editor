@@ -175,6 +175,26 @@ of a command's input reach it, on the first key after focus leaves the held
 view otherwise, and after one second, so a stuck extension never keeps the
 keyboard. Composition preedit is not queued, since the IME already shows it.
 
+### Recording
+
+An editor keeps the input recordings in progress as plain data, one list of
+`{ command, arguments }` entries per recording, and appends to every one as
+input arrives. The window appends a completed key binding's command when it
+runs, and a text binding's command with its `{ text }`. The view appends
+other committed text, an input method's commit included, as `editor.type
+{ text }`, and the editor appends an accepted completion as `editor.type
+{ text, replace }`, whose `replace` counts the characters before the caret the
+completion replaced. Held input is recorded once, when the hold releases it.
+Only these keyboard paths record: palette, menu, scripted, and nested
+invocations, mouse input, composition preedit, and keys in a bar field do not,
+so replaying a recording through `commands.invoke` never records itself.
+`editor.type` is a native editor command, hidden from the palette, that types
+as the keyboard does.
+
+The host assigns recording IDs and records each one's owner, editor, and
+handle, as it does for undo groups. Disposal, lifecycle teardown, and the
+handle's release or stale tab end a recording; stopping returns its entries.
+
 ### Menus
 
 Menus show each command's shown global single-keystroke binding through a

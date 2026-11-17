@@ -1,6 +1,6 @@
 //! Native editor command declarations.
 use super::*;
-use crate::app::commands::declarations::{CommandContext, command};
+use crate::app::commands::declarations::{CommandArguments, CommandContext, command};
 use crate::app::commands::dispatch::ProductCommandTarget;
 pub(crate) use knot_model::editor::commands::*;
 use knot_protocol::{Command, CommandArgumentValue, CommandOutcome};
@@ -117,6 +117,68 @@ pub(crate) async fn editing(context: CommandContext, (): ()) -> Result<(), Comma
             } else {
                 Err(CommandOutcome::Unavailable)
             }
+        })
+        .await
+}
+
+/// The arguments of [`TYPE_COMMAND`].
+pub(crate) struct TypeArguments {
+    text: String,
+    replace: usize,
+}
+
+impl CommandArguments for TypeArguments {
+    fn decode(value: &CommandArgumentValue) -> Result<Self, CommandOutcome> {
+        let invalid = |message: &str| CommandOutcome::InvalidArgument {
+            message: message.into(),
+        };
+        let CommandArgumentValue::Object(fields) = value else {
+            return Err(invalid("editor.type takes an object with a text field"));
+        };
+        let Some(CommandArgumentValue::String(text)) = fields.get("text") else {
+            return Err(invalid("editor.type needs a string text"));
+        };
+        let replace = match fields.get("replace") {
+            None | Some(CommandArgumentValue::Null) => 0,
+            Some(CommandArgumentValue::Number(count))
+                if count.fract() == 0. && *count >= 0. && *count <= u32::MAX as f64 =>
+            {
+                *count as usize
+            }
+            Some(_) => return Err(invalid("editor.type replace must be a count of characters")),
+        };
+        if fields.keys().any(|key| key != "text" && key != "replace") {
+            return Err(invalid("editor.type takes only text and replace"));
+        }
+        Ok(Self {
+            text: text.clone(),
+            replace,
+        })
+    }
+}
+
+/// Type text into the captured editor as the keyboard does, over the
+/// characters before the caret when asked.
+#[command(knot_model::editor::commands::TYPE_COMMAND, title = "Type Text", palette = false, participant = Editor)]
+pub(crate) async fn type_text(
+    context: CommandContext,
+    arguments: TypeArguments,
+) -> Result<(), CommandOutcome> {
+    context
+        .foreground(move |target, cx| {
+            let Some(crate::app::workbench::CommandView::Editor(view)) = target.command_view(cx)
+            else {
+                return Err(CommandOutcome::InvalidTarget);
+            };
+            let editor = view.read(cx).editor().clone();
+            if let Some(input) = editor.read(cx).focused_bar_input().cloned() {
+                input.update(cx, |input, cx| input.insert_text(None, &arguments.text, cx));
+                return Ok(());
+            }
+            editor.update(cx, |editor, cx| {
+                editor.type_replacing(arguments.replace, &arguments.text, cx)
+            });
+            Ok(())
         })
         .await
 }

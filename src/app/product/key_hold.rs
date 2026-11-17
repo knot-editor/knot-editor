@@ -144,6 +144,7 @@ impl KnotWindow {
                 .into(),
             ),
         };
+        editor.update(cx, |editor, _| editor.record_command(&command));
         let window = cx.weak_entity();
         cx.defer(move |cx| {
             let Some(entity) = window.upgrade() else {
@@ -173,7 +174,7 @@ impl KnotWindow {
         cx: &mut Context<Self>,
     ) {
         if !self.take_typed_text(editor, text, cx) {
-            editor.update(cx, |editor, cx| editor.type_text(None, text, cx));
+            editor.update(cx, |editor, cx| editor.type_input(None, text, cx));
         }
     }
 

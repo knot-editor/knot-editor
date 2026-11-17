@@ -485,10 +485,14 @@ impl Editor {
         cx.notify();
     }
 
+    /// Accept the selected completion, recording the text it typed.
     pub(super) fn accept_selected_completion(&mut self, cx: &mut Context<Self>) {
-        self.update_state(cx, |editor, buffer| {
+        let accepted = self.update_state(cx, |editor, buffer| {
             editor.accept_selected_completion(buffer)
         });
+        if let Some(entry) = accepted {
+            self.state.record_input(entry);
+        }
     }
 
     fn dismiss_completion(&mut self, cx: &mut Context<Self>) {
@@ -567,6 +571,44 @@ impl Editor {
         cx: &mut Context<Self>,
     ) {
         self.update_state(cx, |editor, buffer| editor.type_text(range, text, buffer));
+    }
+
+    /// Insert `text` the keyboard or an input method committed, recording it
+    /// as typed input.
+    pub(crate) fn type_input(
+        &mut self,
+        range: Option<Range<usize>>,
+        text: &str,
+        cx: &mut Context<Self>,
+    ) {
+        self.state.record_input(RecordedCommand::typed(text, 0));
+        self.type_text(range, text, cx);
+    }
+
+    /// Type `text` over the `replace` characters before the caret, as the
+    /// `editor.type` command does; see [`EditorState::type_text_replacing`].
+    pub(crate) fn type_replacing(&mut self, replace: usize, text: &str, cx: &mut Context<Self>) {
+        self.update_state(cx, |editor, buffer| {
+            editor.type_text_replacing(replace, text, buffer)
+        });
+    }
+
+    /// Append a command a key ran to the input recordings.
+    pub(crate) fn record_command(&mut self, command: &knot_protocol::Command) {
+        if self.state.is_recording() {
+            self.state.record_input(RecordedCommand {
+                command: command.name.to_string(),
+                arguments: command.arguments.clone(),
+            });
+        }
+    }
+
+    pub(crate) fn start_recording(&mut self, id: u64) {
+        self.state.start_recording(id);
+    }
+
+    pub(crate) fn finish_recording(&mut self, id: u64) -> Option<Vec<RecordedCommand>> {
+        self.state.finish_recording(id)
     }
 
     /// Mark composing `new_text`; see [`EditorState::mark_text`]. Text a
