@@ -1,6 +1,6 @@
 # D202: Fast typing in large files
 
-Status: 🚧 checkpoint 2 implemented, awaiting review. Roadmap item [D202](../roadmap.md).
+Status: 🚧 checkpoints 1–2 complete; checkpoint 3 next. Roadmap item [D202](../roadmap.md).
 
 ## Goal
 
@@ -114,51 +114,27 @@ The profile was recorded with
 it types through `Try: Type 200 Characters`, which edits through the buffer
 API and so skips key routing, cheap in the benchmark.
 
-### 2. Fold marks that do not grow with the file
+### 2. Fold marks that do not grow with the file ✅
 
-The gutter's fold marks cost only the visible lines: the `folds` query runs
-over the visible range (a query cursor range) and only on layers that
-overlap it, and trailing blank lines are trimmed by reading only the lines a
-region ends on. Commands that need every region (Fold All, toggling a
-recursive fold) keep computing them for the whole file on demand.
+Approved: noticeably faster in the app, though not yet immediate. The
+gutter asks `BufferModel::fold_starts` for the visible lines only; it queries
+the visible rows of the layers that reach them, and the whole-text
+`fold_regions` stays for the fold commands. Tested against the whole-text
+regions over every bundled fold case and the shortened benchmark documents.
 
-Deterministic tests: marks over a range match the whole-file regions
-restricted to it, across languages with and without a `folds` query and
-with injections; a layer outside the range is not queried. The product
-benchmark confirms the per-key drop in every language.
-
-**Implemented** ✅ (pending review): `BufferModel::fold_starts` gives the
-gutter the first lines of the regions starting among the visible lines,
-through `SyntaxState::fold_regions_starting_in`, which sets a query cursor
-point range and skips layers whose root node misses the lines (the range
-extends one line down for the colon rule). Without a `folds` query, a line
-starts a region when the next non-blank line is indented more. The
-whole-text `fold_regions` and its cache stay for the commands. Tests: the
-fold cases of every bundled language and the shortened benchmark documents
-compare marks asked for three lines at a time with the whole-text regions;
-model tests cover indentation and blank-only bodies over every window, and a
-Markdown document whose small range reaches only its root and one fence.
-
-Product benchmark after the change (key p50 / p99; after p50 / p99 at the
-slow pace, and up to the fast pace's after p99):
+Product benchmark after it (p99 per key / after the key, fast pace):
 
 | File | Key | After |
 | --- | --- | --- |
-| Markdown | 3.2–9.0 / 5.5–10.6 ms | 3.9 / 5.4–6.1 ms; 17.7 ms fast |
-| Rust | 0.9–2.0 / 2.4–2.8 ms | 1.1 / 1.8 ms; 4.4 ms fast |
-| TypeScript | 1.1–2.0 / 2.2–2.5 ms | 1.0 / 1.7 ms; 4.1 ms fast |
-| Python | 0.9–1.8 / 2.1–2.5 ms | 1.2 / 2.0–2.5 ms; 4.7 ms fast |
-| Plain text | 0.6 / 0.8–0.9 ms | 0.03 / 0.06 ms |
+| Markdown | 5.5–10.6 ms | 17.7 ms |
+| Rust | 2.8 ms | 4.4 ms |
+| TypeScript | 2.5 ms | 4.1 ms |
+| Python | 2.5 ms | 4.7 ms |
+| Plain text | 0.9 ms | 0.06 ms |
 
-Rust, TypeScript, and Python now meet the key target; the fast pace's after
-work (a rebased parse) is just over it. Markdown's remaining cost is the
-per-layer syntax work of checkpoint 3.
-
-**Implementation context**: `crates/knot-model/src/syntax/fold.rs`
-(`SyntaxState::fold_regions`, `collect`), `crates/knot-model/src/buffer/folds.rs`
-(`BufferModel::fold_regions` and its cache, `indentation_regions`),
-`crates/knot-model/src/editor/folding.rs` (`fold_marks` and the commands
-that use all regions), and the gutter in `src/app/editor/paint.rs`.
+Markdown's remaining cost is the per-layer syntax work of checkpoint 3; the
+other languages' after work at the fast pace (a rebased parse) is just over
+target.
 
 ### 3. Syntax work that does not grow with layers (provisional)
 
