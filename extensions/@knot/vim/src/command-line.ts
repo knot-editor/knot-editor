@@ -6,11 +6,10 @@ import { run, type State } from "./normal.js";
 
 /** Asks for a command line and runs it; returns a message to show, or null. */
 export async function commandLine(state: State): Promise<string | null> {
-  const directory = await baseDirectory(state);
   const input = await workbench.showInput({
     title: "Ex Command",
     prompt: ":",
-    onChange: async (line) => ({ items: await completeEx(line, directory) }),
+    onChange: async (line) => ({ items: await completeEx(line) }),
   });
   if (input.kind === "dismissed") return null;
   const command = parseEx(input.value);
@@ -59,8 +58,13 @@ async function baseDirectory(state: State): Promise<string | null> {
   return (await workspaces.get(state.target.window))?.roots[0]?.uri ?? null;
 }
 
-/** `:e`: opens `path` in the base directory. */
-async function edit(state: State, path: string): Promise<string | null> {
+/** `:e`: opens `path` in the base directory, or without one starts Go to
+ * File, the picker the editor opens files with. */
+async function edit(state: State, path: string | null): Promise<string | null> {
+  if (path === null) {
+    await commands.invoke("workspace.go-to-file");
+    return null;
+  }
   const resolved = resolvePath(path, await baseDirectory(state));
   if (resolved === null) return `No directory to open ${path} in`;
   try {
