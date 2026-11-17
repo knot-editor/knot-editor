@@ -1,6 +1,6 @@
 # D150: Vim search and substitution
 
-Status: 🚧 in progress (checkpoint 1 done). Roadmap item [D150](../roadmap.md).
+Status: 🚧 in progress (checkpoints 1–2 done). Roadmap item [D150](../roadmap.md).
 
 ## Goal
 
@@ -150,31 +150,13 @@ regex replacements, are documented under
 [text search](../architecture/core-and-buffers.md#text-search) and in the
 [extension guide](../extension-api.md).
 
-### 2. Input history infrastructure 🚧 (awaiting API review)
+### 2. Input history infrastructure ✅
 
-Deliverables:
-
-- ✅ The `history` option on `showInput` and on bar fields, through the
-  protocol, host, `knot.d.ts` and schema (which does not describe either);
-  prompt history rows ahead of `onChange` items, and Up/Down recall in bar
-  fields. A prompt's `highlighted` counts only `onChange` items and is null
-  on a history row; a bar field's history is the snapshot passed when the
-  bar was opened.
-- ✅ Model tests for the prompt list composition and the bar-field recall
-  (prefix filtering, restoring the typed text); a UI test for each surface's
-  keys, and one per surface through a real extension.
-- ✅ The extension guide's transient-input and editor-bar sections, and the
-  bar key routing in [commands](../architecture/commands.md#editor-bars).
-
-Implementation context: the input state and its completion list behind
-`workbench.showInput` (find it from the `showInput` handler in
-`src/app/extensions/host/handlers.rs`); bar state in
-`crates/knot-model/src/editor/bars.rs`, key routing for bar fields in
-[commands](../architecture/commands.md#editor-bars); `InputOptions` and
-`EditorBar` in `crates/knot-host/src/js/knot.d.ts`; the candidate matcher in
-`knot-model` for filtering.
-
-Review gate: API shape accepted; `just check` clean.
+Done and approved: the `history` option on `showInput` and on bar fields is
+documented in the [extension guide](../extension-api.md) and, for bar keys,
+under [editor bars](../architecture/commands.md#editor-bars). A prompt's
+`highlighted` counts only `onChange` items and is null on a history row; a bar
+field's history is the snapshot passed when the bar was opened.
 
 ### 3. History in Find
 
