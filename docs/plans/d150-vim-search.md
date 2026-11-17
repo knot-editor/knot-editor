@@ -1,6 +1,6 @@
 # D150: Vim search and substitution
 
-Status: 🚧 in progress (checkpoints 1–5 done). Roadmap item [D150](../roadmap.md).
+Status: 🚧 in progress (checkpoints 1–5 done, 6 awaiting review). Roadmap item [D150](../roadmap.md).
 
 ## Goal
 
@@ -185,15 +185,17 @@ prompts preview matches and the first match's caret as you type, and restore
 the view afterwards; in a visual mode only the highlights preview. Product
 tests in `crates/knot-ext-vim/tests/vim.rs` read the editor's decorations.
 
-### 6. Substitution
+### 6. Substitution 🚧 (awaiting the review gate)
 
 Deliverables:
 
-- Ex range parsing and `:s` parsing in `ex.ts`, with unit tests; `:` from
+- ✅ Ex range parsing and `:s` parsing in `ex.ts`, with unit tests; `:` from
   visual mode with `'<,'>`.
-- `:s` running as one native replace with flags, last-pattern reuse, the
-  caret placement and the report.
-- Cases in `test/cases/ex.jsonc` (or a new `substitute.jsonc`) covering
+- ✅ `:s` running as one native replace with flags, last-pattern reuse, the
+  caret placement and the report. The caret goes to the first non-blank of the
+  last substituted line, as Vim's does; a range reaches into the line break
+  after its last line, so `\n` joins lines.
+- ✅ Cases in `test/cases/substitute.jsonc` covering
   ranges, flags, `\1`/`&`/`\r`/`\U` replacements, undo as one step, and
   Rust syntax.
 
