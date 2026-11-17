@@ -88,6 +88,13 @@ input to skip the CI wait. Every build gets a distinct version,
 prereleases are kept; older ones are deleted with their tags. To cut a
 nightly by hand, dispatch the workflow from the Actions tab.
 
+Each prerelease's notes list the `Release-note:` trailers of the commits since
+the previous nightly, collected by `scripts/release-notes.sh` (unit-checked by
+`scripts/test-release-notes.sh`). A commit that changes what a user sees,
+whether it closes a plan or stands alone, carries one such trailer per change:
+a single plain-language sentence with no item IDs or internal names. Commits
+that change nothing user-visible carry none.
+
 The version is compiled in as `KNOT_VERSION` (`knot --version` and `Knot:
 About` show it with the short commit hash) and stamped as the bundle's
 `CFBundleVersion`. The bundle is built by `scripts/build-macos-app.sh

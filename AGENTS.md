@@ -84,6 +84,11 @@ updated. Use ✅ and other emoji to mark executed steps.
   it is done and verified, before starting the next one. Never accumulate
   several steps of work and try to split them into commits at the end.
 - Don't use conventional commits.
+- A commit that changes what a user sees (a feature, a fix, a behavior change)
+  ends with one `Release-note: <sentence>` trailer per change: plain language
+  for a user, one sentence, no item IDs or internal names. The nightly release
+  notes are built from these trailers; commits with no user-visible change
+  carry none. See [development](docs/development.md#nightly-releases).
 - Whenever the user needs to verify something in the real app, such as a
   manual review gate, write a personal-config `post-init.js` that registers
   `try.*` commands (palette titles starting with `Try:`) exercising the

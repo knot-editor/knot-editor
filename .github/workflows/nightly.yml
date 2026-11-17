@@ -31,6 +31,7 @@ jobs:
     outputs:
       build: ${{ steps.decide.outputs.build }}
       version: ${{ steps.decide.outputs.version }}
+      previous: ${{ steps.decide.outputs.previous }}
     steps:
       - name: Decide whether to build
         id: decide
@@ -43,16 +44,16 @@ jobs:
           set -euo pipefail
           echo "version=$(date -u +nightly.%Y%m%d.%H%M)" >> "$GITHUB_OUTPUT"
 
-          if [ "$MANUAL" != true ]; then
-            last_tag="$(gh release list --repo "$REPO" --limit 100 --json tagName,createdAt \
-              --jq '[.[] | select(.tagName | startswith("nightly-"))] | sort_by(.createdAt) | last | .tagName // ""')"
-            if [ -n "$last_tag" ]; then
-              last_sha="$(gh api "repos/$REPO/commits/$last_tag" --jq .sha)"
-              if [ "$last_sha" = "$SHA" ]; then
-                echo "No commits since $last_tag; skipping."
-                echo "build=false" >> "$GITHUB_OUTPUT"
-                exit 0
-              fi
+          last_tag="$(gh release list --repo "$REPO" --limit 100 --json tagName,createdAt \
+            --jq '[.[] | select(.tagName | startswith("nightly-"))] | sort_by(.createdAt) | last | .tagName // ""')"
+          echo "previous=$last_tag" >> "$GITHUB_OUTPUT"
+
+          if [ "$MANUAL" != true ] && [ -n "$last_tag" ]; then
+            last_sha="$(gh api "repos/$REPO/commits/$last_tag" --jq .sha)"
+            if [ "$last_sha" = "$SHA" ]; then
+              echo "No commits since $last_tag; skipping."
+              echo "build=false" >> "$GITHUB_OUTPUT"
+              exit 0
             fi
           fi
 
@@ -95,6 +96,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
+          fetch-tags: true
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
@@ -111,14 +114,20 @@ jobs:
       - name: Publish prerelease
         env:
           SHA: ${{ github.sha }}
+          PREVIOUS: ${{ needs.decide.outputs.previous }}
         run: |
           set -euo pipefail
           tag="nightly-${VERSION#nightly.}"
           tag="${tag/./-}"
+          notes="$RUNNER_TEMP/release-notes.md"
+          {
+            scripts/release-notes.sh "$SHA" "$PREVIOUS"
+            printf '\nNightly build of %s.\n' "$SHA"
+          } > "$notes"
           gh release create "$tag" dist/Knot-"$VERSION"-macos-*.zip dist/Knot-"$VERSION"-macos-*.zip.sha256 \
             --target "$SHA" --prerelease --latest=false \
             --title "Knot $VERSION" \
-            --notes "Nightly build of ${SHA}."
+            --notes-file "$notes"
       - name: Prune old nightlies
         run: |
           set -euo pipefail

@@ -17,3 +17,5 @@ description: Implement the next unfinished checkpoint of a named Knot execution 
 ## Completing a whole plan
 
 When the selected checkpoint is the **last** one and every completion criterion and required gate has passed, finish implementation, tests, documentation, and their commits first. Then preserve durable behavior in the architecture docs and rationale in the `docs/decisions/` topic files and their `docs/decisions.md` index, following the entry rules in `docs/README.md`, and remove the completed plan from `docs/plans/` in a **separate final commit**. Update references to the removed plan in that commit; Git retains its execution history. Do not remove a plan while another checkpoint or gate remains open.
+
+The plan's release note (see the plan's "Release notes" section) must reach the nightly notes. Put it as `Release-note:` trailers on the commit that makes the behavior usable, and at the latest on the final plan-removal commit; revise the drafted wording to what actually shipped. A plan with no user-visible effect has none.
