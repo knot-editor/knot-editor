@@ -170,7 +170,7 @@ impl TextInput {
         self.set_caret(self.text.len(), extend);
     }
 
-    fn select_all(&mut self) {
+    pub(crate) fn select_all(&mut self) {
         self.anchor = 0;
         self.caret = self.text.len();
     }
@@ -221,14 +221,14 @@ impl TextInput {
         true
     }
 
-    fn copy(&self, cx: &mut Context<Self>) {
+    pub(crate) fn copy(&self, cx: &mut Context<Self>) {
         let selected = self.selected_text();
         if !selected.is_empty() {
             cx.write_to_clipboard(ClipboardItem::new_string(selected.to_string()));
         }
     }
 
-    fn cut(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn cut(&mut self, cx: &mut Context<Self>) {
         let selected = self.selected_text();
         if selected.is_empty() {
             return;
@@ -239,7 +239,7 @@ impl TextInput {
         cx.emit(TextInputEvent::Changed);
     }
 
-    fn paste(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn paste(&mut self, cx: &mut Context<Self>) {
         let Some(text) = cx
             .read_from_clipboard()
             .and_then(|item| item.text())

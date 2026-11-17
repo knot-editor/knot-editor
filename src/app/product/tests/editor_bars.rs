@@ -277,6 +277,16 @@ fn typing_in_a_focused_field_reaches_the_listener_and_clicks_move_focus(cx: &mut
     fixture.run("find.read", cx);
     assert_eq!(clipboard(cx).as_deref(), Some("read:abcd"));
 
+    // The clipboard and select-all keys edit the field, not the editor's text.
+    cx.update(|cx| cx.write_to_clipboard(gpui::ClipboardItem::new_string("Z".into())));
+    cx.simulate_keystrokes(fixture.native_window, "secondary-v");
+    cx.run_until_parked();
+    assert_eq!(fixture.field_text(owner, cx), "abcdZ");
+    cx.simulate_keystrokes(fixture.native_window, "secondary-a secondary-x");
+    cx.run_until_parked();
+    assert_eq!(fixture.field_text(owner, cx), "");
+    assert_eq!(cx.read(|cx| fixture.model.read(cx).text()), "text");
+
     // Clicking the text gives it focus, and the bar stays open; clicking
     // the field takes focus back.
     let view = fixture.view(cx);

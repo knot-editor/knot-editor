@@ -95,6 +95,23 @@ pub(crate) async fn editing(context: CommandContext, (): ()) -> Result<(), Comma
                 return Err(CommandOutcome::InvalidTarget);
             };
             let editor = view.read(cx).editor().clone();
+            // A focused bar field takes the clipboard and select-all commands.
+            if let Some(input) = editor.read(cx).focused_bar_input().cloned() {
+                let handled = input.update(cx, |input, cx| {
+                    match name {
+                        COPY_COMMAND => input.copy(cx),
+                        CUT_COMMAND => input.cut(cx),
+                        PASTE_COMMAND => input.paste(cx),
+                        SELECT_ALL_COMMAND => input.select_all(),
+                        _ => return false,
+                    }
+                    cx.notify();
+                    true
+                });
+                if handled {
+                    return Ok(());
+                }
+            }
             if editor.update(cx, |editor, cx| editor.execute_editing_command(name, cx)) {
                 Ok(())
             } else {
