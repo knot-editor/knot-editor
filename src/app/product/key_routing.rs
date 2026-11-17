@@ -362,15 +362,6 @@ impl KnotWindow {
             target.view = None;
         }
         let editor = Self::target_editor(&target, cx);
-        // A key in a bar field edits the bar, not the document.
-        if let Some(view) = &editor {
-            let editor = view.read(cx).editor().clone();
-            editor.update(cx, |editor, _| {
-                if editor.bars().focused_bar().is_none() {
-                    editor.record_command(&command);
-                }
-            });
-        }
         let dispatcher = Self::command_dispatcher(cx);
         let native = matches!(
             dispatcher
@@ -380,6 +371,21 @@ impl KnotWindow {
                 .resolve(command.name.as_ref()),
             Ok(crate::app::commands::catalog::CommandTargetKind::Native)
         );
+        // Only commands that act on the editor's text record; a window-level
+        // command such as opening the palette is not input to replay. A key in
+        // a bar field edits the bar, not the document.
+        if let Some(view) = &editor
+            && (!native
+                || crate::app::commands::declarations::registry()
+                    .is_editor_command(command.name.as_ref()))
+        {
+            let editor = view.read(cx).editor().clone();
+            editor.update(cx, |editor, _| {
+                if editor.bars().focused_bar().is_none() {
+                    editor.record_command(&command);
+                }
+            });
+        }
         let execution = dispatcher.update(cx, |dispatcher, cx| {
             dispatcher.dispatch(command, target, cx)
         });

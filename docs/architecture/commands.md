@@ -180,7 +180,8 @@ keyboard. Composition preedit is not queued, since the IME already shows it.
 An editor keeps the input recordings in progress as plain data, one list of
 `{ command, arguments }` entries per recording, and appends to every one as
 input arrives. The window appends a completed key binding's command when it
-runs, and a text binding's command with its `{ text }`. The view appends
+runs, unless it is a native command that does not act on the editor, such as
+opening the palette or switching tabs, and a text binding's command with its `{ text }`. The view appends
 other committed text, an input method's commit included, as `editor.type
 { text }`, and the editor appends an accepted completion as `editor.type
 { text, replace }`, whose `replace` counts the characters before the caret the

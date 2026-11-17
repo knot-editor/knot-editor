@@ -1419,3 +1419,12 @@ fn replaying_an_accepted_completion_inserts_its_text(cx: &mut TestAppContext) {
     run_recording_command(&window, "rec.replay", None, cx);
     cx.read(|cx| assert_eq!(model.read(cx).text(), "foo"));
 }
+
+#[gpui::test]
+fn window_level_key_commands_are_not_recorded(cx: &mut TestAppContext) {
+    let (_host, _, window, _editor, _model) = recording_fixture(cx);
+    run_recording_command(&window, "rec.start", Some("a"), cx);
+    press_keys(&window, "secondary-shift-p escape", cx);
+    run_recording_command(&window, "rec.stop", Some("a"), cx);
+    assert_eq!(recorded(cx), serde_json::json!([]));
+}

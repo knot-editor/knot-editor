@@ -1844,7 +1844,8 @@ declare module "knot" {
     beginUndoGroup(): Promise<Disposable>;
     /**
      * Start recording the input this editor receives from the keyboard: each
-     * command a key or text binding runs, text typed or committed by an input
+     * command a key or text binding runs (native commands that act on the window
+     * rather than the editor, such as opening the palette, are left out), text typed or committed by an input
      * method, and each accepted completion, in order. Palette, menu,
      * scripted, and nested command invocations, mouse input, and composition
      * preedit are not recorded. Recordings are independent, so several can

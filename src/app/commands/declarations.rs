@@ -343,6 +343,12 @@ impl CommandRegistry {
             .map(|(name, metadata)| (*name, *metadata))
     }
 
+    /// Whether `name` is a native command of editors, which acts on the
+    /// text rather than on the window.
+    pub(crate) fn is_editor_command(&self, name: &str) -> bool {
+        self.entries.contains_key(&(name, Participant::Editor))
+    }
+
     pub(crate) fn dispatch(
         &self,
         participant: Participant,
