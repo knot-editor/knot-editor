@@ -3,11 +3,14 @@
 import { commands, documents, providers, settings, workbench, workspaces } from "knot";
 import type { IconRef, InputCompletion } from "knot";
 import {
-  type BooleanOption, completeEx, directoryOf, type ExCommand, fileCompletionTarget, parseEx, pathOfUri, resolvePath,
-  type SetArgument,
+  type Address, type BooleanOption, completeEx, directoryOf, type ExCommand, fileCompletionTarget, parseEx, pathOfUri, resolvePath,
+  type ExRange, type SetArgument,
 } from "./ex.js";
-import { run, type State } from "./normal.js";
-import { IGNORE_CASE, SMART_CASE } from "./search.js";
+import { BufferLines } from "./lines.js";
+import { grouped, markOffset, moveTo, run, type State } from "./normal.js";
+import { translateReplacement } from "./pattern.js";
+import { compile, IGNORE_CASE, invalidPattern, searchSettings, SMART_CASE } from "./search.js";
+import { firstNonBlank } from "./text.js";
 
 /** A row of the `workspace.files` provider's list, the contract Vim expects
  * of it; the row's ID is the file's URI. */
@@ -47,11 +50,12 @@ function fileCompletion(head: string, row: FileRow): InputCompletion {
 
 /** Asks for a command line and runs it; returns a message to show, or null.
  * Under `:e`, the list is the files provider's, and Enter on a row opens it. */
-export async function commandLine(state: State): Promise<string | null> {
+export async function commandLine(state: State, initial: string): Promise<string | null> {
   let files: readonly FileRow[] = [];
   const input = await workbench.showInput({
     title: "Ex Command",
     prompt: ":",
+    value: initial,
     history: state.shared.registers.entries("command"),
     onChange: async (line) => {
       const target = fileCompletionTarget(line);
@@ -103,9 +107,120 @@ async function runEx(state: State, command: ExCommand): Promise<string | null> {
       return edit(state, command.path);
     case "set":
       return set(state, command.arguments);
+    case "substitute":
+      return substitute(state, command);
     case "nohlsearch":
       await state.shared.highlights.hide();
       return null;
+  }
+}
+
+/** The 0-based first and last line of `range`, or the current line without
+ * one; a message when an address is outside the buffer or a mark is unset. */
+async function resolveRange(
+  state: State,
+  lines: BufferLines,
+  range: ExRange | null,
+): Promise<readonly [number, number] | string> {
+  const total = await lines.count();
+  const current = (await lines.position((await state.handle.selection()).caret)).line;
+  const address = async ({ base, offset }: Address): Promise<number | string> => {
+    switch (base.kind) {
+      case "line": return base.line - 1 + offset;
+      case "current": return current + offset;
+      case "last": return total - 1 + offset;
+      case "mark": {
+        const at = await markOffset(state, base.name);
+        return at === null ? "E20: Mark not set" : (await lines.position(at)).line + offset;
+      }
+    }
+  };
+  if (range === null) return [current, current];
+  const first = await address(range.first);
+  const last = await address(range.last);
+  if (typeof first === "string") return first;
+  if (typeof last === "string") return last;
+  if (Math.min(first, last) < 0 || Math.max(first, last) >= total) return "E16: Invalid range";
+  return [Math.min(first, last), Math.max(first, last)];
+}
+
+/** The most matches one substitution reads. */
+const SUBSTITUTE_LIMIT = 100_000;
+
+/** The most substitutions made without a report, as Vim's `report`. */
+const REPORT = 2;
+
+const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
+
+/** `:s`: replaces the matches in the range in one native replace, so one undo
+ * step. The pattern becomes the last search pattern, and the caret goes to
+ * the first non-blank of the last line substituted. */
+async function substitute(state: State, command: Extract<ExCommand, { kind: "substitute" }>): Promise<string | null> {
+  const lines = new BufferLines(state.buffer);
+  const resolved = await resolveRange(state, lines, command.range);
+  if (typeof resolved === "string") return resolved;
+  const { registers, highlights } = state.shared;
+  let typed = command.pattern;
+  let smart = true;
+  if (typed === "") {
+    const last = registers.get("/")?.text;
+    if (last === undefined) return "E35: No previous regular expression";
+    typed = last;
+    smart = state.shared.search.smart;
+  } else {
+    registers.set("/", { text: typed, linewise: false });
+    registers.remember("search", typed);
+    state.shared.saveRegisters();
+    state.shared.search = { forward: state.shared.search.forward, smart };
+  }
+  await highlights.show();
+  const compiled = await compile(state, typed, smart);
+  if ("error" in compiled) return compiled.error;
+  const [first, last] = resolved;
+  // A range reaches into the line break after its last line, so a pattern
+  // may match it, as `\n` does to join lines.
+  const total = await lines.count();
+  const rangeEnd = last + 1 < total
+    ? (await state.buffer.lineRange(last + 1)).startByteOffset
+    : (await state.buffer.lineRange(last)).endByteOffset;
+  const options = {
+    regex: true,
+    caseSensitive: command.flags.ignoreCase === null ? compiled.caseSensitive : !command.flags.ignoreCase,
+    perLine: !command.flags.global,
+    range: {
+      startByteOffset: (await state.buffer.lineRange(first)).startByteOffset,
+      endByteOffset: rangeEnd,
+    },
+  } as const;
+  try {
+    const read = await state.buffer.find(compiled.query, { ...options, limit: SUBSTITUTE_LIMIT });
+    // A match at the range's very end, which `^` makes, is on the next line.
+    const outside = read.matches.at(-1)?.startByteOffset === rangeEnd && last + 1 < total;
+    const found = { ...read, matches: outside ? read.matches.slice(0, -1) : read.matches };
+    if (found.matches.length === 0) return command.flags.quiet ? null : `E486: Pattern not found: ${typed}`;
+    const matched = new Set<number>();
+    for (const match of found.matches) matched.add(await state.buffer.lineAt(match.startByteOffset));
+    const count = found.matches.length;
+    if (command.flags.count) return `${count} match${count === 1 ? "" : "es"} on ${plural(matched.size, "line")}`;
+    const lastLine = await state.buffer.lineAt(found.matches.at(-1)!.endByteOffset);
+    const { syntax } = await searchSettings(state);
+    await grouped(state, async () => {
+      await state.buffer.replace(compiled.query, translateReplacement(command.replacement, syntax), {
+        ...options, limit: found.matches.length, ifRevision: found.revision,
+      });
+    });
+    // What follows the last match is untouched, so the line is as far from
+    // the end as it was.
+    const fresh = new BufferLines(state.buffer);
+    const line = Math.max(0, (await fresh.count()) - 1 - (total - 1 - lastLine));
+    await moveTo(state, fresh, { line, col: firstNonBlank(await fresh.text(line)) });
+    return count > REPORT ? `${plural(count, "substitution")} on ${plural(matched.size, "line")}` : null;
+  } catch (error) {
+    const code = (error as { code?: string }).code;
+    if (code === "RevisionConflict") return "The buffer changed during the substitution";
+    const message = invalidPattern(error);
+    if (message === null) throw error;
+    return message;
   }
 }
 

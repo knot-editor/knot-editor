@@ -8,6 +8,54 @@ test("noh hides the search highlights", () => {
   assert.equal(parseEx("no").kind, "error");
 });
 
+const flags = { global: false, ignoreCase: null, count: false, quiet: false };
+const line = (n: number, offset = 0) => ({ base: { kind: "line", line: n }, offset }) as const;
+const current = (offset = 0) => ({ base: { kind: "current" }, offset }) as const;
+const last = (offset = 0) => ({ base: { kind: "last" }, offset }) as const;
+
+test(":s takes a pattern, a replacement and flags", () => {
+  assert.deepEqual(parseEx("s/a/b/"), { kind: "substitute", range: null, pattern: "a", replacement: "b", flags });
+  for (const name of ["s", "su", "sub", "substitute"]) {
+    assert.deepEqual(parseEx(`${name}/a/b/`), { kind: "substitute", range: null, pattern: "a", replacement: "b", flags });
+  }
+  assert.deepEqual(parseEx("s/a/b/gI"), {
+    kind: "substitute", range: null, pattern: "a", replacement: "b", flags: { ...flags, global: true, ignoreCase: false },
+  });
+  assert.deepEqual(parseEx("s/a/b/ine"), {
+    kind: "substitute", range: null, pattern: "a", replacement: "b",
+    flags: { ...flags, ignoreCase: true, count: true, quiet: true },
+  });
+  assert.deepEqual(parseEx("s/a"), { kind: "substitute", range: null, pattern: "a", replacement: "", flags });
+  assert.deepEqual(parseEx("s//x/"), { kind: "substitute", range: null, pattern: "", replacement: "x", flags });
+});
+
+test(":s takes any delimiter and a backslash before it is literal", () => {
+  assert.deepEqual(parseEx("s#a/b#c/d#"), { kind: "substitute", range: null, pattern: "a/b", replacement: "c/d", flags });
+  assert.deepEqual(parseEx("s/a\\/b/c\\/d/"), { kind: "substitute", range: null, pattern: "a/b", replacement: "c/d", flags });
+  assert.deepEqual(parseEx("s/\\(a\\)/\\1\\n/"), { kind: "substitute", range: null, pattern: "\\(a\\)", replacement: "\\1\\n", flags });
+  for (const bad of ["sxaxbx", "s1a1b1", "s\\a\\b\\", "s|a|b|", "s a b "]) assert.equal(parseEx(bad).kind, "error", bad);
+  assert.deepEqual(parseEx("s/a/b/c"), { kind: "error", message: "E488: Trailing characters: c" });
+  assert.deepEqual(parseEx("s/a/b/ 3"), { kind: "error", message: "E488: Trailing characters: 3" });
+});
+
+test("a range takes numbers, marks, offsets and %", () => {
+  const range = (text: string) => (parseEx(`${text}s/a/b/`) as { range: unknown }).range;
+  assert.deepEqual(range("%"), { first: line(1), last: last() });
+  assert.deepEqual(range("2,5"), { first: line(2), last: line(5) });
+  assert.deepEqual(range("3"), { first: line(3), last: line(3) });
+  assert.deepEqual(range(".,$"), { first: current(), last: last() });
+  assert.deepEqual(range(".+1,$-2"), { first: current(1), last: last(-2) });
+  assert.deepEqual(range("+,-"), { first: current(1), last: current(-1) });
+  assert.deepEqual(range("2+3"), { first: line(2, 3), last: line(2, 3) });
+  assert.deepEqual(range("'<,'>"), {
+    first: { base: { kind: "mark", name: "<" }, offset: 0 }, last: { base: { kind: "mark", name: ">" }, offset: 0 },
+  });
+  assert.deepEqual(range("'a,'b+1"), {
+    first: { base: { kind: "mark", name: "a" }, offset: 0 }, last: { base: { kind: "mark", name: "b" }, offset: 1 },
+  });
+  assert.deepEqual(range(" 1 , 2 "), { first: line(1), last: line(2) });
+});
+
 test("commands take Vim's abbreviations and a bang", () => {
   for (const line of ["w", "wr", "write", ":w", "  w  "]) assert.deepEqual(parseEx(line), { kind: "write" });
   assert.deepEqual(parseEx("q"), { kind: "quit", force: false });
@@ -33,7 +81,8 @@ test("unknown commands and arguments are errors", () => {
   assert.deepEqual(parseEx("ex"), { kind: "error", message: "E492: Not an editor command: ex" });
   assert.deepEqual(parseEx("w other.txt"), { kind: "error", message: "E488: Trailing characters: other.txt" });
   assert.deepEqual(parseEx("e"), { kind: "edit", path: null });
-  assert.deepEqual(parseEx("s/a/b/"), { kind: "error", message: "E492: Not an editor command: s/a/b/" });
+  assert.deepEqual(parseEx("2,3w"), { kind: "error", message: "E481: No range allowed" });
+  assert.deepEqual(parseEx("s"), { kind: "error", message: "E492: Not an editor command: s" });
 });
 
 test(":set turns options on, off, and over, and sets and shows values", () => {
@@ -93,10 +142,10 @@ const values = async (line: string) => (await completeEx(line)).map((item) => it
 
 test("command names complete, in the order of the matcher", async () => {
   assert.deepEqual(await values("w"), ["write", "wq"]);
-  assert.deepEqual(await values("se"), ["set", "nohlsearch"]);
+  assert.deepEqual(await values("se"), ["set", "nohlsearch", "substitute"]);
   assert.deepEqual(await values(":q"), [":quit", ":wq"]);
   assert.deepEqual(await values("zz"), []);
-  assert.equal((await values("")).length, 8);
+  assert.equal((await values("")).length, 9);
 });
 
 test("line numbers and other arguments get no items", async () => {

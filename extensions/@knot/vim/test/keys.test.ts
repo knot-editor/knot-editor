@@ -202,10 +202,10 @@ test("H, M, and L are motions and operator targets", () => {
   assert.deepEqual(visual("M"), { kind: "motion", motion: "window-middle", count: null });
 });
 
-test(": opens the Ex line in normal mode only", () => {
+test(": opens the Ex line in normal and visual modes, not after an operator", () => {
   assert.deepEqual(parse(":").command, { kind: "ex" });
   assert.equal(parse("d", ":").command, null);
-  assert.equal(visual(":"), null);
+  assert.deepEqual(visual(":"), { kind: "ex" });
 });
 
 test("ctrl-w takes a window key, with or without ctrl", () => {

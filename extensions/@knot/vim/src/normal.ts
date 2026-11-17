@@ -476,8 +476,16 @@ async function markMotion(state: State, lines: BufferLines, motion: MarkMotion):
   return { to: await lineStart(lines, to.line), type: "linewise", jump: true };
 }
 
-async function markOffset(state: State, name: string): Promise<number | null> {
+export async function markOffset(state: State, name: string): Promise<number | null> {
   let mark: Mark | undefined;
+  if (name === "<" || name === ">") {
+    const { previous } = state;
+    if (previous === null) return null;
+    const anchor = await previous.anchor.position();
+    const caret = await previous.caret.position();
+    if (anchor === null || caret === null) return null;
+    return name === "<" ? Math.min(anchor, caret) : Math.max(anchor, caret);
+  }
   if (name === "'" || name === "`") {
     mark = state.context ?? undefined;
   } else if (name === name.toLowerCase()) {

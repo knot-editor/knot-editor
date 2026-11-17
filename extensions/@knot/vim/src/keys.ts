@@ -365,7 +365,7 @@ export function feed(pending: Pending, key: string, visual = false): Fed {
     return done({ kind: "jump", count: (key === "<c-o>" ? -1 : 1) * (count ?? 1) });
   }
   if (key === "v" || key === "V") return done({ kind: "visual", linewise: key === "V" });
-  if (key === ":" && !visual) return done({ kind: "ex" });
+  if (key === ":") return done({ kind: "ex" });
   if (visual) {
     if (key === "i" || key === "a") return next({ prefix: key });
     if (key === "o" || key === "O") return done({ kind: "swap-ends" });

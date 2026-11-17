@@ -1,0 +1,47 @@
+// Vim behavior cases in the format described in
+// crates/knot-ext-vim/tests/vim.rs: a Rust product test types `keys` through the
+// real editor with this package enabled. Topic: substitution.
+{
+  "cases": [
+    { "name": ":s replaces the first match on the current line", "before": ["‸foo foo", "foo"], "keys": ":s/foo/x/<cr>", "after": ["‸x foo", "foo"] },
+    { "name": "the g flag replaces every match on the line", "before": ["‸foo foo", "foo"], "keys": ":s/foo/x/g<cr>", "after": ["‸x x", "foo"] },
+    { "name": ":%s covers every line and the caret ends on the last substituted one", "before": ["‸foo", "foo foo", "bar"], "keys": ":%s/foo/x/<cr>", "after": ["x", "‸x foo", "bar"] },
+    { "name": "the caret goes to the first non-blank of the last substituted line", "before": ["‸a", "  a"], "keys": ":%s/a/b/<cr>", "after": ["b", "  ‸b"] },
+    { "name": "a range of numbers", "before": ["‸a", "a", "a", "a"], "keys": ":2,3s/a/b/<cr>", "after": ["a", "b", "‸b", "a"] },
+    { "name": "a single number is one line", "before": ["‸a", "a", "a"], "keys": ":2s/a/b/<cr>", "after": ["a", "‸b", "a"] },
+    { "name": "dot and an offset", "before": ["a", "‸a", "a", "a"], "keys": ":.,+1s/a/b/<cr>", "after": ["a", "b", "‸b", "a"] },
+    { "name": "$ ends a range", "before": ["‸a", "a", "a"], "keys": ":2,$s/a/b/<cr>", "after": ["a", "b", "‸b"] },
+    { "name": "marks bound a range", "before": ["‸a", "a", "a", "a"], "keys": "jmajj:'a,.s/a/b/<cr>", "after": ["a", "b", "b", "‸b"] },
+    { "name": "a range past the end is an error", "before": ["‸a", "a"], "keys": ":1,5s/a/b/<cr>", "after": ["‸a", "a"] },
+    { "name": "an unset mark is an error", "before": ["‸a", "a"], "keys": ":'z,$s/a/b/<cr>", "after": ["‸a", "a"] },
+    { "name": "a backwards range is swapped", "before": ["‸a", "a", "a"], "keys": ":3,2s/a/b/<cr>", "after": ["a", "b", "‸b"] },
+    { "name": ": in linewise visual mode ranges over the selected lines", "before": ["‸a", "a", "a", "a"], "keys": "Vj:s/a/b/<cr>", "after": ["b", "‸b", "a", "a"] },
+    { "name": ": in visual mode ranges over lines whichever way it selects", "before": ["a", "a", "‸a", "a"], "keys": "vk:s/a/b/<cr>", "after": ["a", "b", "‸b", "a"] },
+    { "name": "'<,'> can be typed", "before": ["‸a", "a", "a"], "keys": "Vj<esc>G:'<lt>,'>s/a/b/<cr>", "after": ["b", "‸b", "a"] },
+    { "name": "groups, & and escapes in the replacement", "before": ["‸john smith"], "keys": ":s/\\(\\w\\+\\) \\(\\w\\+\\)/\\2 \\1/<cr>", "after": ["‸smith john"] },
+    { "name": "& is the whole match", "before": ["‸foo"], "keys": ":s/foo/[&]/<cr>", "after": ["‸[foo]"] },
+    { "name": "\\& is a literal ampersand", "before": ["‸foo"], "keys": ":s/foo/a\\&b/<cr>", "after": ["‸a&b"] },
+    { "name": "\\r breaks the line and the caret follows the last one", "before": ["‸a,b"], "keys": ":s/,/\\r/<cr>", "after": ["a", "‸b"] },
+    { "name": "\\U upper-cases the rest of the replacement", "before": ["‸foo bar"], "keys": ":s/\\w\\+/\\U&/g<cr>", "after": ["‸FOO BAR"] },
+    { "name": "\\u upper-cases the next character", "before": ["‸foo bar"], "keys": ":s/\\w\\+/\\u&/g<cr>", "after": ["‸Foo Bar"] },
+    { "name": "a dollar in the replacement is literal", "before": ["‸a"], "keys": ":s/a/$1/<cr>", "after": ["‸$1"] },
+    { "name": "an empty pattern is the last search pattern", "before": ["‸a foo b foo"], "keys": "/foo<cr>:s//x/<cr>", "after": ["‸a x b foo"] },
+    { "name": "the substituted pattern becomes the search pattern", "before": ["‸foo a", "x", "foo b"], "keys": ":s/foo/y/<cr>n", "after": ["y a", "x", "‸foo b"] },
+    { "name": "an empty pattern with none before is an error", "before": ["‸a"], "keys": ":s//x/<cr>", "after": ["‸a"] },
+    { "name": "one u undoes the whole substitution", "before": ["‸a", "a", "a"], "keys": ":%s/a/b/<cr>u", "after": ["‸a", "a", "a"] },
+    { "name": "the I flag respects case", "before": ["‸Foo"], "keys": ":s/foo/x/I<cr>", "after": ["‸Foo"] },
+    { "name": "the i flag ignores case despite smartcase", "before": ["‸foo"], "keys": ":s/Foo/x/i<cr>", "after": ["‸x"] },
+    { "name": "smartcase makes an uppercase pattern exact", "before": ["‸foo"], "keys": ":s/Foo/x/<cr>", "after": ["‸foo"] },
+    { "name": "the n flag counts without changing the text", "before": ["‸a a", "a"], "keys": ":%s/a/b/gn<cr>", "after": ["‸a a", "a"] },
+    { "name": "a miss changes nothing, and e keeps it quiet", "before": ["‸a"], "keys": ":s/z/b/<cr>:s/z/b/e<cr>", "after": ["‸a"] },
+    { "name": "another delimiter, and a backslash before it is literal", "before": ["‸a/b"], "keys": ":s#/#-#<cr>", "after": ["‸a-b"] },
+    { "name": "a slash escaped in the pattern", "before": ["‸a/b"], "keys": ":s/a\\/b/c/<cr>", "after": ["‸c"] },
+    { "name": "a missing closing delimiter ends the replacement", "before": ["‸abc"], "keys": ":s/b/x<cr>", "after": ["‸axc"] },
+    { "name": "an anchor matches at the line start", "before": ["‸a", "a"], "keys": ":%s/^/> /<cr>", "after": ["> a", "‸> a"] },
+    { "name": "an anchor does not reach the line after the range", "before": ["‸a", "a"], "keys": ":1s/^/> /<cr>", "after": ["‸> a", "a"] },
+    { "name": "$ matches at the line end", "before": ["‸a", "b"], "keys": ":%s/$/;/<cr>", "after": ["a;", "‸b;"] },
+    { "name": "an empty replacement deletes", "before": ["‸a-b-c"], "keys": ":s/-//g<cr>", "after": ["‸abc"] },
+    { "name": "\\n in the pattern joins lines", "before": ["‸a", "b", "c"], "keys": ":1s/\\n//<cr>", "after": ["‸ab", "c"] },
+    { "name": ":s is repeated with the history", "before": ["‸a", "a"], "keys": ":s/a/b/<cr>j:<tab><cr>", "after": ["b", "‸b"] }
+  ]
+}

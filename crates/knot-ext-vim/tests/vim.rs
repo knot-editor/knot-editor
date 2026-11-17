@@ -282,7 +282,7 @@ fn run_topic(topic: &str, cx: &mut TestAppContext) {
 topics!(
     package("vim"),
     run_topic;
-    ex, folding, insert, marks, motions, objects, operators, registers, scrolling, search, visual
+    ex, folding, insert, marks, motions, objects, operators, registers, scrolling, search, substitute, visual
 );
 
 #[gpui::test]
@@ -494,6 +494,33 @@ fn the_last_search_and_the_prompt_histories_persist_across_a_package_restart(
     assert_eq!(test_editor.marked(cx), "a foo b ‸bar c foo");
     test_editor.press("gg/<tab><cr>", cx);
     assert_eq!(test_editor.marked(cx), "a foo b ‸bar c foo");
+}
+
+#[gpui::test]
+fn substitution_reads_the_rust_syntax_when_the_setting_says_so(cx: &mut TestAppContext) {
+    let product = start(cx);
+    let test_editor = open(&product, "ab ab", 0, cx);
+    test_editor.set_setting("vim.regex", "rust".into(), cx);
+    test_editor.press(r":s/(a)(b)/$2${1}x/<cr>", cx);
+    assert_eq!(test_editor.marked(cx), "‸bax ab");
+    // The Vim syntax would read the parentheses as literal text.
+    test_editor.press(r":s/(a)/z/<cr>", cx);
+    assert_eq!(test_editor.marked(cx), "‸bzx ab");
+}
+
+#[gpui::test]
+fn substitution_reports_above_two_and_counts_with_the_n_flag(cx: &mut TestAppContext) {
+    let product = start(cx);
+    let test_editor = open(&product, "a a\na\nb", 0, cx);
+    test_editor.press(":%s/a/x/n<cr>", cx);
+    assert!(shows(&test_editor, "2 matches on 2 lines", cx));
+    assert_eq!(test_editor.marked(cx), "‸a a\na\nb");
+    test_editor.press(":%s/a/x/g<cr>", cx);
+    assert!(shows(&test_editor, "3 substitutions on 2 lines", cx));
+    test_editor.press(":%s/b/y/<cr>", cx);
+    assert!(!shows(&test_editor, "3 substitutions on 2 lines", cx));
+    test_editor.press(":%s/q/y/<cr>", cx);
+    assert!(shows(&test_editor, "E486: Pattern not found: q", cx));
 }
 
 /// The byte ranges the editor paints as search matches, in order.

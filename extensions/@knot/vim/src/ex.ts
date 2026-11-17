@@ -12,6 +12,30 @@ export type SetArgument =
   | { readonly option: NumberOption; readonly action: "show" }
   | { readonly option: NumberOption; readonly action: "set"; readonly value: number };
 
+/** A line of an Ex range: a base and an offset from it. */
+export type Address = {
+  readonly base:
+    | { readonly kind: "line"; readonly line: number }
+    | { readonly kind: "current" }
+    | { readonly kind: "last" }
+    | { readonly kind: "mark"; readonly name: string };
+  readonly offset: number;
+};
+
+/** The lines an Ex command runs over; `:%` is the first line through `$`. */
+export type ExRange = { readonly first: Address; readonly last: Address };
+
+export type SubstituteFlags = {
+  /** Every match on a line, not the first. */
+  readonly global: boolean;
+  /** `i` ignores case, `I` respects it, null leaves it to the options. */
+  readonly ignoreCase: boolean | null;
+  /** Count the matches only. */
+  readonly count: boolean;
+  /** No error when nothing matches. */
+  readonly quiet: boolean;
+};
+
 export type ExCommand =
   | { readonly kind: "write" }
   | { readonly kind: "quit"; readonly force: boolean }
@@ -21,6 +45,15 @@ export type ExCommand =
   /** `:<line>`, 1-based, or null for `:$`. */
   | { readonly kind: "line"; readonly line: number | null }
   | { readonly kind: "set"; readonly arguments: readonly SetArgument[] }
+  /** `:s`, over `range` or the current line. An empty `pattern` is the last
+   * search pattern. */
+  | {
+    readonly kind: "substitute";
+    readonly range: ExRange | null;
+    readonly pattern: string;
+    readonly replacement: string;
+    readonly flags: SubstituteFlags;
+  }
   /** `:noh`, which hides the search highlights until the next search. */
   | { readonly kind: "nohlsearch" }
   /** An empty line, which does nothing. */
@@ -30,7 +63,7 @@ export type ExCommand =
 /** Command names, each with the shortest abbreviation Vim accepts. */
 const NAMES: readonly (readonly [string, number])[] = [
   ["write", 1], ["quit", 1], ["wq", 2], ["xit", 1], ["exit", 3], ["edit", 1], ["set", 2],
-  ["nohlsearch", 3],
+  ["nohlsearch", 3], ["substitute", 1],
 ];
 
 const BOOLEANS: Readonly<Record<string, BooleanOption>> = {
@@ -51,15 +84,21 @@ const NUMBERS: Readonly<Record<string, NumberOption>> = {
 const MAX_SIZE = 32;
 
 export function parseEx(text: string): ExCommand {
-  const line = text.replace(/^[\s:]+/, "").trimEnd();
+  let line = text.replace(/^[\s:]+/, "").trimEnd();
   if (line === "") return { kind: "none" };
   if (/^\d+$/.test(line)) return { kind: "line", line: Math.max(1, Number(line)) };
   if (line === "$") return { kind: "line", line: null };
+  const parsed = parseRange(line);
+  if (parsed.range !== null && parsed.rest === "") return error(`E492: Not an editor command: ${line}`);
+  const range = parsed.range;
+  line = parsed.rest;
   const match = /^([a-zA-Z]+)(!?)\s*(.*)$/.exec(line);
   const name = match === null ? null : fullName(match[1]!);
   if (match === null || name === null) return error(`E492: Not an editor command: ${line}`);
   const force = match[2] === "!";
   const argument = match[3]!;
+  if (name === "substitute") return parseSubstitute(range, argument);
+  if (range !== null) return error("E481: No range allowed");
   if (name === "set") return parseSet(argument);
   if (name === "edit") {
     return { kind: "edit", path: argument === "" ? null : argument };
@@ -72,6 +111,82 @@ export function parseEx(text: string): ExCommand {
     case "wq": return { kind: "write-quit", ifChanged: false };
     default: return { kind: "write-quit", ifChanged: true };
   }
+}
+
+/** The range at the start of `line` and what follows it. `%` is every line;
+ * `,` joins two addresses; an address is a number, `.`, `$` or `'x`, then
+ * any `+N` and `-N` offsets, and an offset alone counts from the current
+ * line. */
+function parseRange(line: string): { readonly range: ExRange | null; readonly rest: string } {
+  if (line.startsWith("%")) {
+    const first: Address = { base: { kind: "line", line: 1 }, offset: 0 };
+    return { range: { first, last: { base: { kind: "last" }, offset: 0 } }, rest: line.slice(1).trimStart() };
+  }
+  const first = parseAddress(line);
+  if (first === null) return { range: null, rest: line };
+  let rest = first.rest;
+  let last = first.address;
+  const comma = /^\s*,/.exec(rest);
+  if (comma !== null) {
+    const second = parseAddress(rest.slice(comma[0].length));
+    if (second === null) return { range: null, rest: line };
+    last = second.address;
+    rest = second.rest;
+  }
+  return { range: { first: first.address, last }, rest: rest.trimStart() };
+}
+
+function parseAddress(text: string): { readonly address: Address; readonly rest: string } | null {
+  const base = /^\s*(?:(\d+)|(\.)|(\$)|'(.))/.exec(text);
+  let rest = base === null ? text.trimStart() : text.slice(base[0].length);
+  let kind: Address["base"];
+  if (base === null) kind = { kind: "current" };
+  else if (base[1] !== undefined) kind = { kind: "line", line: Number(base[1]) };
+  else if (base[2] !== undefined) kind = { kind: "current" };
+  else if (base[3] !== undefined) kind = { kind: "last" };
+  else kind = { kind: "mark", name: base[4]! };
+  let offset = 0;
+  let any = base !== null;
+  for (let step = /^\s*([+-])(\d*)/.exec(rest); step !== null; step = /^\s*([+-])(\d*)/.exec(rest)) {
+    offset += (step[1] === "-" ? -1 : 1) * (step[2] === "" ? 1 : Number(step[2]));
+    rest = rest.slice(step[0].length);
+    any = true;
+  }
+  return any ? { address: { base: kind, offset }, rest } : null;
+}
+
+/** `:s/pattern/replacement/flags` with any delimiter a letter, digit, backslash,
+ * `"` or `|` is not; a backslash before the delimiter makes it literal. */
+function parseSubstitute(range: ExRange | null, text: string): ExCommand {
+  const delimiter = text[0];
+  if (delimiter === undefined || /[\p{L}\p{N}\\"|\s]/u.test(delimiter)) {
+    return error(`E492: Not an editor command: s${text}`);
+  }
+  let index = 1;
+  const field = (): string => {
+    let out = "";
+    while (index < text.length && text[index] !== delimiter) {
+      if (text[index] === "\\" && index + 1 < text.length) {
+        if (text[index + 1] !== delimiter) out += "\\";
+        index++;
+      }
+      out += text[index++];
+    }
+    index++;
+    return out;
+  };
+  const pattern = field();
+  const replacement = field();
+  const flags = { global: false, ignoreCase: null as boolean | null, count: false, quiet: false };
+  for (const flag of text.slice(Math.min(index, text.length)).trim()) {
+    if (flag === "g") flags.global = !flags.global;
+    else if (flag === "i") flags.ignoreCase = true;
+    else if (flag === "I") flags.ignoreCase = false;
+    else if (flag === "n") flags.count = true;
+    else if (flag === "e") flags.quiet = true;
+    else return error(`E488: Trailing characters: ${text.slice(Math.min(index, text.length)).trim()}`);
+  }
+  return { kind: "substitute", range, pattern, replacement, flags };
 }
 
 function fullName(typed: string): string | null {

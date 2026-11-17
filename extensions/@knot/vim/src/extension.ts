@@ -338,7 +338,9 @@ class Vim {
         if (command.kind === "ex") {
           // A command such as `:q` may close the editor.
           await whileOpen(async () => {
-            state.message = await commandLine(state);
+            // `:` in a visual mode leaves it and ranges over its lines.
+            if (visual) await runVisual(state, { kind: "leave-visual" });
+            state.message = await commandLine(state, visual ? "'<,'>" : "");
           });
           if (this.states.get(state.target) !== state) return this.showStatus(state.target.window);
           continue;
