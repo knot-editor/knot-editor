@@ -95,8 +95,6 @@ uses.
 
 - Whether context menus show each command's key binding. Include it only if
   gpui-component's `PopupMenu` supports it cheaply (checked in checkpoint 3).
-- Whether an `editor`-scoped explorer item set belongs in `content` too (Copy
-  Path in the editor's own menu). Revisit at checkpoint 5's review.
 
 ## Checkpoints
 
@@ -130,25 +128,12 @@ See [context menus](../architecture/commands.md#context-menus), the
 [editor views](../architecture/editor-and-languages.md#editor-views), and the
 [terminal notes](../architecture/workbench-and-lifecycle.md).
 
-### 5. Explorer items in the tab menu 🔍 ready for review
+### 5. Explorer items in the tab menu ✅
 
-The explorer adds Copy Path, Copy Relative Path, Reveal in Explorer View, and
-Reveal in Finder to editor tabs, acting on the captured tab's document.
-
-- **Implementation context:** `extensions/@knot/explorer/src/clipboard.ts`
-  and `commands.ts` (`explorer.reveal-active-file`) currently read the active
-  file through `activeFile` in `reveal.ts`. New tab-scoped commands read the
-  captured `ctx.editor`/`ctx.buffer` document instead. If the API cannot read
-  the URI of a captured buffer, add that accessor (host handler and
-  `knot.d.ts`).
-- **Status:** ✅ the explorer registers the four items for editor tabs, and
-  their commands read the captured tab's document (`capturedUri`). ✅ Tests
-  cover the menu contents, each item run from an unfocused tab, and
-  unavailable on an untitled document.
-- **Validation:** explorer package tests in
-  `crates/knot-ext-workbench/tests/workbench/explorer.rs` run each item from
-  an unfocused tab's menu, and an untitled document returns unavailable.
-- **Review gate:** manual check, and decide the deferred `content` question.
+Done and approved. The explorer adds Copy Path, Copy Relative Path, Reveal in
+Explorer View, and a platform-named file manager entry to editor tabs; they act
+on the clicked tab's document. Copy Path stays out of the editor's `content`
+menu.
 
 ### 6. Menu-bar contributions ✳️ not started
 
