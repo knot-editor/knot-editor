@@ -1,6 +1,6 @@
 # D198 — Extension providers
 
-Status: 🚧 checkpoints 1–4 complete; checkpoint 5 next. Roadmap item [D198](../roadmap.md).
+Status: 🚧 checkpoints 1–4 complete; checkpoint 5 awaits its review gate. Roadmap item [D198](../roadmap.md).
 
 ## Goal
 
@@ -148,7 +148,7 @@ beside `label`, `icon`, and `matches`, and paint with the picker's row element
 - An accepted input reports `highlighted`, the index into the list the caller
   last returned, or null when there is no list or it answers older text.
 
-### 5. Vim's `:e` uses the files provider
+### 5. Vim's `:e` uses the files provider — ✅ implemented, awaiting the review gate
 
 Deliverables: `:e` and `:e <query>` list `workspace.files` rows under the Ex
 line; Enter opens the highlighted file or the typed path; Tab fills the
@@ -159,8 +159,9 @@ Validation: Vim tests through the real editor for listing, filtering, Enter on
 a row, Enter with no match opening the typed path, Tab, falling back with Go
 to File absent, and `:set` completions unchanged. `just check`.
 
-Review gate: run `:e`, filter, open, and create a file in the real app; a
-`try.*` command restarts Go to File to check the fallback.
+Review gate: run `:e`, filter, open, and create a file in the real app; `try.*`
+commands replace the files provider with fake and broken ones to check the
+replacement and the fallback.
 
 **Implementation context**
 - `extensions/@knot/vim/src/command-line.ts` (`commandLine`, `edit`,
