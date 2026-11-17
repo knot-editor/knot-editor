@@ -1,6 +1,6 @@
 # D156 — Fewer host round trips per key
 
-Status: 🚧 checkpoint 3 awaiting review. Source: [roadmap](../roadmap.md) D156.
+Status: 🚧 checkpoint 3 done. Source: [roadmap](../roadmap.md) D156.
 
 ## Goal
 
@@ -92,28 +92,10 @@ suggests the host glue is not what a turn spends its time on.
 
 ### 3. View target on the command context ✅
 
-Implemented: `viewTarget` is the captured tab for any tab kind (null only when
-no tab was focused); the extension API test covers an editor tab. The budget
-is now `j` 20, `w` 16, `x` 15.
-
-Deliverables: `CommandTarget.viewTarget`; Vim's `stateOf` uses it and no
-longer calls `windows.get`; the budget test lowers by one per key.
-
-Validation: an extension API test that a command from an editor tab gets
-that tab's `ViewTarget` and one from a tool or palette without a view gets
-null; Vim suite; budget test; `just check`.
-
-Review gate: Vim behavior unchanged, including keys arriving before the
-tab's activation is observed.
-
-**Implementation context:** `CommandCapture` in
-`crates/knot-protocol/src/lib.rs` gains the pane identity; the capture is
-filled where command targets are captured in `src/app/commands/`; JavaScript
-builds the target in `bootstrap.js` (`windowTarget({ window })` near the
-command frame, interning through `presentationTarget`). Contract in
-`knot.d.ts`, docs in `docs/extension-api.md`, flow in
-`docs/architecture/commands.md`. Vim change in
-`extensions/@knot/vim/src/extension.ts`.
+`context.target.viewTarget` is the captured tab for any tab kind (null only
+when no tab was focused); Vim keys its state by it. The extension API test
+covers an editor tab; the null case is untested. The budget is `j` 20,
+`w` 16, `x` 15. See [commands](../architecture/commands.md).
 
 ### 4. Selection notification payload
 
