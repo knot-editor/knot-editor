@@ -13,7 +13,7 @@ Every item has the same shape:
 - **Description** says what is missing today and when it becomes worth doing,
   then what to build.
 
-The next unused ID is **D198**; take it for a new item and bump this line.
+The next unused ID is **D200**; take it for a new item and bump this line.
 
 Each section is ordered so that an item comes after the items it depends on,
 wherever the sections allow it. Items with no dependencies are ordered by
@@ -289,6 +289,24 @@ hold the analyses that support some items.
 
 ### Extension platform and language tooling
 
+- **D198 — Extension providers** 🚧
+  - Depends on: none
+  - Description: A package cannot reuse another package's feature, only run
+    its commands, which return no data; Vim's `:e` cannot show Go to File's
+    list under the Ex line. Add named providers that packages register and
+    others look up and call across isolates, with Go to File providing its
+    lists and Vim's `:e` as the first consumer.
+    [Plan](plans/d198-extension-providers.md).
+
+- **D199 — Importing another package's code**
+  - Depends on: D198
+  - Description: A package reuses another only through named providers
+    (D198), with JSON calls and a contract each consumer declares locally. Do
+    it when provider contracts grow large enough that untyped names and local
+    interfaces cause mistakes: let a package import a dependency's exports as
+    a module whose functions call into the dependency's isolate, typed from
+    the dependency's declarations.
+
 - **D117 — Non-modal notifications and progress**
   - Depends on: none
   - Description: Extension messages use the native modal prompt, and native
@@ -345,6 +363,8 @@ hold the analyses that support some items.
     inline suggestions, in the style of GitHub Copilot, fits it: slow and
     streamed results, cancellation as the user types, and a multi-line
     suggestion shown as virtual text (D145) rather than in the list.
+    Decide whether editor completion providers move onto the extension
+    providers of D198 or keep their native registry.
 
 - **D067 — Language servers and semantic tokens**
   - Depends on: D182, D087, D145, D117, D115, D022
