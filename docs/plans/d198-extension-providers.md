@@ -1,6 +1,6 @@
 # D198 — Extension providers
 
-Status: 🚧 checkpoints 1–3 complete; checkpoint 4 awaits its review gate. Roadmap item [D198](../roadmap.md).
+Status: 🚧 checkpoints 1–4 complete; checkpoint 5 next. Roadmap item [D198](../roadmap.md).
 
 ## Goal
 
@@ -139,30 +139,14 @@ later checkpoints rely on:
   rejects `ProviderBusy`; a command run from the command palette (Go to File's)
   cannot call Go to File's providers.
 
-### 4. Picker rows in the input list — ✅ implemented, awaiting the review gate
+### 4. Picker rows in the input list — ✅ complete
 
-✅ Deliverables: input completions with `description` (replacing `detail`),
-`hint`, and `descriptionMatches`, painted by the picker's row element
-(`picker_row`), and an accepted input reporting `highlighted`, the index of the
-completion highlighted for the accepted text, or null when there is no list or
-it answers older text.
-
-Validation: product transient tests for painting data, highlight movement,
-Tab, and Enter reporting the highlighted completion or none; fake-host
-support. `just check`.
-
-Review gate: a `try.*` command showing an input whose completions carry
-descriptions and hints and reporting what Enter accepted.
-
-**Implementation context**
-- `src/app/transient.rs` (input view, its `uniform_list` of completions,
-  `accept_completion`), `src/app/picker.rs` (the picker's row painting at
-  `picker-rows`) to extract a shared row element.
-- `InputCompletion` and `InputResult` in `crates/knot-protocol/src/lib.rs`,
-  `show_input` in `src/app/extensions/host/handlers.rs`, and the types in
-  `knot.d.ts`.
-- Tests in `src/app/product/tests/transient.rs` and
-  `scripts/extensions/testing/transient.test.ts`.
+Input completions take `description`, `hint`, and `descriptionMatches`
+beside `label`, `icon`, and `matches`, and paint with the picker's row element
+(`picker_row`); see [semantic UI](../architecture/semantic-ui.md) and the
+[extension guide](../extension-api.md). Choices the later checkpoints rely on:
+- An accepted input reports `highlighted`, the index into the list the caller
+  last returned, or null when there is no list or it answers older text.
 
 ### 5. Vim's `:e` uses the files provider
 
