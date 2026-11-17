@@ -125,3 +125,12 @@ fn popups_stop_at_the_limit_and_count_the_rest() {
     assert_eq!(store.popups("w", 0).more, 5);
     assert_eq!(store.popups("w", 9).more, 0);
 }
+
+#[test]
+fn positions_parse_and_fall_back_to_the_bottom_right() {
+    assert_eq!(Position::parse("topCenter"), Position::TopCenter);
+    assert_eq!(Position::parse("bottomLeft"), Position::BottomLeft);
+    assert_eq!(Position::parse("middle"), Position::BottomRight);
+    assert!(Position::parse("topLeft").is_top());
+    assert!(!Position::parse("bottomRight").is_top());
+}

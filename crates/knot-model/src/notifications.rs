@@ -20,6 +20,35 @@ pub enum Severity {
     Error,
 }
 
+/// Where a window stacks its popups.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum Position {
+    #[default]
+    BottomRight,
+    BottomLeft,
+    TopRight,
+    TopLeft,
+    TopCenter,
+}
+
+impl Position {
+    /// The position `notifications.position` names; `BottomRight` for an
+    /// unknown value.
+    pub fn parse(name: &str) -> Self {
+        match name {
+            "bottomLeft" => Self::BottomLeft,
+            "topRight" => Self::TopRight,
+            "topLeft" => Self::TopLeft,
+            "topCenter" => Self::TopCenter,
+            _ => Self::BottomRight,
+        }
+    }
+
+    pub fn is_top(self) -> bool {
+        matches!(self, Self::TopRight | Self::TopLeft | Self::TopCenter)
+    }
+}
+
 /// A button on a notice that runs a command.
 #[derive(Clone, Debug, PartialEq)]
 pub struct NoticeAction {
