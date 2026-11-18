@@ -557,9 +557,9 @@ Kakoune mode could use them too. The
 
 ### Terminal
 
-- **D203 — Tool windows with a title and session tabs**
+- **D203 — Tool windows with a title and session tabs** 🚧
   - Depends on: none
-  - Description: A dock pane's tabs are the tools, and terminals are flat tabs
+  - Description: [Plan](plans/d203-tool-windows.md). A dock pane's tabs are the tools, and terminals are flat tabs
     among them, so a terminal pane reads "Terminal Terminal Terminal" and a
     tool has no title of its own. IntelliJ gives each tool window one bold
     title and, for a terminal, an inner strip of numbered sessions, with the
