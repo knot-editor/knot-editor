@@ -368,7 +368,6 @@ chrome_values! {
     card_border = "cardBorder", 1., 0., 4., "Width of the card border, painted in the `border` color.";
     tab_bar_height = "tabBarHeight", 30., 20., 48., "Height of tab bars and dock headers.";
     stripe_width = "stripeWidth", 36., 24., 64., "Width of the tool stripes.";
-    header_weight = "headerWeight", 600., 100., 900., "Font weight of a dock header's tab titles.";
     accent_width = "accentWidth", 2., 0., 6., "Thickness of the accent line under the active tab.";
     tab_inset = "tabInset", 0., 0., 12., "Space above and below the tabs inside the tab bar.";
     tab_radius = "tabRadius", 0., 0., 12., "Corner radius of a tab, so the active tab can be a rounded pill.";

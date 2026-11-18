@@ -316,7 +316,7 @@ impl KnotWindow {
         let active_border = theme(cx).paint_color(active_border);
         let transparent = gpui::transparent_black();
         let pill = chrome.tab_radius > 0.;
-        let card_background = theme(cx).paint_color(color::CARD_BACKGROUND);
+        let inactive_background = theme(cx).paint_color(color::TAB_INACTIVE_BACKGROUND);
         let tabs = pane
             .tabs()
             .iter()
@@ -382,60 +382,28 @@ impl KnotWindow {
                     } else {
                         color::TAB_INACTIVE_FOREGROUND
                     }))
-                    // A center tab sits on the tab background with an accent
-                    // line under the active one.
-                    .when(!in_dock, |element| {
-                        let background = if tab_id == active_tab {
+                    // Every tab sits on the tab bar's background; the selected
+                    // one is filled, or underlined with the accent in a
+                    // theme without pills. A lone tool shows only its title.
+                    .map(|element| {
+                        let selected = tab_id == active_tab && !titled_alone;
+                        let background = if selected {
                             active_background_color
                         } else {
-                            theme(cx).paint_color(color::TAB_INACTIVE_BACKGROUND)
+                            inactive_background
                         };
                         if pill {
-                            element.bg(background).border_1().border_color(
-                                if tab_id == active_tab {
-                                    active_border
-                                } else {
-                                    transparent
-                                },
-                            )
+                            element.bg(background).border_1().border_color(if selected {
+                                active_border
+                            } else {
+                                transparent
+                            })
                         } else {
                             element
                                 .bg(background)
                                 .border_b(px(chrome.accent_width))
-                                .border_color(if tab_id == active_tab {
-                                    accent
-                                } else {
-                                    background
-                                })
+                                .border_color(if selected { accent } else { background })
                         }
-                    })
-                    // A dock header's tabs are text on the card, the active
-                    // one underlined with the accent.
-                    .when(in_dock, |element| {
-                        element
-                            .font_weight(FontWeight(chrome.header_weight))
-                            .when(tab_id == active_tab && !titled_alone, |element| {
-                                element.bg(active_background_color)
-                            })
-                            .map(|element| {
-                                if pill {
-                                    element.border_1().border_color(
-                                        if tab_id == active_tab && !titled_alone {
-                                            active_border
-                                        } else {
-                                            transparent
-                                        },
-                                    )
-                                } else {
-                                    element.border_b(px(chrome.accent_width)).border_color(
-                                        if tab_id == active_tab && !titled_alone {
-                                            accent
-                                        } else {
-                                            card_background
-                                        },
-                                    )
-                                }
-                            })
                     })
                     .flex()
                     .flex_row()
@@ -586,11 +554,7 @@ impl KnotWindow {
                     .debug_selector(move || format!("tab-bar-{}", pane_id.value()))
                     .child(self.tab_bar_drag_geometry(pane_id))
                     .overflow_hidden()
-                    .bg(theme(cx).paint_color(if in_dock {
-                        color::CARD_BACKGROUND
-                    } else {
-                        color::TAB_BAR_BACKGROUND
-                    }))
+                    .bg(theme(cx).paint_color(color::TAB_BAR_BACKGROUND))
                     .children(tabs)
                     // The line between the tab bar and its content.
                     .child(

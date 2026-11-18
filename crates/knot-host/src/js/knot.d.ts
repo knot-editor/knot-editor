@@ -417,7 +417,6 @@ declare module "knot" {
     /** Width of the tool stripes. From 24 to 64; native default -1 follows the theme. */
     "chrome.stripeWidth": number;
     /** Font weight of a dock header's tab titles. From 100 to 900; native default -1 follows the theme. */
-    "chrome.headerWeight": number;
     /** Thickness of the accent line under the active tab. From 0 to 6; native default -1 follows the theme. */
     "chrome.accentWidth": number;
     /** Corner radius of a tab, so the active tab can be a rounded pill. From 0 to 12; native default -1 follows the theme. */
@@ -768,8 +767,6 @@ declare module "knot" {
     readonly tabBarHeight?: number;
     /** Width of the tool stripes, 24 to 64. */
     readonly stripeWidth?: number;
-    /** Font weight of a dock header's tab titles, 100 to 900. */
-    readonly headerWeight?: number;
     /** Thickness of the accent line under the active tab, 0 to 6. */
     readonly accentWidth?: number;
     /** Corner radius of a tab, so the active tab can be a rounded pill, 0 to 12. */

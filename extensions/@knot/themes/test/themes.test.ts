@@ -50,7 +50,7 @@ test("the Islands themes are the native default pair", () => {
 });
 
 test("every theme defines a complete chrome of known values", () => {
-  const keys = ["accentWidth", "cardBorder", "cardGap", "cardInset", "cardRadius", "headerWeight", "stripeWidth", "tabBarHeight", "tabInset", "tabRadius"];
+  const keys = ["accentWidth", "cardBorder", "cardGap", "cardInset", "cardRadius", "stripeWidth", "tabBarHeight", "tabInset", "tabRadius"];
   for (const theme of THEMES) {
     assert.deepEqual(Object.keys(theme.chrome ?? {}).sort(), keys, theme.name);
   }

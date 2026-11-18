@@ -164,7 +164,6 @@ function emptyState() {
       ["chrome.cardBorder", { key: "chrome.cardBorder", type: "number", default: -1, description: "Width of the card border, painted in the `border` color. From 0 to 4; -1 follows the theme" }],
       ["chrome.tabBarHeight", { key: "chrome.tabBarHeight", type: "number", default: -1, description: "Height of tab bars and dock headers. From 20 to 48; -1 follows the theme" }],
       ["chrome.stripeWidth", { key: "chrome.stripeWidth", type: "number", default: -1, description: "Width of the tool stripes. From 24 to 64; -1 follows the theme" }],
-      ["chrome.headerWeight", { key: "chrome.headerWeight", type: "number", default: -1, description: "Font weight of a dock header's tab titles. From 100 to 900; -1 follows the theme" }],
       ["chrome.accentWidth", { key: "chrome.accentWidth", type: "number", default: -1, description: "Thickness of the accent line under the active tab. From 0 to 6; -1 follows the theme" }],
       ["chrome.tabRadius", { key: "chrome.tabRadius", type: "number", default: -1, description: "Corner radius of a tab, so the active tab can be a rounded pill. From 0 to 12; -1 follows the theme" }],
       ["chrome.tabInset", { key: "chrome.tabInset", type: "number", default: -1, description: "Space above and below the tabs inside the tab bar. From 0 to 12; -1 follows the theme" }],
