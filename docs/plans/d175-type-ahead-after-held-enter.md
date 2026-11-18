@@ -1,6 +1,6 @@
 # D175 — Type-ahead after a held Enter
 
-Status: 🚧 checkpoint 1 done; checkpoint 2 not started. Source: D175 in the [roadmap](../roadmap.md).
+Status: 🚧 checkpoint 1 done; checkpoint 2 awaiting manual review. Source: D175 in the [roadmap](../roadmap.md).
 
 ## Outcome
 
@@ -74,22 +74,26 @@ window's key path. Covered by product tests in
 after Enter on current rows, and on rows arriving two seconds late, land in the
 opened document. The Escape case was checked only by the tests.
 
-### 2. Palette dispatches hold
+### 2. Palette dispatches hold — 🔍 awaiting manual review
 
 Deliverables:
 
-- Confirming a palette entry for an extension command holds later keys until
-  it settles, after focus returns to the origin.
-- Update [ordered delivery](../architecture/commands.md#ordered-delivery) to
+- ✅ Confirming a palette entry for an extension command holds later keys until
+  it settles, after focus returns to the origin
+  (`KnotWindow::dispatch_holding_keys`, shared with key dispatch's native check).
+- ✅ Update [ordered delivery](../architecture/commands.md#ordered-delivery) to
   say palette dispatches hold too.
 
 Validation:
 
-- Product test: run an extension command from the palette that edits the
+- ✅ Product test: run an extension command from the palette that edits the
   origin editor, type immediately, and assert the typing lands after the
   command's edit.
-- Product test: a palette command that opens a picker releases the hold
-  when the picker takes focus, and typing reaches the picker.
+- ✅ Product test: a palette command that opens an input releases the hold
+  when the input takes focus, and typing reaches the input.
+- The palette key opens Search Everywhere, whose chosen action runs as a child
+  of its own command, so checkpoint 1's accepted-picker hold already covers it;
+  this checkpoint covers the fallback palette shown without that package.
 
 Implementation context:
 
