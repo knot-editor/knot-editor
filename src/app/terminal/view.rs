@@ -925,24 +925,20 @@ fn shaping_runs(
 }
 
 /// Split a jointly-shaped run into one piece per cell at the cells' byte
-/// boundaries, so each cell paints at its own snapped grid origin with the
-/// cell's fixed advance. Returns `None` when a glyph spans a cell boundary:
-/// the run shaped into a real ligature, which paints jointly clipped to its
-/// cells instead. Every boundary is a cell boundary by construction, so the
-/// split cannot fail on bounds or encoding.
-fn per_cell_pieces(shaped: &ShapedLine, cells: &[RenderCell]) -> Option<Vec<ShapedLine>> {
+/// boundaries. A piece whose byte range holds no glyph starts comes back
+/// `None`: a gap where one glyph spans cells, which the paint loop skips.
+/// Every boundary is a cell boundary by construction, so the split cannot
+/// fail on bounds or encoding.
+fn per_cell_pieces(shaped: &ShapedLine, cells: &[RenderCell]) -> Vec<Option<ShapedLine>> {
     let mut cursor = shaped.cursor();
     let mut pieces = Vec::with_capacity(cells.len());
     let mut end = 0;
     for cell in cells {
         end += cell.text.len();
         let piece = cursor.take_until(end);
-        if f32::from(piece.width()) <= 0. {
-            return None;
-        }
-        pieces.push(piece);
+        pieces.push((f32::from(piece.width()) > 0.).then_some(piece));
     }
-    Some(pieces)
+    pieces
 }
 
 struct RenderCursor {
@@ -1286,16 +1282,13 @@ impl Element for TerminalElement {
                     &[run],
                     None,
                 );
-                // Each cell paints at its own snapped grid origin. A glyph
-                // spanning cells is a real ligature: it paints jointly,
-                // clipped to its cells.
+                // Text paints at the given snapped origin under a mask; the
+                // multi-cell path below shares one mask per run.
                 let mut paint_text =
-                    |column: usize, line: usize, spans: usize, shaped: &ShapedLine| {
-                        let origin = layout.snap(layout.origin(bounds, column, line));
-                        let width = cell_width * spans;
+                    |origin: Point<Pixels>, mask_width: Pixels, shaped: &ShapedLine| {
                         window.with_content_mask(
                             Some(ContentMask {
-                                bounds: Bounds::new(origin, size(width, cell_height)),
+                                bounds: Bounds::new(origin, size(mask_width, cell_height)),
                             }),
                             |window| {
                                 let origin = layout.snap(layout.text_origin(
@@ -1314,26 +1307,48 @@ impl Element for TerminalElement {
                             },
                         );
                     };
-                match per_cell_pieces(&shaped, cells) {
-                    Some(pieces) => {
-                        for (cell, piece) in cells.iter().zip(&pieces) {
-                            paint_text(
-                                cell.column,
-                                cell.line,
-                                if cell.wide { 2 } else { 1 },
-                                piece,
-                            );
-                        }
-                    }
-                    None => {
-                        paint_text(
-                            cell.column,
-                            cell.line,
-                            if cell.wide { 2 } else { cells.len() },
-                            &shaped,
-                        );
-                    }
+                // Single cells paint exactly one cell wide, as before.
+                if cells.len() == 1 {
+                    let origin = layout.snap(layout.origin(bounds, cell.column, cell.line));
+                    let width = cell_width * if cell.wide { 2 } else { 1 };
+                    paint_text(origin, width, &shaped);
+                    continue;
                 }
+                // One piece per cell at its own snapped grid origin, so
+                // columns never drift. Ligature glyphs sit on the last cell
+                // of their cluster with ink overflowing left over the
+                // cluster's blank cells, so every piece paints under the
+                // run's mask instead of a single cell's.
+                let run_origin = layout.snap(layout.origin(bounds, cell.column, cell.line));
+                window.with_content_mask(
+                    Some(ContentMask {
+                        bounds: Bounds::new(
+                            run_origin,
+                            size(cell_width * cells.len(), cell_height),
+                        ),
+                    }),
+                    |window| {
+                        for (cell, piece) in cells.iter().zip(per_cell_pieces(&shaped, cells)) {
+                            if let Some(piece) = piece {
+                                let origin =
+                                    layout.snap(layout.origin(bounds, cell.column, cell.line));
+                                let origin = layout.snap(layout.text_origin(
+                                    origin,
+                                    piece.ascent,
+                                    piece.descent,
+                                ));
+                                let _ = piece.paint(
+                                    origin,
+                                    cell_height,
+                                    TextAlign::Left,
+                                    None,
+                                    window,
+                                    cx,
+                                );
+                            }
+                        }
+                    },
+                );
             }
         });
         if let Some(scrollbar) = snapshot.scrollbar {

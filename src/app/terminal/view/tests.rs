@@ -451,14 +451,18 @@ fn punctuation_runs_split_into_per_cell_pieces(cx: &mut TestAppContext) {
         let shaped = text_system.shape_line(SharedString::from("->"), px(14.), &[run(2)], None);
         let cells = [cell(0, "-"), cell(1, ">")];
         // The test font has no `->` ligature, so the jointly-shaped run must
-        // split back into one piece per cell.
-        let pieces = per_cell_pieces(&shaped, &cells).expect("run splits per cell");
+        // split back into one piece per cell with no gaps.
+        let pieces = per_cell_pieces(&shaped, &cells);
         assert_eq!(pieces.len(), 2);
-        assert_eq!((pieces[0].len(), pieces[1].len()), (1, 1));
+        let byte_lens: Vec<_> = pieces
+            .iter()
+            .map(|piece| piece.as_ref().map(|piece| piece.len()))
+            .collect();
+        assert_eq!(byte_lens, [Some(1), Some(1)]);
         // Each piece keeps the cell's own fixed advance instead of carrying
         // the run's proportional advances.
         let single = text_system.shape_line(SharedString::from("-"), px(14.), &[run(1)], None);
-        for piece in &pieces {
+        for piece in pieces.iter().flatten() {
             let drift = f32::from(piece.width() - single.width()).abs();
             assert!(
                 drift < 0.01,
