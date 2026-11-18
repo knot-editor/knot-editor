@@ -33,7 +33,7 @@ function catppuccin(name: string, appearance: "dark" | "light", p: Flavor): Them
     colors: {
       "background": p.mantle,
       "card.background": p.base,
-      "card.focusedBorder": p.blue,
+      "card.focusedBorder": dark ? p.overlay2 : p.blue,
       "tab.accent": p.blue,
       "toolbar.background": p.mantle,
       "window.background": p.mantle,
@@ -89,6 +89,9 @@ function catppuccin(name: string, appearance: "dark" | "light", p: Flavor): Them
       "stripe.selected.background": `${p.blue}4d`,
       "success": p.green,
       "tab.active.background": p.base,
+      "tab.active.border": p.base,
+      "tab.active.unfocused.background": p.base,
+      "tab.active.unfocused.border": p.base,
       "tab.active.foreground": p.text,
       "tab.bar.background": p.mantle,
       "tab.inactive.background": p.mantle,

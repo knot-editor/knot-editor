@@ -47,14 +47,14 @@ test("the Islands themes are the native default pair and keep the window darker 
   const light = THEMES.find((theme) => theme.name === "Knot Islands Light");
   assert.equal(dark?.appearance, "dark");
   assert.equal(light?.appearance, "light");
-  assert.equal(dark?.colors?.["window.background"], "#1e1f22");
-  assert.equal(dark?.colors?.["card.background"], "#2b2d30");
-  assert.equal(dark?.colors?.["tab.accent"], "#3574f0");
+  assert.equal(dark?.colors?.["window.background"], "#26282c");
+  assert.equal(dark?.colors?.["card.background"], "#191a1c");
+  assert.equal(dark?.colors?.["tab.accent"], "#3871e1");
   assert.equal(light?.colors?.["tab.accent"], "#3574f0");
 });
 
 test("every theme defines a complete chrome of known values", () => {
-  const keys = ["accentWidth", "cardBorder", "cardGap", "cardInset", "cardRadius", "headerWeight", "stripeWidth", "tabBarHeight"];
+  const keys = ["accentWidth", "cardBorder", "cardGap", "cardInset", "cardRadius", "headerWeight", "stripeWidth", "tabBarHeight", "tabInset", "tabRadius"];
   for (const theme of THEMES) {
     assert.deepEqual(Object.keys(theme.chrome ?? {}).sort(), keys, theme.name);
   }
@@ -62,7 +62,7 @@ test("every theme defines a complete chrome of known values", () => {
 
 test("Islands themes float rounded cards and flat themes meet at borders", () => {
   const byName = new Map(THEMES.map((theme) => [theme.name, theme]));
-  assert.equal(byName.get("Knot Islands Dark")?.chrome?.cardRadius, 6);
+  assert.equal(byName.get("Knot Islands Dark")?.chrome?.cardRadius, 8);
   assert.equal(byName.get("Knot Islands Dark")?.chrome?.cardBorder, 1);
   assert.equal(byName.get("One Dark")?.chrome?.cardGap, 0);
   assert.equal(byName.get("One Dark")?.chrome?.cardBorder, 1);

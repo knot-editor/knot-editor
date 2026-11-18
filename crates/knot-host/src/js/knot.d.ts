@@ -420,6 +420,10 @@ declare module "knot" {
     "chrome.headerWeight": number;
     /** Thickness of the accent line under the active tab. From 0 to 6; native default -1 follows the theme. */
     "chrome.accentWidth": number;
+    /** Corner radius of a tab, so the active tab can be a rounded pill. From 0 to 12; native default -1 follows the theme. */
+    "chrome.tabRadius": number;
+    /** Space above and below the tabs inside the tab bar. From 0 to 12; native default -1 follows the theme. */
+    "chrome.tabInset": number;
     /** The icon pack that restyles icons; empty uses the default icons.
      * Native default "". */
     "icons.pack": string;
@@ -673,8 +677,11 @@ declare module "knot" {
     readonly "tab.accent"?: string;
     /** The active tab. */
     readonly "tab.active.background"?: string;
+    readonly "tab.active.border"?: string;
     /** Title of the active tab. */
     readonly "tab.active.foreground"?: string;
+    readonly "tab.active.unfocused.background"?: string;
+    readonly "tab.active.unfocused.border"?: string;
     /** The tab bar behind the tabs. */
     readonly "tab.bar.background"?: string;
     /** Inactive tabs. */
@@ -765,6 +772,10 @@ declare module "knot" {
     readonly headerWeight?: number;
     /** Thickness of the accent line under the active tab, 0 to 6. */
     readonly accentWidth?: number;
+    /** Corner radius of a tab, so the active tab can be a rounded pill, 0 to 12. */
+    readonly tabRadius?: number;
+    /** Space above and below the tabs inside the tab bar, 0 to 12. */
+    readonly tabInset?: number;
   }
   export interface ThemeDefinition {
     readonly name: string;

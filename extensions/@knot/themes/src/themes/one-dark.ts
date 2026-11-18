@@ -22,7 +22,7 @@ export const ONE_DARK: ThemeDefinition = {
   colors: {
     "background": panel,
     "card.background": bg,
-    "card.focusedBorder": blue,
+    "card.focusedBorder": "#7f8aa3",
     "tab.accent": accent,
     "toolbar.background": panel,
     "window.background": panel,
@@ -78,6 +78,9 @@ export const ONE_DARK: ThemeDefinition = {
     "stripe.selected.background": `${accent}4d`,
     "success": green,
     "tab.active.background": bg,
+    "tab.active.border": bg,
+    "tab.active.unfocused.background": bg,
+    "tab.active.unfocused.border": bg,
     "tab.active.foreground": "#d7dae0",
     "tab.bar.background": panel,
     "tab.inactive.background": panel,

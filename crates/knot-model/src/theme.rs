@@ -272,7 +272,10 @@ native_colors! {
     STRIPE_SELECTED_BACKGROUND = "stripe.selected.background", "The selected tool button in a stripe.", Rgba(0x3574f04d), Rgba(0x3574f04d);
     SUCCESS = "success", "Success markers.", Rgb(0x5fb865), Rgb(0x369650);
     TAB_ACTIVE_BACKGROUND = "tab.active.background", "The active tab.", Key(EDITOR_BACKGROUND), Key(EDITOR_BACKGROUND);
+    TAB_ACTIVE_BORDER = "tab.active.border", "Border around the active tab when tabs are rounded pills.", Key(TAB_ACTIVE_BACKGROUND), Key(TAB_ACTIVE_BACKGROUND);
     TAB_ACTIVE_FOREGROUND = "tab.active.foreground", "Title of the active tab.", Rgb(0xdfe1e5), Key(TEXT);
+    TAB_ACTIVE_UNFOCUSED_BACKGROUND = "tab.active.unfocused.background", "The active tab of a pane that does not have focus.", Key(TAB_ACTIVE_BACKGROUND), Key(TAB_ACTIVE_BACKGROUND);
+    TAB_ACTIVE_UNFOCUSED_BORDER = "tab.active.unfocused.border", "Border around the active tab of a pane that does not have focus, when tabs are rounded pills.", Key(TAB_ACTIVE_BORDER), Key(TAB_ACTIVE_BORDER);
     TAB_BAR_BACKGROUND = "tab.bar.background", "The tab bar behind the tabs.", Key(BACKGROUND), Key(BACKGROUND);
     TAB_INACTIVE_BACKGROUND = "tab.inactive.background", "Inactive tabs.", Key(TAB_BAR_BACKGROUND), Key(TAB_BAR_BACKGROUND);
     TAB_INACTIVE_FOREGROUND = "tab.inactive.foreground", "Titles of inactive tabs.", Rgb(0x868a91), Key(TEXT_MUTED);
@@ -367,6 +370,8 @@ chrome_values! {
     stripe_width = "stripeWidth", 36., 24., 64., "Width of the tool stripes.";
     header_weight = "headerWeight", 600., 100., 900., "Font weight of a dock header's tab titles.";
     accent_width = "accentWidth", 2., 0., 6., "Thickness of the accent line under the active tab.";
+    tab_inset = "tabInset", 0., 0., 12., "Space above and below the tabs inside the tab bar.";
+    tab_radius = "tabRadius", 0., 0., 12., "Corner radius of a tab, so the active tab can be a rounded pill.";
 }
 
 /// The definitions of every native color key.

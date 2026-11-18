@@ -53,7 +53,7 @@ fn bundled_packages_load_with_product_discovery(cx: &mut TestAppContext) {
     assert!(product.theme_is_dark(cx));
     assert_eq!(
         Some(product.theme_color("editor.background", cx)),
-        TestProduct::parse_color("#2b2d30")
+        TestProduct::parse_color("#191a1c")
     );
 }
 
