@@ -1,6 +1,6 @@
 # D175 — Type-ahead after a held Enter
 
-Status: 🚧 checkpoint 1 done; checkpoint 2 awaiting manual review. Source: D175 in the [roadmap](../roadmap.md).
+Status: ✅ done. Source: D175 in the [roadmap](../roadmap.md).
 
 ## Outcome
 
@@ -74,37 +74,14 @@ window's key path. Covered by product tests in
 after Enter on current rows, and on rows arriving two seconds late, land in the
 opened document. The Escape case was checked only by the tests.
 
-### 2. Palette dispatches hold — 🔍 awaiting manual review
+### 2. Palette dispatches hold — ✅ done
 
-Deliverables:
-
-- ✅ Confirming a palette entry for an extension command holds later keys until
-  it settles, after focus returns to the origin
-  (`KnotWindow::dispatch_holding_keys`, shared with key dispatch's native check).
-- ✅ Update [ordered delivery](../architecture/commands.md#ordered-delivery) to
-  say palette dispatches hold too.
-
-Validation:
-
-- ✅ Product test: run an extension command from the palette that edits the
-  origin editor, type immediately, and assert the typing lands after the
-  command's edit.
-- ✅ Product test: a palette command that opens an input releases the hold
-  when the input takes focus, and typing reaches the input.
-- The palette key opens Search Everywhere, whose chosen action runs as a child
-  of its own command, so checkpoint 1's accepted-picker hold already covers it;
-  this checkpoint covers the fallback palette shown without that package.
-
-Implementation context:
-
-- `src/app/product.rs`: the `open_command_palette_from` subscription calls
-  `dispatch_command`, which discards the execution. Hold on
-  `execution.completion` for extension commands, as
-  `src/app/product/key_routing.rs` does around line 392 (`native` check and
-  `hold_keys_until`).
-
-Review gate: run `just check`. Manual check of a palette command followed by
-immediate typing.
+A fallback palette entry for an extension command holds later keys like a key
+binding (`KnotWindow::dispatch_holding_keys`); Search Everywhere was already
+covered by checkpoint 1, since its action runs as a child of its own command.
+Covered by product tests in `src/app/product/tests/key_hold.rs`. Manually
+checked in the app through Search Everywhere only; the fallback palette path
+was checked only by the tests.
 
 ## Deferred
 
