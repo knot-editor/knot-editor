@@ -54,7 +54,8 @@ fn measured_layout_drives_the_grid_and_frames_paint_cells(cx: &mut TestAppContex
     cx.update(|window, cx| {
         let view = view.read(cx);
         let layout = view.layout.unwrap();
-        let measured = TerminalLayout::measure(window, &base_font(cx), px(14.), 1.2);
+        let measured =
+            TerminalLayout::measure(window, &base_font(cx), px(14.), font_settings(cx).line_height);
         assert_eq!(layout.cell_width, measured.cell_width);
         assert_eq!(layout.cell_height, measured.cell_height);
         assert_eq!(
@@ -198,10 +199,11 @@ fn terminal_line_height_resizes_the_rows(cx: &mut TestAppContext) {
             )
         })
     };
-    // The test font is 1.3 em tall, 18.2px at 14px, and the test window's
-    // scale factor of 2 rounds rows to half pixels.
+    // The test font is 1.3 em tall, 18.2px at 14px; the terminal default
+    // line height of 1.0 and the test window's scale factor of 2 round
+    // rows to half pixels.
     let (height, columns, rows) = grid(cx);
-    assert_eq!(height, px(22.));
+    assert_eq!(height, px(18.5));
 
     cx.update(|_, cx| {
         cx.global_mut::<ApplicationSettings>()
