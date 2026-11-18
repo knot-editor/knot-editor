@@ -13,7 +13,7 @@ Every item has the same shape:
 - **Description** says what is missing today and when it becomes worth doing,
   then what to build.
 
-The next unused ID is **D202**; take it for a new item and bump this line.
+The next unused ID is **D205**; take it for a new item and bump this line.
 
 Each section is ordered so that an item comes after the items it depends on,
 wherever the sections allow it. Items with no dependencies are ordered by
@@ -29,15 +29,18 @@ point.
 ## Next up
 
 1. D203 — Tool windows with a title and session tabs, as IntelliJ.
-2. D022 — Editor autocompletion.
-3. D182 — Interleave extension roots at awaits: before D067.
-4. D087 — Extension entitlements: D085, D126, D067, and D101 need it.
-5. D129 — Refactor builtin language extensions.
-6. D138 — Extension startup report as an untitled document.
-7. D054 — Dedicated read-only generated text surface.
-8. D085 — Cross-file search.
-9. D197 — Diff view: D126 and D174 build on it.
-10. D126 — Git status and changes per root.
+2. D155 — Word and line selection in terminals.
+3. D202 — Paste a URL over a selection as a Markdown link.
+4. D140 — Placeholder text in input fields.
+5. D022 — Editor autocompletion.
+6. D182 — Interleave extension roots at awaits: before D067.
+7. D087 — Extension entitlements: D085, D126, D067, and D101 need it.
+8. D129 — Refactor builtin language extensions.
+9. D138 — Extension startup report as an untitled document.
+10. D054 — Dedicated read-only generated text surface.
+11. D085 — Cross-file search.
+12. D197 — Diff view: D126 and D174 build on it.
+13. D126 — Git status and changes per root.
 
 Remove an item from this list when it is done or dropped.
 
@@ -138,6 +141,14 @@ hold the analyses that support some items.
     modal: recent projects first, then switch, new, rename, and delete as
     picker actions or companion commands. Remove the Projects tool
     registration and its tree code.
+
+- **D204 — Opening a project restores the sidebar**
+  - Depends on: none
+  - Description: Opening a project from the Projects tool leaves that tool
+    expanded in the sidebar, hiding the explorer or whatever was showing.
+    Do it when the Projects tool is next touched, or before D084 replaces
+    it: after opening a project, collapse the Projects tool and show the
+    explorer, or restore the sidebar state from before the tool was opened.
 
 - **D085 — Cross-file search**
   - Depends on: D087
@@ -358,7 +369,9 @@ hold the analyses that support some items.
     line. Do it before the next bundled input that would benefit from a hint:
     add a `placeholder` option to `showInput`, and let Tab accept it into an
     empty field, as Zed's Go to Line does. Update `@knot/go-to-line` to show
-    the current position as `line:column` there.
+    the current position as `line:column` there. Search Everywhere also needs
+    its own placeholder per tab, so opening it on Files or Actions reads
+    differently from the All tab instead of every tab showing the same hint.
 
 - **D180 — Modal surface for informational views**
   - Depends on: none
@@ -406,6 +419,15 @@ hold the analyses that support some items.
     sets, which also need D089 (D116).
 
 ### Editing and languages
+
+- **D202 — Paste a URL over a selection as a Markdown link**
+  - Depends on: none
+  - Description: In Zed, GitHub, Teams, and most editors, pasting a URL while
+    text is selected in Markdown turns the selection into a link instead of
+    replacing it. Do it now: when the pasted text is a URL and the selection
+    is not empty in a Markdown document, wrap it as `[selection](url)` in one
+    undo step, keeping bare-URL paste when nothing is selected. Decide whether
+    plain-text documents get it too.
 
 - **D088 — VS Code, Zed, IntelliJ, and Sublime keymap presets**
   - Depends on: none
