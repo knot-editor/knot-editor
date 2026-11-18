@@ -59,13 +59,27 @@ impl Terminal {
     /// Starts a selection gesture at `at`, replacing the selection.
     ///
     /// `click_count` is the caller's count of presses in a row: one selects
-    /// cell by cell, and larger counts select by larger units while the
-    /// press is held. The emulator counts repeats from press times and
+    /// cell by cell, two selects the word under the press, and three its
+    /// line; a drag then extends by that unit. The emulator counts repeats from press times and
     /// distances, so the press carries a synthetic time that repeats exactly
     /// when `click_count` is above one. The terminal tracks the selected
     /// cells as output scrolls them, and drops the selection when they leave
     /// the scrollback.
     pub fn select_press(&mut self, at: Pointer, click_count: u8) {
+        let click_count = click_count.clamp(1, 3);
+        // The emulator counts the presses it has seen; a repeat the caller
+        // saw while it was not selecting, such as under application mouse
+        // reporting, is replayed first.
+        if click_count > 1 && self.gesture_click_count() == 0 {
+            for count in 1..click_count {
+                self.press(at, count);
+                self.select_release(at);
+            }
+        }
+        self.press(at, click_count);
+    }
+
+    fn press(&mut self, at: Pointer, click_count: u8) {
         self.gesture_clock_ns += if click_count > 1 {
             1
         } else {
@@ -93,13 +107,27 @@ impl Terminal {
             ffi::GHOSTTY_SELECTION_GESTURE_EVENT_OPT_REPEAT_DISTANCE,
             &f64::MAX,
         );
-        let cells = ffi::GhosttySelectionGestureBehaviors {
-            single_click: ffi::GHOSTTY_SELECTION_GESTURE_BEHAVIOR_CELL,
-            double_click: ffi::GHOSTTY_SELECTION_GESTURE_BEHAVIOR_CELL,
-            triple_click: ffi::GHOSTTY_SELECTION_GESTURE_BEHAVIOR_CELL,
-        };
-        event.set(ffi::GHOSTTY_SELECTION_GESTURE_EVENT_OPT_BEHAVIORS, &cells);
         self.apply_gesture(&event);
+    }
+
+    /// The presses in the gesture's current click sequence, or zero when
+    /// there is none.
+    fn gesture_click_count(&self) -> u8 {
+        let mut count = 0u8;
+        // SAFETY: the data kind writes one `u8`.
+        let result = unsafe {
+            ffi::ghostty_selection_gesture_get(
+                self.gesture,
+                self.raw,
+                ffi::GHOSTTY_SELECTION_GESTURE_DATA_CLICK_COUNT,
+                (&mut count as *mut u8).cast(),
+            )
+        };
+        if result == ffi::GHOSTTY_SUCCESS {
+            count
+        } else {
+            0
+        }
     }
 
     /// Moves the gesture's pointer to `at`, extending the selection from

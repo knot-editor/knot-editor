@@ -1,8 +1,8 @@
 use super::{TerminalSession, TerminalStatus, TerminalView};
 use crate::app::terminal::session::lock;
 use gpui::{
-    App, AppContext, Entity, Modifiers, MouseButton, Pixels, Point, ScrollDelta, ScrollEvent,
-    TestAppContext, point, px,
+    App, AppContext, Entity, Modifiers, MouseButton, MouseDownEvent, Pixels, Point, ScrollDelta,
+    ScrollEvent, TestAppContext, point, px,
 };
 use knot_terminal::{PtyOptions, Scroll, Shell};
 use std::{
@@ -881,4 +881,103 @@ fn modifier_click_opens_current_scrollback_url(cx: &mut TestAppContext) {
         assert!(scrollbar.rows_below() > 0);
     });
     finish(&fixture, b"", cx);
+}
+
+/// The `click_count`th left press in a row at `position`, after the
+/// earlier ones, released.
+fn click(
+    cx: &mut gpui::VisualTestContext,
+    position: Point<Pixels>,
+    click_count: usize,
+    modifiers: Modifiers,
+) {
+    for count in 1..click_count {
+        press(cx, position, count, modifiers);
+        cx.simulate_mouse_up(position, MouseButton::Left, modifiers);
+    }
+    press(cx, position, click_count, modifiers);
+}
+
+/// A left press that is the `click_count`th in a row at `position`.
+fn press(
+    cx: &mut gpui::VisualTestContext,
+    position: Point<Pixels>,
+    click_count: usize,
+    modifiers: Modifiers,
+) {
+    cx.simulate_event(MouseDownEvent {
+        button: MouseButton::Left,
+        position,
+        modifiers,
+        click_count,
+        first_mouse: false,
+    });
+}
+
+#[gpui::test]
+fn double_and_triple_clicks_select_words_and_lines_and_drags_extend_them(cx: &mut TestAppContext) {
+    let fixture = fixture(cx, "", 0);
+    let (view, cx) = cx.add_window_view(|_, cx| TerminalView::new(fixture.session.clone(), cx));
+    cx.refresh().unwrap();
+    cx.update(|_, cx| {
+        parse(
+            &fixture,
+            b"\x1b[2J\x1b[3J\x1b[Halpha beta gamma\r\nsecond line",
+            cx,
+        )
+    });
+    let inside = cx.read(|cx| cell(&view, cx, 7, 0));
+    let later = cx.read(|cx| cell(&view, cx, 13, 0));
+    let next_row = cx.read(|cx| cell(&view, cx, 3, 1));
+
+    press(cx, inside, 1, Modifiers::default());
+    cx.simulate_mouse_up(inside, MouseButton::Left, Modifiers::default());
+    cx.read(|cx| assert_eq!(selection(&fixture, cx), None));
+
+    click(cx, inside, 2, Modifiers::default());
+    cx.simulate_mouse_up(inside, MouseButton::Left, Modifiers::default());
+    cx.read(|cx| assert_eq!(selection(&fixture, cx).as_deref(), Some("beta")));
+
+    // Dragging after the double click extends by whole words.
+    click(cx, inside, 2, Modifiers::default());
+    cx.simulate_mouse_move(later, MouseButton::Left, Modifiers::default());
+    cx.simulate_mouse_up(later, MouseButton::Left, Modifiers::default());
+    cx.read(|cx| assert_eq!(selection(&fixture, cx).as_deref(), Some("beta gamma")));
+
+    click(cx, inside, 3, Modifiers::default());
+    cx.simulate_mouse_up(inside, MouseButton::Left, Modifiers::default());
+    cx.read(|cx| assert_eq!(selection(&fixture, cx).as_deref(), Some("alpha beta gamma")));
+
+    // Dragging after the triple click extends by whole lines, and backwards.
+    click(cx, next_row, 3, Modifiers::default());
+    cx.simulate_mouse_move(inside, MouseButton::Left, Modifiers::default());
+    cx.simulate_mouse_up(inside, MouseButton::Left, Modifiers::default());
+    cx.read(|cx| {
+        assert_eq!(
+            selection(&fixture, cx).as_deref(),
+            Some("alpha beta gamma\nsecond line")
+        )
+    });
+    finish(&fixture, b"", cx);
+}
+
+#[gpui::test]
+fn repeated_clicks_belong_to_application_reporting_until_shift_forces_local(
+    cx: &mut TestAppContext,
+) {
+    let expected = b"\x1b[<0;8;1M\x1b[<0;8;1m\x1b[<0;8;1M\x1b[<0;8;1m";
+    let fixture = fixture(cx, "\\033[?1000h\\033[?1006h", expected.len());
+    let (view, cx) = cx.add_window_view(|_, cx| TerminalView::new(fixture.session.clone(), cx));
+    cx.refresh().unwrap();
+    cx.update(|_, cx| parse(&fixture, b"\x1b[2J\x1b[3J\x1b[Halpha beta gamma", cx));
+    let inside = cx.read(|cx| cell(&view, cx, 7, 0));
+    for count in [1, 2] {
+        press(cx, inside, count, Modifiers::default());
+        cx.simulate_mouse_up(inside, MouseButton::Left, Modifiers::default());
+    }
+    cx.read(|cx| assert_eq!(selection(&fixture, cx), None));
+    click(cx, inside, 2, shift());
+    cx.simulate_mouse_up(inside, MouseButton::Left, shift());
+    cx.read(|cx| assert_eq!(selection(&fixture, cx).as_deref(), Some("beta")));
+    finish(&fixture, expected, cx);
 }

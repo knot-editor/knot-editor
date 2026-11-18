@@ -602,7 +602,11 @@ sanitizing bracketed paste. OSC 52, title, and bell events do not access product
 features or the clipboard; additional protocols remain deferred in the roadmap.
 
 A mouse press chooses application reporting or local selection through release,
-even if modifiers change. Shift forces local interaction. A right press that is not reported opens the
+even if modifiers change. Shift forces local interaction. Local selection is
+libghostty's selection gesture: a click selects cell by cell, a double click a
+word, a triple click a line, and a drag extends by that unit, with a cell
+joining a drag once the pointer passes its middle. The view passes the press
+its platform click count and the emulator owns the rest. A right press that is not reported opens the
 terminal's `content` menu. Wheels choose their
 current route independently. The session-local reporting toggle survives restart
 and handoff without changing application-requested modes. Disabling it balances

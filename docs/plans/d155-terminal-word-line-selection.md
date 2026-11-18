@@ -1,6 +1,6 @@
 # D155 — Word and line selection in terminals
 
-Status: 🚧 checkpoint 1 done, checkpoint 2 not started. Roadmap item [D155](../roadmap.md).
+Status: 🚧 checkpoint 1 done, checkpoint 2 awaiting review. Roadmap item [D155](../roadmap.md).
 
 ## Goal
 
@@ -37,6 +37,10 @@ or lines. A single click and drag still select cell by cell.
 - **Lifecycle.** Restart, handoff, geometry change, and mode changes already
   invalidate pointer gestures; they also reset the selection gesture.
 
+- **Replayed repeats.** A repeat the view saw while mouse reporting owned the
+  press never reached the gesture, so a Shift double click replays the
+  earlier presses first. Presses beyond the third keep selecting the line.
+
 ## Exclusions
 
 - The output behavior (needs OSC 133, D039), rectangle selection, autoscroll
@@ -53,22 +57,22 @@ Approved. Local selection runs through the gesture wrapper in
 still selects by cell. The click-count adapter and the half-cell edge rule
 are described under Design.
 
-## Checkpoint 2 — Word and line behaviors ⬜
+## Checkpoint 2 — Word and line behaviors 🚧
 
 Deliverable: double click selects a word, triple click a line, drag extends
 by that unit; documented.
 
-- Enable the word and line behaviors and pass the GPUI click count.
-- Validation: `knot-terminal` tests for word selection (default separators,
+- ✅ Enable the word and line behaviors and pass the GPUI click count.
+- ✅ Validation: `knot-terminal` tests for word selection (default separators,
   paths and URLs) and line selection including soft-wrapped lines;
   `mouse_tests.rs` cases for double and triple click, drag extension in
   both directions, no selection start while application reporting owns the
   press, and Shift forcing local selection.
-- Docs: update the selection sentences in
+- ✅ Docs: update the selection sentences in
   [workbench and lifecycle](../architecture/workbench-and-lifecycle.md)
   (terminal selection and mouse paragraphs) and remove this plan and the
-  roadmap entry when done.
-- Review gate: `just check`; a `try.*` command in the personal
+  roadmap entry once approved.
+- Review gate: ✅ `just check`; ✅ a `try.*` command in the personal
   `post-init.js` opens the mouse fixture terminal so the user can double-
   and triple-click, then drag, on its output.
 

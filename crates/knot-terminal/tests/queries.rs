@@ -264,17 +264,67 @@ fn selection_joins_soft_wraps_and_follows_scrolling() {
     assert!(!terminal.has_selection());
 }
 
-#[test]
-fn repeated_presses_select_by_cell() {
-    let (mut terminal, _) = recording(20, 3);
-    terminal.write(b"one two three");
-    for click_count in [1, 2, 3, 4] {
-        terminal.select_release(pointer(Point::new(5, 0)));
-        terminal.select_press(pointer_at(Point::new(5, 0), 0.25), click_count);
-        terminal.select_drag(pointer_at(Point::new(6, 0), 0.75));
-        assert_eq!(terminal.selection_text().as_deref(), Some("wo"));
-        terminal.select_release(pointer(Point::new(6, 0)));
+/// A click sequence of `click_count` presses at `cell`, held there.
+fn click(terminal: &mut Terminal, cell: Point, click_count: u8) {
+    for count in 1..=click_count {
+        terminal.select_press(pointer(cell), count);
+        if count < click_count {
+            terminal.select_release(pointer(cell));
+        }
     }
+}
+
+#[test]
+fn repeated_presses_select_words_then_lines() {
+    let (mut terminal, _) = recording(12, 4);
+    // The first line soft-wraps after twelve columns.
+    terminal.write(b"see /a/b.rs now and more\r\nnext line");
+
+    click(&mut terminal, Point::new(1, 0), 1);
+    assert_eq!(terminal.selection_text(), None);
+    click(&mut terminal, Point::new(1, 0), 2);
+    assert_eq!(terminal.selection_text().as_deref(), Some("see"));
+    // Paths and URLs stay whole under the default separators.
+    click(&mut terminal, Point::new(6, 0), 2);
+    assert_eq!(terminal.selection_text().as_deref(), Some("/a/b.rs"));
+    // A line selects whole, joining its soft wrap.
+    click(&mut terminal, Point::new(1, 1), 3);
+    assert_eq!(
+        terminal.selection_text().as_deref(),
+        Some("see /a/b.rs now and more")
+    );
+    // Further presses keep selecting the line.
+    click(&mut terminal, Point::new(1, 0), 4);
+    assert_eq!(
+        terminal.selection_text().as_deref(),
+        Some("see /a/b.rs now and more")
+    );
+}
+
+#[test]
+fn dragging_after_a_repeated_press_extends_by_words_or_lines() {
+    let (mut terminal, _) = recording(30, 4);
+    terminal.write(b"alpha beta gamma delta\r\nsecond line\r\nthird");
+
+    click(&mut terminal, Point::new(7, 0), 2);
+    terminal.select_drag(pointer(Point::new(13, 0)));
+    assert_eq!(terminal.selection_text().as_deref(), Some("beta gamma"));
+    // Dragging back past the press keeps the pressed word.
+    terminal.select_drag(pointer(Point::new(2, 0)));
+    assert_eq!(terminal.selection_text().as_deref(), Some("alpha beta"));
+    terminal.select_release(pointer(Point::new(2, 0)));
+
+    click(&mut terminal, Point::new(3, 1), 3);
+    terminal.select_drag(pointer(Point::new(1, 2)));
+    assert_eq!(
+        terminal.selection_text().as_deref(),
+        Some("second line\nthird")
+    );
+    terminal.select_drag(pointer(Point::new(4, 0)));
+    assert_eq!(
+        terminal.selection_text().as_deref(),
+        Some("alpha beta gamma delta\nsecond line")
+    );
 }
 
 #[test]
