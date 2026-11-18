@@ -65,13 +65,14 @@ text, then replays them in order on release.
 Accepting an extension picker or input holds keys until the owning command
 tree settles, through a root settle watcher on `ExtensionCommandBridge`.
 Enter on pending rows holds from that Enter (`PickerEvent::Pending`), and
-Escape there drops the held keys. See
+Escape there drops the held keys; that hold's timeout starts when the picker
+confirms. See
 [ordered delivery](../architecture/commands.md#ordered-delivery). The picker
 still freezes its field while pending, as a guard for input that bypasses the
 window's key path. Covered by product tests in
 `src/app/product/tests/key_hold.rs`. Manually checked in the app: keys typed
-after Enter on current rows land in the opened document. The pending-rows and
-Escape cases were checked only by the tests.
+after Enter on current rows, and on rows arriving two seconds late, land in the
+opened document. The Escape case was checked only by the tests.
 
 ### 2. Palette dispatches hold
 
