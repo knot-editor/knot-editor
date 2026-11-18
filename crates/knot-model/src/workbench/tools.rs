@@ -117,6 +117,13 @@ impl Slot {
     }
 }
 
+/// The dot on a tool window's stripe button.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ToolBadge {
+    Info,
+    Error,
+}
+
 /// How a tool window holds tabs.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ToolKind {
@@ -145,6 +152,8 @@ pub struct ToolFrame {
     pub(super) shown_at: u64,
     /// When focus last entered the window, 0 for never.
     pub(super) active_at: u64,
+    /// The dot on its stripe button.
+    pub badge: Option<ToolBadge>,
     pub(super) tree: AreaTree,
 }
 
@@ -255,6 +264,7 @@ impl Workbench {
             order: usize::MAX,
             shown_at: 0,
             active_at: 0,
+            badge: None,
             tree: AreaTree::default(),
         });
         if kind == ToolKind::Fixed {
@@ -281,6 +291,12 @@ impl Workbench {
     pub fn set_tool_order(&mut self, id: ToolFrameId, order: usize) {
         if self.tool(id).is_some() {
             self.tool_mut(id).order = order;
+        }
+    }
+
+    pub fn set_tool_badge(&mut self, id: ToolFrameId, badge: Option<ToolBadge>) {
+        if self.tool(id).is_some() {
+            self.tool_mut(id).badge = badge;
         }
     }
 

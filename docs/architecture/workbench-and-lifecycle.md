@@ -171,9 +171,10 @@ window exists, such as startup configuration warnings, wait in the store and
 pop up when the first window opens. While the Notifications panel shows in a
 window, that window paints no popups.
 
-The bundled `@knot/notifications` package builds the panel and the status bell
-on the public extension API alone: a dock tool listing the history, with the
-unread count in the bell. Popups can be turned off with `notifications.popups`,
+The bundled `@knot/notifications` package builds the panel on the public
+extension API alone: a tool window listing the history, with a dot on its
+stripe button (`setBadge`) that is red while an unread notice is an error and
+blue while any other is unread. Popups can be turned off with `notifications.popups`,
 for a package that presents notices itself.
 
 Every `knot::config` warning also raises a sticky `warning` notice, with

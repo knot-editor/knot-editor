@@ -6,7 +6,7 @@ use crate::app::context_menu::ContextMenu;
 use crate::app::convert::ThemePaint as _;
 use crate::app::theme::{chrome, color, theme};
 use crate::app::tokens;
-use crate::app::workbench::{Slot, SplitEdge, StripeClick, Stripes};
+use crate::app::workbench::{Slot, SplitEdge, StripeClick, Stripes, ToolBadge};
 use crate::app::zoom;
 use gpui_component::menu::PopupMenuItem;
 use knot_model::icons::IconDefinition;
@@ -180,7 +180,26 @@ impl KnotWindow {
         };
         let selector = format!("stripe-button-{key}");
         let tooltip_title = title.clone();
+        let badge = tool.badge.map(|badge| {
+            theme(cx).paint_color(match badge {
+                ToolBadge::Info => color::NOTIFICATION_INFO,
+                ToolBadge::Error => color::NOTIFICATION_ERROR,
+            })
+        });
         stripe_face(icon, &title)
+            .relative()
+            .when_some(badge, |button, dot| {
+                button.child(
+                    div()
+                        .debug_selector(move || format!("stripe-badge-{key}"))
+                        .absolute()
+                        .top(zoom::rems(tokens::chrome::STRIPE_BADGE_INSET))
+                        .right(zoom::rems(tokens::chrome::STRIPE_BADGE_INSET))
+                        .size(zoom::rems(tokens::chrome::STRIPE_BADGE))
+                        .rounded_full()
+                        .bg(dot),
+                )
+            })
             .id(SharedString::from(selector.clone()))
             .debug_selector(move || selector.clone())
             .size(zoom::rems(tokens::chrome::STRIPE_BUTTON))

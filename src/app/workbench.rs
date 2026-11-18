@@ -15,8 +15,8 @@ pub(crate) use knot_model::workbench::{
     Area, Arrangement, BottomDockLayout, CloseConfirmation, CloseRequestOutcome, DockLocation,
     DocumentCloseDisposition, DocumentId, PaneId, PresentationId, Slot, SplitDirection, SplitEdge,
     SplitPlacement, StripeClick, Stripes, TabId, TabMoveCapture, TabMoveDestination,
-    TabMovePlacement, TabSurfaceId, TerminalSessionId, ToolFrameId, ToolKind, WorkbenchLayout,
-    WorkbenchTab, neighbor,
+    TabMovePlacement, TabSurfaceId, TerminalSessionId, ToolBadge, ToolFrameId, ToolKind,
+    WorkbenchLayout, WorkbenchTab, neighbor,
 };
 
 use super::{

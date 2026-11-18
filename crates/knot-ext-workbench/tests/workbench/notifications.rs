@@ -46,23 +46,23 @@ fn a_raised_notice_is_listed_and_opening_the_panel_reads_it(cx: &mut TestAppCont
 }
 
 #[gpui::test]
-fn the_bell_counts_unread_notices_and_toggles_the_panel(cx: &mut TestAppContext) {
+fn the_stripe_dot_follows_unread_notices_and_severity(cx: &mut TestAppContext) {
     let product = start(cx);
-    let editor = product.windowed_editor("text", cx);
-    let bell = |cx: &mut TestAppContext| editor.status(cx).1;
-    wait_until(cx, |cx| bell(cx).len() == 1);
-    assert_eq!(bell(cx), [""]);
+    let window = product.active_window(cx);
+    let dot = |cx: &mut TestAppContext| window.stripe_badge(VIEW, cx);
+    wait_until(cx, |cx| window.has_tool(VIEW, cx));
+    assert_eq!(dot(cx), None);
 
     product.raise_notice("one", "info", None, cx);
+    wait_until(cx, |cx| dot(cx) == Some("info"));
     product.raise_notice("two", "error", None, cx);
-    wait_until(cx, |cx| bell(cx) == ["2"]);
+    wait_until(cx, |cx| dot(cx) == Some("error"));
 
-    let window = product.active_window(cx);
     assert_eq!(
         window.run_command("notifications.toggle", cx),
         CommandOutcome::Completed
     );
-    wait_until(cx, |cx| bell(cx) == [""]);
+    wait_until(cx, |cx| dot(cx).is_none());
     assert!(product.notice_states(cx).iter().all(|(_, read)| *read));
 }
 

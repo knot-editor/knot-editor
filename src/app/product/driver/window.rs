@@ -111,6 +111,20 @@ impl TestWindow {
         cx.read(|cx| windows(cx).contains(&self.window))
     }
 
+    /// The dot on the stripe button of the tool window `view`: "info" or
+    /// "error", `None` without one.
+    pub fn stripe_badge(&self, view: &str, cx: &mut TestAppContext) -> Option<&'static str> {
+        use crate::app::workbench::ToolBadge;
+        cx.read(|cx| {
+            let workbench = self.window.read(cx).workbench.read(cx);
+            let tool = workbench.tool(workbench.tool_by_stable_id(view)?)?;
+            tool.badge.map(|badge| match badge {
+                ToolBadge::Info => "info",
+                ToolBadge::Error => "error",
+            })
+        })
+    }
+
     /// Start the command `name` on the focused surface.
     pub fn start_command(&self, name: &str, cx: &mut TestAppContext) -> TestCommand {
         let target = in_window(self.native_window, cx, |cx| {

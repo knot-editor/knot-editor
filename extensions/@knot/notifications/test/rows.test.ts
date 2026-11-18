@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Notice } from "knot";
-import { bellOptions, groupOf, panelItems, relativeTime } from "../src/rows.js";
+import { groupOf, panelItems, relativeTime, stripeBadge } from "../src/rows.js";
 
 const NOW = new Date(2026, 10, 17, 15, 0, 0).getTime();
 const minutes = (n: number) => n * 60_000;
@@ -83,13 +83,9 @@ test("a row shows the first action as a button, Dismiss on hover, and the rest i
   );
 });
 
-test("the bell counts unread notices in the color of the most severe", () => {
-  assert.equal(bellOptions([]).text, "");
-  assert.equal(bellOptions([]).color, undefined);
-  const mixed = [notice(1), notice(2, { severity: "error" }), notice(3, { severity: "warning" }), notice(4, { severity: "error", read: true })];
-  const bell = bellOptions(mixed);
-  assert.equal(bell.text, "3");
-  assert.equal(bell.color, "notification.error");
-  assert.equal(bell.side, "right");
-  assert.equal(bellOptions([notice(1, { read: true })]).text, "");
+test("the stripe dot is red for an unread error, blue for other unread notices, and gone once read", () => {
+  assert.equal(stripeBadge([]), null);
+  assert.equal(stripeBadge([notice(1), notice(2, { severity: "warning" })]), "info");
+  assert.equal(stripeBadge([notice(1), notice(2, { severity: "error" })]), "error");
+  assert.equal(stripeBadge([notice(1, { severity: "error", read: true })]), null);
 });

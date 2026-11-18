@@ -1,12 +1,12 @@
-// The notification history as a tool, and a bell in the status bar. The
+// The notification history as a tool with an unread dot on its stripe button. The
 // popups are native; this package mirrors the application's notices through
 // the public observation and changes them through the workbench operations.
 // Opening the panel marks every notice read.
 import { commands, icons, workbench } from "knot";
-import type { CommandContext, JsonValue, Notice, StatusItem, ViewRegistration } from "knot";
+import type { CommandContext, JsonValue, Notice, ViewRegistration } from "knot";
 import {
-  ACTIVATE, BELL_ICON, TOOL_ICON, BELL_UNREAD_ICON, CLEAR, CLEAR_ICON, DISMISS, DISMISS_ICON, EMPTY_ICON,
-  MARK_ALL_READ, MARK_READ_ICON, RUN_ACTION, SHOW, TOGGLE, VIEW_ID, bellOptions, panelItems, severityIcon, unread,
+  ACTIVATE, TOOL_ICON, CLEAR, CLEAR_ICON, DISMISS, DISMISS_ICON, EMPTY_ICON,
+  MARK_ALL_READ, MARK_READ_ICON, RUN_ACTION, SHOW, TOGGLE, VIEW_ID, panelItems, severityIcon, stripeBadge, unread,
 } from "./rows.js";
 
 const SEVERITIES = [
@@ -40,8 +40,6 @@ export async function start() {
     await icons.define(severityIcon(severity), { lucide, color: `notification.${severity}` });
   }
   await icons.define(TOOL_ICON, { lucide: "bell" });
-  await icons.define(BELL_ICON, { lucide: "bell" });
-  await icons.define(BELL_UNREAD_ICON, { lucide: "bell-dot" });
   await icons.define(EMPTY_ICON, { lucide: "bell-off" });
   await icons.define(DISMISS_ICON, { lucide: "x" });
   await icons.define(MARK_READ_ICON, { lucide: "check-check" });
@@ -49,13 +47,12 @@ export async function start() {
 
   let notices: readonly Notice[] = [];
   let view: ViewRegistration;
-  let bell: StatusItem;
 
   const find = (id: number | null) => notices.find((notice) => notice.id === id);
 
   const sync = async (next: readonly Notice[]) => {
     notices = next;
-    await bell.update(bellOptions(notices));
+    await view.setBadge(stripeBadge(notices));
     await view.invalidate();
   };
 
@@ -84,7 +81,6 @@ export async function start() {
       { label: "Clear All", icon: CLEAR_ICON, command: CLEAR },
     ],
   });
-  bell = await workbench.registerStatusItem("bell", bellOptions([]));
 
   const observation = await workbench.observe(async (event) => {
     if (event.type === "notificationsChanged") await sync(event.notifications);

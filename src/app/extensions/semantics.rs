@@ -79,6 +79,8 @@ pub(crate) struct ViewDefinition {
     pub(crate) visible: bool,
     /// A container's command that opens a tab in it.
     pub(crate) new_tab: Option<String>,
+    /// The dot on its stripe button.
+    pub(crate) badge: Option<crate::app::workbench::ToolBadge>,
 }
 
 struct TreeRegistration {
@@ -264,6 +266,7 @@ impl ExtensionSemanticBridge {
             order: order.try_into().expect("view order fits usize"),
             visible,
             new_tab,
+            badge: None,
         };
         if content == ViewContentKind::Tree {
             for view in self.live_tree_views(&id, None) {
@@ -319,6 +322,23 @@ impl ExtensionSemanticBridge {
             view.update(cx, |view, cx| view.replace_text(&text, cx));
         }
         Ok(())
+    }
+
+    /// Set the dot on a view's stripe button in every window.
+    pub(crate) fn set_view_badge(
+        &mut self,
+        request: &RequestContext,
+        registration: TreeProviderRegistrationId,
+        badge: Option<crate::app::workbench::ToolBadge>,
+    ) -> Result<String, SemanticError> {
+        self.validate(request)?;
+        let id = self.owned_tree_kind(registration, request)?;
+        self.tree_registrations
+            .get_mut(&registration)
+            .expect("owned registration exists")
+            .definition
+            .badge = badge;
+        Ok(id)
     }
 
     pub(crate) fn invalidate_tree_provider(

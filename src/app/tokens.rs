@@ -20,6 +20,9 @@ pub(crate) mod chrome {
     pub(crate) const STATUS_TEXT_SIZE: f32 = 12.;
     pub(crate) const STRIPE_BUTTON: f32 = 30.;
     pub(crate) const STRIPE_GROUP_MIN_HEIGHT: f32 = 60.;
+    /// The unread dot on a stripe button and its inset from the button corner.
+    pub(crate) const STRIPE_BADGE: f32 = 8.;
+    pub(crate) const STRIPE_BADGE_INSET: f32 = 3.;
     /// The narrowest grab area of a dock or split resize handle.
     pub(crate) const MIN_RESIZE_HANDLE: f32 = 6.;
     /// The toolbar row's height; unscaled on macOS, where it matches the native window buttons.

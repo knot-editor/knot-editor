@@ -1,11 +1,11 @@
 {
-  // Bundled Notifications panel and status bar bell.
+  // Bundled Notifications panel.
   "name": "@knot/notifications",
   "apiVersion": 1,
   "version": "0.1.0",
   "main": "dist/main.js",
   "displayName": "Notifications",
-  "description": "The notification history as a tool, and a status bar bell with the unread count.",
+  "description": "The notification history as a tool, with a dot on its stripe button while notices are unread.",
   "author": "Knot",
   "license": "GPL-3.0-or-later",
 }

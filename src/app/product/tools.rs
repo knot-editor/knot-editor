@@ -53,6 +53,7 @@ impl KnotWindow {
                         definition.location,
                     );
                     workbench.set_tool_order(id, definition.order);
+                    workbench.set_tool_badge(id, definition.badge);
                     workbench.place_registered_tool(id, stored.as_ref(), definition.visible);
                     if let Some(pane) = previous {
                         workbench.focus_pane(pane);
@@ -120,6 +121,7 @@ impl KnotWindow {
                 definition.location,
             );
             workbench.set_tool_order(id, definition.order);
+            workbench.set_tool_badge(id, definition.badge);
             workbench.place_registered_tool(id, stored.as_ref(), definition.visible);
             if let Some(pane) = previous {
                 workbench.focus_pane(pane);
@@ -190,6 +192,21 @@ impl KnotWindow {
         }
         cx.notify();
         true
+    }
+
+    /// Paint or clear the dot on a contributed frame's stripe button.
+    pub(crate) fn set_contributed_view_badge(
+        &mut self,
+        stable_id: &str,
+        badge: Option<crate::app::workbench::ToolBadge>,
+        cx: &mut Context<Self>,
+    ) {
+        self.workbench.update(cx, |workbench, _| {
+            if let Some(frame) = workbench.tool_by_stable_id(stable_id) {
+                workbench.set_tool_badge(frame, badge);
+            }
+        });
+        cx.notify();
     }
 
     /// Show and focus a contributed frame in this window.

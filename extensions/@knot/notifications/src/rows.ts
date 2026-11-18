@@ -1,5 +1,5 @@
-// The panel's rows and the bell's value, as plain data from the notice history.
-import type { Notice, NoticeSeverity, StatusItemOptions, TreeItem } from "knot";
+// The panel's rows and the stripe dot, as plain data from the notice history.
+import type { Notice, NoticeSeverity, TreeItem } from "knot";
 
 export const VIEW_ID = "builtin.notifications";
 export const SHOW = "notifications.show";
@@ -10,8 +10,6 @@ export const ACTIVATE = "notifications.activate";
 export const RUN_ACTION = "notifications.run-action";
 export const DISMISS = "notifications.dismiss";
 
-export const BELL_ICON = "notifications.bell";
-export const BELL_UNREAD_ICON = "notifications.bell-unread";
 export const TOOL_ICON = `tool.${VIEW_ID}`;
 export const EMPTY_ICON = "notifications.empty";
 export const DISMISS_ICON = "notifications.dismiss";
@@ -113,24 +111,10 @@ export function unread(notices: readonly Notice[]): Notice[] {
   return notices.filter((notice) => !notice.read);
 }
 
-/** The bell: an icon always, the unread count beside it, and the color of
- * the most severe unread notice. */
-export function bellOptions(notices: readonly Notice[]): StatusItemOptions {
+/** The dot on the stripe button: red while an unread notice is an error,
+ * blue while any other is unread, none once all are read. */
+export function stripeBadge(notices: readonly Notice[]): "info" | "error" | null {
   const pending = unread(notices);
-  const worst = pending.reduce<NoticeSeverity | null>(
-    (worst, notice) => (worst === null || RANK[notice.severity] > RANK[worst] ? notice.severity : worst),
-    null,
-  );
-  return {
-    text: pending.length === 0 ? "" : String(pending.length),
-    icon: worst === null ? BELL_ICON : BELL_UNREAD_ICON,
-    tooltip:
-      pending.length === 0
-        ? "Notifications"
-        : `Notifications: ${pending.length} unread`,
-    command: { name: TOGGLE },
-    ...(worst === null ? {} : { color: severityColor(worst) }),
-    side: "right",
-    priority: -100,
-  };
+  if (pending.length === 0) return null;
+  return pending.some((notice) => notice.severity === "error") ? "error" : "info";
 }

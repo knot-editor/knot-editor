@@ -1346,6 +1346,33 @@ impl HostArguments for ReplaceViewTextArguments {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub(crate) struct ViewBadgeArguments {
+    pub registration: TreeProviderRegistrationId,
+    pub badge: Option<crate::app::workbench::ToolBadge>,
+}
+impl HostArguments for ViewBadgeArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        use crate::app::workbench::ToolBadge;
+        let badge = match reader
+            .optional_text(3, "view badge must be text or null")?
+            .as_deref()
+        {
+            None => None,
+            Some("info") => Some(ToolBadge::Info),
+            Some("error") => Some(ToolBadge::Error),
+            Some(_) => return Err(DecodeError::Type("invalid view badge")),
+        };
+        Ok(Self {
+            registration: TreeProviderRegistrationId::new(reader.integer(2)?),
+            badge,
+        })
+    }
+    fn provider_mutation(&self) -> Option<ProviderIdentity> {
+        Some(ProviderIdentity::Tree(self.registration))
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) struct ViewOperationArguments {
     pub registration: TreeProviderRegistrationId,
     pub window: Option<String>,
@@ -2604,6 +2631,15 @@ pub(crate) async fn unregister_tree_provider(
 ) -> Result<(), SemanticError> {
     let request = context.request;
     context.foreground(|host, cx| host.unregister_view(&request, arguments, cx))?
+}
+
+#[host_operation("setViewBadge")]
+pub(crate) async fn set_view_badge(
+    context: HostContext,
+    arguments: ViewBadgeArguments,
+) -> Result<(), SemanticError> {
+    let request = context.request;
+    context.foreground(|host, cx| host.set_view_badge(&request, arguments, cx))?
 }
 
 #[host_operation("showView")]

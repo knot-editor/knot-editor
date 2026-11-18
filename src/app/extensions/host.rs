@@ -3054,6 +3054,23 @@ impl ProductExtensionHost {
 
     /// Show, hide, or focus a live registration in all windows or in
     /// one explicit window. Programmatic presentation never publishes defaults.
+    pub(crate) fn set_view_badge(
+        &mut self,
+        request: &knot_protocol::RequestContext,
+        arguments: handlers::ViewBadgeArguments,
+        cx: &mut Context<Self>,
+    ) -> Result<(), crate::app::extensions::semantics::SemanticError> {
+        let id = self
+            .semantics
+            .set_view_badge(request, arguments.registration, arguments.badge)?;
+        for window in crate::app::product::windows(cx) {
+            window.update(cx, |window, cx| {
+                window.set_contributed_view_badge(&id, arguments.badge, cx)
+            });
+        }
+        Ok(())
+    }
+
     pub(crate) fn present_view(
         &mut self,
         request: &knot_protocol::RequestContext,

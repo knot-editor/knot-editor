@@ -188,6 +188,13 @@ Decisions that later checkpoints build on:
 
 ### 4. Notifications in one place
 
+✅ Implemented, awaiting review. `ViewRegistration.setBadge` paints the dot
+(`ToolBadge` on the tool window, carried by the view definition so new windows
+show it); `@knot/notifications` sets it from read state and severity and no
+longer registers the bell. Reading still happens through Show Notifications,
+the package's toggle command, Mark All Read, and a row; a stripe click or the
+generated toggle shows the panel without reading, so the dot stays until then.
+
 Deliverables:
 - `ViewRegistration.setBadge`. `@knot/notifications` shows the unread dot,
   red when an unread notice is an error, on its stripe button and drops the

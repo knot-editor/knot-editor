@@ -2133,6 +2133,13 @@ declare module "knot" {
      * where it is focused, returning focus to the center. */
     toggle(window?: WindowTarget): Promise<void>;
     /**
+     * Paint a blue ("info") or red ("error") dot on the tool's stripe button
+     * in every window, or clear it with null.
+     * @throws HostError with OwnershipDisposed after disposal starts or
+     * Cancelled on teardown.
+     */
+    setBadge(badge: "info" | "error" | null): Promise<void>;
+    /**
      * Invalidate root children when parentId is omitted/null, otherwise that
      * parent's children. Omitting window invalidates every live instance; an
      * explicit window must own a live instance.

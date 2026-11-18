@@ -1191,8 +1191,8 @@ mod terminals;
 pub use terminals::free_label;
 mod tools;
 pub use tools::{
-    DockLocation, Slot, StoredTool, StripeClick, TOOL_LAYOUT_VERSION, ToolFrame, ToolFrameId,
-    ToolKind, ToolLayoutSnapshot,
+    DockLocation, Slot, StoredTool, StripeClick, TOOL_LAYOUT_VERSION, ToolBadge, ToolFrame,
+    ToolFrameId, ToolKind, ToolLayoutSnapshot,
 };
 
 mod arrange;

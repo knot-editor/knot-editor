@@ -1447,6 +1447,13 @@ export async function registerView(contribution) {
       owned.assertActive();
       await owned.track(request("toggleView", registration, optionalWindowAuthority(window)));
     },
+    async setBadge(badge) {
+      owned.assertActive();
+      if (badge !== null && badge !== "info" && badge !== "error") {
+        throw new TypeError("view badge must be info, error, or null");
+      }
+      await owned.track(request("setViewBadge", registration, badge));
+    },
     async invalidate(parentId, window) {
       owned.assertActive();
       const parent = optionalText(parentId);

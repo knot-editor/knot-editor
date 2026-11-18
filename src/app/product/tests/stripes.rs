@@ -133,6 +133,36 @@ fn stripes_group_tools_by_slot_toggle_on_click_and_move_by_drag(cx: &mut TestApp
 }
 
 #[gpui::test]
+fn a_badge_paints_a_dot_on_its_stripe_button(cx: &mut TestAppContext) {
+    use crate::app::workbench::ToolBadge;
+    let documents = install_globals(cx);
+    cx.set_global(ApplicationFileSystems(memory_filesystems()));
+    let (window, native_window) = empty_product_window(&documents, cx);
+    toggle_test_tool(&window, cx);
+    cx.run_until_parked();
+    let dot = "stripe-badge-test.tool";
+    let set = |badge: Option<ToolBadge>, cx: &mut TestAppContext| {
+        window.update(cx, |window, cx| {
+            window.set_contributed_view_badge(crate::app::product::tools::TEST_TOOL_ID, badge, cx)
+        });
+    };
+    let mut visual = VisualTestContext::from_window(native_window, cx);
+    assert!(visual.debug_bounds(dot).is_none());
+    drop(visual);
+
+    set(Some(ToolBadge::Error), cx);
+    let mut visual = VisualTestContext::from_window(native_window, cx);
+    let button = visual.debug_bounds(EXPLORER_BUTTON).unwrap();
+    let dot_bounds = visual.debug_bounds(dot).unwrap();
+    assert!(button.contains(&dot_bounds.center()));
+    drop(visual);
+
+    set(None, cx);
+    let mut visual = VisualTestContext::from_window(native_window, cx);
+    assert!(visual.debug_bounds(dot).is_none());
+}
+
+#[gpui::test]
 fn the_tool_stripes_setting_hides_both_stripes(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
     let (_, window) = empty_product_window(&documents, cx);

@@ -84,6 +84,8 @@ type FakeView = {
   contribution: Knot.ViewContribution;
   visible: boolean;
   text: string;
+  /** The dot on the tool's stripe button. */
+  badge: "info" | "error" | null;
   invalidations: number;
   /** The invalidated parents (null for the root), oldest first. */
   invalidated: { parent: string | null; window: Knot.WindowTarget | undefined }[];
@@ -2537,6 +2539,7 @@ export const api: KnotApi = {
         contribution,
         visible: contribution.placement?.visible ?? true,
         text: "",
+        badge: null,
         invalidations: 0,
         invalidated: [],
         reveals: [],
@@ -2555,6 +2558,9 @@ export const api: KnotApi = {
         },
         toggle: async () => {
           registered.visible = !registered.visible;
+        },
+        setBadge: async (badge) => {
+          registered.badge = badge;
         },
         invalidate: async (parent, window) => {
           registered.invalidations += 1;
