@@ -9,7 +9,9 @@
 //! input the same way until the command settles, so keys typed after Enter
 //! reach what the command opens. Enter on supplied rows that are not yet
 //! current holds from that Enter, with the waiting picker as the held view;
-//! Escape then dismisses the picker and drops what was held.
+//! Escape then dismisses the picker and drops what was held. The timeout
+//! starts once the picker confirms, since the frozen picker takes no keys
+//! and Escape leaves it.
 //!
 //! The hold ends when the command completes, when a picker, input, or the
 //! palette takes focus from the held view, when a key arrives after focus
@@ -53,7 +55,8 @@ impl KnotWindow {
     }
 
     /// Hold the window's later input until the command tree `invocation`
-    /// belongs to settles, with `focus` as the held view.
+    /// belongs to settles, with `focus` as the held view. A waiting picker's
+    /// hold starts its timeout when the picker confirms.
     pub(super) fn hold_keys_for_command(
         &mut self,
         invocation: CommandInvocationId,
@@ -71,16 +74,21 @@ impl KnotWindow {
         };
         if let Some(generation) = self.start_key_hold(focus, editor.as_ref().map(Entity::downgrade))
         {
-            self.release_key_hold_after(generation, settled, cx);
+            self.release_key_hold_on(generation, settled, cx);
+            if focus.layer != Focus::Transient {
+                self.release_key_hold_on_timeout(generation, cx);
+            }
         }
     }
 
     /// Move the hold a waiting picker started to the view and editor focus
-    /// returns to once the picker confirms; false when no such hold is active.
+    /// returns to once the picker confirms, and start its timeout; false when
+    /// no such hold is active.
     pub(super) fn retarget_picker_hold(
         &mut self,
         focus: FocusTarget,
         editor: Option<Entity<Editor>>,
+        cx: &mut Context<Self>,
     ) -> bool {
         let Some(hold) = self
             .key_hold
@@ -91,6 +99,8 @@ impl KnotWindow {
         };
         hold.focus = focus;
         hold.editor = editor.as_ref().map(Entity::downgrade);
+        let generation = hold.generation;
+        self.release_key_hold_on_timeout(generation, cx);
         true
     }
 
@@ -132,11 +142,24 @@ impl KnotWindow {
         completion: tokio::sync::oneshot::Receiver<CommandOutcome>,
         cx: &mut Context<Self>,
     ) {
+        self.release_key_hold_on(generation, completion, cx);
+        self.release_key_hold_on_timeout(generation, cx);
+    }
+
+    fn release_key_hold_on(
+        &mut self,
+        generation: u64,
+        completion: tokio::sync::oneshot::Receiver<CommandOutcome>,
+        cx: &mut Context<Self>,
+    ) {
         cx.spawn(async move |this, cx| {
             let _ = completion.await;
             cx.update(|cx| release_key_hold(&this, generation, cx));
         })
         .detach();
+    }
+
+    fn release_key_hold_on_timeout(&mut self, generation: u64, cx: &mut Context<Self>) {
         cx.spawn(async move |this, cx| {
             cx.background_executor().timer(KEY_HOLD_TIMEOUT).await;
             cx.update(|cx| release_key_hold(&this, generation, cx));

@@ -1578,7 +1578,7 @@ impl KnotWindow {
             }
             _ => None,
         };
-        if !self.retarget_picker_hold(focus, editor.clone()) {
+        if !self.retarget_picker_hold(focus, editor.clone(), cx) {
             self.hold_keys_for_command(invocation, focus, editor, cx);
         }
     }

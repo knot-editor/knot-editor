@@ -247,6 +247,10 @@ fn keys_after_enter_on_pending_rows_reach_the_opened_document(cx: &mut TestAppCo
     let fixture = fixture("xyz", cx);
     fixture.open_picker("a", false, cx);
     fixture.keys("enter b c", cx);
+    // The timeout waits for the picker to confirm.
+    cx.executor()
+        .advance_clock(super::super::key_hold::KEY_HOLD_TIMEOUT * 2);
+    cx.run_until_parked();
     assert!(fixture.holds_keys(cx));
     answer_query("a", cx);
     fixture.settle(cx);

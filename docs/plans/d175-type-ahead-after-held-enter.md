@@ -39,8 +39,9 @@ text, then replays them in order on release.
 - **Escape while pending** goes through to the picker: it dismisses the
   picker and discards the queued keys rather than replaying them into the
   restored view.
-- **Timeout.** The existing one-second release still applies, counted from
-  Enter.
+- **Timeout.** The existing one-second release still applies. For pending
+  rows it starts when the picker confirms, so rows slower than a second do
+  not lose the keys; Escape still leaves a picker that never answers.
 - **Palette.** A palette entry that dispatches an extension command holds
   later keys until that command settles, exactly as a key binding does.
   The existing release when a picker, input, or the palette takes focus keeps

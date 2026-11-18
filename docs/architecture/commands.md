@@ -182,7 +182,8 @@ The held view is the one focus returns to; a command that opens a tab moves
 focus, and the next key releases there. Enter on supplied rows that do not
 answer the field yet holds from that Enter, with the waiting picker as the held
 view; Escape then dismisses the picker and drops the held keys. The one-second
-release counts from Enter.
+release starts once the picker confirms: the frozen picker takes no keys, and
+Escape leaves it.
 
 ### Recording
 
