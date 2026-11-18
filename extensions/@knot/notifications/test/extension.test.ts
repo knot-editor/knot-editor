@@ -16,10 +16,10 @@ beforeEach(async () => {
 const rows = async (parent: string | null = null) => host.treeItems(VIEW_ID, window, parent);
 const badge = () => host.view(VIEW_ID).badge;
 
-test("the panel starts hidden at the right with an empty state and no dot", async () => {
+test("the panel starts hidden at the bottom right with an empty state and no dot", async () => {
   const view = host.view(VIEW_ID);
   assert.equal(view.visible, false);
-  assert.equal(view.contribution.placement?.location, "rightTop");
+  assert.equal(view.contribution.placement?.location, "bottomRight");
   assert.deepEqual((await rows()).map((row) => row.label), ["No notifications"]);
   assert.deepEqual(view.contribution.actions?.map((action) => action.command), [
     "notifications.mark-all-read",

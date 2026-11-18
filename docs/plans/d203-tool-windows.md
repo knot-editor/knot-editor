@@ -47,7 +47,7 @@ after this lands, not before.
   the tool window shown. `terminal.escapeToEditor` (default true) sends Esc to
   the shell instead, as IntelliJ's setting does.
 - **Default slots:** Explorer and Projects (hidden) left top, Terminal
-  bottom left, Notifications right top.
+  bottom left, Notifications bottom right.
 - **Terminal** is a container tool window that `@knot/chrome` registers,
   with New Terminal as its new-tab command. The engine, restore, and split stay
   native.
