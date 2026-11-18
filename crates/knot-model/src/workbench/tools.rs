@@ -1,21 +1,23 @@
-//! Native tool definitions, the docks they live in, and the tool-only layout
-//! record fresh windows inherit. Tool definitions outlive their visible tab
-//! attachments.
-
-use std::collections::HashSet;
+//! Tool windows, the slots they sit in, and the tool-only layout record fresh
+//! windows inherit. A tool window keeps its tabs, size, and slot while it is
+//! hidden.
 
 use serde::{Deserialize, Serialize};
 
 use super::*;
 
-pub const TOOL_LAYOUT_VERSION: u32 = 3;
-/// A stable tool ID the tests register in the left dock.
-#[cfg(test)]
-pub(crate) const LEFT_TOOL_ID: &str = "test.left";
+pub const TOOL_LAYOUT_VERSION: u32 = 4;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct ToolFrameId(u64);
 
+impl ToolFrameId {
+    pub fn value(self) -> u64 {
+        self.0
+    }
+}
+
+/// A window side that holds tool windows.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum DockLocation {
@@ -27,10 +29,10 @@ pub enum DockLocation {
 impl DockLocation {
     pub const ALL: [Self; 3] = [Self::Left, Self::Right, Self::Bottom];
 
-    /// Smallest usable dock extent in logical pixels. Dividers floor to this
-    /// minimum so a dragged dock stays visible without squeezing the center
-    /// shut; the window edge is the effective maximum (`area_rects` clamps
-    /// painted dock sizes to the available bounds).
+    /// Smallest usable side extent in logical pixels. Dividers floor to this
+    /// minimum so a dragged tool window stays visible without squeezing the
+    /// center shut; the window edge is the effective maximum (`area_rects`
+    /// clamps painted sizes to the available bounds).
     pub const MIN_SIZE: f32 = 80.;
 
     pub fn index(self) -> usize {
@@ -48,144 +50,149 @@ impl DockLocation {
         }
     }
 
-    /// The split direction along which the dock's size runs.
+    /// The split direction along which the side's size runs.
     pub fn axis(self) -> SplitDirection {
         match self {
             Self::Left | Self::Right => SplitDirection::Horizontal,
             Self::Bottom => SplitDirection::Vertical,
         }
     }
+
+    /// The side's first slot (top, or left for the bottom side) or its second.
+    pub fn slot(self, first: bool) -> Slot {
+        match (self, first) {
+            (Self::Left, true) => Slot::LeftTop,
+            (Self::Left, false) => Slot::LeftBottom,
+            (Self::Right, true) => Slot::RightTop,
+            (Self::Right, false) => Slot::RightBottom,
+            (Self::Bottom, true) => Slot::BottomLeft,
+            (Self::Bottom, false) => Slot::BottomRight,
+        }
+    }
 }
 
-/// Where a hidden tool returns: the pane it left, while that pane is still in
-/// its dock, else the dock.
+/// One of the six places a tool window docks. A slot shows at most one tool
+/// window.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Slot {
+    LeftTop,
+    LeftBottom,
+    RightTop,
+    RightBottom,
+    BottomLeft,
+    BottomRight,
+}
+
+impl Slot {
+    /// Every slot, in layout order.
+    pub const ALL: [Self; 6] = [
+        Self::LeftTop,
+        Self::LeftBottom,
+        Self::RightTop,
+        Self::RightBottom,
+        Self::BottomLeft,
+        Self::BottomRight,
+    ];
+
+    pub fn index(self) -> usize {
+        Self::ALL
+            .iter()
+            .position(|slot| *slot == self)
+            .expect("every slot is listed")
+    }
+
+    pub fn side(self) -> DockLocation {
+        match self {
+            Self::LeftTop | Self::LeftBottom => DockLocation::Left,
+            Self::RightTop | Self::RightBottom => DockLocation::Right,
+            Self::BottomLeft | Self::BottomRight => DockLocation::Bottom,
+        }
+    }
+
+    /// Whether this is its side's first slot: top, or left for the bottom
+    /// side.
+    pub fn is_first(self) -> bool {
+        matches!(self, Self::LeftTop | Self::RightTop | Self::BottomLeft)
+    }
+}
+
+/// How a tool window holds tabs.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct ToolPlacement {
-    dock: DockLocation,
-    pane: Option<PaneId>,
-    index: usize,
+pub enum ToolKind {
+    /// The single tree or text tab the tool registered with.
+    Fixed,
+    /// Tabs opened into it, such as terminals.
+    Container,
 }
 
 pub struct ToolFrame {
     pub id: ToolFrameId,
     pub stable_id: String,
     pub title: String,
-    /// The presentation every tab of this tool shows.
+    /// The presentation of the tool's own tab, when it is fixed.
     pub presentation: PresentationId,
-    remembered: ToolPlacement,
+    pub(super) kind: ToolKind,
+    pub(super) slot: Slot,
+    pub(super) shown: bool,
+    pub(super) sidebar: bool,
+    pub(super) size: f32,
+    pub(super) share: f32,
+    /// Where its stripe button sits among the slot's; registration order
+    /// breaks ties.
+    pub(super) order: usize,
+    /// When the window last showed, 0 for never.
+    pub(super) shown_at: u64,
+    pub(super) tree: AreaTree,
 }
 
-/// One dock of a tool-only layout record.
+impl ToolFrame {
+    pub fn kind(&self) -> ToolKind {
+        self.kind
+    }
+
+    pub fn slot(&self) -> Slot {
+        self.slot
+    }
+
+    /// Whether the window is shown in its slot.
+    pub fn is_shown(&self) -> bool {
+        self.shown
+    }
+
+    /// Whether the window has a stripe button.
+    pub fn on_sidebar(&self) -> bool {
+        self.sidebar
+    }
+
+    pub fn size(&self) -> f32 {
+        self.size
+    }
+
+    /// The share of its side the window takes when both slots show.
+    pub fn share(&self) -> f32 {
+        self.share
+    }
+}
+
+/// One tool window of a tool-only layout record.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-pub struct StoredDock {
-    pub size: f32,
-    pub visible: bool,
-    pub root: Option<StoredNode>,
-}
-
-/// A dock's split tree of stable tool IDs.
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(tag = "kind", rename_all = "camelCase")]
-pub enum StoredNode {
-    Pane {
-        selected: usize,
-        tools: Vec<String>,
-    },
-    Split {
-        direction: SplitDirection,
-        ratio: f32,
-        first: Box<StoredNode>,
-        second: Box<StoredNode>,
-    },
-}
-
-impl StoredNode {
-    fn contains(&self, tool: &str) -> bool {
-        match self {
-            Self::Pane { tools, .. } => tools.iter().any(|id| id == tool),
-            Self::Split { first, second, .. } => first.contains(tool) || second.contains(tool),
-        }
-    }
-
-    /// The tree with only the tools `keep` accepts, collapsing emptied panes
-    /// and one-child splits. A pruned selection falls back to the first tool.
-    fn prune(&self, keep: &dyn Fn(&str) -> bool) -> Option<Self> {
-        match self {
-            Self::Pane { selected, tools } => {
-                let kept = tools
-                    .iter()
-                    .filter(|tool| keep(tool))
-                    .cloned()
-                    .collect::<Vec<_>>();
-                let selected = tools
-                    .get(*selected)
-                    .and_then(|tool| kept.iter().position(|id| id == tool))
-                    .unwrap_or(0);
-                (!kept.is_empty()).then_some(Self::Pane {
-                    selected,
-                    tools: kept,
-                })
-            }
-            Self::Split {
-                direction,
-                ratio,
-                first,
-                second,
-            } => match (first.prune(keep), second.prune(keep)) {
-                (Some(first), Some(second)) => Some(Self::Split {
-                    direction: *direction,
-                    ratio: *ratio,
-                    first: Box::new(first),
-                    second: Box::new(second),
-                }),
-                (Some(remaining), None) | (None, Some(remaining)) => Some(remaining),
-                (None, None) => None,
-            },
-        }
-    }
-
-    fn plan(&self, resolve: &dyn Fn(&str) -> Option<ToolFrameId>) -> PlanNode<ToolFrameId> {
-        match self {
-            Self::Pane { selected, tools } => PlanNode::Pane {
-                selected: *selected,
-                focused: false,
-                pinned: 0,
-                tabs: tools.iter().filter_map(|tool| resolve(tool)).collect(),
-            },
-            Self::Split {
-                direction,
-                ratio,
-                first,
-                second,
-            } => PlanNode::Split {
-                direction: *direction,
-                ratio: *ratio,
-                first: Box::new(first.plan(resolve)),
-                second: Box::new(second.plan(resolve)),
-            },
-        }
-    }
-}
-
-/// A hidden tool and the dock it returns to.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct HiddenTool {
+pub struct StoredTool {
     pub id: String,
-    pub dock: DockLocation,
-    pub index: usize,
+    pub slot: Slot,
+    pub shown: bool,
+    pub sidebar: bool,
+    pub size: f32,
+    pub share: f32,
 }
 
-/// The tool-only layout record: each dock's size, visibility, and split tree
-/// of stable tool IDs, hidden tools' docks, and the terminal home dock, never
-/// documents or terminals.
+/// The tool-only layout record: where each tool window sits, whether it shows
+/// and has a stripe button, and its size and share of its side; never
+/// documents, terminals, or tab trees.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct ToolLayoutSnapshot {
     pub version: u32,
-    /// The left, right, and bottom docks.
-    pub docks: [StoredDock; 3],
-    pub hidden: Vec<HiddenTool>,
-    /// The dock new terminals open in when none lives in a dock.
-    pub terminal_home: DockLocation,
+    pub tools: Vec<StoredTool>,
     /// Whether the user has ever customized the arrangement. Fresh windows
     /// only auto-show stored tools once set, preserving first-run behavior on
     /// fresh installs.
@@ -193,74 +200,38 @@ pub struct ToolLayoutSnapshot {
     pub customized: bool,
 }
 
-/// How a tool-only record places one tool.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum StoredPlacement {
-    /// In a dock's tree.
-    Docked(DockLocation),
-    Hidden {
-        dock: DockLocation,
-        index: usize,
-    },
-}
-
 impl ToolLayoutSnapshot {
     pub fn product_default() -> Self {
-        let dock = |dock: DockLocation, root| StoredDock {
-            size: dock.default_size(),
-            visible: true,
-            root,
-        };
         Self {
             version: TOOL_LAYOUT_VERSION,
-            docks: [
-                dock(DockLocation::Left, None),
-                dock(DockLocation::Right, None),
-                dock(DockLocation::Bottom, None),
-            ],
-            hidden: Vec::new(),
-            terminal_home: DEFAULT_TERMINAL_HOME,
+            tools: Vec::new(),
             customized: false,
         }
     }
 
-    pub fn dock(&self, dock: DockLocation) -> &StoredDock {
-        &self.docks[dock.index()]
-    }
-
-    pub fn dock_sizes(&self) -> [f32; 3] {
-        DockLocation::ALL.map(|dock| self.dock(dock).size)
-    }
-
-    pub fn placement(&self, id: &str) -> Option<StoredPlacement> {
-        DockLocation::ALL
-            .into_iter()
-            .find(|dock| {
-                self.dock(*dock)
-                    .root
-                    .as_ref()
-                    .is_some_and(|root| root.contains(id))
-            })
-            .map(StoredPlacement::Docked)
-            .or_else(|| {
-                self.hidden
-                    .iter()
-                    .find(|tool| tool.id == id)
-                    .map(|tool| StoredPlacement::Hidden {
-                        dock: tool.dock,
-                        index: tool.index,
-                    })
-            })
+    pub fn tool(&self, id: &str) -> Option<&StoredTool> {
+        self.tools.iter().find(|tool| tool.id == id)
     }
 }
 
+/// What a click on a tool's stripe button did.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum StripeClick {
+    Hidden,
+    Shown(PaneId, TabId),
+    /// A container tool window without tabs: the caller opens its first tab.
+    Empty,
+}
+
 impl Workbench {
-    /// Define a hidden tool that first shows in `dock`.
+    /// Define a hidden tool window of `kind` that first shows in `slot`. A
+    /// fixed one gets its single tab.
     pub fn register_tool(
         &mut self,
         stable_id: impl Into<String>,
         title: impl Into<String>,
-        dock: DockLocation,
+        slot: Slot,
+        kind: ToolKind,
     ) -> ToolFrameId {
         let id = ToolFrameId(self.next_tool_id);
         self.next_tool_id = self
@@ -273,12 +244,25 @@ impl Workbench {
             stable_id: stable_id.into(),
             title: title.into(),
             presentation,
-            remembered: ToolPlacement {
-                dock,
-                pane: None,
-                index: usize::MAX,
-            },
+            kind,
+            slot,
+            shown: false,
+            sidebar: true,
+            size: slot.side().default_size(),
+            share: 0.5,
+            order: usize::MAX,
+            shown_at: 0,
+            tree: AreaTree::default(),
         });
+        if kind == ToolKind::Fixed {
+            let pane = self.create_pane(Area::Tool(id));
+            let tab = self.new_tab(TabSurfaceId::Tool(id), false);
+            let tab_id = tab.id;
+            let pane = self.panes.iter_mut().find(|item| item.id == pane).unwrap();
+            pane.tabs.push(tab);
+            pane.select(tab_id);
+        }
+        self.debug_assert_invariants();
         id
     }
 
@@ -290,6 +274,20 @@ impl Workbench {
         self.tools.iter().find(|tool| tool.id == id)
     }
 
+    /// Set where a tool's stripe button sits among its slot's.
+    pub fn set_tool_order(&mut self, id: ToolFrameId, order: usize) {
+        if self.tool(id).is_some() {
+            self.tool_mut(id).order = order;
+        }
+    }
+
+    pub(super) fn tool_mut(&mut self, id: ToolFrameId) -> &mut ToolFrame {
+        self.tools
+            .iter_mut()
+            .find(|tool| tool.id == id)
+            .expect("registered tool")
+    }
+
     pub fn tool_by_stable_id(&self, stable_id: &str) -> Option<ToolFrameId> {
         self.tools
             .iter()
@@ -297,7 +295,15 @@ impl Workbench {
             .map(|tool| tool.id)
     }
 
-    /// The tab showing a tool, in a visible or a hidden dock.
+    /// The tool window a pane belongs to, `None` for the center.
+    pub fn pane_tool(&self, pane: PaneId) -> Option<ToolFrameId> {
+        match self.pane_area(pane)? {
+            Area::Tool(id) => Some(id),
+            Area::Center => None,
+        }
+    }
+
+    /// The tab a fixed tool window shows, whether it is shown or hidden.
     pub fn tool_tab(&self, id: ToolFrameId) -> Option<(PaneId, TabId)> {
         self.panes.iter().find_map(|pane| {
             pane.tabs
@@ -307,236 +313,282 @@ impl Workbench {
         })
     }
 
-    /// Whether a tool has a tab in a painted dock.
+    /// Whether a tool window is shown in its slot.
     pub fn tool_visible(&self, id: ToolFrameId) -> bool {
-        self.tool_tab(id)
-            .is_some_and(|(pane, _)| self.pane_shown(pane))
+        self.tool(id).is_some_and(|tool| tool.shown)
     }
 
+    /// Whether a tool window holds no panes.
+    pub fn tool_is_empty(&self, id: ToolFrameId) -> bool {
+        self.tool(id).is_some_and(|tool| tool.tree.layout.is_none())
+    }
+
+    /// The side of the window a pane's tool window docks on.
     pub fn dock_location(&self, pane: PaneId) -> Option<DockLocation> {
-        match self.pane_area(pane)? {
-            Area::Dock(dock) => Some(dock),
-            Area::Center => None,
+        self.tool(self.pane_tool(pane)?)
+            .map(|tool| tool.slot.side())
+    }
+
+    /// The tool window shown in `slot`.
+    pub fn slot_tool(&self, slot: Slot) -> Option<ToolFrameId> {
+        self.tools
+            .iter()
+            .find(|tool| tool.shown && tool.slot == slot)
+            .map(|tool| tool.id)
+    }
+
+    /// The tool windows shown on a side, first slot first.
+    pub fn side_tools(&self, side: DockLocation) -> [Option<ToolFrameId>; 2] {
+        [true, false].map(|first| self.slot_tool(side.slot(first)))
+    }
+
+    /// A side's extent: the size of the window in its first slot, else of its
+    /// second. `None` while the side shows nothing.
+    pub fn side_extent(&self, side: DockLocation) -> Option<f32> {
+        let [first, second] = self.side_tools(side);
+        first
+            .or(second)
+            .and_then(|id| self.tool(id))
+            .map(|tool| tool.size)
+    }
+
+    /// Resize a side by setting the size of the window that gives it its
+    /// extent.
+    pub fn set_side_extent(&mut self, side: DockLocation, size: f32) {
+        let [first, second] = self.side_tools(side);
+        if let Some(id) = first.or(second) {
+            self.set_tool_size(id, size);
         }
     }
 
-    pub fn dock_size(&self, dock: DockLocation) -> f32 {
-        self.docks[dock.index()].size
+    /// The share of its side the first slot's window takes while both slots
+    /// show.
+    pub fn side_share(&self, side: DockLocation) -> Option<f32> {
+        let [first, second] = self.side_tools(side);
+        second?;
+        first.and_then(|id| self.tool(id)).map(|tool| tool.share)
     }
 
-    pub fn set_dock_size(&mut self, dock: DockLocation, size: f32) {
-        self.docks[dock.index()].size = size.max(DockLocation::MIN_SIZE);
-    }
-
-    pub fn set_dock_sizes(&mut self, sizes: [f32; 3]) {
-        for dock in DockLocation::ALL {
-            self.set_dock_size(dock, sizes[dock.index()]);
+    /// Set the first slot's share of a side that shows both slots.
+    pub fn set_side_share(&mut self, side: DockLocation, share: f32) {
+        let [first, second] = self.side_tools(side);
+        if let (Some(first), Some(second)) = (first, second) {
+            let share = WorkbenchLayout::clamp_ratio(share);
+            self.tool_mut(first).share = share;
+            self.tool_mut(second).share = 1. - share;
         }
     }
 
-    /// The dock's visible flag, which it keeps while empty.
-    pub fn dock_visible(&self, dock: DockLocation) -> bool {
-        self.docks[dock.index()].visible
+    pub fn tool_size(&self, id: ToolFrameId) -> Option<f32> {
+        self.tool(id).map(|tool| tool.size)
     }
 
-    /// Show or hide a dock with its arrangement. Hiding moves focus out of
-    /// it; showing it into an unfocused workbench focuses it.
-    pub fn set_dock_visible(&mut self, dock: DockLocation, visible: bool) {
-        self.docks[dock.index()].visible = visible;
-        self.settle_focus(Some(Area::Dock(dock)));
-        self.debug_assert_invariants();
-    }
-
-    /// Remember where a hidden tool shows next without showing it. Restore
-    /// uses this so hidden tools keep their dock without visible tabs.
-    pub fn remember_tool_placement(&mut self, id: ToolFrameId, dock: DockLocation, index: usize) {
-        if let Some(tool) = self.tools.iter_mut().find(|tool| tool.id == id) {
-            tool.remembered = ToolPlacement {
-                dock,
-                pane: None,
-                index,
-            };
+    pub fn set_tool_size(&mut self, id: ToolFrameId, size: f32) {
+        if self.tool(id).is_some() {
+            self.tool_mut(id).size = size.max(DockLocation::MIN_SIZE);
         }
     }
 
-    /// Remove a tool definition and its visible attachment. Remembered layout
-    /// records live outside the workbench and are intentionally left untouched.
+    /// Show a window in its slot without moving focus, hiding the one there.
+    /// A window shown this way regains its stripe button.
+    pub(super) fn reveal_tool(&mut self, id: ToolFrameId) {
+        let Some(tool) = self.tool(id) else {
+            return;
+        };
+        if tool.shown {
+            return;
+        }
+        let slot = tool.slot;
+        for other in &mut self.tools {
+            if other.slot == slot {
+                other.shown = false;
+            }
+        }
+        self.reveal_clock += 1;
+        let clock = self.reveal_clock;
+        let tool = self.tool_mut(id);
+        tool.shown = true;
+        tool.sidebar = true;
+        tool.shown_at = clock;
+    }
+
+    /// Remove a tool window and its panes. A container's terminals move to
+    /// the center. Remembered layout records live outside the workbench and
+    /// are intentionally left untouched.
     pub fn unregister_tool(&mut self, id: ToolFrameId) {
         self.hide_tool(id);
+        self.evict_tool_terminals(id);
+        let area = Area::Tool(id);
+        self.panes.retain(|pane| pane.area != area);
         self.tools.retain(|tool| tool.id != id);
+        self.settle_focus(None);
         self.debug_assert_invariants();
     }
 
-    /// Remove a tool's tab, remembering its pane and position.
+    /// Hide a tool window, which keeps its tabs. Focus moves to the center.
     pub fn hide_tool(&mut self, id: ToolFrameId) -> bool {
-        let Some((pane, tab)) = self.tool_tab(id) else {
+        if !self.tool_visible(id) {
             return false;
-        };
-        let dock = self
-            .dock_location(pane)
-            .expect("tool tabs live in the docks");
-        let index = self
-            .pane(pane)
-            .unwrap()
-            .tabs
-            .iter()
-            .position(|item| item.id == tab)
-            .unwrap();
-        let tool = self.tools.iter_mut().find(|tool| tool.id == id).unwrap();
-        tool.remembered = ToolPlacement {
-            dock,
-            pane: Some(pane),
-            index,
-        };
-        self.remove_tab(pane, tab);
+        }
+        self.tool_mut(id).shown = false;
+        self.settle_focus(None);
+        self.debug_assert_invariants();
         true
     }
 
-    /// Show and focus a tool: its tab, showing a hidden dock, else a new tab
-    /// at its remembered pane and position, else at its dock.
+    /// Show and focus a tool window in its slot, hiding the one there, which
+    /// keeps its tabs. A container without tabs cannot show: the caller opens
+    /// its first tab, which shows it.
     pub fn show_tool(&mut self, id: ToolFrameId) -> Option<(PaneId, TabId)> {
-        if let Some((pane, tab)) = self.tool_tab(id) {
-            self.activate_tab(pane, tab);
-            return Some((pane, tab));
-        }
-        let ToolPlacement { dock, pane, index } = self.tool(id)?.remembered;
-        let area = Area::Dock(dock);
-        let pane = pane
-            .filter(|pane| self.pane_area(*pane) == Some(area))
-            .or_else(|| self.area_focus(area))
-            .unwrap_or_else(|| self.create_pane(area));
-        let tab = self.new_tab(TabSurfaceId::Tool(id), false);
-        let tab_id = tab.id;
-        let group = self
-            .panes
-            .iter_mut()
-            .find(|group| group.id == pane)
-            .unwrap();
-        group.tabs.insert(group.section_index(false, index), tab);
-        group.select(tab_id);
+        let tool = self.tool(id)?;
+        let pane = tool
+            .tree
+            .focused
+            .filter(|pane| self.pane_area(*pane) == Some(Area::Tool(id)))
+            .or_else(|| tool.tree.layout.as_ref().map(WorkbenchLayout::first_pane))?;
         self.set_focus(pane);
         self.debug_assert_invariants();
-        Some((pane, tab_id))
+        Some((pane, self.pane(pane)?.active_tab))
     }
 
-    /// Move a tool to the end of a dock and show it.
-    pub fn place_tool(&mut self, id: ToolFrameId, dock: DockLocation) -> bool {
-        if self.tool(id).is_none() {
-            return false;
+    /// A click on a tool's stripe button: a shown window hides, a hidden one
+    /// shows in its slot and takes focus.
+    pub fn stripe_click(&mut self, id: ToolFrameId) -> StripeClick {
+        if self.tool_visible(id) {
+            self.hide_tool(id);
+            return StripeClick::Hidden;
         }
-        self.hide_tool(id);
-        self.remember_tool_placement(id, dock, usize::MAX);
-        self.show_tool(id).is_some()
+        match self.show_tool(id) {
+            Some((pane, tab)) => StripeClick::Shown(pane, tab),
+            None => StripeClick::Empty,
+        }
     }
 
-    /// Toggle a tool: a hidden or unfocused tool shows and takes focus, and a
-    /// focused one hides, returning focus to the center. Returns whether the
-    /// tool is shown afterwards.
+    /// Toggle a tool window: a hidden or unfocused one shows and takes focus,
+    /// and a focused one hides, returning focus to the center. Returns
+    /// whether the window is shown afterwards; a container without tabs
+    /// stays hidden for its caller to fill.
     pub fn toggle_tool(&mut self, id: ToolFrameId) -> bool {
-        let focused = self.tool_tab(id).is_some_and(|(pane, tab)| {
-            self.focused_pane_id() == Some(pane) && self.pane(pane).unwrap().active_tab == tab
-        });
+        let focused = self
+            .focused_pane_id()
+            .is_some_and(|pane| self.pane_tool(pane) == Some(id));
         if focused {
             self.hide_tool(id);
             self.focus_center();
             false
         } else {
-            self.show_tool_replacing(id).is_some()
+            self.show_tool(id).is_some()
         }
     }
 
-    /// Show and focus a tool as the switcher of its pane would: a tool that
-    /// is not showing takes the place of the other tools in the pane it
-    /// returns to, which hide but keep their places. Terminals stay, and a
-    /// tool already showing only takes focus, so tabs the user grouped stay.
-    pub fn show_tool_replacing(&mut self, id: ToolFrameId) -> Option<(PaneId, TabId)> {
-        let showing = self.tool_tab(id).is_some();
-        let (pane, tab) = self.show_tool(id)?;
-        if !showing {
-            let others = self
-                .pane(pane)?
-                .tabs
-                .iter()
-                .filter_map(|item| match item.surface_id() {
-                    TabSurfaceId::Tool(other) if other != id => Some(other),
-                    _ => None,
-                });
-            for other in others.collect::<Vec<_>>() {
-                self.hide_tool(other);
+    /// Toggle a side: while focus is in one of its windows they all hide;
+    /// while the side shows windows, one takes focus; and while it shows
+    /// none, each slot shows the window it showed last, else its first on the
+    /// sidebar. Returns whether the side shows afterwards.
+    pub fn toggle_side(&mut self, side: DockLocation) -> bool {
+        let shown = self
+            .side_tools(side)
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+        let focused = self
+            .focused_pane_id()
+            .and_then(|pane| self.pane_tool(pane))
+            .is_some_and(|tool| shown.contains(&tool));
+        if focused {
+            for id in shown {
+                self.hide_tool(id);
             }
-            self.set_focus(pane);
+            self.focus_center();
+            return false;
         }
-        Some((pane, tab))
-    }
-
-    /// Show and focus a tool in a pane of its own beside the last focused
-    /// pane of its shown dock, stacked the way the dock lays out its panes.
-    /// A tool already showing, or whose dock is hidden or empty, shows as
-    /// [`show_tool`](Self::show_tool) does.
-    pub fn show_tool_beside(&mut self, id: ToolFrameId) -> Option<(PaneId, TabId)> {
-        if self.tool_tab(id).is_some() {
-            return self.show_tool(id);
+        if let Some(id) = shown.first() {
+            return self.show_tool(*id).is_some();
         }
-        let dock = self.tool(id)?.remembered.dock;
-        let area = Area::Dock(dock);
-        let Some(anchor) = self.area_focus(area).filter(|_| self.area_shown(area)) else {
-            return self.show_tool(id);
-        };
-        let direction = match dock {
-            DockLocation::Left | DockLocation::Right => SplitDirection::Vertical,
-            DockLocation::Bottom => SplitDirection::Horizontal,
-        };
-        let pane = self.split_with(
-            anchor,
-            direction,
-            SplitPlacement::After,
-            TabSurfaceId::Tool(id),
-        )?;
-        let tab = self.pane(pane)?.active_tab;
-        Some((pane, tab))
-    }
-
-    /// Toggle a dock with its arrangement: a hidden dock shows and takes
-    /// focus, a shown but unfocused one takes focus, and a focused one hides,
-    /// returning focus to the center. An empty dock shows the hidden tools
-    /// that return to it.
-    pub fn toggle_dock(&mut self, dock: DockLocation) {
-        let area = Area::Dock(dock);
-        if self.focused_pane().is_some_and(|pane| pane.area == area) {
-            self.set_dock_visible(dock, false);
-        } else if let Some(pane) = self.area_focus(area) {
-            self.set_focus(pane);
-            self.debug_assert_invariants();
-        } else {
-            let mut ids = self
+        let mut revealed = Vec::new();
+        for first in [true, false] {
+            let slot = side.slot(first);
+            let candidate = self
                 .tools
                 .iter()
-                .filter(|tool| tool.remembered.dock == dock)
-                .map(|tool| (tool.remembered.index, tool.id))
-                .collect::<Vec<_>>();
-            ids.sort_by_key(|(index, _)| *index);
-            for (_, id) in ids {
-                self.show_tool(id);
+                .filter(|tool| tool.slot == slot && tool.sidebar && tool.tree.layout.is_some())
+                .max_by_key(|tool| (tool.shown_at, std::cmp::Reverse(tool.order)))
+                .map(|tool| tool.id);
+            if let Some(id) = candidate {
+                self.reveal_tool(id);
+                revealed.push(id);
             }
+        }
+        if let Some(id) = revealed.first() {
+            self.show_tool(*id);
+        }
+        !revealed.is_empty()
+    }
+
+    /// Move a tool window to `slot`, replacing the window shown there when
+    /// this one shows. Its size, share, and tabs go with it.
+    pub fn place_tool(&mut self, id: ToolFrameId, slot: Slot) -> bool {
+        let Some(tool) = self.tool(id) else {
+            return false;
+        };
+        let shown = tool.shown;
+        let tool = self.tool_mut(id);
+        tool.shown = false;
+        tool.slot = slot;
+        if shown {
+            self.reveal_tool(id);
+        }
+        self.settle_focus(None);
+        self.debug_assert_invariants();
+        true
+    }
+
+    /// Return a tool window to the defaults it registered with: its slot,
+    /// button position, size, and share, and shown when `visible` (a
+    /// container with tabs keeps showing).
+    pub fn reset_tool(&mut self, id: ToolFrameId, slot: Slot, order: usize, visible: bool) {
+        let Some(tool) = self.tool(id) else {
+            return;
+        };
+        let keep = tool.shown && tool.kind == ToolKind::Container;
+        let tool = self.tool_mut(id);
+        tool.shown = false;
+        tool.slot = slot;
+        tool.order = order;
+        tool.sidebar = true;
+        tool.size = slot.side().default_size();
+        tool.share = 0.5;
+        if (visible || keep) && !self.tool_is_empty(id) {
+            self.reveal_tool(id);
+        }
+        self.settle_focus(None);
+        self.debug_assert_invariants();
+    }
+
+    /// Put a tool window's button back on the stripes without showing it.
+    pub fn add_to_sidebar(&mut self, id: ToolFrameId) {
+        if self.tool(id).is_some() {
+            self.tool_mut(id).sidebar = true;
         }
     }
 
-    fn dock_holds_terminals(&self, dock: DockLocation) -> bool {
-        self.panes.iter().any(|pane| {
-            pane.area == Area::Dock(dock)
-                && pane
-                    .tabs
-                    .iter()
-                    .any(|tab| tab.surface.kind() == TabKind::Terminal)
-        })
+    /// Hide a tool window and take its button off the stripes.
+    pub fn remove_from_sidebar(&mut self, id: ToolFrameId) -> bool {
+        if self.tool(id).is_none() {
+            return false;
+        }
+        self.hide_tool(id);
+        self.tool_mut(id).sidebar = false;
+        true
     }
 
-    /// Move every terminal tab of a dock to the center.
-    fn evict_dock_terminals(&mut self, dock: DockLocation) {
+    /// Move every terminal tab of a tool window to the center.
+    fn evict_tool_terminals(&mut self, id: ToolFrameId) {
+        let area = Area::Tool(id);
         let terminals = self
             .panes
             .iter()
-            .filter(|pane| pane.area == Area::Dock(dock))
+            .filter(|pane| pane.area == area)
             .flat_map(|pane| pane.tabs.iter().map(move |tab| (pane.id, tab)))
             .filter(|(_, tab)| tab.surface.kind() == TabKind::Terminal)
             .map(|(pane, tab)| (pane, tab.id))
@@ -548,222 +600,90 @@ impl Workbench {
         }
     }
 
-    /// A dock's tree of stable tool IDs, as a tool-only record keeps it.
-    fn stored_dock_tree(&self, dock: DockLocation) -> Option<StoredNode> {
-        fn node(workbench: &Workbench, layout: &WorkbenchLayout) -> Option<StoredNode> {
-            match layout {
-                WorkbenchLayout::Pane(id) => {
-                    let pane = workbench.pane(*id)?;
-                    let mut tools = Vec::new();
-                    let mut selected = 0;
-                    for tab in &pane.tabs {
-                        let TabSurfaceId::Tool(tool) = tab.surface_id() else {
-                            continue;
-                        };
-                        if tab.id == pane.active_tab {
-                            selected = tools.len();
-                        }
-                        tools.push(workbench.tool(tool)?.stable_id.clone());
-                    }
-                    (!tools.is_empty()).then_some(StoredNode::Pane { selected, tools })
-                }
-                WorkbenchLayout::Split {
-                    direction,
-                    ratio,
-                    first,
-                    second,
-                } => match (node(workbench, first), node(workbench, second)) {
-                    (Some(first), Some(second)) => Some(StoredNode::Split {
-                        direction: *direction,
-                        ratio: *ratio,
-                        first: Box::new(first),
-                        second: Box::new(second),
-                    }),
-                    (Some(remaining), None) | (None, Some(remaining)) => Some(remaining),
-                    (None, None) => None,
-                },
-            }
-        }
-        node(self, self.area_layout(Area::Dock(dock))?)
-    }
-
-    /// Capture the tool-only layout record: docks' trees of stable tool IDs,
-    /// sizes, and visibility, and the dock each hidden tool returns to.
-    /// Documents, terminals, and live handles never enter the record.
+    /// Capture the tool-only layout record: each tool window's slot, state,
+    /// and sizes. Documents, terminals, and live handles never enter it.
     pub fn tool_layout_snapshot(&self) -> ToolLayoutSnapshot {
         ToolLayoutSnapshot {
             version: TOOL_LAYOUT_VERSION,
-            docks: DockLocation::ALL.map(|dock| StoredDock {
-                size: self.dock_size(dock),
-                visible: self.dock_visible(dock),
-                root: self.stored_dock_tree(dock),
-            }),
-            hidden: self
+            tools: self
                 .tools
                 .iter()
-                .filter(|tool| self.tool_tab(tool.id).is_none())
-                .map(|tool| HiddenTool {
+                .map(|tool| StoredTool {
                     id: tool.stable_id.clone(),
-                    dock: tool.remembered.dock,
-                    index: tool.remembered.index,
+                    slot: tool.slot,
+                    shown: tool.shown,
+                    sidebar: tool.sidebar,
+                    size: tool.size,
+                    share: tool.share,
                 })
                 .collect(),
-            terminal_home: self.terminal_home,
             customized: false,
         }
     }
 
-    /// Replace a dock's tools with `root`, a tree of registered tools, and
-    /// set its visibility. Displaced tools are hidden, and the dock's
-    /// terminals move to the center.
-    pub fn arrange_dock(
-        &mut self,
-        dock: DockLocation,
-        root: Option<PlanNode<ToolFrameId>>,
-        visible: bool,
-    ) {
-        let area = Area::Dock(dock);
-        let displaced = self
-            .area_panes(area)
-            .into_iter()
-            .flat_map(|pane| self.pane(pane).unwrap().tabs.iter())
-            .filter_map(|tab| match tab.surface_id() {
-                TabSurfaceId::Tool(id) => Some(id),
-                _ => None,
-            })
-            .collect::<Vec<_>>();
-        let placed = root.as_ref().map_or_else(HashSet::new, |root| {
-            let mut ids = HashSet::new();
-            root.for_each(&mut |id| {
-                ids.insert(*id);
-            });
-            ids
-        });
-        for id in displaced.into_iter().chain(placed.iter().copied()) {
-            self.hide_tool(id);
+    /// Set a window's slot, button, and sizes from its record, hidden.
+    fn apply_stored(&mut self, id: ToolFrameId, stored: &StoredTool) {
+        let tool = self.tool_mut(id);
+        tool.shown = false;
+        tool.slot = stored.slot;
+        tool.sidebar = stored.sidebar;
+        tool.size = stored.size.max(DockLocation::MIN_SIZE);
+        tool.share = WorkbenchLayout::clamp_ratio(stored.share);
+    }
+
+    /// Show a window its record shows, when it has tabs to show.
+    fn reveal_stored(&mut self, id: ToolFrameId, stored: &StoredTool) {
+        if stored.shown && !self.tool_is_empty(id) {
+            self.reveal_tool(id);
         }
-        self.evict_dock_terminals(dock);
-        debug_assert!(self.area_layout(area).is_none(), "the dock is empty");
-        let mut focused = None;
-        let mut installed = Vec::new();
-        let root = root.map(|root| root.map(&mut |id| (TabSurfaceId::Tool(id), ())));
-        self.tree_mut(area).layout =
-            root.map(|root| self.install(root, area, &mut focused, &mut installed));
-        self.docks[dock.index()].visible = visible;
+    }
+
+    /// Install a whole tool-only record over the registered tools. Tools the
+    /// record does not name keep their place.
+    pub fn restore_tool_layout(&mut self, snapshot: &ToolLayoutSnapshot) {
+        let named = self
+            .tools
+            .iter()
+            .filter_map(|tool| Some((tool.id, snapshot.tool(&tool.stable_id)?.clone())))
+            .collect::<Vec<_>>();
+        for (id, stored) in &named {
+            self.apply_stored(*id, stored);
+        }
+        for (id, stored) in &named {
+            self.reveal_stored(*id, stored);
+        }
         self.settle_focus(None);
         self.debug_assert_invariants();
     }
 
-    /// Install a whole tool-only record over the registered tools: each dock
-    /// gets its size, visibility, and stored tree of registered tools, and
-    /// hidden tools return to their stored docks. Tools displaced from a dock
-    /// are hidden.
-    pub fn restore_tool_layout(&mut self, snapshot: &ToolLayoutSnapshot) {
-        self.set_dock_sizes(snapshot.dock_sizes());
-        self.terminal_home = snapshot.terminal_home;
-        let registered = self
-            .tools
-            .iter()
-            .map(|tool| tool.stable_id.clone())
-            .collect::<HashSet<_>>();
-        for dock in DockLocation::ALL {
-            let stored = snapshot.dock(dock);
-            let root = stored
-                .root
-                .as_ref()
-                .and_then(|root| root.prune(&|tool| registered.contains(tool)))
-                .map(|root| root.plan(&|tool| self.tool_by_stable_id(tool)));
-            self.arrange_dock(dock, root, stored.visible);
-        }
-        for hidden in &snapshot.hidden {
-            if let Some(id) = self.tool_by_stable_id(&hidden.id)
-                && self.tool_tab(id).is_none()
-            {
-                self.remember_tool_placement(id, hidden.dock, hidden.index);
-            }
-        }
-    }
-
-    /// Place a newly registered tool as `snapshot` records it: in its stored
-    /// dock (see [`restore_stored_tool`](Self::restore_stored_tool)) or
-    /// hidden with its stored dock. A tool the record does not name returns
-    /// to `dock` at `index` and shows when `visible`. Returns whether the
-    /// record named the tool.
+    /// Place a newly registered tool as `snapshot` records it. A tool the
+    /// record does not name stays where it registered, and shows when
+    /// `visible` and its slot is free. Returns whether the record named the
+    /// tool.
     pub fn place_registered_tool(
         &mut self,
         id: ToolFrameId,
         snapshot: Option<&ToolLayoutSnapshot>,
-        dock: DockLocation,
-        index: usize,
         visible: bool,
     ) -> bool {
-        let Some(stable) = self.tool(id).map(|tool| tool.stable_id.clone()) else {
+        let Some(tool) = self.tool(id) else {
             return false;
         };
-        match snapshot.and_then(|snapshot| Some((snapshot, snapshot.placement(&stable)?))) {
-            Some((snapshot, StoredPlacement::Docked(_))) => {
-                self.restore_stored_tool(id, snapshot);
-                true
-            }
-            Some((_, StoredPlacement::Hidden { dock, index })) => {
-                self.remember_tool_placement(id, dock, index);
+        let stored = snapshot.and_then(|snapshot| snapshot.tool(&tool.stable_id).cloned());
+        match stored {
+            Some(stored) => {
+                self.apply_stored(id, &stored);
+                self.reveal_stored(id, &stored);
                 true
             }
             None => {
-                self.remember_tool_placement(id, dock, index);
-                if visible {
-                    self.show_tool(id);
+                let slot = tool.slot;
+                if visible && self.slot_tool(slot).is_none() && !self.tool_is_empty(id) {
+                    self.reveal_tool(id);
                 }
                 false
             }
         }
-    }
-
-    /// Show a newly registered tool in the dock `snapshot` docks it in. When
-    /// that dock still holds exactly the record's arrangement of the other
-    /// registered tools, the record's tree is installed over it, so tools
-    /// attaching one by one rebuild the stored arrangement; otherwise the tool
-    /// joins the dock. Returns false when the record does not dock the tool.
-    pub fn restore_stored_tool(&mut self, id: ToolFrameId, snapshot: &ToolLayoutSnapshot) -> bool {
-        let Some(tool) = self.tool(id) else {
-            return false;
-        };
-        let stable = tool.stable_id.clone();
-        let Some(StoredPlacement::Docked(dock)) = snapshot.placement(&stable) else {
-            return false;
-        };
-        let stored = snapshot.dock(dock);
-        let registered = self
-            .tools
-            .iter()
-            .map(|tool| tool.stable_id.clone())
-            .collect::<HashSet<_>>();
-        let others = stored
-            .root
-            .as_ref()
-            .and_then(|root| root.prune(&|tool| tool != stable && registered.contains(tool)));
-        if self.stored_dock_tree(dock) == others
-            && self.tool_tab(id).is_none()
-            && !self.dock_holds_terminals(dock)
-        {
-            let root = stored
-                .root
-                .as_ref()
-                .and_then(|root| root.prune(&|tool| registered.contains(tool)))
-                .map(|root| root.plan(&|tool| self.tool_by_stable_id(tool)));
-            self.arrange_dock(dock, root, stored.visible);
-        } else {
-            self.remember_tool_placement(id, dock, usize::MAX);
-            self.show_tool(id);
-        }
-        true
-    }
-}
-
-impl ToolFrame {
-    /// The dock the tool returns to when shown while hidden.
-    pub fn remembered_dock(&self) -> DockLocation {
-        self.remembered.dock
     }
 }
 
@@ -771,419 +691,251 @@ impl ToolFrame {
 mod tests {
     use super::*;
 
-    fn explorer(workbench: &mut Workbench) -> ToolFrameId {
-        workbench.register_tool(LEFT_TOOL_ID, "Explorer", DockLocation::Left)
-    }
-
-    fn tool_ids(workbench: &Workbench, pane: PaneId) -> Vec<TabSurfaceId> {
-        workbench
-            .pane(pane)
-            .unwrap()
-            .tabs()
-            .iter()
-            .map(WorkbenchTab::surface_id)
-            .collect()
+    fn fixed(workbench: &mut Workbench, name: &str, slot: Slot) -> ToolFrameId {
+        workbench.register_tool(name, name, slot, ToolKind::Fixed)
     }
 
     #[test]
-    fn showing_a_tool_replaces_the_other_tools_of_its_pane_but_not_terminals() {
+    fn a_slot_shows_one_window_and_the_replaced_one_keeps_its_tabs() {
         let workbench = &mut Workbench::empty();
-        workbench.open_document_in_center(DocumentId::new(1));
-        let [first, second] = ["knot.first", "knot.second"]
-            .map(|name| workbench.register_tool(name, name, DockLocation::Left));
-        let (pane, _) = workbench.show_tool(first).unwrap();
-        assert!(workbench.toggle_tool(second));
-        assert!(!workbench.tool_visible(first));
-        assert_eq!(tool_ids(workbench, pane), [TabSurfaceId::Tool(second)]);
-        assert_eq!(workbench.focused_pane_id(), Some(pane));
-
-        // The replaced tool returns to the same pane, replacing in turn.
-        assert!(workbench.toggle_tool(first));
-        assert_eq!(tool_ids(workbench, pane), [TabSurfaceId::Tool(first)]);
-
-        // Tabs grouped on purpose stay: a showing tool only takes focus.
-        workbench.show_tool(second);
-        assert_eq!(tool_ids(workbench, pane).len(), 2);
-        workbench.show_tool_replacing(first);
-        assert_eq!(tool_ids(workbench, pane).len(), 2);
-
-        // A terminal in the pane is not displaced.
-        let third = workbench.register_tool("knot.third", "third", DockLocation::Left);
-        workbench.hide_tool(first);
-        workbench
-            .open_terminal_tab(pane, TerminalSessionId(1))
-            .unwrap();
-        workbench.show_tool(first);
-        workbench.show_tool_replacing(third);
-        assert!(!workbench.tool_visible(first) && !workbench.tool_visible(second));
-        assert_eq!(
-            tool_ids(workbench, pane),
-            [
-                TabSurfaceId::Terminal(TerminalSessionId(1)),
-                TabSurfaceId::Tool(third)
-            ]
+        let (center, _) = workbench.open_document_in_center(DocumentId::new(1));
+        let explorer = fixed(workbench, "knot.explorer", Slot::LeftTop);
+        let projects = fixed(workbench, "knot.projects", Slot::LeftTop);
+        let terminal = workbench.register_tool(
+            "knot.terminal",
+            "Terminal",
+            Slot::LeftTop,
+            ToolKind::Container,
         );
-    }
 
-    #[test]
-    fn a_tool_shows_beside_the_docks_last_pane_in_a_pane_of_its_own() {
-        let workbench = &mut Workbench::empty();
-        workbench.open_document_in_center(DocumentId::new(1));
-        let [first, second, bottom] = [
-            ("knot.first", DockLocation::Left),
-            ("knot.second", DockLocation::Left),
-            ("knot.bottom", DockLocation::Bottom),
-        ]
-        .map(|(name, dock)| workbench.register_tool(name, name, dock));
-
-        // With nothing in the dock it shows as usual.
-        let (pane, _) = workbench.show_tool_beside(first).unwrap();
-        let (beside, _) = workbench.show_tool_beside(second).unwrap();
-        assert_ne!(pane, beside);
-        assert_eq!(workbench.dock_location(beside), Some(DockLocation::Left));
-        assert_eq!(workbench.focused_pane_id(), Some(beside));
-        assert!(workbench.tool_visible(first) && workbench.tool_visible(second));
-        let Some(WorkbenchLayout::Split { direction, .. }) =
-            workbench.area_layout(Area::Dock(DockLocation::Left))
-        else {
-            panic!("the left dock splits");
-        };
-        assert_eq!(*direction, SplitDirection::Vertical);
-
-        // A hidden dock shows with the tool alone.
-        let (alone, _) = workbench.show_tool_beside(bottom).unwrap();
-        assert_eq!(workbench.dock_location(alone), Some(DockLocation::Bottom));
-    }
-
-    #[test]
-    fn tools_keep_identity_and_return_to_their_pane_and_position() {
-        let workbench = &mut Workbench::empty();
-        let document = DocumentId::new(1);
-        let (center, _) = workbench.open_document_in_center(document);
-        let id = explorer(workbench);
-        let presentation = workbench.tool(id).unwrap().presentation;
-        let (dock, _) = workbench.show_tool(id).unwrap();
-        assert_eq!(workbench.dock_location(dock), Some(DockLocation::Left));
-        assert_eq!(workbench.center(), Some(&WorkbenchLayout::Pane(center)));
-        workbench.set_dock_size(DockLocation::Left, 315.);
-        assert!(workbench.hide_tool(id));
-        assert!(workbench.pane(dock).is_none());
+        // Registered windows start hidden with their tab ready.
+        assert!(!workbench.tool_visible(explorer));
+        assert!(workbench.tool_tab(explorer).is_some());
         assert_eq!(workbench.focused_pane_id(), Some(center));
-        let (reopened, _) = workbench.show_tool(id).unwrap();
-        assert_eq!(workbench.dock_location(reopened), Some(DockLocation::Left));
-        assert_eq!(workbench.dock_size(DockLocation::Left), 315.);
-        assert_eq!(workbench.tool(id).unwrap().presentation, presentation);
 
-        // A hidden tool returns to the pane and position it left.
-        let [first, second] = ["knot.first", "knot.second"]
-            .map(|stable| workbench.register_tool(stable, stable, DockLocation::Left));
-        workbench.show_tool(first);
-        workbench.show_tool(second);
-        let source = workbench
-            .capture_tab_move(reopened, workbench.tool_tab(second).unwrap().1)
+        let (pane, _) = workbench.show_tool(explorer).unwrap();
+        assert_eq!(workbench.slot_tool(Slot::LeftTop), Some(explorer));
+        assert_eq!(workbench.focused_pane_id(), Some(pane));
+        assert_eq!(workbench.dock_location(pane), Some(DockLocation::Left));
+
+        // Showing another replaces it; the replaced window keeps its tab.
+        workbench.show_tool(projects).unwrap();
+        assert!(workbench.tool_visible(projects) && !workbench.tool_visible(explorer));
+        assert_eq!(workbench.tool_tab(explorer).unwrap().0, pane);
+        workbench.show_tool(explorer).unwrap();
+        assert!(workbench.tool_visible(explorer) && !workbench.tool_visible(projects));
+
+        // A container with tabs replaces and is replaced in turn, keeping
+        // its terminals.
+        let (term_pane, _) = workbench
+            .open_terminal_in_tool(terminal, TerminalSessionId(1))
             .unwrap();
-        let moved = workbench
-            .relocate_tab(
-                source,
-                TabMoveDestination::At {
-                    anchor: source,
-                    placement: TabMovePlacement::Split(SplitEdge::Bottom),
-                },
-            )
-            .unwrap();
-        let lower = moved.destination.pane_id;
-        assert_eq!(workbench.dock_location(lower), Some(DockLocation::Left));
-        assert!(workbench.hide_tool(first));
+        assert_eq!(workbench.slot_tool(Slot::LeftTop), Some(terminal));
+        assert!(!workbench.tool_visible(explorer));
+        workbench.show_tool(explorer).unwrap();
+        assert!(workbench.pane(term_pane).is_some());
+        assert!(!workbench.tool_is_empty(terminal));
         assert_eq!(
-            tool_ids(workbench, reopened),
-            [TabSurfaceId::Tool(id)],
-            "the hidden tool left its pane"
+            workbench.focused_pane_id(),
+            workbench.tool_tab(explorer).map(|t| t.0)
         );
-        assert_eq!(workbench.show_tool(first).unwrap().0, reopened);
-        assert_eq!(
-            tool_ids(workbench, reopened),
-            [TabSurfaceId::Tool(id), TabSurfaceId::Tool(first)]
-        );
-        // Placing moves a tool to the end of another dock.
-        assert!(workbench.place_tool(first, DockLocation::Bottom));
-        let bottom = workbench.tool_tab(first).unwrap().0;
-        assert_eq!(workbench.dock_location(bottom), Some(DockLocation::Bottom));
-        assert_eq!(workbench.view_count(document), 1);
     }
 
     #[test]
-    fn tools_and_documents_stay_in_their_areas() {
+    fn stripe_clicks_show_hide_and_focus_the_center() {
         let workbench = &mut Workbench::empty();
-        let document = DocumentId::new(2);
-        let id = explorer(workbench);
-        let (dock, tool_tab) = workbench.show_tool(id).unwrap();
-        assert_eq!(workbench.center(), None);
-        assert_eq!(workbench.open_tab_for_document(dock, document), None);
-        // A document opened from a dock goes to the center.
-        let (pane, _, _) = workbench.open_preview_for_document(dock, document).unwrap();
-        assert_eq!(workbench.pane_area(pane), Some(Area::Center));
-        let doc_tab = workbench.pane(pane).unwrap().active_tab_id();
-        let tool = workbench.capture_tab_move(dock, tool_tab).unwrap();
-        let doc = workbench.capture_tab_move(pane, doc_tab).unwrap();
-        for (source, anchor) in [(tool, doc), (doc, tool)] {
+        let (center, _) = workbench.open_document_in_center(DocumentId::new(1));
+        let a = fixed(workbench, "knot.a", Slot::RightTop);
+        let b = fixed(workbench, "knot.b", Slot::RightTop);
+        let StripeClick::Shown(pane, _) = workbench.stripe_click(a) else {
+            panic!("a hidden window shows");
+        };
+        assert_eq!(workbench.focused_pane_id(), Some(pane));
+        // A click on a visible window hides it, focused or not.
+        workbench.focus_pane(center);
+        assert_eq!(workbench.stripe_click(a), StripeClick::Hidden);
+        assert!(!workbench.tool_visible(a));
+        assert_eq!(workbench.focused_pane_id(), Some(center));
+        // The toggle pattern: show and focus, focus, then hide.
+        assert!(workbench.toggle_tool(b));
+        workbench.focus_pane(center);
+        assert!(workbench.toggle_tool(b));
+        assert_eq!(
+            workbench.focused_pane_id(),
+            workbench.tool_tab(b).map(|t| t.0)
+        );
+        assert!(!workbench.toggle_tool(b));
+        assert_eq!(workbench.focused_pane_id(), Some(center));
+        // With no center, hiding leaves nothing focused.
+        workbench.show_tool(b);
+        workbench.remove_document_tabs();
+        workbench.hide_tool(b);
+        assert_eq!(workbench.focused_pane_id(), None);
+    }
+
+    #[test]
+    fn moving_to_a_slot_replaces_there_and_keeps_size_and_state() {
+        let workbench = &mut Workbench::empty();
+        workbench.open_document_in_center(DocumentId::new(1));
+        let a = fixed(workbench, "knot.a", Slot::LeftTop);
+        let b = fixed(workbench, "knot.b", Slot::BottomRight);
+        workbench.show_tool(a);
+        workbench.show_tool(b);
+        workbench.set_tool_size(a, 333.);
+        assert!(workbench.place_tool(a, Slot::BottomRight));
+        assert_eq!(workbench.slot_tool(Slot::BottomRight), Some(a));
+        assert!(!workbench.tool_visible(b) && workbench.slot_tool(Slot::LeftTop).is_none());
+        assert_eq!(workbench.tool_size(a), Some(333.));
+        assert_eq!(
+            workbench.dock_location(workbench.tool_tab(a).unwrap().0),
+            Some(DockLocation::Bottom)
+        );
+        // A hidden window moves without showing.
+        workbench.hide_tool(a);
+        workbench.place_tool(a, Slot::RightBottom);
+        assert!(!workbench.tool_visible(a));
+        assert_eq!(workbench.tool(a).unwrap().slot(), Slot::RightBottom);
+        assert!(!workbench.tool_visible(b));
+    }
+
+    #[test]
+    fn sizes_floor_and_each_window_remembers_its_own() {
+        let workbench = &mut Workbench::empty();
+        let a = fixed(workbench, "knot.a", Slot::LeftTop);
+        let b = fixed(workbench, "knot.b", Slot::LeftTop);
+        workbench.set_tool_size(a, 1.);
+        assert_eq!(workbench.tool_size(a), Some(DockLocation::MIN_SIZE));
+        workbench.set_tool_size(a, 600.);
+        workbench.set_tool_size(b, 150.);
+        workbench.show_tool(a);
+        assert_eq!(workbench.side_extent(DockLocation::Left), Some(600.));
+        workbench.show_tool(b);
+        assert_eq!(workbench.side_extent(DockLocation::Left), Some(150.));
+        workbench.set_side_extent(DockLocation::Left, 200.);
+        assert_eq!(
+            (workbench.tool_size(a), workbench.tool_size(b)),
+            (Some(600.), Some(200.))
+        );
+        assert_eq!(workbench.side_extent(DockLocation::Right), None);
+    }
+
+    #[test]
+    fn the_layout_record_restores_and_waits_for_late_tools() {
+        let mut source = Workbench::empty();
+        source.open_document_in_center(DocumentId::new(1));
+        let a = fixed(&mut source, "knot.a", Slot::LeftTop);
+        let b = fixed(&mut source, "knot.b", Slot::LeftTop);
+        let c = fixed(&mut source, "knot.c", Slot::BottomLeft);
+        source.show_tool(a);
+        source.show_tool(b);
+        source.place_tool(c, Slot::RightBottom);
+        source.show_tool(c);
+        source.set_tool_size(b, 280.);
+        source.remove_from_sidebar(a);
+        let snapshot = source.tool_layout_snapshot();
+        assert_eq!(snapshot.tool("knot.b").unwrap().size, 280.);
+        assert!(!snapshot.tool("knot.a").unwrap().sidebar);
+        let payload = serde_json::to_string(&snapshot).unwrap();
+        for forbidden in ["document", "presentation", "terminal"] {
             assert!(
-                workbench
-                    .relocate_tab(
-                        source,
-                        TabMoveDestination::At {
-                            anchor,
-                            placement: TabMovePlacement::End,
-                        },
-                    )
-                    .is_none()
+                !payload.contains(forbidden),
+                "tool record leaks {forbidden}"
             );
         }
+        let decoded: ToolLayoutSnapshot = serde_json::from_str(&payload).unwrap();
+        assert_eq!(decoded, snapshot);
+
+        // Tools registering one by one land as the record says, whatever the
+        // order; one the record does not name takes its default.
+        let workbench = &mut Workbench::empty();
+        for name in ["knot.c", "knot.b", "knot.a"] {
+            let id = fixed(workbench, name, Slot::LeftTop);
+            assert!(workbench.place_registered_tool(id, Some(&decoded), true));
+        }
+        assert_eq!(workbench.tool_layout_snapshot().tools.len(), 3);
+        for name in ["knot.a", "knot.b", "knot.c"] {
+            let id = workbench.tool_by_stable_id(name).unwrap();
+            let stored = decoded.tool(name).unwrap();
+            let tool = workbench.tool(id).unwrap();
+            assert_eq!(
+                (tool.slot(), tool.is_shown(), tool.on_sidebar(), tool.size()),
+                (stored.slot, stored.shown, stored.sidebar, stored.size),
+                "{name}"
+            );
+        }
+        let unknown = fixed(workbench, "knot.unknown", Slot::LeftBottom);
+        assert!(!workbench.place_registered_tool(unknown, Some(&decoded), true));
+        assert_eq!(workbench.slot_tool(Slot::LeftBottom), Some(unknown));
+        // A default does not displace a window that is already showing.
+        let late = fixed(workbench, "knot.late", Slot::LeftBottom);
+        assert!(!workbench.place_registered_tool(late, Some(&decoded), true));
+        assert_eq!(workbench.slot_tool(Slot::LeftBottom), Some(unknown));
+
+        // Restoring a whole record over a live workbench follows it.
+        workbench.show_tool(late);
+        workbench.restore_tool_layout(&decoded);
+        assert_eq!(workbench.slot_tool(Slot::LeftBottom), Some(late));
+        assert_eq!(
+            workbench.tool_layout_snapshot().tool("knot.b"),
+            decoded.tool("knot.b")
+        );
+    }
+
+    #[test]
+    fn unregistering_removes_the_window_and_moves_terminals_to_the_center() {
+        let workbench = &mut Workbench::new_for_document(DocumentId::new(1));
+        let fixed_tool = fixed(workbench, "knot.a", Slot::LeftTop);
+        let terminal =
+            workbench.register_tool("knot.t", "T", Slot::BottomLeft, ToolKind::Container);
+        workbench
+            .open_terminal_in_tool(terminal, TerminalSessionId(1))
+            .unwrap();
+        workbench.unregister_tool(terminal);
+        workbench.unregister_tool(fixed_tool);
+        assert!(workbench.tools().is_empty());
         assert!(
             workbench
-                .relocate_tab(
-                    doc,
-                    TabMoveDestination::Area(Area::Dock(DockLocation::Right))
-                )
+                .tabs()
+                .any(|tab| tab.surface_id() == TabSurfaceId::Terminal(TerminalSessionId(1)))
+        );
+        assert_eq!(workbench.panes().len(), 1);
+    }
+
+    #[test]
+    fn documents_and_fixed_tabs_stay_in_their_windows() {
+        let workbench = &mut Workbench::empty();
+        let (center, _) = workbench.open_document_in_center(DocumentId::new(2));
+        let a = fixed(workbench, "knot.a", Slot::LeftTop);
+        let b = fixed(workbench, "knot.b", Slot::RightTop);
+        let (a_pane, a_tab) = workbench.show_tool(a).unwrap();
+        assert_eq!(
+            workbench.open_tab_for_document(a_pane, DocumentId::new(2)),
+            None
+        );
+        // A document opened from a tool window goes to the center.
+        let (pane, _, _) = workbench
+            .open_preview_for_document(a_pane, DocumentId::new(3))
+            .unwrap();
+        assert_eq!(pane, center);
+        let tool = workbench.capture_tab_move(a_pane, a_tab).unwrap();
+        for target in [
+            TabMoveDestination::Area(Area::Center),
+            TabMoveDestination::Area(Area::Tool(b)),
+        ] {
+            assert!(workbench.relocate_tab(tool, target).is_none());
+        }
+        let doc_tab = workbench.pane(center).unwrap().active_tab_id();
+        let doc = workbench.capture_tab_move(center, doc_tab).unwrap();
+        assert!(
+            workbench
+                .relocate_tab(doc, TabMoveDestination::Area(Area::Tool(a)))
                 .is_none()
         );
-        // Tools never move to another window.
         let mut destination = Workbench::empty();
         assert!(
             workbench
                 .transfer_tab_to(&mut destination, tool, TabMoveDestination::Empty)
                 .is_none()
         );
-        assert!(destination.panes().is_empty());
-        assert!(workbench.contains_tab_move(tool));
-    }
-
-    #[test]
-    fn hidden_docks_keep_their_arrangement_and_move_focus_to_the_center() {
-        let workbench = &mut Workbench::empty();
-        let (center, _) = workbench.open_document_in_center(DocumentId::new(4));
-        let ids = ["knot.first", "knot.second", "knot.third"]
-            .map(|stable| workbench.register_tool(stable, stable, DockLocation::Right));
-        for id in ids {
-            workbench.show_tool(id);
-        }
-        let (dock, _) = workbench.show_tool(ids[1]).unwrap();
-        workbench.toggle_dock(DockLocation::Right);
-        assert!(!workbench.area_shown(Area::Dock(DockLocation::Right)));
-        assert_eq!(workbench.focused_pane_id(), Some(center));
-        assert!(workbench.tool_tab(ids[0]).is_some());
-        assert!(!workbench.tool_visible(ids[0]));
-        workbench.toggle_dock(DockLocation::Right);
-        assert_eq!(workbench.focused_pane_id(), Some(dock));
-        assert_eq!(tool_ids(workbench, dock), ids.map(TabSurfaceId::Tool));
-        assert_eq!(
-            workbench.pane(dock).unwrap().active_tab().surface_id(),
-            TabSurfaceId::Tool(ids[1])
-        );
-        // Showing a tool of a hidden dock shows the dock.
-        workbench.set_dock_visible(DockLocation::Right, false);
-        workbench.show_tool(ids[2]);
-        assert!(workbench.tool_visible(ids[0]));
-        assert_eq!(workbench.focused_pane_id(), Some(dock));
-
-        // An empty dock shows the hidden tools that return to it.
-        for id in ids.into_iter().rev() {
-            workbench.hide_tool(id);
-        }
-        assert_eq!(workbench.area_layout(Area::Dock(DockLocation::Right)), None);
-        workbench.toggle_dock(DockLocation::Right);
-        let dock = workbench.tool_tab(ids[0]).unwrap().0;
-        assert_eq!(tool_ids(workbench, dock), ids.map(TabSurfaceId::Tool));
-
-        // A shown dock without focus takes focus before it hides.
-        workbench.focus_pane(center);
-        workbench.toggle_dock(DockLocation::Right);
-        assert_eq!(workbench.focused_pane_id(), Some(dock));
-        assert!(workbench.area_shown(Area::Dock(DockLocation::Right)));
-        workbench.toggle_dock(DockLocation::Right);
-        assert_eq!(workbench.focused_pane_id(), Some(center));
-
-        // With no center, hiding the only dock leaves nothing focused.
-        workbench.toggle_dock(DockLocation::Right);
-        workbench.remove_document_tabs();
-        workbench.toggle_dock(DockLocation::Right);
-        assert_eq!(workbench.focused_pane_id(), None);
-        workbench.toggle_dock(DockLocation::Right);
-        assert_eq!(workbench.focused_pane_id(), Some(dock));
-    }
-
-    #[test]
-    fn toggling_a_tool_shows_focuses_then_hides_it_and_returns_to_the_center() {
-        let workbench = &mut Workbench::empty();
-        let (center, _) = workbench.open_document_in_center(DocumentId::new(6));
-        let [first, second] = ["knot.first", "knot.second"]
-            .map(|stable| workbench.register_tool(stable, stable, DockLocation::Left));
-        workbench.show_tool(first);
-        workbench.show_tool(second);
-        let (dock, _) = workbench.tool_tab(first).unwrap();
-        workbench.focus_pane(center);
-
-        // Visible but unfocused, behind another tab: it takes focus.
-        assert!(workbench.toggle_tool(first));
-        assert_eq!(workbench.focused_pane_id(), Some(dock));
-        assert_eq!(
-            workbench.pane(dock).unwrap().active_tab().surface_id(),
-            TabSurfaceId::Tool(first)
-        );
-        // Focused: it hides, and focus returns to the center although its
-        // pane survives with the other tool.
-        assert!(!workbench.toggle_tool(first));
-        assert!(workbench.tool_tab(first).is_none());
-        assert_eq!(workbench.focused_pane_id(), Some(center));
-        // Hidden: it returns to its pane and position, focused, replacing
-        // the tool there.
-        assert!(workbench.toggle_tool(first));
-        assert_eq!(tool_ids(workbench, dock), [TabSurfaceId::Tool(first)]);
-        assert_eq!(workbench.focused_pane_id(), Some(dock));
-        // A tool of a hidden dock shows the dock.
-        workbench.toggle_dock(DockLocation::Left);
-        assert!(!workbench.tool_visible(first));
-        assert!(workbench.toggle_tool(second));
-        assert!(workbench.tool_visible(second) && !workbench.tool_visible(first));
-        assert_eq!(workbench.focused_pane_id(), Some(dock));
-
-        // With an empty center, hiding a focused tool leaves nothing focused.
-        workbench.remove_document_tabs();
-        workbench.toggle_tool(second);
-        assert_eq!(workbench.focused_pane_id(), None);
-    }
-
-    #[test]
-    fn dock_sizes_floor_and_survive_hide_reopen() {
-        let workbench = &mut Workbench::empty();
-        let id = explorer(workbench);
-        workbench.show_tool(id).unwrap();
-        workbench.set_dock_size(DockLocation::Left, 1.);
-        assert_eq!(
-            workbench.dock_size(DockLocation::Left),
-            DockLocation::MIN_SIZE
-        );
-        // No upper cap: a dock drags out to the window edge.
-        workbench.set_dock_size(DockLocation::Left, 600.);
-        assert_eq!(workbench.dock_size(DockLocation::Left), 600.);
-        workbench.set_dock_size(DockLocation::Bottom, 133.);
-        workbench.place_tool(id, DockLocation::Bottom);
-        assert_eq!(workbench.dock_size(DockLocation::Bottom), 133.);
-        assert!(workbench.hide_tool(id));
-        workbench.set_dock_size(DockLocation::Bottom, 200.);
-        let (pane, _) = workbench.show_tool(id).unwrap();
-        assert_eq!(workbench.dock_location(pane), Some(DockLocation::Bottom));
-        assert_eq!(workbench.dock_size(DockLocation::Bottom), 200.);
-    }
-
-    #[test]
-    fn tool_snapshots_record_dock_trees_and_hidden_docks_only() {
-        let workbench = &mut Workbench::empty();
-        let (center, _) = workbench.open_document_in_center(DocumentId::new(5));
-        workbench.open_terminal_tab(center, TerminalSessionId(7));
-        let id = explorer(workbench);
-        let other = workbench.register_tool("knot.other", "Other", DockLocation::Left);
-        let hidden = workbench.register_tool("knot.hidden", "Hidden", DockLocation::Bottom);
-        workbench.show_tool(id).unwrap();
-        workbench.show_tool(other).unwrap();
-        let (dock, tab) = workbench.tool_tab(other).unwrap();
-        let source = workbench.capture_tab_move(dock, tab).unwrap();
-        workbench.relocate_tab(
-            source,
-            TabMoveDestination::At {
-                anchor: source,
-                placement: TabMovePlacement::Split(SplitEdge::Bottom),
-            },
-        );
-        workbench.set_dock_size(DockLocation::Left, 311.);
-        workbench.set_dock_visible(DockLocation::Left, false);
-        let snapshot = workbench.tool_layout_snapshot();
-        let pane = |tool: &str| StoredNode::Pane {
-            selected: 0,
-            tools: vec![tool.to_owned()],
-        };
-        assert_eq!(
-            snapshot.docks[0],
-            StoredDock {
-                size: 311.,
-                visible: false,
-                root: Some(StoredNode::Split {
-                    direction: SplitDirection::Vertical,
-                    ratio: 0.5,
-                    first: Box::new(pane(LEFT_TOOL_ID)),
-                    second: Box::new(pane("knot.other")),
-                }),
-            }
-        );
-        assert_eq!(snapshot.docks[2].root, None);
-        assert_eq!(
-            snapshot.hidden,
-            [HiddenTool {
-                id: "knot.hidden".into(),
-                dock: DockLocation::Bottom,
-                index: usize::MAX,
-            }]
-        );
-        assert_eq!(
-            snapshot.placement("knot.other"),
-            Some(StoredPlacement::Docked(DockLocation::Left))
-        );
-        assert_eq!(snapshot.placement("gone"), None);
-        let payload = serde_json::to_string(&snapshot).unwrap();
-        for forbidden in ["document", "presentation"] {
-            assert!(
-                !payload.contains(forbidden),
-                "tool record leaks {forbidden}"
-            );
-        }
-        assert_eq!(payload.matches("terminal").count(), 1, "only the home");
-        let decoded: ToolLayoutSnapshot = serde_json::from_str(&payload).unwrap();
-        assert_eq!(decoded, snapshot);
-        assert!(workbench.tool(hidden).is_some());
-    }
-
-    #[test]
-    fn tools_attaching_one_by_one_rebuild_the_stored_dock() {
-        let mut source = Workbench::empty();
-        let ids = ["knot.first", "knot.second", "knot.third"]
-            .map(|stable| source.register_tool(stable, stable, DockLocation::Bottom));
-        for id in ids {
-            source.show_tool(id);
-        }
-        let (dock, tab) = source.tool_tab(ids[2]).unwrap();
-        let moved = source.capture_tab_move(dock, tab).unwrap();
-        source.relocate_tab(
-            moved,
-            TabMoveDestination::At {
-                anchor: moved,
-                placement: TabMovePlacement::Split(SplitEdge::Right),
-            },
-        );
-        let (dock, tab) = source.tool_tab(ids[0]).unwrap();
-        source.activate_tab(dock, tab);
-        let snapshot = source.tool_layout_snapshot();
-
-        let workbench = &mut Workbench::empty();
-        for stable in ["knot.third", "knot.second", "knot.first"] {
-            let id = workbench.register_tool(stable, stable, DockLocation::Left);
-            assert!(workbench.restore_stored_tool(id, &snapshot));
-        }
-        assert_eq!(
-            workbench.tool_layout_snapshot().docks,
-            snapshot.docks,
-            "attaching in any order rebuilds the stored tree and selection"
-        );
-
-        // A dock the user changed is joined instead of rebuilt.
-        let workbench = &mut Workbench::empty();
-        let first = workbench.register_tool("knot.first", "First", DockLocation::Left);
-        workbench.restore_stored_tool(first, &snapshot);
-        workbench.place_tool(first, DockLocation::Right);
-        let second = workbench.register_tool("knot.second", "Second", DockLocation::Left);
-        assert!(workbench.restore_stored_tool(second, &snapshot));
-        let bottom = workbench.tool_tab(second).unwrap().0;
-        assert_eq!(workbench.dock_location(bottom), Some(DockLocation::Bottom));
-        assert_eq!(tool_ids(workbench, bottom), [TabSurfaceId::Tool(second)]);
-        let unknown = workbench.register_tool("knot.unknown", "Unknown", DockLocation::Left);
-        assert!(!workbench.restore_stored_tool(unknown, &snapshot));
     }
 }

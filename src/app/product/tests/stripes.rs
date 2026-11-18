@@ -1,11 +1,13 @@
-//! The tool stripes: buttons by home, toggling by click, and rehoming by drag.
+//! The tool stripes: buttons by slot, showing and hiding by click, moving by
+//! drag, and the sidebar menus.
 use super::operations::empty_product_window;
 use super::*;
 use crate::app::product::Focus;
-use crate::app::workbench::DockLocation;
+use crate::app::workbench::{DockLocation, Slot};
 use gpui::{Modifiers, MouseButton, VisualTestContext, point, px};
 
 const EXPLORER_BUTTON: &str = "stripe-button-test.tool";
+const TERMINAL_BUTTON: &str = "stripe-button-knot.terminal";
 
 fn explorer_shown(window: &Entity<KnotWindow>, cx: &TestAppContext) -> bool {
     cx.read(|cx| {
@@ -25,7 +27,7 @@ fn click(native_window: gpui::AnyWindowHandle, selector: &'static str, cx: &mut 
 }
 
 #[gpui::test]
-fn stripes_list_tools_by_home_toggle_on_click_and_rehome_by_drag(cx: &mut TestAppContext) {
+fn stripes_group_tools_by_slot_toggle_on_click_and_move_by_drag(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
     cx.set_global(ApplicationFileSystems(memory_filesystems()));
     let (window, native_window) = empty_product_window(&documents, cx);
@@ -33,37 +35,41 @@ fn stripes_list_tools_by_home_toggle_on_click_and_rehome_by_drag(cx: &mut TestAp
     cx.run_until_parked();
     assert!(explorer_shown(&window, cx));
 
-    // The explorer's button sits in the left stripe, and the terminal's in
-    // its lower end, the terminal home being the bottom dock.
+    // The explorer's button sits in the left stripe's top group, and the
+    // Terminal window's in its lower end.
     let mut visual = VisualTestContext::from_window(native_window, cx);
     let left = visual.debug_bounds("stripe-left").unwrap();
     let explorer = visual.debug_bounds(EXPLORER_BUTTON).unwrap();
-    let terminal = visual.debug_bounds("stripe-button-terminal").unwrap();
+    let terminal = visual.debug_bounds(TERMINAL_BUTTON).unwrap();
     assert!(left.contains(&explorer.center()));
     assert!(left.contains(&terminal.center()));
     assert!(terminal.top() > explorer.bottom());
     drop(visual);
 
-    // A click toggles: the focused explorer hides, then shows again.
+    // A click on a visible tool window hides it, and on a hidden one shows it.
     click(native_window, EXPLORER_BUTTON, cx);
     assert!(!explorer_shown(&window, cx));
     click(native_window, EXPLORER_BUTTON, cx);
     assert!(explorer_shown(&window, cx));
 
-    // The terminal button opens a dock terminal in its home, then hides it.
-    click(native_window, "stripe-button-terminal", cx);
-    cx.read(|cx| {
-        let workbench = window.read(cx).workbench.read(cx);
-        assert!(workbench.dock_terminals_visible());
-        assert!(workbench.dock_visible(DockLocation::Bottom));
-    });
-    click(native_window, "stripe-button-terminal", cx);
-    cx.read(|cx| {
-        assert!(!window.read(cx).workbench.read(cx).dock_terminals_visible());
-    });
+    // The Terminal button opens a terminal in its window, then hides it,
+    // keeping the terminal.
+    let terminal_state = |cx: &TestAppContext| {
+        cx.read(|cx| {
+            let workbench = window.read(cx).workbench.read(cx);
+            let tool = workbench
+                .tool_by_stable_id(crate::app::terminal::TERMINAL_TOOL_ID)
+                .unwrap();
+            (workbench.tool_visible(tool), workbench.tool_is_empty(tool))
+        })
+    };
+    assert_eq!(terminal_state(cx), (false, true));
+    click(native_window, TERMINAL_BUTTON, cx);
+    assert_eq!(terminal_state(cx), (true, false));
+    click(native_window, TERMINAL_BUTTON, cx);
+    assert_eq!(terminal_state(cx), (false, false));
 
-    // Dragging the explorer's button to the right stripe moves the tool and
-    // rehomes it.
+    // Dragging the explorer's button to the right stripe moves its window.
     let mut visual = VisualTestContext::from_window(native_window, cx);
     let from = visual.debug_bounds(EXPLORER_BUTTON).unwrap().center();
     assert!(visual.debug_bounds("stripe-right").is_none());
@@ -74,7 +80,12 @@ fn stripes_list_tools_by_home_toggle_on_click_and_rehome_by_drag(cx: &mut TestAp
         Modifiers::default(),
     );
     // The empty right stripe appears while a button is dragged.
-    let to = visual.debug_bounds("stripe-group-1").unwrap().center();
+    let to = visual
+        .debug_bounds(Box::leak(
+            format!("stripe-group-{}", Slot::RightTop.index()).into_boxed_str(),
+        ))
+        .unwrap()
+        .center();
     visual.simulate_mouse_move(to, MouseButton::Left, Modifiers::default());
     visual.simulate_mouse_up(to, MouseButton::Left, Modifiers::default());
     visual.run_until_parked();
@@ -84,7 +95,8 @@ fn stripes_list_tools_by_home_toggle_on_click_and_rehome_by_drag(cx: &mut TestAp
         let explorer = workbench
             .tool_by_stable_id(crate::app::product::tools::TEST_TOOL_ID)
             .unwrap();
-        assert_eq!(workbench.tool_home(explorer), Some(DockLocation::Right));
+        assert_eq!(workbench.tool(explorer).unwrap().slot(), Slot::RightTop);
+        assert!(workbench.tool_visible(explorer));
         let (pane, _) = workbench.tool_tab(explorer).unwrap();
         assert_eq!(workbench.dock_location(pane), Some(DockLocation::Right));
     });
@@ -93,13 +105,14 @@ fn stripes_list_tools_by_home_toggle_on_click_and_rehome_by_drag(cx: &mut TestAp
     let explorer = visual.debug_bounds(EXPLORER_BUTTON).unwrap();
     assert!(right.contains(&explorer.center()));
 
-    // Dragging the terminal button to the left stripe moves the dock
-    // terminals there and makes it their home.
-    let from = visual
-        .debug_bounds("stripe-button-terminal")
+    // Dragging the Terminal button to the left top group moves its window.
+    let from = visual.debug_bounds(TERMINAL_BUTTON).unwrap().center();
+    let to = visual
+        .debug_bounds(Box::leak(
+            format!("stripe-group-{}", Slot::LeftTop.index()).into_boxed_str(),
+        ))
         .unwrap()
         .center();
-    let to = visual.debug_bounds("stripe-group-0").unwrap().center();
     visual.simulate_mouse_down(from, MouseButton::Left, Modifiers::default());
     visual.simulate_mouse_move(
         from + point(px(0.), px(12.)),
@@ -112,14 +125,10 @@ fn stripes_list_tools_by_home_toggle_on_click_and_rehome_by_drag(cx: &mut TestAp
     drop(visual);
     cx.read(|cx| {
         let workbench = window.read(cx).workbench.read(cx);
-        assert_eq!(workbench.terminal_home(), DockLocation::Left);
-        assert!(
-            workbench
-                .dock_terminal_tabs_outside(DockLocation::Left)
-                .is_empty()
-        );
-        let (pane, _) = workbench.recent_dock_terminal().unwrap();
-        assert_eq!(workbench.dock_location(pane), Some(DockLocation::Left));
+        let terminal = workbench
+            .tool_by_stable_id(crate::app::terminal::TERMINAL_TOOL_ID)
+            .unwrap();
+        assert_eq!(workbench.tool(terminal).unwrap().slot(), Slot::LeftTop);
     });
 }
 
@@ -138,7 +147,7 @@ fn the_tool_stripes_setting_hides_both_stripes(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn a_stripe_click_replaces_the_tool_in_its_pane_and_the_menu_shows_one_beside(
+fn a_stripe_click_replaces_the_window_in_its_slot_and_the_menu_removes_it_from_the_sidebar(
     cx: &mut TestAppContext,
 ) {
     use knot_protocol::{ExtensionId, ExtensionKey, ExtensionLifecycleId};
@@ -156,7 +165,7 @@ await workbench.registerView({
   id: "example.notes",
   title: "Notes",
   content: { kind: "tree", provider: { getChildren: () => [] } },
-  placement: { location: "left", visible: false },
+  placement: { location: "leftTop", visible: false },
 });
 "#,
             )
@@ -187,14 +196,14 @@ await workbench.registerView({
     };
     assert_eq!(shown(cx), [true, false]);
 
-    // Clicking the other tool's button replaces the explorer in its pane.
+    // Clicking the other window's button replaces the explorer in its slot,
+    // which keeps its tab.
     click(native_window, "stripe-button-example.notes", cx);
     assert_eq!(shown(cx), [false, true]);
     click(native_window, EXPLORER_BUTTON, cx);
     assert_eq!(shown(cx), [true, false]);
 
-    // The button's menu opens on a right click; its Show Beside action puts
-    // the tool in a pane of its own next to the explorer's.
+    // The button's menu opens on a right click and takes focus.
     let mut visual = VisualTestContext::from_window(native_window, cx);
     let at = visual
         .debug_bounds("stripe-button-example.notes")
@@ -207,19 +216,30 @@ await workbench.registerView({
         assert_eq!(window.focus, Focus::Popup);
     });
     drop(visual);
-    window.update(cx, |window, cx| {
-        window.show_tool_beside("example.notes", cx);
+
+    // Removing a window from the sidebar hides it and its button; the More
+    // tool windows button lists it, and picking it shows the window and
+    // returns its button.
+    let notes = cx.read(|cx| {
+        window
+            .read(cx)
+            .workbench
+            .read(cx)
+            .tool_by_stable_id("example.notes")
+            .unwrap()
     });
-    assert_eq!(shown(cx), [true, true]);
-    cx.read(|cx| {
-        let workbench = window.read(cx).workbench.read(cx);
-        let [first, second] =
-            [crate::app::product::tools::TEST_TOOL_ID, "example.notes"].map(|id| {
-                workbench
-                    .tool_tab(workbench.tool_by_stable_id(id).unwrap())
-                    .unwrap()
-                    .0
-            });
-        assert_ne!(first, second);
-    });
+    window.update(cx, |window, cx| window.remove_tool_from_sidebar(notes, cx));
+    cx.run_until_parked();
+    let mut visual = VisualTestContext::from_window(native_window, cx);
+    assert!(visual.debug_bounds("stripe-button-example.notes").is_none());
+    assert!(visual.debug_bounds("stripe-more").is_some());
+    drop(visual);
+    click(native_window, "stripe-more", cx);
+    window.read_with(cx, |window, _| assert!(window.stripe_menu.is_some()));
+    window.update(cx, |window, cx| window.restore_tool_to_sidebar(notes, cx));
+    cx.run_until_parked();
+    assert_eq!(shown(cx), [false, true]);
+    let mut visual = VisualTestContext::from_window(native_window, cx);
+    assert!(visual.debug_bounds("stripe-button-example.notes").is_some());
+    assert!(visual.debug_bounds("stripe-more").is_none());
 }

@@ -98,7 +98,7 @@ if (listed.map((language) => language.id).join() !== "edited,python,rust"
 }
 await workbench.registerView({
   id: "lang.log", title: "Log", content: { kind: "text" }, language: "rust",
-  placement: { location: "bottom" },
+  placement: { location: "bottomLeft" },
 });
 await commands.register("lang.set", async ({ buffer, arguments: language }) => {
   const document = (await documents.list()).find((candidate) => candidate.buffer === buffer);

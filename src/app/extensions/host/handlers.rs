@@ -1235,7 +1235,7 @@ pub(crate) struct TreeArguments {
     pub title: String,
     pub content: ViewContentKind,
     pub actions: Vec<TreeAction>,
-    pub location: crate::app::workbench::DockLocation,
+    pub location: crate::app::workbench::Slot,
     pub order: Option<u64>,
     pub visible: bool,
     pub language: Option<String>,
@@ -1245,9 +1245,12 @@ pub(crate) struct TreeArguments {
 impl HostArguments for TreeArguments {
     fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
         let location = match reader.text(4, "view placement must be text")?.as_str() {
-            "left" => crate::app::workbench::DockLocation::Left,
-            "right" => crate::app::workbench::DockLocation::Right,
-            "bottom" => crate::app::workbench::DockLocation::Bottom,
+            "leftTop" => crate::app::workbench::Slot::LeftTop,
+            "leftBottom" => crate::app::workbench::Slot::LeftBottom,
+            "rightTop" => crate::app::workbench::Slot::RightTop,
+            "rightBottom" => crate::app::workbench::Slot::RightBottom,
+            "bottomLeft" => crate::app::workbench::Slot::BottomLeft,
+            "bottomRight" => crate::app::workbench::Slot::BottomRight,
             _ => return Err(DecodeError::Type("invalid view placement")),
         };
         let content = match reader.text(7, "view content kind must be text")?.as_str() {

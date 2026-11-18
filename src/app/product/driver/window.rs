@@ -430,13 +430,28 @@ impl TestWindow {
         cx.run_until_parked();
     }
 
+    /// Move the tool window `stable_id` to `slot` (such as `rightTop`), as a
+    /// drag of its stripe button does.
+    pub fn move_tool(&self, stable_id: &str, slot: &str, cx: &mut TestAppContext) {
+        let slot = serde_json::from_value(serde_json::json!(slot)).expect("a slot name");
+        self.window.update(cx, |window, cx| {
+            let tool = window
+                .workbench
+                .read(cx)
+                .tool_by_stable_id(stable_id)
+                .expect("a registered tool window");
+            window.move_tool_to_slot(tool, slot, cx);
+        });
+        cx.run_until_parked();
+    }
+
     /// Size the dock `dock`, `left`, `right`, or `bottom`, to `size`.
     pub fn set_dock_size(&self, dock: &str, size: f32, cx: &mut TestAppContext) {
         let location = dock_location(dock);
         self.window.update(cx, |window, cx| {
             window
                 .workbench
-                .update(cx, |workbench, _| workbench.set_dock_size(location, size));
+                .update(cx, |workbench, _| workbench.set_side_extent(location, size));
         });
         cx.run_until_parked();
     }
@@ -688,16 +703,20 @@ impl TestTree {
     ) -> Option<(crate::app::workbench::PaneId, crate::app::workbench::TabId)> {
         let focus = self.tree.read(cx).focus_handle(cx);
         let workbench = self.window.read(cx).workbench.read(cx);
-        workbench.panes().iter().find_map(|pane| {
-            pane.tabs()
-                .iter()
-                .find(|tab| {
-                    workbench
-                        .command_view(tab)
-                        .is_some_and(|view| view.focus_handle(cx) == focus)
-                })
-                .map(|tab| (pane.id(), tab.id()))
-        })
+        workbench
+            .panes()
+            .iter()
+            .filter(|pane| workbench.area_shown(pane.area()))
+            .find_map(|pane| {
+                pane.tabs()
+                    .iter()
+                    .find(|tab| {
+                        workbench
+                            .command_view(tab)
+                            .is_some_and(|view| view.focus_handle(cx) == focus)
+                    })
+                    .map(|tab| (pane.id(), tab.id()))
+            })
     }
 
     fn activate_tab(&self, cx: &mut TestAppContext) {

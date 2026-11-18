@@ -223,9 +223,10 @@ fn dock_and_main(
 ) -> (crate::app::workbench::PaneId, crate::app::workbench::PaneId) {
     cx.read(|cx| {
         let workbench = window.read(cx).workbench.read(cx);
-        let dock = workbench.area_panes(crate::app::workbench::Area::Dock(
-            crate::app::workbench::DockLocation::Left,
-        ))[0];
+        let tool = workbench
+            .tool_by_stable_id(crate::app::product::tools::TEST_TOOL_ID)
+            .unwrap();
+        let dock = workbench.area_panes(crate::app::workbench::Area::Tool(tool))[0];
         (dock, workbench.center_pane().unwrap())
     })
 }
@@ -376,7 +377,7 @@ fn pane_cycling_stays_in_the_focused_area(cx: &mut TestAppContext) {
 #[gpui::test]
 fn a_full_width_bottom_dock_runs_under_the_side_docks(cx: &mut TestAppContext) {
     use crate::app::commands::dispatch::FOCUS_PANE_DOWN_COMMAND;
-    use crate::app::workbench::{DockLocation, ToolContent};
+    use crate::app::workbench::ToolContent;
     let (window, native_window) = docked_window(cx);
     let (dock, _) = dock_and_main(&window, cx);
     let bottom = window.update(cx, |window, cx| {
@@ -386,7 +387,7 @@ fn a_full_width_bottom_dock_runs_under_the_side_docks(cx: &mut TestAppContext) {
                 "test.bottom",
                 "Bottom",
                 ToolContent::Extension(crate::app::workbench::ExtensionView::Tree(tree)),
-                DockLocation::Bottom,
+                crate::app::workbench::Slot::BottomLeft,
             );
             workbench.show_tool(id).unwrap().0
         });

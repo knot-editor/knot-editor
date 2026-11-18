@@ -19,7 +19,7 @@ use crate::app::extensions::host::handlers::{
     AccessError, ReplaceViewTextArguments, TreeArguments, TreeInvalidationArguments,
     TreeRegistrationArguments, TreeRevealArguments,
 };
-use crate::app::workbench::DockLocation;
+use crate::app::workbench::Slot;
 use knot_protocol::declarations::HostError;
 
 use crate::app::{
@@ -74,7 +74,7 @@ pub(crate) struct ViewDefinition {
     pub(crate) title: String,
     pub(crate) content: ViewContentKind,
     pub(crate) actions: Vec<TreeAction>,
-    pub(crate) location: DockLocation,
+    pub(crate) location: Slot,
     pub(crate) order: usize,
     pub(crate) visible: bool,
 }
@@ -576,7 +576,7 @@ mod tests {
             title: "Outline".into(),
             content: ViewContentKind::Tree,
             actions: Vec::new(),
-            location: DockLocation::Left,
+            location: Slot::LeftTop,
             order: None,
             visible: true,
             language: None,
@@ -590,7 +590,7 @@ mod tests {
             title: "Log".into(),
             content: ViewContentKind::Text,
             actions: Vec::new(),
-            location: DockLocation::Bottom,
+            location: Slot::BottomLeft,
             order: None,
             visible: true,
             language: None,

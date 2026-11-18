@@ -1377,14 +1377,18 @@ export async function registerView(contribution) {
     }
     gutter = value.gutter;
   }
-  let location = "left";
+  let location = "leftTop";
   let order = null;
   let visible = true;
   if (value.placement !== undefined) {
     const placement = record(value.placement, "view placement must be an object");
     if (placement.location !== undefined) {
       location = string(placement.location, "view placement location must be text");
-      if (!["left", "right", "bottom", "document"].includes(location)) {
+      if (
+        !["leftTop", "leftBottom", "rightTop", "rightBottom", "bottomLeft", "bottomRight"].includes(
+          location,
+        )
+      ) {
         throw new TypeError("view placement location is invalid");
       }
     }

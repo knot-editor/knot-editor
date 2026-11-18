@@ -28,7 +28,7 @@ fn a_docked_tool_opens_resources_beside_it_and_has_a_nontext_snapshot(cx: &mut T
             tab.document_id()
                 .is_some_and(|id| documents.read(cx).get(id).unwrap().resource_uri() == Some(&uri))
         }));
-        let id = workbench.tools()[0].id;
+        let id = id_of(workbench);
         assert_eq!(
             workbench.dock_location(workbench.tool_tab(id).unwrap().0),
             Some(DockLocation::Left)
@@ -61,8 +61,14 @@ fn a_docked_tool_opens_resources_beside_it_and_has_a_nontext_snapshot(cx: &mut T
         assert_eq!(state.current_target, Some(tool.target.clone()));
     })
     .unwrap();
-    place_explorer(&window, native_window, DockLocation::Bottom, cx);
-    cx.read(|cx| assert_eq!(target.validate_tab(cx), Err(CommandOutcome::InvalidTarget)));
+    place_explorer(
+        &window,
+        native_window,
+        crate::app::workbench::Slot::BottomLeft,
+        cx,
+    );
+    // Moving a tool window leaves its tab and presentation as they were.
+    cx.read(|cx| assert!(target.validate_tab(cx).is_ok()));
     let close = dispatch_product_command(&window, native_window, CLOSE_TAB_COMMAND, cx);
     assert_eq!(wait_for_command(close, cx), CommandOutcome::Completed);
     assert!(!cx.has_pending_prompt());
@@ -82,7 +88,9 @@ fn a_docked_tool_opens_resources_beside_it_and_has_a_nontext_snapshot(cx: &mut T
 }
 
 fn id_of(workbench: &Workbench) -> crate::app::workbench::ToolFrameId {
-    workbench.tools()[0].id
+    workbench
+        .tool_by_stable_id(crate::app::product::tools::TEST_TOOL_ID)
+        .unwrap()
 }
 
 #[gpui::test]
@@ -135,13 +143,8 @@ fn last_document_closure_leaves_tool_only_window_and_hidden_definitions_survive_
         assert_eq!(&window.read(cx).workbench, &workbench);
         assert_eq!(documents.read(cx).documents().count(), 0);
         assert_eq!(workbench.read(cx).center(), None);
-        assert_eq!(workbench.read(cx).tools().len(), 1);
-        assert!(
-            workbench
-                .read(cx)
-                .tool_tab(id_of(workbench.read(cx)))
-                .is_none()
-        );
+        assert_eq!(workbench.read(cx).tools().len(), 2);
+        assert!(!workbench.read(cx).tool_visible(id_of(workbench.read(cx))));
     });
 }
 
@@ -154,11 +157,11 @@ fn workspace_refresh_does_not_reopen_or_reposition_tool(cx: &mut TestAppContext)
         window.ensure_test_tool(false, cx);
         let id = id_of(window.workbench.read(cx));
         window.workbench.update(cx, |workbench, _| {
-            workbench.place_tool(id, DockLocation::Bottom);
+            workbench.place_tool(id, crate::app::workbench::Slot::BottomLeft);
             workbench.hide_tool(id);
         });
         window.install_workspace(ResourceUri::parse("mem://product/src").unwrap(), cx);
-        assert!(window.workbench.read(cx).tool_tab(id).is_none());
+        assert!(!window.workbench.read(cx).tool_visible(id));
         window.workbench.update(cx, |workbench, _| {
             let (pane, _) = workbench.show_tool(id).unwrap();
             assert_eq!(workbench.dock_location(pane), Some(DockLocation::Bottom));
@@ -180,7 +183,12 @@ async fn tools_do_not_bypass_dirty_document_or_terminal_protection(cx: &mut Test
     assert!(cx.has_pending_prompt());
     cx.simulate_prompt_answer("Cancel");
     assert_eq!(close.completion.await.unwrap(), CommandOutcome::Cancelled);
-    place_explorer(&window, native_window, DockLocation::Bottom, cx);
+    place_explorer(
+        &window,
+        native_window,
+        crate::app::workbench::Slot::BottomLeft,
+        cx,
+    );
     let close_tool = dispatch_product_command(&window, native_window, CLOSE_TAB_COMMAND, cx);
     assert_eq!(wait_for_command(close_tool, cx), CommandOutcome::Completed);
     assert!(!cx.has_pending_prompt());
@@ -250,18 +258,20 @@ fn docked_tools_have_visible_geometry(cx: &mut TestAppContext) {
         let documents = install_globals(cx);
         cx.set_global(ApplicationFileSystems(memory_filesystems()));
         let (window, native_window) = empty_product_window(&documents, cx);
-        window.update(cx, |window, cx| {
+        let pane = window.update(cx, |window, cx| {
             window.ensure_test_tool(false, cx);
             let id = window.test_tool_frame(cx).unwrap();
-            window.workbench.update(cx, |workbench, _| {
-                assert!(workbench.place_tool(id, dock));
-                assert_eq!(workbench.tool_tab(id).unwrap().0.value(), 3);
+            let pane = window.workbench.update(cx, |workbench, _| {
+                assert!(workbench.place_tool(id, dock.slot(true)));
+                workbench.tool_tab(id).unwrap().0.value()
             });
             cx.notify();
+            pane
         });
         cx.run_until_parked();
+        let pane_selector: &'static str = Box::leak(format!("pane-{pane}").into_boxed_str());
         let mut visual = VisualTestContext::from_window(native_window, cx);
-        let explorer = visual.debug_bounds("pane-3").unwrap();
+        let explorer = visual.debug_bounds(pane_selector).unwrap();
         let editor = visual.debug_bounds("pane-1").unwrap();
         // A dock's size includes its card border on both sides.
         let border = 2. * crate::app::theme::Chrome::default().card_border;
@@ -275,7 +285,8 @@ fn docked_tools_have_visible_geometry(cx: &mut TestAppContext) {
                 assert!(explorer.size.height > px(100.));
             }
             DockLocation::Bottom => {
-                assert_eq!(explorer.size.height, px(220. - border), "{explorer:?}");
+                // The window keeps the size it had on the left.
+                assert_eq!(explorer.size.height, px(240. - border), "{explorer:?}");
                 assert!(explorer.size.width > px(100.));
             }
         }
@@ -297,7 +308,7 @@ fn docked_tools_have_visible_geometry(cx: &mut TestAppContext) {
             cx.notify();
         });
         visual.run_until_parked();
-        let reopened = visual.debug_bounds("pane-4").unwrap();
+        let reopened = visual.debug_bounds(pane_selector).unwrap();
         assert_eq!(reopened.size, explorer.size);
     }
 }

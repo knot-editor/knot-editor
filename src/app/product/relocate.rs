@@ -95,20 +95,7 @@ impl KnotWindow {
             let Some(moved) = moved else {
                 return CommandOutcome::InvalidTarget;
             };
-            // A tool's home is the dock it is in; a terminal moved into a
-            // dock makes that dock the terminal home.
-            let mut rehomed = matches!(source.tab.tab.surface, TabSurfaceId::Tool(_));
-            if matches!(source.tab.tab.surface, TabSurfaceId::Terminal(_)) {
-                self.workbench.update(cx, |workbench, _| {
-                    if let Some(dock) = workbench.dock_location(moved.destination.pane_id) {
-                        workbench.set_terminal_home(dock);
-                        rehomed = true;
-                    }
-                });
-            }
-            if rehomed {
-                self.publish_tool_layout(cx);
-            }
+            let _ = moved;
             self.focus_relocated_surface(cx);
             cx.notify();
             return CommandOutcome::Completed;

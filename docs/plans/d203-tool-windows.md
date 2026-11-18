@@ -131,24 +131,43 @@ after this lands, not before.
 
 ### 1. Slots and tool windows
 
+Status: ✅ implemented, 🚧 awaiting the review gate.
+
 Deliverables:
-- Docks become six slots of tool windows, each owning a split tree, with the
+- ✅ Docks become six slots of tool windows, each owning a split tree, with the
   title, actions, ⋮ menu, and hide in the header and double-click to
   maximize. Existing tools are fixed tool windows.
-- Stripes are grouped by slot. A click on a hidden window shows it, replacing
+- ✅ Stripes are grouped by slot. A click on a hidden window shows it, replacing
   the one in its slot, and a click on a visible one hides it. Drag and Move to
   move a window between slots. Remove from Sidebar and the ⋯ button work,
   and picking from ⋯ restores the button. Show Beside goes away.
-- Per-tool-window sizes and side shares, and the side extent rule.
-- Native code registers the Terminal container window for now, with the
+- ✅ Per-tool-window sizes and side shares, and the side extent rule.
+- ✅ Native code registers the Terminal container window for now, with the
   placement rules above, shell-name labels, and New Terminal opening into it.
   Closing or moving out its last tab hides it.
   The terminal stripe button, terminal home dock, and dock-terminal recency go
   away.
-- Relocation, directional focus, maximize, resize (side size and slot ratio),
+- ✅ Relocation, directional focus, maximize, resize (side size and slot ratio),
   closure, Reset Layout, window layouts, and the tool-layout record follow the
   new model. `placement.location`, `WindowLayout`, and `LayoutDock` change
   as above, and bundled packages use the default slots above.
+
+Scope decisions while implementing:
+- A tool window keeps its size when moved to another slot, as each window
+  remembers its own; it does not take the new side's default.
+- The left/right/bottom dock toggles and Move Tab to Center stay until
+  checkpoint 3; the dock toggles act on a side (focus a shown window, hide
+  the side, or show the windows it showed last). The three Move Tab to
+  Left/Right/Bottom Dock commands are already gone, since tool tabs never move.
+- A terminal tab is allowed in the center and any container; with one
+  container it needs no recorded home, which waits for a second container.
+- A window layout records the center and each tool window; a fixed window
+  records no tabs, so focus on a fixed tool window is not restored. Layout
+  entries of a container that has not registered yet wait for it in
+  checkpoint 2, when JavaScript registers containers; the native Terminal
+  window registers with the window.
+- Rename Session and persisted names belong to checkpoint 3; the label is the
+  shell name with the lowest free ` (N)` suffix, kept on the session.
 
 Validation: model tests for slot transitions, replacement, hidden tool windows
 keeping their tabs, stripe click show/hide, sizes, sidebar removal, placement

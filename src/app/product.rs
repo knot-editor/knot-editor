@@ -94,8 +94,8 @@ use super::{
     },
     workbench::{
         Area, CloseRequestOutcome, DockLocation, DocumentCloseDisposition, PaneId, SplitDirection,
-        SplitPlacement, TabId, TabSurfaceId, TerminalSessionId, ToolContent, Workbench,
-        WorkbenchLayout,
+        SplitPlacement, TabId, TabSurfaceId, TerminalSessionId, ToolContent, ToolFrameId,
+        Workbench, WorkbenchLayout,
     },
     workspace::WorkspaceState,
 };
@@ -605,6 +605,7 @@ pub(crate) struct KnotWindow {
     native_window: Option<AnyWindowHandle>,
     tab_drag: std::rc::Rc<RefCell<tab_drag::TabDragState>>,
     dock_resize: Option<DockResizeDrag>,
+    slot_resize: Option<SlotResizeDrag>,
     /// The open right-click menu of a tool stripe button.
     stripe_menu: Option<crate::app::context_menu::ContextMenu>,
     /// The open right-click menu of a tab header.
@@ -615,9 +616,9 @@ pub(crate) struct KnotWindow {
     recent_walk: Option<knot_model::workbench::RecentWalk>,
     /// The pane rendered over the whole workbench, while it stays focused.
     maximized: Option<PaneId>,
-    /// Per dock, the pane that was maximized when the dock was hidden;
-    /// showing the dock again maximizes it.
-    hidden_maximized: [Option<PaneId>; 3],
+    /// Per tool window, the pane that was maximized when the window was
+    /// hidden; showing the window again maximizes it.
+    hidden_maximized: Vec<(ToolFrameId, PaneId)>,
     /// Closed tabs Reopen Closed Tab recreates, most recent last.
     closed_tabs: knot_model::workbench::RecentlyClosed<reopen::ClosedTab>,
     command_palette: Option<CommandPalette<ProductCommandTarget>>,
@@ -738,6 +739,17 @@ struct DockResizeDrag {
     start_size: f32,
 }
 
+/// The divider between a side's two tool windows being dragged: the first
+/// window's share of the side at the start, and the painted extent along the
+/// split.
+#[derive(Clone, Copy)]
+struct SlotResizeDrag {
+    side: DockLocation,
+    start_pointer: Point<Pixels>,
+    start_share: f32,
+    extent: f32,
+}
+
 /// An ordinary divider being dragged: its split, identified by its boundary
 /// pane, and the split's painted extent along its direction.
 #[derive(Clone, Copy)]
@@ -758,18 +770,26 @@ impl KnotWindow {
         cx.global::<ApplicationWindows>()
             .register(cx.weak_entity(), &workbench);
         document_watch::install(cx);
+        workbench.update(cx, |workbench, _| {
+            workbench.register_container(
+                crate::app::terminal::TERMINAL_TOOL_ID,
+                "Terminal",
+                crate::app::terminal::TERMINAL_SLOT,
+            );
+        });
         Self {
             workbench,
             native_window: None,
             tab_drag: Default::default(),
             dock_resize: None,
+            slot_resize: None,
             stripe_menu: None,
             surface_menu: None,
             stripe_dragging: Default::default(),
             split_resize: None,
             recent_walk: None,
             maximized: None,
-            hidden_maximized: [None; 3],
+            hidden_maximized: Vec::new(),
             closed_tabs: knot_model::workbench::RecentlyClosed::new(reopen::CLOSED_TAB_LIMIT),
             command_palette: None,
             command_palette_subscription: None,
@@ -1088,6 +1108,15 @@ impl KnotWindow {
         .or_else(|| self.default_terminal_directory(cx))
     }
 
+    /// The label of a terminal session's tab.
+    fn terminal_session_name(id: TerminalSessionId, cx: &App) -> Option<String> {
+        let sessions = cx.global::<ApplicationTerminalSessions>().0.borrow();
+        sessions
+            .sessions
+            .get(&id)
+            .map(|session| session.read(cx).name().to_owned())
+    }
+
     fn terminal_session_directory(id: TerminalSessionId, cx: &App) -> Option<std::path::PathBuf> {
         let sessions = cx.global::<ApplicationTerminalSessions>().0.borrow();
         sessions
@@ -1247,6 +1276,17 @@ impl KnotWindow {
             .borrow_mut()
             .allocate_id();
         let session = cx.new(|cx| TerminalSession::new(directory, cx));
+        let taken = self
+            .workbench
+            .read(cx)
+            .tabs()
+            .filter_map(|tab| match tab.surface_id() {
+                TabSurfaceId::Terminal(id) => Self::terminal_session_name(id, cx),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        let name = knot_model::workbench::free_label(session.read(cx).name(), &taken);
+        session.update(cx, |session, _| session.set_name(name));
         let view = cx.new(|cx| TerminalView::new(session.clone(), cx));
         cx.global::<ApplicationTerminalSessions>()
             .0
@@ -2003,7 +2043,7 @@ impl KnotWindow {
         match pane {
             Some(pane) => match workbench.pane_area(pane).ok_or(())? {
                 Area::Center => Ok(Some(pane)),
-                Area::Dock(_) => Ok(workbench.center_pane()),
+                Area::Tool(_) => Ok(workbench.center_pane()),
             },
             None => Ok(workbench.center_pane()),
         }
@@ -2046,10 +2086,10 @@ impl KnotWindow {
         ))
     }
 
-    /// Opens a focused terminal starting in `directory`. In a dock it opens
-    /// beside the terminal in `pane`, else beside the most recently used dock
-    /// terminal, else in the terminal home dock; in the center, beside `pane`
-    /// or in the center pane.
+    /// Opens a focused terminal starting in `directory`. In the Terminal
+    /// window it opens beside the terminal in `pane` when that is in it, else
+    /// in its last focused pane; in the center, beside `pane` or in the
+    /// center pane.
     fn new_terminal_in_pane(
         &mut self,
         pane: Option<PaneId>,
@@ -2059,20 +2099,22 @@ impl KnotWindow {
     ) -> Option<OpenTarget> {
         enum Destination {
             Pane(PaneId),
-            Dock(DockLocation),
+            Tool(ToolFrameId),
             Center,
         }
         let destination = match location {
             operations::TerminalLocation::Dock => {
                 let workbench = self.workbench.read(cx);
+                let tool = workbench.tool_by_stable_id(crate::app::terminal::TERMINAL_TOOL_ID)?;
                 let beside = pane.filter(|pane| {
-                    workbench.pane(*pane).is_some_and(|pane| {
-                        matches!(pane.active_tab().surface_id(), TabSurfaceId::Terminal(_))
-                    })
+                    workbench.pane_tool(*pane) == Some(tool)
+                        && workbench.pane(*pane).is_some_and(|pane| {
+                            matches!(pane.active_tab().surface_id(), TabSurfaceId::Terminal(_))
+                        })
                 });
-                match beside.or_else(|| workbench.recent_dock_terminal().map(|(pane, _)| pane)) {
+                match beside {
                     Some(pane) => Destination::Pane(pane),
-                    None => Destination::Dock(workbench.terminal_home()),
+                    None => Destination::Tool(tool),
                 }
             }
             operations::TerminalLocation::Center => match self.center_destination(pane, cx).ok()? {
@@ -2085,7 +2127,7 @@ impl KnotWindow {
             Destination::Pane(pane) => workbench
                 .open_terminal_tab(pane, id, view)
                 .map(|tab| (pane, tab)),
-            Destination::Dock(dock) => workbench.open_terminal_in_dock(dock, id, view),
+            Destination::Tool(tool) => workbench.open_terminal_in_tool(tool, id, view),
             Destination::Center => workbench.open_terminal_in_center(id, view),
         }) else {
             self.close_terminal(id, cx);
@@ -2102,19 +2144,24 @@ impl KnotWindow {
         ))
     }
 
-    /// Toggle the dock terminals (see [`Workbench::toggle_terminal`]); with
-    /// none, open one in the terminal home dock.
+    /// Toggle the Terminal window (see [`Workbench::toggle_tool`]); while it
+    /// has no tabs, open one.
     pub(super) fn toggle_terminal(
         &mut self,
         cx: &mut Context<Self>,
     ) -> Result<(), knot_protocol::CommandOutcome> {
-        let toggle = self
+        let tool = self
             .workbench
-            .update(cx, |workbench, _| workbench.toggle_terminal());
-        if toggle == knot_model::workbench::TerminalToggle::NeedsTerminal {
+            .read(cx)
+            .tool_by_stable_id(crate::app::terminal::TERMINAL_TOOL_ID)
+            .ok_or(knot_protocol::CommandOutcome::InvalidTarget)?;
+        if self.workbench.read(cx).tool_is_empty(tool) {
             let directory = self.terminal_directory(cx);
             self.new_terminal_in_pane(None, operations::TerminalLocation::Dock, directory, cx)
                 .ok_or(knot_protocol::CommandOutcome::InvalidTarget)?;
+        } else {
+            self.workbench
+                .update(cx, |workbench, _| workbench.toggle_tool(tool));
         }
         self.publish_tool_layout(cx);
         self.focus_active_surface(cx);

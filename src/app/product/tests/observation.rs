@@ -1363,7 +1363,10 @@ fn view_state_changes_coalesce_into_one_settled_event_per_window(cx: &mut TestAp
     // A focused-pane or dock-size change is view state too.
     window.update(cx, |window, cx| {
         window.workbench.update(cx, |workbench, _| {
-            workbench.set_dock_size(crate::app::workbench::DockLocation::Bottom, 300.)
+            let terminal = workbench
+                .tool_by_stable_id(crate::app::terminal::TERMINAL_TOOL_ID)
+                .unwrap();
+            workbench.set_tool_size(terminal, 300.)
         });
         cx.notify();
     });

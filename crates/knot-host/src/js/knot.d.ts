@@ -432,9 +432,9 @@ declare module "knot" {
     /** Whether documents browsed from the explorer or search open as preview
      * tabs that the next preview replaces. Native default true. */
     "workbench.previewTabs": boolean;
-    /** Where the bottom dock sits: "contained" under the center between the
-     * side docks, or "full" across the window width under them. Native
-     * default "contained". */
+    /** Where the bottom side sits: "contained" under the center between the
+     * left and right sides, or "full" across the window width under them.
+     * Native default "contained". */
     "workbench.bottomDockLayout": "contained" | "full";
     /** Whether the left and right window edges show stripes of tool
      * buttons. Native default true. */
@@ -668,8 +668,12 @@ declare module "knot" {
     readonly "statusBar.foreground"?: string;
     /** A status bar item that runs a command, under the pointer. */
     readonly "statusBar.item.hover.background"?: string;
-    /** The selected tool button in a stripe. */
+    /** The button of the focused tool window in a stripe. */
     readonly "stripe.selected.background"?: string;
+    /** The line between groups of tool buttons in a stripe. */
+    readonly "stripe.separator"?: string;
+    /** The button of a tool window that shows without focus. */
+    readonly "stripe.shown.background"?: string;
     /** Success markers. */
     readonly "success"?: string;
     /** The line under the active tab. */
@@ -2045,13 +2049,22 @@ declare module "knot" {
      */
     getChildren(parentId: string | null, context: ViewContext): Iterable<TreeItem> | Promise<Iterable<TreeItem>>;
   }
-  /** Views are tools and live in the docks around the document center. */
-  export type ViewLocation = "left" | "right" | "bottom";
+  /**
+   * Views are tool windows, each docked in one of six slots around the
+   * document center. A slot shows at most one tool window.
+   */
+  export type ViewLocation =
+    | "leftTop"
+    | "leftBottom"
+    | "rightTop"
+    | "rightBottom"
+    | "bottomLeft"
+    | "bottomRight";
   /** Initial placement; remembered user layout overrides it on later windows. */
   export interface ViewPlacement {
-    /** Dock. Defaults to the left dock. */
+    /** Slot. Defaults to `leftTop`. */
     readonly location?: ViewLocation;
-    /** Deterministic order within a dock; defaults after native tools. */
+    /** Deterministic order among the tool windows of a slot; defaults after native tools. */
     readonly order?: number;
     /** Initial visibility. Defaults to true. */
     readonly visible?: boolean;
@@ -2594,7 +2607,6 @@ declare module "knot" {
    * language. */
   export type LayoutTab =
     | Readonly<{ kind: "document"; document: DocumentId | null; uri: string | null; view: EditorViewState; language?: string }>
-    | Readonly<{ kind: "tool"; tool: string }>
     | Readonly<{ kind: "terminal"; directory?: string }>;
   export type LayoutNode =
     | Readonly<{ kind: "pane"; selected: number; tabs: readonly LayoutTab[] }>
@@ -2618,18 +2630,30 @@ declare module "knot" {
   /** Versioned, JSON-compatible window layout from workbench.captureLayout.
    * Store it verbatim; it holds no live handles and is assignable to JsonValue. */
   export type WindowLayout = Readonly<{
-    version: 2;
+    version: 3;
     geometry: WindowGeometry | null;
     /** The document center's split tree; documents and terminals restore
-     * only here, tools only in docks. */
+     * here and in container tool windows. */
     center: LayoutNode | null;
-    docks: Readonly<{ left: LayoutDock; right: LayoutDock; bottom: LayoutDock }>;
-    /** Index of the focused pane in layout order: the center's panes, then
-     * the left, right, and bottom docks'. */
+    /** The tool windows, by slot order. */
+    tools: readonly LayoutTool[];
+    /** Index of the focused pane among the center's panes and the container
+     * tool windows' panes, in layout order. */
     focused: number | null;
   }>;
-  /** A dock keeps its size and arrangement while hidden. */
-  export type LayoutDock = Readonly<{ size: number; visible: boolean; root: LayoutNode | null }>;
+  /** One tool window: where it docks, whether it shows and has a stripe
+   * button, its size and its share of its side when both slots show, and a
+   * container's split tree of terminals. A hidden tool window keeps its
+   * arrangement. */
+  export type LayoutTool = Readonly<{
+    tool: string;
+    slot: ViewLocation;
+    shown: boolean;
+    sidebar: boolean;
+    size: number;
+    share: number;
+    root: LayoutNode | null;
+  }>;
   export interface SessionWindow {
     /** Ordered directory roots, validated and deduplicated as in
      * workspaces.replaceRoots. */

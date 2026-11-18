@@ -62,7 +62,7 @@ export async function registerTree(state: ProjectsState) {
         },
       },
     },
-    placement: { location: "left", visible: false },
+    placement: { location: "leftTop", visible: false },
     actions: [
       { label: "New Window", icon: "action.new-window", command: "projects.new-window" },
     ],

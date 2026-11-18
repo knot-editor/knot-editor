@@ -28,17 +28,18 @@ impl KnotWindow {
         let Some(index) = group.tabs().iter().position(|item| item.id() == tab) else {
             return;
         };
-        let tab = WindowLayout::capture_tab(
+        let Some(tab) = WindowLayout::capture_tab(
             workbench,
             &group.tabs()[index],
             Self::documents(cx).read(cx),
             &|id| Self::terminal_session_directory(id, cx),
             cx,
-        );
+        ) else {
+            return;
+        };
         let kept = match &tab {
             LayoutTab::Document { uri, .. } => uri.is_some(),
             LayoutTab::Terminal { .. } => true,
-            LayoutTab::Tool { .. } => false,
         };
         if !kept {
             return;
@@ -115,9 +116,7 @@ impl KnotWindow {
                 self.tasks.push(task);
                 Ok(())
             }
-            LayoutTab::Document { uri: None, .. } | LayoutTab::Tool { .. } => {
-                Err(CommandOutcome::Unavailable)
-            }
+            LayoutTab::Document { uri: None, .. } => Err(CommandOutcome::Unavailable),
         }
     }
 

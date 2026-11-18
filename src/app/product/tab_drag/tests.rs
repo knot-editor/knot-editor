@@ -36,13 +36,7 @@ fn fixture(cx: &mut TestAppContext) -> (Entity<KnotWindow>, AnyWindowHandle) {
 }
 
 pub(super) fn tab_selector(id: u64) -> &'static str {
-    match id {
-        1 => "tab-1",
-        2 => "tab-2",
-        3 => "tab-3",
-        4 => "tab-4",
-        _ => panic!("unexpected fixture tab"),
-    }
+    Box::leak(format!("tab-{id}").into_boxed_str())
 }
 
 pub(super) fn start_drag(cx: &mut VisualTestContext, id: u64) {
@@ -296,135 +290,118 @@ fn tool_fixture(cx: &mut TestAppContext) -> (Entity<KnotWindow>, AnyWindowHandle
     (window, native_window)
 }
 
-fn tool_tab_id(window: &Entity<KnotWindow>, cx: &TestAppContext) -> u64 {
+/// The pane of the explorer test tool.
+fn tool_pane(window: &Entity<KnotWindow>, cx: &TestAppContext) -> u64 {
     cx.read(|cx| {
         let workbench = window.read(cx).workbench.read(cx);
         let id = window.read(cx).test_tool_frame(cx).unwrap();
-        workbench.tool_tab(id).unwrap().1.value()
+        workbench.tool_tab(id).unwrap().0.value()
     })
-}
-
-fn tool_presentation(
-    window: &Entity<KnotWindow>,
-    cx: &TestAppContext,
-) -> crate::app::workbench::PresentationId {
-    cx.read(|cx| {
-        let workbench = window.read(cx).workbench.read(cx);
-        let id = window.read(cx).test_tool_frame(cx).unwrap();
-        workbench.tool(id).unwrap().presentation
-    })
-}
-
-fn assert_tool_focused(window: &Entity<KnotWindow>, visual: &mut VisualTestContext) {
-    let tree = visual.read(|cx| window.read(cx).test_tool_tree(cx));
-    visual.update(|window, cx| assert!(tree.focus_handle(cx).is_focused(window)));
 }
 
 #[gpui::test]
-fn tool_drag_moves_between_docks_and_never_enters_the_center(cx: &mut TestAppContext) {
+fn a_terminal_drags_between_the_center_and_its_window_and_a_tool_has_no_tab_to_drag(
+    cx: &mut TestAppContext,
+) {
     let (window, native_window) = tool_fixture(cx);
-    let presentation = tool_presentation(&window, cx);
+    let terminal_window = cx.read(|cx| {
+        window
+            .read(cx)
+            .workbench
+            .read(cx)
+            .tool_by_stable_id(crate::app::terminal::TERMINAL_TOOL_ID)
+            .unwrap()
+    });
+    // A terminal in the center and one in the Terminal window.
+    cx.update_window(native_window, |_, _, cx| {
+        window.update(cx, |window, cx| {
+            let center = window.workbench.read(cx).center_pane().unwrap();
+            window.new_terminal_in_pane(
+                Some(center),
+                crate::app::product::operations::TerminalLocation::Center,
+                None,
+                cx,
+            );
+            window.new_terminal_in_pane(
+                None,
+                crate::app::product::operations::TerminalLocation::Dock,
+                None,
+                cx,
+            );
+        });
+    })
+    .unwrap();
+    cx.run_until_parked();
+    let (center_tab, window_tab, window_pane) = cx.read(|cx| {
+        let workbench = window.read(cx).workbench.read(cx);
+        let center = workbench.center_pane().unwrap();
+        let center_tab = workbench
+            .pane(center)
+            .unwrap()
+            .tabs()
+            .iter()
+            .find(|tab| matches!(tab.surface_id(), TabSurfaceId::Terminal(_)))
+            .unwrap()
+            .id()
+            .value();
+        let pane = workbench.area_panes(Area::Tool(terminal_window))[0];
+        let tab = workbench.pane(pane).unwrap().active_tab_id().value();
+        (center_tab, tab, pane)
+    });
     let mut visual = VisualTestContext::from_window(native_window, cx);
 
-    // Escape cancels without moving.
-    let before = cx.read(|cx| window.read(cx).workbench.read(cx).tab_snapshots());
-    start_drag(&mut visual, tool_tab_id(&window, cx));
-    let center = visual.debug_bounds("pane-1").unwrap().center();
-    visual.simulate_mouse_move(center, MouseButton::Left, Modifiers::default());
-    visual.simulate_keystrokes("escape");
-    visual.simulate_mouse_up(center, MouseButton::Left, Modifiers::default());
-    visual.run_until_parked();
-    visual.read(|cx| {
-        assert_eq!(window.read(cx).workbench.read(cx).tab_snapshots(), before);
-        assert!(window.read(cx).tab_drag.borrow().preview.is_none());
+    // A fixed tool window shows no tab to drag.
+    let tool_tab = cx.read(|cx| {
+        let id = window.read(cx).test_tool_frame(cx).unwrap();
+        window
+            .read(cx)
+            .workbench
+            .read(cx)
+            .tool_tab(id)
+            .unwrap()
+            .1
+            .value()
     });
+    assert!(visual.debug_bounds(tab_selector(tool_tab)).is_none());
 
-    // The center's document pane offers the tool no target.
-    start_drag(&mut visual, tool_tab_id(&window, cx));
-    visual.simulate_mouse_move(center, MouseButton::Left, Modifiers::default());
+    // Dropping the center terminal on the Terminal window's strip moves it in.
+    start_drag(&mut visual, center_tab);
+    let strip = visual
+        .debug_bounds(Box::leak(
+            format!("tab-bar-{}", window_pane.value()).into_boxed_str(),
+        ))
+        .unwrap();
+    let target = point(strip.right() - px(60.), strip.center().y);
+    visual.simulate_mouse_move(target, MouseButton::Left, Modifiers::default());
     visual.run_until_parked();
     window.read_with(&visual, |window, _| {
-        assert!(window.tab_drag.borrow().preview.is_none());
+        assert!(window.tab_drag.borrow().preview.is_some());
     });
-    visual.simulate_mouse_up(center, MouseButton::Left, Modifiers::default());
-    visual.run_until_parked();
-    visual.read(|cx| {
-        assert_eq!(window.read(cx).workbench.read(cx).tab_snapshots(), before);
-    });
-
-    // Workbench edges move the same frame between docks.
-    for (dock, at) in [
-        (DockLocation::Right, (1., 0.5)),
-        (DockLocation::Bottom, (0.5, 1.)),
-        (DockLocation::Left, (0., 0.5)),
-    ] {
-        start_drag(&mut visual, tool_tab_id(&window, cx));
-        let bounds = window.read_with(&visual, |window, _| {
-            window.tab_drag.borrow().workbench_bounds().unwrap()
-        });
-        let target = point(
-            (bounds.left() + bounds.size.width * at.0)
-                .clamp(bounds.left() + px(2.), bounds.right() - px(2.)),
-            (bounds.top() + bounds.size.height * at.1)
-                .clamp(bounds.top() + px(2.), bounds.bottom() - px(2.)),
-        );
-        visual.simulate_mouse_move(target, MouseButton::Left, Modifiers::default());
-        visual.run_until_parked();
-        window.read_with(&visual, |window, _| {
-            assert_eq!(
-                window.tab_drag.borrow().preview.unwrap().tab,
-                TabMoveDestination::Area(Area::Dock(dock))
-            );
-        });
-        visual.simulate_mouse_up(target, MouseButton::Left, Modifiers::default());
-        visual.run_until_parked();
-        visual.read(|cx| {
-            let workbench = window.read(cx).workbench.read(cx);
-            let id = window.read(cx).test_tool_frame(cx).unwrap();
-            assert_eq!(
-                workbench.dock_location(workbench.tool_tab(id).unwrap().0),
-                Some(dock)
-            );
-            assert_eq!(workbench.tool(id).unwrap().presentation, presentation);
-        });
-        assert_tool_focused(&window, &mut visual);
-    }
-
-    // Invalid release above the pane keeps the model unchanged.
-    let before = cx.read(|cx| window.read(cx).workbench.read(cx).tab_snapshots());
-    start_drag(&mut visual, tool_tab_id(&window, cx));
-    let pane = visual.debug_bounds("pane-1").unwrap();
-    let invalid = point(pane.center().x, pane.top() - px(5.));
-    visual.simulate_mouse_move(invalid, MouseButton::Left, Modifiers::default());
-    visual.simulate_mouse_up(invalid, MouseButton::Left, Modifiers::default());
-    visual.run_until_parked();
-    visual.read(|cx| {
-        assert_eq!(window.read(cx).workbench.read(cx).tab_snapshots(), before);
-    });
-}
-
-#[gpui::test]
-fn hiding_tool_mid_drag_cancels_drop(cx: &mut TestAppContext) {
-    let (window, native_window) = tool_fixture(cx);
-    let before = cx.read(|cx| window.read(cx).workbench.read(cx).tab_snapshots());
-    let mut visual = VisualTestContext::from_window(native_window, cx);
-    start_drag(&mut visual, tool_tab_id(&window, cx));
-    window.update(&mut visual, |window, cx| {
-        let id = window.test_tool_frame(cx).unwrap();
-        window.workbench.update(cx, |workbench, _| {
-            workbench.hide_tool(id);
-        });
-        cx.notify();
-    });
-    visual.run_until_parked();
-    let pane = visual.debug_bounds("pane-1").unwrap();
-    visual.simulate_mouse_up(pane.center(), MouseButton::Left, Modifiers::default());
+    visual.simulate_mouse_up(target, MouseButton::Left, Modifiers::default());
     visual.run_until_parked();
     visual.read(|cx| {
         let workbench = window.read(cx).workbench.read(cx);
-        let id = window.read(cx).test_tool_frame(cx).unwrap();
-        assert!(workbench.tool_tab(id).is_none());
-        assert_eq!(workbench.tab_snapshots().len(), before.len() - 1);
+        assert_eq!(workbench.pane(window_pane).unwrap().tabs().len(), 2);
+    });
+
+    // And back: dropping the window's terminal on the center pane.
+    start_drag(&mut visual, window_tab);
+    let center = visual.debug_bounds("pane-1").unwrap();
+    let target = center.center();
+    visual.simulate_mouse_move(target, MouseButton::Left, Modifiers::default());
+    visual.simulate_mouse_up(target, MouseButton::Left, Modifiers::default());
+    visual.run_until_parked();
+    visual.read(|cx| {
+        let workbench = window.read(cx).workbench.read(cx);
+        let centre = workbench.center_pane().unwrap();
+        assert!(
+            workbench
+                .pane(centre)
+                .unwrap()
+                .tabs()
+                .iter()
+                .any(|tab| tab.id().value() == window_tab)
+        );
     });
 }
 
@@ -477,7 +454,8 @@ fn dock_divider_drag_resizes_and_escape_reverts(cx: &mut TestAppContext) {
                 .read(cx)
                 .workbench
                 .read(cx)
-                .dock_size(DockLocation::Left),
+                .side_extent(DockLocation::Left)
+                .unwrap(),
             300.
         );
     });
@@ -493,7 +471,8 @@ fn dock_divider_drag_resizes_and_escape_reverts(cx: &mut TestAppContext) {
                 .read(cx)
                 .workbench
                 .read(cx)
-                .dock_size(DockLocation::Left),
+                .side_extent(DockLocation::Left)
+                .unwrap(),
             300.
         );
     });
@@ -523,7 +502,8 @@ fn dock_divider_drag_resizes_and_escape_reverts(cx: &mut TestAppContext) {
                 .read(cx)
                 .workbench
                 .read(cx)
-                .dock_size(DockLocation::Left),
+                .side_extent(DockLocation::Left)
+                .unwrap(),
             300.
         );
     });
@@ -601,7 +581,7 @@ fn ordinary_divider_drag_changes_the_split_ratio_and_escape_reverts(cx: &mut Tes
 }
 
 #[gpui::test]
-fn document_drag_offers_no_dock_or_dock_pane_target(cx: &mut TestAppContext) {
+fn document_drag_offers_no_tool_window_target(cx: &mut TestAppContext) {
     let (window, native_window) = tool_fixture(cx);
     let mut visual = VisualTestContext::from_window(native_window, cx);
     let before = cx.read(|cx| window.read(cx).workbench.read(cx).tab_snapshots());
@@ -614,32 +594,13 @@ fn document_drag_offers_no_dock_or_dock_pane_target(cx: &mut TestAppContext) {
             .id()
             .value()
     });
-    // Workbench edges keep the pane-local split, never a dock.
-    let bounds = window.read_with(&visual, |window, _| {
-        window.tab_drag.borrow().workbench_bounds().unwrap()
-    });
-    for target in [
-        point(bounds.right() - px(2.), bounds.center().y),
-        point(bounds.center().x, bounds.bottom() - px(2.)),
-    ] {
-        start_drag(&mut visual, document_tab);
-        visual.simulate_mouse_move(target, MouseButton::Left, Modifiers::default());
-        visual.run_until_parked();
-        window.read_with(&visual, |window, _| {
-            assert!(!matches!(
-                window.tab_drag.borrow().preview.map(|preview| preview.tab),
-                Some(TabMoveDestination::Area(Area::Dock(_)))
-            ));
-        });
-        visual.simulate_keystrokes("escape");
-        visual.simulate_mouse_up(target, MouseButton::Left, Modifiers::default());
-        visual.run_until_parked();
-    }
-    // The explorer's dock pane offers no target and refuses the release.
+    // The explorer's pane offers no target and refuses the release.
     let explorer = visual
-        .debug_bounds(tab_selector(tool_tab_id(&window, cx)))
+        .debug_bounds(Box::leak(
+            format!("pane-{}", tool_pane(&window, cx)).into_boxed_str(),
+        ))
         .unwrap();
-    let target = point(explorer.center().x, explorer.bottom() + px(40.));
+    let target = explorer.center();
     start_drag(&mut visual, document_tab);
     visual.simulate_mouse_move(target, MouseButton::Left, Modifiers::default());
     visual.run_until_parked();

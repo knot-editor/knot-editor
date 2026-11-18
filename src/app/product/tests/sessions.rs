@@ -985,7 +985,7 @@ fn capture_layout(
 /// The parts of a layout restoration reproduces exactly; geometry is fitted
 /// to the displays instead.
 fn arrangement(layout: &serde_json::Value) -> serde_json::Value {
-    json!({ "center": layout["center"], "focused": layout["focused"], "docks": layout["docks"] })
+    json!({ "center": layout["center"], "focused": layout["focused"], "tools": layout["tools"] })
 }
 
 fn editors(
@@ -1059,7 +1059,7 @@ fn layouts_restore_splits_shared_views_docks_and_fresh_terminals(cx: &mut TestAp
                 .split_pane(pane, SplitDirection::Horizontal, SplitPlacement::After, cx)
                 .unwrap();
             workbench.open_terminal_tab(split, terminal, view);
-            workbench.set_dock_size(DockLocation::Left, 310.);
+            workbench.set_side_extent(DockLocation::Left, 310.);
             workbench.focus_pane(split);
         });
     });
@@ -1069,8 +1069,18 @@ fn layouts_restore_splits_shared_views_docks_and_fresh_terminals(cx: &mut TestAp
     let source_terminals = terminal_sessions(&window, cx);
     let layout = capture_layout(native_window, cx);
     assert_eq!(layout["center"]["kind"], "split");
-    assert_eq!(layout["docks"]["left"]["root"]["kind"], "pane");
-    assert_eq!(layout["docks"]["left"]["size"], 310.);
+    let tool_entry = |layout: &serde_json::Value, id: &str| {
+        layout["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|tool| tool["tool"] == id)
+            .cloned()
+    };
+    let explorer = tool_entry(&layout, crate::app::product::tools::TEST_TOOL_ID).unwrap();
+    assert_eq!(explorer["slot"], "leftTop");
+    assert_eq!(explorer["size"], 310.);
+    assert_eq!(explorer["shown"], true);
 
     let result = h
         .replace(
@@ -1117,20 +1127,21 @@ fn layouts_restore_splits_shared_views_docks_and_fresh_terminals(cx: &mut TestAp
         assert!(!sessions.borrow().sessions.contains_key(&stopped));
     });
 
-    // A tool in another dock, beside a hidden one, is placed exactly too.
+    // A hidden tool window in another slot is placed exactly too.
     let tab = restored.update(cx, |window, cx| {
         let explorer = window.test_tool_frame(cx).unwrap();
         let pane = window.workbench.read(cx).center_pane().unwrap();
         window.workbench.update(cx, |workbench, _| {
-            workbench.place_tool(explorer, DockLocation::Bottom);
-            workbench.set_dock_visible(DockLocation::Left, false);
+            workbench.place_tool(explorer, crate::app::workbench::Slot::BottomLeft);
+            workbench.hide_tool(explorer);
             workbench.focus_pane(pane);
         });
         pane
     });
     let shared = capture_layout(restored_window, cx);
-    assert_eq!(shared["docks"]["bottom"]["root"]["kind"], "pane");
-    assert_eq!(shared["docks"]["left"]["visible"], false);
+    let hidden = tool_entry(&shared, crate::app::product::tools::TEST_TOOL_ID).unwrap();
+    assert_eq!(hidden["slot"], "bottomLeft");
+    assert_eq!(hidden["shown"], false);
     let result = h
         .replace(
             json!({
@@ -1232,33 +1243,29 @@ fn restored_terminals_start_in_their_recorded_directory(cx: &mut TestAppContext)
 fn layouts_prune_unknown_tabs_hide_unnamed_tools_and_ignore_unsupported_versions(
     cx: &mut TestAppContext,
 ) {
+    cx.set_global(crate::app::product::tools::TestToolInEveryWindow);
     let h = harness(cx);
     let (one, _, window) = h.file_window("a/one.txt", cx);
     let untitled = h.untitled("loose", cx);
     let view = json!({ "anchor": 0, "caret": 2, "top": 0, "scrollX": 0 });
-    // The explorer is registered by the roots but named only in the center,
-    // which does not allow tools; the second center pane holds it and an
-    // unmatched document, the first repeats its document, and the bottom dock
-    // holds only an unknown tool and a document, which docks do not allow.
+    // The second center pane holds only an unmatched document, the first
+    // repeats its document, and the unknown tool window is dropped.
     let layout = json!({
-        "version": 2, "geometry": null, "focused": 1,
+        "version": 3, "geometry": null, "focused": 1,
         "center": { "kind": "split", "direction": "vertical", "ratio": 0.5,
             "first": { "kind": "pane", "selected": 5, "tabs": [
                 { "kind": "document", "document": null, "uri": "mem://product/a/one.txt", "view": view },
                 { "kind": "document", "document": null, "uri": "mem://product/a/./one.txt", "view": view },
             ] },
             "second": { "kind": "pane", "selected": 0, "tabs": [
-                { "kind": "tool", "tool": "knot.explorer" },
                 { "kind": "document", "document": "not-an-entry", "uri": null, "view": view },
             ] } },
-        "docks": {
-            "left": { "size": 200, "visible": true, "root": null },
-            "right": { "size": 240, "visible": true, "root": null },
-            "bottom": { "size": 220, "visible": true, "root": { "kind": "pane", "selected": 0, "tabs": [
-                { "kind": "tool", "tool": "@example/gone.view" },
-                { "kind": "document", "document": null, "uri": "mem://product/a/one.txt", "view": view },
-            ] } },
-        },
+        "tools": [
+            { "tool": crate::app::product::tools::TEST_TOOL_ID, "slot": "leftTop",
+              "shown": true, "sidebar": true, "size": 200, "share": 0.5, "root": null },
+            { "tool": "@example/gone.view", "slot": "bottomLeft",
+              "shown": true, "sidebar": true, "size": 220, "share": 0.5, "root": null },
+        ],
     });
     let result = h
         .replace(
@@ -1287,9 +1294,20 @@ fn layouts_prune_unknown_tabs_hide_unnamed_tools_and_ignore_unsupported_versions
     // the center, so its text is never hidden.
     assert_eq!(captured["center"]["kind"], "pane");
     assert_eq!(captured["center"]["tabs"][0]["view"]["caret"], 2);
-    assert_eq!(captured["docks"]["bottom"]["root"], serde_json::Value::Null);
+    let named = |id: &str| {
+        captured["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|tool| tool["tool"] == id)
+            .cloned()
+    };
+    assert_eq!(named("@example/gone.view"), None);
     assert_eq!(h.texts(&pruned, cx), ["one", "loose"]);
-    assert_eq!(captured["docks"]["left"]["size"], 200.);
+    assert_eq!(
+        named(crate::app::product::tools::TEST_TOOL_ID).unwrap()["size"],
+        200.
+    );
     // The ignored layout falls back to the entries-only arrangement.
     let (fallback, _) = created(&result, 1, cx);
     assert_eq!(h.texts(&fallback, cx), ["two"]);

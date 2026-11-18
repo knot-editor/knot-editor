@@ -984,7 +984,7 @@ macro_rules! toggle_dock {
         pub(crate) async fn $function(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
             context
                 .window(|window, _, cx| {
-                    window.toggle_dock($dock, cx);
+                    window.toggle_side($dock, cx);
                     Ok(())
                 })
                 .await
@@ -1013,9 +1013,6 @@ macro_rules! move_tab_to_area {
 }
 
 move_tab_to_area! {
-    "workbench.move-tab-to-left-dock", "Move Tab to Left Dock", "Move the focused tab to the left dock.", MOVE_TAB_TO_LEFT_DOCK_COMMAND, move_tab_to_left_dock, Area::Dock(DockLocation::Left);
-    "workbench.move-tab-to-right-dock", "Move Tab to Right Dock", "Move the focused tab to the right dock.", MOVE_TAB_TO_RIGHT_DOCK_COMMAND, move_tab_to_right_dock, Area::Dock(DockLocation::Right);
-    "workbench.move-tab-to-bottom-dock", "Move Tab to Bottom Dock", "Move the focused tab to the bottom dock.", MOVE_TAB_TO_BOTTOM_DOCK_COMMAND, move_tab_to_bottom_dock, Area::Dock(DockLocation::Bottom);
     "workbench.move-tab-to-center", "Move Tab to Center", "Move the focused tab to the center.", MOVE_TAB_TO_CENTER_COMMAND, move_tab_to_center, Area::Center;
 }
 

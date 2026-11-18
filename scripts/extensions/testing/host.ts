@@ -1884,7 +1884,7 @@ export const NATIVE_COLOR_KEYS: readonly string[] = [
   "list.hover.background", "list.match.foreground", "list.selected.background", "list.selected.foreground",
   "notification.background", "notification.border", "notification.description.foreground", "notification.error", "notification.foreground", "notification.info", "notification.warning",
   "popover.background", "popover.border", "scrim", "scrollbar.thumb",
-  "statusBar.background", "statusBar.border", "statusBar.foreground", "statusBar.item.hover.background", "stripe.selected.background", "success",
+  "statusBar.background", "statusBar.border", "statusBar.foreground", "statusBar.item.hover.background", "stripe.selected.background", "stripe.separator", "stripe.shown.background", "success",
   "tab.accent", "tab.active.background", "tab.active.border", "tab.active.foreground", "tab.active.unfocused.background", "tab.active.unfocused.border", "tab.bar.background",
   "tab.inactive.background", "tab.inactive.foreground", "terminal.ansi.black",
   "terminal.ansi.blue", "terminal.ansi.brightBlack", "terminal.ansi.brightBlue",
@@ -2024,12 +2024,11 @@ export function settingDefinitions(): ReadonlyMap<string, Knot.SettingDefinition
 
 // The "knot" module --------------------------------------------------------
 
-const DOCK = { size: 0, visible: true, root: null };
 const LAYOUT: Knot.WindowLayout = {
-  version: 2,
+  version: 3,
   geometry: null,
   center: null,
-  docks: { left: DOCK, right: DOCK, bottom: DOCK },
+  tools: [],
   focused: null,
 };
 

@@ -5,7 +5,7 @@ use super::*;
 use crate::app::settings::{ApplicationSettings, SettingsScope};
 use crate::app::theme::Chrome;
 use gpui::{Pixels, VisualTestContext, px};
-use knot_model::workbench::{Area, DockLocation, PaneId};
+use knot_model::workbench::{Area, PaneId};
 
 fn set_chrome(key: &str, value: f64, cx: &mut TestAppContext) {
     cx.update(|cx| {
@@ -95,7 +95,15 @@ fn only_the_focused_pane_draws_the_focus_ring(cx: &mut TestAppContext) {
         })
     };
     let center = pane(Area::Center, cx);
-    let dock = pane(Area::Dock(DockLocation::Left), cx);
+    let tool = cx.read(|cx| {
+        window
+            .read(cx)
+            .workbench
+            .read(cx)
+            .tool_by_stable_id(crate::app::product::tools::TEST_TOOL_ID)
+            .unwrap()
+    });
+    let dock = pane(Area::Tool(tool), cx);
     for (focused, other) in [(center, dock), (dock, center)] {
         window.update(cx, |window, cx| {
             window

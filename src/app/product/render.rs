@@ -6,14 +6,16 @@ use crate::app::documents::{DocumentDirty, ExternalChange};
 use crate::app::status_bar::{BarItem, StatusItem};
 use crate::app::theme::{Chrome, Theme, chrome, color, theme};
 use crate::app::tokens;
-use crate::app::workbench::BottomDockLayout;
+use crate::app::workbench::{BottomDockLayout, ToolKind};
 use crate::app::zoom;
 
 /// What dragging a divider resizes.
 #[derive(Clone, Copy)]
 pub(super) enum Divider {
-    /// A dock's absolute size.
+    /// A side's absolute size.
     Dock(DockLocation),
+    /// How a side divides between its two tool windows.
+    Slots(DockLocation),
     /// The ratio of the split identified by its boundary pane.
     Split(PaneId),
 }
@@ -41,14 +43,19 @@ impl KnotWindow {
                 .into_any_element();
         }
         let workbench = self.workbench.read(cx);
-        let dock = |dock: DockLocation| {
-            workbench
-                .area_shown(Area::Dock(dock))
-                .then(|| workbench.area_layout(Area::Dock(dock)).cloned())
+        let sides = DockLocation::ALL.map(|side| {
+            let size = workbench.side_extent(side)?;
+            let windows = workbench
+                .side_tools(side)
+                .into_iter()
                 .flatten()
-                .map(|layout| (layout, workbench.dock_size(dock)))
-        };
-        let [left, right, bottom] = DockLocation::ALL.map(dock);
+                .filter_map(|id| {
+                    let layout = workbench.area_layout(Area::Tool(id))?.clone();
+                    Some((id, layout, workbench.tool(id)?.share()))
+                })
+                .collect::<Vec<_>>();
+            Some((size, windows))
+        });
         let center = workbench.center().cloned();
         let center = match center {
             Some(layout) => self.render_layout(&layout, cx),
@@ -62,20 +69,47 @@ impl KnotWindow {
                 .into_any_element(),
         };
         let mut docks = [None, None, None];
-        for (dock, shown) in DockLocation::ALL.into_iter().zip([left, right, bottom]) {
-            let Some((layout, size)) = shown else {
+        for (dock, shown) in DockLocation::ALL.into_iter().zip(sides) {
+            let Some((size, windows)) = shown else {
                 continue;
             };
-            let element = card(div())
+            let both = windows.len() == 2;
+            let mut element = div()
                 .flex_none()
                 .min_w_0()
                 .min_h_0()
+                .flex()
                 .debug_selector(move || format!("dock-{}", dock.index()))
                 .map(|element| match dock {
-                    DockLocation::Bottom => element.h(px(size)).w_full(),
-                    DockLocation::Left | DockLocation::Right => element.w(px(size)).h_full(),
-                })
-                .child(self.render_layout(&layout, cx));
+                    DockLocation::Bottom => element.flex_row().h(px(size)).w_full(),
+                    DockLocation::Left | DockLocation::Right => {
+                        element.flex_col().w(px(size)).h_full()
+                    }
+                });
+            for (index, (id, layout, share)) in windows.into_iter().enumerate() {
+                if index == 1 {
+                    element = element.child(self.render_divider(
+                        if dock == DockLocation::Bottom {
+                            SplitDirection::Horizontal
+                        } else {
+                            SplitDirection::Vertical
+                        },
+                        Divider::Slots(dock),
+                        chrome,
+                        cx,
+                    ));
+                }
+                let grow = if both { share } else { 1. };
+                let mut window = card(div())
+                    .min_w_0()
+                    .min_h_0()
+                    .flex_basis(px(0.))
+                    .flex_shrink(1.)
+                    .debug_selector(move || format!("tool-window-{}", id.value()))
+                    .child(self.render_layout(&layout, cx));
+                window.style().flex_grow = Some(grow);
+                element = element.child(window);
+            }
             let divider = self.render_divider(dock.axis(), Divider::Dock(dock), chrome, cx);
             docks[dock.index()] = Some((element, divider));
         }
@@ -170,6 +204,9 @@ impl KnotWindow {
             Divider::Dock(dock) => div()
                 .id(("dock-divider", dock.index()))
                 .debug_selector(move || format!("dock-divider-{}", dock.index())),
+            Divider::Slots(side) => div()
+                .id(("slot-divider", side.index()))
+                .debug_selector(move || format!("slot-divider-{}", side.index())),
             Divider::Split(boundary) => div()
                 .id(("split-divider", boundary.value()))
                 .debug_selector(move || format!("split-divider-{}", boundary.value())),
@@ -197,29 +234,47 @@ impl KnotWindow {
                     .items_center()
                     .cursor(CursorStyle::ResizeUpDown)
             })
-            .when(matches!(divider, Divider::Split(_)), |element| {
-                element.child(
-                    div()
-                        .when(horizontal, |element| element.w(px(1.)).h_full())
-                        .when(!horizontal, |element| element.h(px(1.)).w_full())
-                        .bg(theme(cx).paint_color(color::BORDER))
-                        .hover({
-                            let hover = theme(cx).paint_color(color::BORDER_HOVER);
-                            move |style| style.bg(hover)
-                        }),
-                )
-            })
+            .when(
+                matches!(divider, Divider::Split(_) | Divider::Slots(_)),
+                |element| {
+                    element.child(
+                        div()
+                            .when(horizontal, |element| element.w(px(1.)).h_full())
+                            .when(!horizontal, |element| element.h(px(1.)).w_full())
+                            .bg(theme(cx).paint_color(color::BORDER))
+                            .hover({
+                                let hover = theme(cx).paint_color(color::BORDER_HOVER);
+                                move |style| style.bg(hover)
+                            }),
+                    )
+                },
+            )
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(move |this, event: &MouseDownEvent, _, cx| {
                     match divider {
                         Divider::Dock(dock) => {
-                            let size = this.workbench.read(cx).dock_size(dock);
-                            this.dock_resize = Some(DockResizeDrag {
-                                dock,
-                                start_pointer: event.position,
-                                start_size: size,
-                            });
+                            let size = this.workbench.read(cx).side_extent(dock);
+                            if let Some(size) = size {
+                                this.dock_resize = Some(DockResizeDrag {
+                                    dock,
+                                    start_pointer: event.position,
+                                    start_size: size,
+                                });
+                            }
+                        }
+                        Divider::Slots(side) => {
+                            let workbench = this.workbench.read(cx);
+                            let share = workbench.side_share(side);
+                            let extent = this.tab_drag.borrow().side_extent(workbench, side);
+                            if let (Some(share), Some(extent)) = (share, extent) {
+                                this.slot_resize = Some(SlotResizeDrag {
+                                    side,
+                                    start_pointer: event.position,
+                                    start_share: share,
+                                    extent,
+                                });
+                            }
                         }
                         Divider::Split(boundary) => {
                             let ratio = this.workbench.read(cx).split_ratio(boundary);
@@ -296,12 +351,21 @@ impl KnotWindow {
             _ => None,
         };
         let documents = Self::documents(cx);
-        let in_dock = matches!(area, Area::Dock(_));
-        let terminal_active = matches!(pane.active_tab().surface_id(), TabSurfaceId::Terminal(_));
+        let window_tool = match area {
+            Area::Tool(id) => workbench.tool(id),
+            Area::Center => None,
+        };
+        let in_dock = window_tool.is_some();
+        let container = window_tool.is_some_and(|tool| tool.kind() == ToolKind::Container);
+        let tool_id = window_tool.map(|tool| tool.id);
+        // The window's header is its first pane's strip.
+        let header_title = window_tool
+            .filter(|_| workbench.area_panes(area).first() == Some(&pane_id))
+            .map(|tool| tool.title.clone());
         let content_menu = !matches!(pane.active_tab().surface_id(), TabSurfaceId::Tool(_));
-        // A lone tool shows just its title; terminals come in numbers, so
-        // theirs always show which is active.
-        let titled_alone = in_dock && pane.tabs().len() == 1 && !terminal_active;
+        // A fixed tool window shows just its title; a container's panes show
+        // their tabs even when there is one.
+        let titled_alone = in_dock && !container;
         let chrome = chrome(cx);
         let accent = theme(cx).paint_color(color::TAB_ACCENT);
         let (active_background, active_border) = if focused {
@@ -320,6 +384,7 @@ impl KnotWindow {
         let tabs = pane
             .tabs()
             .iter()
+            .filter(|_| !titled_alone)
             .map(|tab| {
                 let tab_id = tab.id();
                 let documents = documents.read(cx);
@@ -336,7 +401,8 @@ impl KnotWindow {
                             }
                         )
                     }
-                    TabSurfaceId::Terminal(_) => "Terminal".to_owned(),
+                    TabSurfaceId::Terminal(session) => Self::terminal_session_name(session, cx)
+                        .unwrap_or_else(|| "Terminal".to_owned()),
                     TabSurfaceId::Tool(id) => workbench.tool(id).unwrap().title.to_owned(),
                 };
                 let dirty = match tab.surface_id() {
@@ -521,6 +587,16 @@ impl KnotWindow {
             })
             .collect::<Vec<_>>();
 
+        let header_title = header_title.map(|title| {
+            div()
+                .debug_selector(move || format!("tool-title-{}", pane_id.value()))
+                .px(zoom::rems(10.))
+                .font_weight(FontWeight::BOLD)
+                .text_size(zoom::rems(13.))
+                .text_color(theme(cx).paint_color(color::TAB_ACTIVE_FOREGROUND))
+                .child(title)
+        });
+        let header_end = header_title.is_some();
         let frame_actions = match active_tool_view {
             Some(crate::app::workbench::ExtensionView::Tree(tree)) if in_dock => {
                 crate::app::tree_view::TreeView::frame_actions_bar(&tree, cx)
@@ -531,7 +607,7 @@ impl KnotWindow {
             .id(("pane", pane_id.value()))
             .debug_selector(move || format!("pane-{}", pane_id.value()))
             .relative()
-            .child(self.pane_drag_geometry(pane_id, area))
+            .child(self.pane_drag_geometry(pane_id, area, area == Area::Center || container))
             .flex()
             .flex_col()
             .size_full()
@@ -551,10 +627,20 @@ impl KnotWindow {
                     .items_center()
                     .when(pill, |bar| bar.pl(zoom::rems(6.)))
                     .relative()
+                    .id(("tab-bar", pane_id.value()))
                     .debug_selector(move || format!("tab-bar-{}", pane_id.value()))
+                    .when(header_end, |bar| {
+                        // A double click on a tool window's header maximizes it.
+                        bar.on_click(cx.listener(move |this, event: &ClickEvent, _, cx| {
+                            if event.click_count() == 2 {
+                                this.toggle_maximize(pane_id, cx);
+                            }
+                        }))
+                    })
                     .child(self.tab_bar_drag_geometry(pane_id))
                     .overflow_hidden()
                     .bg(theme(cx).paint_color(color::TAB_BAR_BACKGROUND))
+                    .children(header_title)
                     .children(tabs)
                     // The line between the tab bar and its content.
                     .child(
@@ -569,10 +655,13 @@ impl KnotWindow {
                     .when(in_dock, |bar| {
                         bar.child(div().flex_1())
                             .children(frame_actions)
-                            .when(terminal_active, |bar| {
-                                bar.child(self.render_new_terminal_button(pane_id, cx))
+                            .when(container, |bar| {
+                                bar.child(self.render_new_tab_button(pane_id, tool_id, cx))
                             })
-                            .child(self.render_hide_button(pane_id, cx))
+                            .when(header_end, |bar| {
+                                bar.children(tool_id.map(|id| self.render_options_button(id, cx)))
+                                    .child(self.render_hide_button(pane_id, cx))
+                            })
                     }),
             )
             .child(
@@ -619,8 +708,14 @@ impl KnotWindow {
             }))
     }
 
-    /// The dock header button that opens a terminal beside the pane's.
-    fn render_new_terminal_button(&self, pane_id: PaneId, cx: &mut Context<Self>) -> Stateful<Div> {
+    /// The header button that opens a tab in the container tool window,
+    /// beside the pane's tabs.
+    fn render_new_tab_button(
+        &self,
+        pane_id: PaneId,
+        tool: Option<ToolFrameId>,
+        cx: &mut Context<Self>,
+    ) -> Stateful<Div> {
         let hover = theme(cx).paint_color(color::BUTTON_HOVER_BACKGROUND);
         div()
             .id(("new-terminal", pane_id.value()))
@@ -632,28 +727,39 @@ impl KnotWindow {
             .hover(move |style| style.bg(hover))
             .child("+")
             .on_click(cx.listener(move |this, _, _, cx| {
-                let directory = this.terminal_directory(cx);
-                this.new_terminal_in_pane(
-                    Some(pane_id),
-                    super::operations::TerminalLocation::Dock,
-                    directory,
-                    cx,
-                );
+                if tool.is_some() {
+                    let directory = this.terminal_directory(cx);
+                    this.new_terminal_in_pane(
+                        Some(pane_id),
+                        super::operations::TerminalLocation::Dock,
+                        directory,
+                        cx,
+                    );
+                }
             }))
     }
 
+    /// The header's options button (⋮), which opens the window's menu.
+    fn render_options_button(&self, tool: ToolFrameId, cx: &mut Context<Self>) -> Stateful<Div> {
+        let hover = theme(cx).paint_color(color::BUTTON_HOVER_BACKGROUND);
+        div()
+            .id(("tool-options", tool.value()))
+            .debug_selector(move || format!("tool-options-{}", tool.value()))
+            .px_1p5()
+            .rounded(zoom::rems(tokens::radius::SM))
+            .cursor_pointer()
+            .text_color(theme(cx).paint_color(color::TAB_INACTIVE_FOREGROUND))
+            .hover(move |style| style.bg(hover))
+            .child("⋮")
+            .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
+                this.open_tool_menu(tool, false, event.position(), window, cx);
+            }))
+    }
+
+    /// Hide the tool window a pane belongs to.
     fn hide_pane_from_header(&mut self, pane_id: PaneId, cx: &mut Context<Self>) {
-        let surface = self
-            .workbench
-            .read(cx)
-            .pane(pane_id)
-            .map(|pane| pane.active_tab().surface_id());
-        match surface {
-            Some(TabSurfaceId::Tool(id)) => self.hide_tool_from_pointer(id, cx),
-            Some(TabSurfaceId::Terminal(_)) => {
-                self.toggle_terminal(cx).ok();
-            }
-            _ => {}
+        if let Some(tool) = self.workbench.read(cx).pane_tool(pane_id) {
+            self.hide_tool_from_pointer(tool, cx);
         }
     }
 }

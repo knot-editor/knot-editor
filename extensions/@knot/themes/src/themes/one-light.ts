@@ -69,6 +69,8 @@ export const ONE_LIGHT: ThemeDefinition = {
     "notification.warning": yellow,
     "popover.background": "#f2f2f2",
     "popover.border": "#dbdbdc",
+    "stripe.separator": "#dbdbdc",
+    "stripe.shown.background": "#cfcfd0",
     "scrim": "#00000033",
     "scrollbar.thumb": "#696c7766",
     "statusBar.background": panel,

@@ -96,8 +96,14 @@ mod tests {
 
     fn customized(size: f32) -> ToolLayoutSnapshot {
         let mut snapshot = ToolLayoutSnapshot::product_default();
-        snapshot.docks[0].size = size;
-        snapshot.docks.swap(0, 2);
+        snapshot.tools.push(knot_model::workbench::StoredTool {
+            id: "knot.explorer".to_owned(),
+            slot: knot_model::workbench::Slot::LeftTop,
+            shown: true,
+            sidebar: true,
+            size,
+            share: 0.5,
+        });
         // Publish marks the arrangement customized; stored snapshots compare
         // against that form.
         snapshot.customized = true;

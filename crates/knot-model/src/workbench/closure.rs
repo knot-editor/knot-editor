@@ -395,8 +395,14 @@ mod tests {
         };
         let sibling = view(key(1, 3, 3));
         let other_pane = view(key(2, 4, 4));
+        let tool = super::super::Workbench::empty().register_tool(
+            "x.terminal",
+            "Terminal",
+            super::super::Slot::BottomLeft,
+            super::super::ToolKind::Container,
+        );
         let dock = ClosureView {
-            area: Area::Dock(super::super::DockLocation::Left),
+            area: Area::Tool(tool),
             ..view(key(3, 5, 5))
         };
         let other_window = view(ViewKey {

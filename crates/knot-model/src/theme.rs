@@ -269,7 +269,9 @@ native_colors! {
     STATUS_BAR_BORDER = "statusBar.border", "The line above the status bar.", Key(WINDOW_BACKGROUND), Key(WINDOW_BACKGROUND);
     STATUS_BAR_FOREGROUND = "statusBar.foreground", "Status bar items that choose no color.", Key(TEXT_MUTED), Key(TEXT_MUTED);
     STATUS_BAR_ITEM_HOVER_BACKGROUND = "statusBar.item.hover.background", "A status bar item that runs a command, under the pointer.", Key(LIST_HOVER_BACKGROUND), Key(LIST_HOVER_BACKGROUND);
-    STRIPE_SELECTED_BACKGROUND = "stripe.selected.background", "The selected tool button in a stripe.", Rgba(0x3574f04d), Rgba(0x3574f04d);
+    STRIPE_SELECTED_BACKGROUND = "stripe.selected.background", "The button of the focused tool window in a stripe.", Rgba(0x3574f04d), Rgba(0x3574f04d);
+    STRIPE_SHOWN_BACKGROUND = "stripe.shown.background", "The button of a tool window that shows without focus.", Rgb(0x4a4c50), Rgb(0xdfe1e5);
+    STRIPE_SEPARATOR = "stripe.separator", "The line between groups of tool buttons in a stripe.", Rgb(0x424649), Rgb(0xc9ccd6);
     SUCCESS = "success", "Success markers.", Rgb(0x5fb865), Rgb(0x369650);
     TAB_ACTIVE_BACKGROUND = "tab.active.background", "The active tab.", Key(EDITOR_BACKGROUND), Key(EDITOR_BACKGROUND);
     TAB_ACTIVE_BORDER = "tab.active.border", "Border around the active tab when tabs are rounded pills.", Key(TAB_ACTIVE_BACKGROUND), Key(TAB_ACTIVE_BACKGROUND);

@@ -69,6 +69,8 @@ pub(crate) struct TerminalSession {
     next_attachment: u64,
     focused: bool,
     mouse_reporting_enabled: bool,
+    /// The label its tab shows.
+    name: String,
 }
 
 pub(crate) struct TerminalAttachment {
@@ -102,6 +104,24 @@ fn replay(terminal: &mut Terminal, text: &str) {
     bytes.extend_from_slice(RESTART_DIVIDER.as_bytes());
     bytes.extend_from_slice(b"\r\n");
     terminal.write(&bytes);
+}
+
+/// The name of the shell new sessions run, such as `zsh`.
+pub(crate) fn shell_name() -> String {
+    if cfg!(test) {
+        return "sh".to_owned();
+    }
+    let shell = std::env::var("SHELL")
+        .ok()
+        .filter(|shell| !shell.is_empty());
+    shell
+        .as_deref()
+        .and_then(|shell| std::path::Path::new(shell).file_stem())
+        .and_then(|name| name.to_str())
+        .map_or_else(
+            || if cfg!(windows) { "cmd" } else { "sh" }.to_owned(),
+            str::to_owned,
+        )
 }
 
 impl TerminalSession {
@@ -139,6 +159,7 @@ impl TerminalSession {
             next_attachment: 0,
             focused: false,
             mouse_reporting_enabled: terminal_mouse_reporting(cx),
+            name: shell_name(),
         };
         this.start(None, cx);
         this
@@ -207,6 +228,15 @@ impl TerminalSession {
                 PtyEvent::Terminal(_) | PtyEvent::Output => {}
             }
         }
+    }
+
+    /// The label the session's tab shows.
+    pub(crate) fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub(crate) fn set_name(&mut self, name: String) {
+        self.name = name;
     }
 
     pub(crate) fn mouse_reporting_enabled(&self) -> bool {

@@ -225,7 +225,7 @@ fn closing_the_last_window_suspends_without_captures(cx: &mut TestAppContext) {
     );
     assert_eq!(windows[0]["selected"], 0);
     // Each session window keeps its captured layout.
-    assert_eq!(windows[0]["layout"]["version"], 2);
+    assert_eq!(windows[0]["layout"]["version"], 3);
 
     // Closing the last one suspends the project with its last membership,
     // which records the dirty document's identity once tracking sees it.
@@ -458,9 +458,9 @@ fn a_new_project_window_opens_with_the_project_roots_and_joins_it(cx: &mut TestA
 }
 
 /// A window's arrangement without document identities, which restored
-/// captures and reopened files replace, nor its focus and the dock's
-/// selection, which selecting through the tree moves to the Projects tool
-/// before each switch.
+/// captures and reopened files replace, nor its focus and which tool window
+/// shows in a slot, which selecting through the tree moves to the Projects
+/// tool before each switch.
 fn arrangement(layout: Value) -> Value {
     fn forget(node: &mut Value) {
         for tab in node["tabs"].as_array_mut().into_iter().flatten() {
@@ -474,9 +474,11 @@ fn arrangement(layout: Value) -> Value {
     }
     let mut center = layout["center"].clone();
     forget(&mut center);
-    let mut docks = layout["docks"].clone();
-    docks["left"]["root"]["selected"] = Value::Null;
-    serde_json::json!({ "center": center, "docks": docks })
+    let mut tools = layout["tools"].clone();
+    for tool in tools.as_array_mut().into_iter().flatten() {
+        tool["shown"] = Value::Null;
+    }
+    serde_json::json!({ "center": center, "tools": tools })
 }
 
 #[gpui::test]
@@ -505,7 +507,14 @@ fn a_multi_root_layout_with_shared_views_survives_repeated_switches(cx: &mut Tes
         projects.follow_roots(&[&a_uri, &c_uri], cx);
         let current = arrangement(projects.window.layout(cx));
         assert_eq!(current["center"]["kind"], "split");
-        assert_eq!(current["docks"]["left"]["size"], 300.);
+        assert!(
+            current["tools"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|tool| tool["slot"] == "leftTop" && tool["size"] == 300.),
+            "{current}"
+        );
         assert_eq!(
             before.get_or_insert(current.clone()),
             &current,

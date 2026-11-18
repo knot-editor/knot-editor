@@ -317,18 +317,19 @@ fn current_open_target(window: &Entity<KnotWindow>, cx: &gpui::App) -> OpenTarge
 fn place_explorer(
     window: &Entity<KnotWindow>,
     window_handle: impl WindowHandle,
-    dock: crate::app::workbench::DockLocation,
+    slot: crate::app::workbench::Slot,
     cx: &mut TestAppContext,
 ) {
     window_handle.run(cx, |cx| {
         window.update(cx, |window, cx| {
             window.ensure_test_tool(false, cx);
             let id = window.test_tool_frame(cx).unwrap();
-            let (pane, tab) = window.workbench.read(cx).tool_tab(id).unwrap();
-            let area = crate::app::workbench::Area::Dock(dock);
-            if window.workbench.read(cx).pane_area(pane) != Some(area) {
-                window.move_tab_to_area(pane, tab, area, cx).unwrap();
-            }
+            window.move_tool_to_slot(id, slot, cx);
+            // The tool takes focus, as when it is used.
+            window
+                .workbench
+                .update(cx, |workbench, _| workbench.show_tool(id));
+            window.focus_active_surface(cx);
         })
     });
 }

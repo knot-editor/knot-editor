@@ -70,7 +70,7 @@ const log = await workbench.registerView({
   id: "guide.log",
   title: "Guide log",
   content: { kind: "text" },
-  placement: { location: "bottom", visible: false },
+  placement: { location: "bottomLeft", visible: false },
 });
 await log.setText("guide: activated\n");
 await log.setText("guide: ready\n");

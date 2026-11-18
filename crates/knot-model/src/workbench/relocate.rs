@@ -1,8 +1,8 @@
 //! Atomic relocation of one tab without document or session closure.
 
 use super::{
-    Area, Pane, PaneId, PresentationId, SplitDirection, SplitPlacement, TabId, TabKind, Workbench,
-    WorkbenchLayout, WorkbenchTab, WorkbenchTabSnapshot,
+    Area, Pane, PaneId, PresentationId, SplitDirection, SplitPlacement, TabId, TabSurfaceId,
+    Workbench, WorkbenchLayout, WorkbenchTab, WorkbenchTabSnapshot,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -103,19 +103,19 @@ impl Workbench {
         }
     }
 
-    /// Whether a tab of `kind` may move to `target`.
-    pub fn accepts_tab_move(&self, kind: TabKind, target: TabMoveDestination) -> bool {
+    /// Whether a tab showing `surface` may move to `target`.
+    pub fn accepts_tab_move(&self, surface: TabSurfaceId, target: TabMoveDestination) -> bool {
         self.destination_area(target)
-            .is_some_and(|area| kind.allows(area))
+            .is_some_and(|area| self.allows(surface, area))
     }
 
     fn prepare_destination(
         &self,
-        kind: TabKind,
+        surface: TabSurfaceId,
         target: TabMoveDestination,
         reused_tab: Option<TabId>,
     ) -> Option<PreparedDestination> {
-        if !self.accepts_tab_move(kind, target) {
+        if !self.accepts_tab_move(surface, target) {
             return None;
         }
         let area = self.destination_area(target)?;
@@ -218,8 +218,8 @@ impl Workbench {
         if !self.contains_tab_move(source) {
             return None;
         }
-        let kind = source.tab.surface.kind();
-        let mut prepared = self.prepare_destination(kind, target, Some(source.tab.tab_id))?;
+        let mut prepared =
+            self.prepare_destination(source.tab.surface, target, Some(source.tab.tab_id))?;
         if prepared.pane == source.tab.pane_id {
             let pane = self
                 .panes
@@ -276,7 +276,7 @@ impl Workbench {
         {
             return None;
         }
-        let prepared = destination.prepare_destination(source.tab.surface.kind(), target, None)?;
+        let prepared = destination.prepare_destination(source.tab.surface, target, None)?;
         let removed = self
             .remove_tab(source.tab.pane_id, source.tab.tab_id)
             .expect("validated source tab");

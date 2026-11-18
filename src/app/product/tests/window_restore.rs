@@ -255,7 +255,7 @@ fn arrangement(record: &WindowRecord) -> Vec<serde_json::Value> {
                 "roots": window.roots,
                 "center": layout["center"],
                 "focused": layout["focused"],
-                "docks": layout["docks"],
+                "tools": layout["tools"],
             })
         })
         .collect()
@@ -308,7 +308,7 @@ fn several_windows_restore_with_splits_shared_views_docks_dirty_text_and_fresh_t
                 .unwrap();
             workbench.open_terminal_tab(split, terminal, view);
             workbench.set_split_ratio(split, 0.3);
-            workbench.set_dock_size(DockLocation::Left, 280.);
+            workbench.set_side_extent(DockLocation::Left, 280.);
         });
         terminal
     });
@@ -354,10 +354,13 @@ fn several_windows_restore_with_splits_shared_views_docks_dirty_text_and_fresh_t
     // A contributed tool whose package fails at the next launch is pruned.
     let mut failing = before.clone();
     let mut layout = serde_json::to_value(&failing.windows[1].layout).unwrap();
-    layout["docks"]["left"]["root"]["tabs"]
+    layout["tools"]
         .as_array_mut()
         .unwrap()
-        .push(serde_json::json!({ "kind": "tool", "tool": "@example/failed.view" }));
+        .push(serde_json::json!({
+            "tool": "@example/failed.view", "slot": "leftTop", "shown": true,
+            "sidebar": true, "size": 240, "share": 0.5, "root": null
+        }));
     failing.windows[1].layout = serde_json::from_value(layout).unwrap();
 
     launch.restart(Vec::new(), cx);

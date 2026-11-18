@@ -27,7 +27,7 @@ impl Rect {
     }
 }
 
-/// Where the bottom dock sits relative to the side docks.
+/// Where the bottom side sits relative to the left and right sides.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum BottomDockLayout {
     /// Under the center, between the side docks, which span the full height.
@@ -160,16 +160,13 @@ pub fn neighbor(rects: &[(PaneId, Rect)], from: PaneId, edge: SplitEdge) -> Opti
 }
 
 impl Workbench {
-    /// Each painted area's rectangle when the workbench fills `bounds`: the
-    /// side docks and the bottom dock surround the center as `layout`
-    /// arranges them, and the center takes the rest.
-    pub fn area_rects(&self, bounds: Rect, layout: BottomDockLayout) -> Vec<(Area, Rect)> {
-        let shown = |dock: DockLocation| self.area_shown(Area::Dock(dock));
-        let bottom = if shown(DockLocation::Bottom) {
-            self.dock_size(DockLocation::Bottom).min(bounds.height)
-        } else {
-            0.
-        };
+    /// Each side's rectangle when the workbench fills `bounds`: the side
+    /// stripes' windows and the bottom side surround the center as `layout`
+    /// arranges them. A side with nothing shown has none.
+    pub fn side_rects(&self, bounds: Rect, layout: BottomDockLayout) -> Vec<(DockLocation, Rect)> {
+        let bottom = self
+            .side_extent(DockLocation::Bottom)
+            .map_or(0., |size| size.min(bounds.height));
         // The band the side docks and the center share.
         let upper = match layout {
             BottomDockLayout::Contained => bounds,
@@ -178,35 +175,21 @@ impl Workbench {
                 ..bounds
             },
         };
-        let left = if shown(DockLocation::Left) {
-            self.dock_size(DockLocation::Left).min(bounds.width)
-        } else {
-            0.
-        };
-        let right = if shown(DockLocation::Right) {
-            self.dock_size(DockLocation::Right).min(bounds.width - left)
-        } else {
-            0.
-        };
+        let left = self
+            .side_extent(DockLocation::Left)
+            .map_or(0., |size| size.min(bounds.width));
+        let right = self
+            .side_extent(DockLocation::Right)
+            .map_or(0., |size| size.min(bounds.width - left));
         let middle = Rect {
             x: bounds.x + left,
             width: bounds.width - left - right,
             ..upper
         };
-        let center_height = match layout {
-            BottomDockLayout::Contained => middle.height - bottom,
-            BottomDockLayout::Full => middle.height,
-        };
-        let mut rects = vec![(
-            Area::Center,
-            Rect {
-                height: center_height,
-                ..middle
-            },
-        )];
+        let mut rects = Vec::new();
         if left > 0. {
             rects.push((
-                Area::Dock(DockLocation::Left),
+                DockLocation::Left,
                 Rect {
                     width: left,
                     ..upper
@@ -215,7 +198,7 @@ impl Workbench {
         }
         if right > 0. {
             rects.push((
-                Area::Dock(DockLocation::Right),
+                DockLocation::Right,
                 Rect {
                     x: middle.x + middle.width,
                     width: right,
@@ -229,13 +212,83 @@ impl Workbench {
                 BottomDockLayout::Full => bounds,
             };
             rects.push((
-                Area::Dock(DockLocation::Bottom),
+                DockLocation::Bottom,
                 Rect {
                     y: bounds.y + bounds.height - bottom,
                     height: bottom,
                     ..span
                 },
             ));
+        }
+        rects
+    }
+
+    /// Each painted area's rectangle when the workbench fills `bounds`: the
+    /// shown tool windows share their side's rectangle by share, and the
+    /// center takes the rest.
+    pub fn area_rects(&self, bounds: Rect, layout: BottomDockLayout) -> Vec<(Area, Rect)> {
+        let sides = self.side_rects(bounds, layout);
+        let extent = |side| {
+            sides.iter().find(|(other, _)| *other == side).map_or(
+                0.,
+                |(_, rect): &(DockLocation, Rect)| match side {
+                    DockLocation::Bottom => rect.height,
+                    _ => rect.width,
+                },
+            )
+        };
+        let (left, right, bottom) = (
+            extent(DockLocation::Left),
+            extent(DockLocation::Right),
+            extent(DockLocation::Bottom),
+        );
+        let middle_height = match layout {
+            BottomDockLayout::Contained => bounds.height - bottom,
+            BottomDockLayout::Full => bounds.height - bottom,
+        };
+        let mut rects = vec![(
+            Area::Center,
+            Rect {
+                x: bounds.x + left,
+                width: bounds.width - left - right,
+                height: middle_height,
+                ..bounds
+            },
+        )];
+        for (side, rect) in sides {
+            let [first, second] = self.side_tools(side);
+            match (first, second) {
+                (Some(first), Some(second)) => {
+                    let share = self.tool(first).map_or(0.5, |tool| tool.share);
+                    let (a, b) = if side == DockLocation::Bottom {
+                        let width = rect.width * share;
+                        (
+                            Rect { width, ..rect },
+                            Rect {
+                                x: rect.x + width,
+                                width: rect.width - width,
+                                ..rect
+                            },
+                        )
+                    } else {
+                        let height = rect.height * share;
+                        (
+                            Rect { height, ..rect },
+                            Rect {
+                                y: rect.y + height,
+                                height: rect.height - height,
+                                ..rect
+                            },
+                        )
+                    };
+                    rects.push((Area::Tool(first), a));
+                    rects.push((Area::Tool(second), b));
+                }
+                (Some(only), None) | (None, Some(only)) => {
+                    rects.push((Area::Tool(only), rect));
+                }
+                (None, None) => {}
+            }
         }
         rects
     }
@@ -312,12 +365,13 @@ impl Workbench {
         let Some(area) = self.pane_area(pane) else {
             return false;
         };
-        if let Area::Dock(dock) = area
-            && axis.is_none_or(|axis| axis == dock.axis())
+        if let Area::Tool(tool) = area
+            && let Some(side) = self.tool(tool).map(|tool| tool.slot().side())
+            && axis.is_none_or(|axis| axis == side.axis())
         {
-            let before = self.dock_size(dock);
-            self.set_dock_size(dock, before + sign * DOCK_RESIZE_STEP);
-            return self.dock_size(dock) != before;
+            let before = self.tool_size(tool).unwrap_or_default();
+            self.set_tool_size(tool, before + sign * DOCK_RESIZE_STEP);
+            return self.tool_size(tool) != Some(before);
         }
         let Some((boundary, in_second, ratio)) = self.area_layout(area).and_then(|layout| {
             layout
@@ -564,23 +618,21 @@ mod tests {
     }
 
     #[test]
-    fn pane_rects_lay_docks_around_the_center() {
+    fn pane_rects_lay_tool_windows_around_the_center() {
         let workbench = &mut Workbench::empty();
         let (left, _) = workbench.open_document_in_center(DocumentId::new(5));
         let right = workbench
             .split_pane(left, SplitDirection::Horizontal, SplitPlacement::After)
             .unwrap();
         workbench.set_split_ratio(right, 0.25);
-        let explorer = workbench.register_tool(
-            crate::workbench::tools::LEFT_TOOL_ID,
-            "Explorer",
-            DockLocation::Left,
-        );
+        let explorer =
+            workbench.register_tool("knot.explorer", "Explorer", Slot::LeftTop, ToolKind::Fixed);
         let (dock, _) = workbench.show_tool(explorer).unwrap();
-        let other = workbench.register_tool("knot.other", "Other", DockLocation::Bottom);
+        let other =
+            workbench.register_tool("knot.other", "Other", Slot::BottomLeft, ToolKind::Fixed);
         let (bottom, _) = workbench.show_tool(other).unwrap();
-        workbench.set_dock_size(DockLocation::Left, 200.);
-        workbench.set_dock_size(DockLocation::Bottom, 100.);
+        workbench.set_tool_size(explorer, 200.);
+        workbench.set_tool_size(other, 100.);
         let bounds = rect(0., 0., 1000., 500.);
         let rects = workbench.pane_rects(bounds, BottomDockLayout::Contained);
         assert_eq!(
@@ -594,7 +646,7 @@ mod tests {
         );
         assert_eq!(neighbor(&rects, bottom, SplitEdge::Left), Some(dock));
         assert_eq!(neighbor(&rects, left, SplitEdge::Bottom), Some(bottom));
-        // A full-width bottom dock runs under the side dock, which stops above it.
+        // A full-width bottom side runs under the side dock, which stops above it.
         let rects = workbench.pane_rects(bounds, BottomDockLayout::Full);
         assert_eq!(
             rects,
@@ -607,50 +659,91 @@ mod tests {
         );
         assert_eq!(neighbor(&rects, bottom, SplitEdge::Left), None);
         assert_eq!(neighbor(&rects, dock, SplitEdge::Bottom), Some(bottom));
-        // A hidden dock gives its room back and is never a neighbor.
-        workbench.set_dock_visible(DockLocation::Left, false);
+        // A hidden window gives its room back and is never a neighbor.
+        workbench.hide_tool(explorer);
         let rects = workbench.pane_rects(bounds, BottomDockLayout::Contained);
         assert_eq!(rects[0], (left, rect(0., 0., 250., 400.)));
         assert_eq!(neighbor(&rects, left, SplitEdge::Left), None);
     }
 
     #[test]
-    fn dock_panes_resize_their_dock_and_splits_across_it() {
+    fn two_slots_share_a_side_by_the_first_windows_share() {
+        let workbench = &mut Workbench::empty();
+        let (center, _) = workbench.open_document_in_center(DocumentId::new(5));
+        let [top, lower] = [
+            ("knot.top", Slot::LeftTop, 300.),
+            ("knot.lower", Slot::LeftBottom, 120.),
+        ]
+        .map(|(name, slot, size)| {
+            let id = workbench.register_tool(name, name, slot, ToolKind::Fixed);
+            workbench.set_tool_size(id, size);
+            id
+        });
+        let (top_pane, _) = workbench.show_tool(top).unwrap();
+        let (lower_pane, _) = workbench.show_tool(lower).unwrap();
+        // The first slot's window gives the side its extent, and its share
+        // splits the side.
+        assert_eq!(workbench.side_extent(DockLocation::Left), Some(300.));
+        workbench.set_side_share(DockLocation::Left, 0.25);
+        let bounds = rect(0., 0., 1000., 400.);
+        let rects = workbench.pane_rects(bounds, BottomDockLayout::Contained);
+        assert_eq!(
+            rects,
+            [
+                (center, rect(300., 0., 700., 400.)),
+                (top_pane, rect(0., 0., 300., 100.)),
+                (lower_pane, rect(0., 100., 300., 300.)),
+            ]
+        );
+        // Without the first window the second gives the extent.
+        workbench.hide_tool(top);
+        assert_eq!(workbench.side_extent(DockLocation::Left), Some(120.));
+        workbench.set_side_extent(DockLocation::Left, 150.);
+        assert_eq!(workbench.tool_size(lower), Some(150.));
+        assert_eq!(workbench.tool_size(top), Some(300.));
+        assert_eq!(workbench.side_share(DockLocation::Left), None);
+    }
+
+    #[test]
+    fn tool_window_panes_resize_their_side_and_splits_across_it() {
         let workbench = &mut Workbench::empty();
         let (pane, _) = workbench.open_document_in_center(DocumentId::new(6));
-        let first = workbench.register_tool(
-            crate::workbench::tools::LEFT_TOOL_ID,
-            "Explorer",
-            DockLocation::Left,
+        let terminal = workbench.register_tool(
+            "knot.terminal",
+            "Terminal",
+            Slot::LeftTop,
+            ToolKind::Container,
         );
-        let (dock, tab) = workbench.show_tool(first).unwrap();
-        let second = workbench.register_tool("knot.other", "Other", DockLocation::Left);
-        workbench.show_tool(second).unwrap();
-        let source = workbench.capture_tab_move(dock, tab).unwrap();
+        let (dock, tab) = workbench
+            .open_terminal_in_tool(terminal, TerminalSessionId(1))
+            .map(|(pane, _)| (pane, workbench_tab(workbench, pane)))
+            .unwrap();
         let lower = workbench
-            .relocate_tab(
-                source,
-                TabMoveDestination::At {
-                    anchor: source,
-                    placement: TabMovePlacement::Split(SplitEdge::Bottom),
-                },
+            .split_pane_with_terminal(
+                dock,
+                SplitDirection::Vertical,
+                SplitPlacement::After,
+                TerminalSessionId(2),
             )
-            .unwrap()
-            .destination
-            .pane_id;
-        let before = workbench.dock_size(DockLocation::Left);
+            .unwrap();
+        let _ = tab;
+        let before = workbench.tool_size(terminal).unwrap();
         assert!(workbench.resize_pane(lower, true, None));
-        assert_eq!(workbench.dock_size(DockLocation::Left), before + 40.);
+        assert_eq!(workbench.tool_size(terminal), Some(before + 40.));
         assert!(workbench.resize_pane(lower, true, Some(SplitDirection::Vertical)));
         assert!(close(workbench.split_ratio(lower).unwrap(), 0.45));
-        assert_eq!(workbench.dock_size(DockLocation::Left), before + 40.);
+        assert_eq!(workbench.tool_size(terminal), Some(before + 40.));
         // An unsplit center pane has nothing to resize.
         assert!(!workbench.resize_pane(pane, true, None));
         // Equalizing stays in one area.
         workbench.set_split_ratio(lower, 0.3);
         workbench.equalize_splits(Area::Center);
         assert_eq!(workbench.split_ratio(lower), Some(0.3));
-        workbench.equalize_splits(Area::Dock(DockLocation::Left));
+        workbench.equalize_splits(Area::Tool(terminal));
         assert_eq!(workbench.split_ratio(lower), Some(0.5));
+    }
+
+    fn workbench_tab(workbench: &Workbench, pane: PaneId) -> TabId {
+        workbench.pane(pane).unwrap().active_tab_id()
     }
 }

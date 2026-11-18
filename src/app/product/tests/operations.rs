@@ -949,7 +949,7 @@ await commands.register("operations.terminal", async () => {{
     place_explorer(
         &window,
         native_window,
-        crate::app::workbench::DockLocation::Left,
+        crate::app::workbench::Slot::LeftTop,
         cx,
     );
     assert_eq!(

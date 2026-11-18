@@ -1,12 +1,13 @@
 //! Window-local workbench layout.
 //!
-//! A workbench is a center area of documents surrounded by left, right, and
-//! bottom docks of tools, each a binary split tree whose leaves are tabbed
-//! panes, with native tool definitions. Tabs carry the identity of what they
-//! show (a document, a terminal session, or a tool) and a presentation
-//! identity; the application owns the views behind presentations. This module
-//! models layout and lifecycle transitions independently of native windows,
-//! views, and confirmation dialogs.
+//! A workbench is a center area of documents surrounded by tool windows.
+//! Every tool window sits in one of six slots (two per left, right, and bottom
+//! side), and a slot shows at most one of its windows. The center and each tool
+//! window own a binary split tree whose leaves are tabbed panes. Tabs carry the
+//! identity of what they show (a document, a terminal session, or a tool) and a
+//! presentation identity; the application owns the views behind
+//! presentations. This module models layout and lifecycle transitions
+//! independently of native windows, views, and confirmation dialogs.
 
 #[cfg(debug_assertions)]
 use std::collections::HashSet;
@@ -243,21 +244,11 @@ impl WorkbenchLayout {
     }
 }
 
-/// Where a pane lives: the center document area or one of the docks.
+/// Where a pane lives: the center document area or a tool window.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Area {
     Center,
-    Dock(DockLocation),
-}
-
-impl Area {
-    /// Every area, in layout order.
-    pub const ALL: [Self; 4] = [
-        Self::Center,
-        Self::Dock(DockLocation::Left),
-        Self::Dock(DockLocation::Right),
-        Self::Dock(DockLocation::Bottom),
-    ];
+    Tool(ToolFrameId),
 }
 
 /// What a tab presents, as far as placement cares.
@@ -266,18 +257,6 @@ pub enum TabKind {
     Document,
     Terminal,
     Tool,
-}
-
-impl TabKind {
-    /// Whether tabs of this kind may occupy `area`. Every placement,
-    /// relocation, and restore checks this declaration.
-    pub fn allows(self, area: Area) -> bool {
-        match self {
-            Self::Document => area == Area::Center,
-            Self::Terminal => true,
-            Self::Tool => area != Area::Center,
-        }
-    }
 }
 
 impl TabSurfaceId {
@@ -413,30 +392,20 @@ impl Pane {
 
 /// One area's split tree and the pane it last focused.
 #[derive(Default)]
-struct AreaTree {
-    layout: Option<WorkbenchLayout>,
-    focused: Option<PaneId>,
-}
-
-/// A dock keeps its arrangement while hidden; its size is absolute.
-struct DockState {
-    tree: AreaTree,
-    size: f32,
-    visible: bool,
+pub(super) struct AreaTree {
+    pub(super) layout: Option<WorkbenchLayout>,
+    pub(super) focused: Option<PaneId>,
 }
 
 pub struct Workbench {
     tools: Vec<ToolFrame>,
     center: AreaTree,
-    docks: [DockState; 3],
     next_pane_id: u64,
     next_tab_id: u64,
     next_presentation_id: u64,
     next_tool_id: u64,
-    /// The dock new terminals open in when no dock terminal exists.
-    terminal_home: DockLocation,
-    /// Dock terminal tabs, most recently focused first.
-    terminal_recent: Vec<TabId>,
+    /// Counts window reveals, for [`ToolFrame::shown_at`].
+    reveal_clock: u64,
     panes: Vec<Pane>,
     focused_pane: Option<PaneId>,
     /// The pane that had focus before the focused one, for going back.
@@ -448,17 +417,11 @@ impl Workbench {
         Self {
             tools: Vec::new(),
             center: AreaTree::default(),
-            docks: DockLocation::ALL.map(|dock| DockState {
-                tree: AreaTree::default(),
-                size: dock.default_size(),
-                visible: true,
-            }),
             next_pane_id: 1,
             next_tab_id: 1,
             next_presentation_id: 1,
             next_tool_id: 1,
-            terminal_home: DEFAULT_TERMINAL_HOME,
-            terminal_recent: Vec::new(),
+            reveal_clock: 0,
             panes: Vec::new(),
             focused_pane: None,
             previous_pane: None,
@@ -482,14 +445,36 @@ impl Workbench {
     fn tree(&self, area: Area) -> &AreaTree {
         match area {
             Area::Center => &self.center,
-            Area::Dock(dock) => &self.docks[dock.index()].tree,
+            Area::Tool(id) => &self.tool(id).expect("areas name registered tools").tree,
         }
     }
 
     fn tree_mut(&mut self, area: Area) -> &mut AreaTree {
         match area {
             Area::Center => &mut self.center,
-            Area::Dock(dock) => &mut self.docks[dock.index()].tree,
+            Area::Tool(id) => {
+                &mut self
+                    .tools
+                    .iter_mut()
+                    .find(|tool| tool.id == id)
+                    .expect("areas name registered tools")
+                    .tree
+            }
+        }
+    }
+
+    /// Whether tabs of `surface` may occupy `area`. Documents live in the
+    /// center, a fixed tool's tab only in its own window, and a terminal in the
+    /// center or a container tool window. Every placement, relocation, and
+    /// restore checks this declaration.
+    pub fn allows(&self, surface: TabSurfaceId, area: Area) -> bool {
+        match (surface, area) {
+            (TabSurfaceId::Document(_), area) => area == Area::Center,
+            (TabSurfaceId::Terminal(_), Area::Center) => true,
+            (TabSurfaceId::Terminal(_), Area::Tool(id)) => self
+                .tool(id)
+                .is_some_and(|tool| tool.kind() == ToolKind::Container),
+            (TabSurfaceId::Tool(tool), area) => area == Area::Tool(tool),
         }
     }
 
@@ -502,15 +487,12 @@ impl Workbench {
         self.tree(area).layout.as_ref()
     }
 
-    /// Whether an area is painted: the center always, a dock while it is
-    /// visible and holds panes.
+    /// Whether an area is painted: the center always, a tool window while it
+    /// is shown in its slot.
     pub fn area_shown(&self, area: Area) -> bool {
         match area {
             Area::Center => true,
-            Area::Dock(dock) => {
-                let state = &self.docks[dock.index()];
-                state.visible && state.tree.layout.is_some()
-            }
+            Area::Tool(id) => self.tool(id).is_some_and(|tool| tool.shown),
         }
     }
 
@@ -557,10 +539,20 @@ impl Workbench {
         ids
     }
 
-    /// Every pane in layout order: the center, then the left, right, and
-    /// bottom docks, hidden ones included.
+    /// Every area in layout order: the center, then the tool windows by slot
+    /// and registration, hidden ones included.
+    pub fn areas(&self) -> Vec<Area> {
+        let mut tools = self.tools.iter().collect::<Vec<_>>();
+        tools.sort_by_key(|tool| tool.slot.index());
+        std::iter::once(Area::Center)
+            .chain(tools.into_iter().map(|tool| Area::Tool(tool.id)))
+            .collect()
+    }
+
+    /// Every pane in layout order: the center, then the tool windows, hidden
+    /// ones included.
     pub fn pane_order(&self) -> Vec<PaneId> {
-        Area::ALL
+        self.areas()
             .into_iter()
             .flat_map(|area| self.area_panes(area))
             .collect()
@@ -585,7 +577,8 @@ impl Workbench {
     }
 
     /// Focus `pane_id`, remembering the pane it leaves and, for its area,
-    /// the pane. Focusing a hidden dock's pane shows the dock.
+    /// the pane. Focusing a hidden tool window's pane shows the window in its
+    /// slot, replacing the one there.
     fn set_focus(&mut self, pane_id: PaneId) {
         if self.focused_pane != Some(pane_id) {
             self.previous_pane = self.focused_pane;
@@ -593,19 +586,8 @@ impl Workbench {
         self.focused_pane = Some(pane_id);
         let area = self.pane_area(pane_id).expect("focused panes are live");
         self.tree_mut(area).focused = Some(pane_id);
-        if let Area::Dock(dock) = area {
-            self.docks[dock.index()].visible = true;
-            let active = self.pane(pane_id).and_then(|pane| {
-                pane.tabs
-                    .iter()
-                    .find(|tab| tab.id == pane.active_tab)
-                    .filter(|tab| tab.surface.kind() == TabKind::Terminal)
-                    .map(|tab| tab.id)
-            });
-            if let Some(id) = active {
-                self.terminal_recent.retain(|recent| *recent != id);
-                self.terminal_recent.insert(0, id);
-            }
+        if let Area::Tool(id) = area {
+            self.reveal_tool(id);
         }
     }
 
@@ -847,7 +829,7 @@ impl Workbench {
     /// it.
     fn insert_tab(&mut self, pane_id: PaneId, surface: TabSurfaceId) -> Option<TabId> {
         let pane_index = self.panes.iter().position(|pane| pane.id == pane_id)?;
-        if !surface.kind().allows(self.panes[pane_index].area) {
+        if !self.allows(surface, self.panes[pane_index].area) {
             return None;
         }
         let tab = self.new_tab(surface, false);
@@ -983,7 +965,7 @@ impl Workbench {
         surface: TabSurfaceId,
     ) -> Option<PaneId> {
         let area = self.pane_area(pane_id)?;
-        if !surface.kind().allows(area) {
+        if !self.allows(surface, area) {
             return None;
         }
         let new_pane_id = self.allocate_pane_id();
@@ -1095,6 +1077,11 @@ impl Workbench {
                 .layout
                 .take()
                 .and_then(|layout| layout.remove_pane(pane_id));
+            if let Area::Tool(id) = area
+                && self.tree(area).layout.is_none()
+            {
+                self.tool_mut(id).shown = false;
+            }
             self.settle_focus(Some(area));
             let removed = RemovedTab {
                 tab,
@@ -1137,7 +1124,7 @@ impl Workbench {
         #[cfg(debug_assertions)]
         {
             let mut layout_panes = Vec::new();
-            for area in Area::ALL {
+            for area in self.areas() {
                 for pane in self.area_panes(area) {
                     debug_assert_eq!(self.pane_area(pane), Some(area));
                     layout_panes.push(pane);
@@ -1153,6 +1140,11 @@ impl Workbench {
                     .is_none_or(|focused| self.pane_shown(focused))
             );
 
+            let mut slots = HashSet::new();
+            for tool in &self.tools {
+                debug_assert!(!tool.shown || tool.tree.layout.is_some());
+                debug_assert!(!tool.shown || slots.insert(tool.slot));
+            }
             let mut tool_ids = HashSet::new();
             let mut presentations = HashSet::new();
             let mut tab_ids = HashSet::new();
@@ -1166,7 +1158,7 @@ impl Workbench {
                         .all(|tab| !tab.pinned)
                 );
                 for tab in &pane.tabs {
-                    debug_assert!(tab.surface.kind().allows(pane.area));
+                    debug_assert!(self.allows(tab.surface, pane.area));
                     debug_assert!(tab_ids.insert(tab.id));
                     debug_assert!(presentations.insert(tab.presentation));
                     if let TabSurfaceId::Tool(id) = tab.surface {
@@ -1188,13 +1180,13 @@ struct RemovedTab {
 }
 
 mod stripes;
-pub use stripes::{StripeButton, Stripes};
+pub use stripes::Stripes;
 mod terminals;
-pub use terminals::{DEFAULT_TERMINAL_HOME, TerminalToggle};
+pub use terminals::free_label;
 mod tools;
 pub use tools::{
-    DockLocation, HiddenTool, StoredDock, StoredNode, StoredPlacement, TOOL_LAYOUT_VERSION,
-    ToolFrame, ToolFrameId, ToolLayoutSnapshot,
+    DockLocation, Slot, StoredTool, StripeClick, TOOL_LAYOUT_VERSION, ToolFrame, ToolFrameId,
+    ToolKind, ToolLayoutSnapshot,
 };
 
 mod arrange;
@@ -1206,7 +1198,7 @@ mod relocate;
 mod resize;
 pub use resize::{BottomDockLayout, Rect, neighbor};
 
-pub use arrange::{Arrangement, DockArrangement, PlanNode};
+pub use arrange::{Arrangement, PlanNode, ToolArrangement};
 
 pub use relocate::{
     SplitEdge, TabMoveCapture, TabMoveDestination, TabMovePlacement, TabMoveTransition,
@@ -1228,24 +1220,26 @@ mod tests {
         let split = workbench
             .split_focused(SplitDirection::Horizontal, SplitPlacement::After)
             .unwrap();
-        let [first, second] = ["knot.first", "knot.second"]
-            .map(|stable| workbench.register_tool(stable, stable, DockLocation::Left));
-        let (upper, tab) = workbench.show_tool(first).unwrap();
-        workbench.show_tool(second);
-        let source = workbench.capture_tab_move(upper, tab).unwrap();
+        let terminal = workbench.register_tool(
+            "knot.terminal",
+            "Terminal",
+            Slot::LeftTop,
+            ToolKind::Container,
+        );
+        let (upper, _) = workbench
+            .open_terminal_in_tool(terminal, TerminalSessionId(1))
+            .unwrap();
         let lower = workbench
-            .relocate_tab(
-                source,
-                TabMoveDestination::At {
-                    anchor: source,
-                    placement: TabMovePlacement::Split(SplitEdge::Bottom),
-                },
+            .split_pane_with_terminal(
+                upper,
+                SplitDirection::Vertical,
+                SplitPlacement::After,
+                TerminalSessionId(2),
             )
-            .unwrap()
-            .destination
-            .pane_id;
+            .unwrap();
         assert_eq!(workbench.area_panes(Area::Center), [main, split]);
         assert_eq!(workbench.pane_order(), [main, split, upper, lower]);
+        assert_eq!(workbench.focused_pane_id(), Some(lower));
         assert_eq!(workbench.cycle_pane_id(true), Some(upper));
         assert_eq!(workbench.first_pane_id(), Some(upper));
         workbench.focus_pane(main);
@@ -1253,15 +1247,12 @@ mod tests {
         assert_eq!(workbench.last_pane_id(), Some(split));
         workbench.focus_pane(lower);
 
-        // A collapsed pane hands focus to its area, and the dock's last pane
-        // to the center pane it last focused.
-        workbench.hide_tool(first);
-        assert_eq!(workbench.focused_pane_id(), Some(upper));
-        workbench.hide_tool(second);
+        // Hiding the window hands focus to the center pane it last focused.
+        workbench.hide_tool(terminal);
         assert_eq!(workbench.focused_pane_id(), Some(main));
         assert_eq!(workbench.center_pane(), Some(main));
-        // Emptying the center leaves focus on the empty center, not a dock.
-        let (upper, _) = workbench.show_tool(second).unwrap();
+        // Emptying the center leaves focus on the empty center, not a window.
+        let (upper, _) = workbench.show_tool(terminal).unwrap();
         workbench.focus_pane(main);
         workbench.remove_document_tabs();
         assert_eq!(workbench.center(), None);
@@ -1274,32 +1265,47 @@ mod tests {
     }
 
     #[test]
-    fn arranging_installs_each_area_and_focuses_the_marked_pane() {
+    fn arranging_installs_the_center_and_containers_and_focuses_the_marked_pane() {
         let workbench = &mut Workbench::empty();
-        let tool = workbench.register_tool("knot.tool", "Tool", DockLocation::Right);
+        let tool = workbench.register_tool("knot.tool", "Tool", Slot::RightTop, ToolKind::Fixed);
+        let terminal = workbench.register_tool(
+            "knot.terminal",
+            "Terminal",
+            Slot::BottomLeft,
+            ToolKind::Container,
+        );
         let pane = |tabs, focused| PlanNode::Pane {
             selected: 0,
             focused,
             pinned: 0,
             tabs,
         };
-        let dock = |root, visible| DockArrangement {
+        let arranged = |tool, slot, shown, size, root| ToolArrangement {
+            tool,
+            slot,
+            shown,
+            sidebar: true,
+            size,
+            share: 0.5,
             root,
-            size: 300.,
-            visible,
         };
         let installed = workbench.arrange(Arrangement {
             center: Some(pane(
                 vec![(TabSurfaceId::Document(DocumentId::new(21)), 'a')],
                 false,
             )),
-            docks: [
-                dock(None, true),
-                dock(
-                    Some(pane(vec![(TabSurfaceId::Tool(tool), 'b')], true)),
+            tools: vec![
+                arranged(tool, Slot::RightTop, true, 300., None),
+                arranged(
+                    terminal,
+                    Slot::BottomLeft,
                     true,
+                    150.,
+                    Some(pane(
+                        vec![(TabSurfaceId::Terminal(TerminalSessionId(7)), 'b')],
+                        true,
+                    )),
                 ),
-                dock(None, false),
             ],
         });
         assert_eq!(
@@ -1310,15 +1316,25 @@ mod tests {
             ['a', 'b']
         );
         let right = workbench.tool_tab(tool).unwrap().0;
-        assert_eq!(workbench.dock_location(right), Some(DockLocation::Right));
-        assert_eq!(workbench.focused_pane_id(), Some(right));
-        assert_eq!(workbench.dock_size(DockLocation::Right), 300.);
-        assert!(!workbench.dock_visible(DockLocation::Bottom));
+        assert!(workbench.tool_visible(tool) && workbench.tool_visible(terminal));
+        assert_eq!(workbench.tool_size(tool), Some(300.));
+        assert_eq!(workbench.tool_size(terminal), Some(150.));
+        let terminal_pane = workbench.area_panes(Area::Tool(terminal))[0];
+        assert_eq!(workbench.focused_pane_id(), Some(terminal_pane));
         // A tab restored into a pane whose area does not allow its kind lands
         // in the center.
         let (center, _) =
             workbench.insert_arranged(right, 0, TabSurfaceId::Document(DocumentId::new(9)), false);
         assert_eq!(workbench.pane_area(center), Some(Area::Center));
+
+        // Arranging again keeps fixed tools' tabs and replaces the rest.
+        workbench.arrange(Arrangement {
+            center: None,
+            tools: vec![arranged(tool, Slot::RightTop, false, 300., None)],
+        });
+        assert!(!workbench.tool_visible(tool) && !workbench.tool_visible(terminal));
+        assert!(workbench.tool_is_empty(terminal));
+        assert_eq!(workbench.tool_tab(tool).unwrap().0, right);
     }
 
     #[test]

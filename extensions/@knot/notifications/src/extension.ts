@@ -78,7 +78,7 @@ export async function start() {
       kind: "tree",
       provider: { getChildren: (parentId) => panelItems(notices, parentId, Date.now()) },
     },
-    placement: { location: "bottom", visible: false },
+    placement: { location: "rightTop", visible: false },
     actions: [
       { label: "Mark All Read", icon: MARK_READ_ICON, command: MARK_ALL_READ },
       { label: "Clear All", icon: CLEAR_ICON, command: CLEAR },

@@ -209,9 +209,14 @@ impl KnotWindow {
         let source = self
             .capture_tab_relocation(pane, tab, cx)
             .ok_or(CommandOutcome::InvalidTarget)?;
-        let kind = source.tab.tab.surface.kind();
+        let surface = source.tab.tab.surface;
         let workbench = self.workbench.read(cx);
-        let target = match self.neighbor(pane, edge, |area| kind.allows(area), cx) {
+        let allowed = workbench
+            .areas()
+            .into_iter()
+            .filter(|area| workbench.allows(surface, *area))
+            .collect::<Vec<_>>();
+        let target = match self.neighbor(pane, edge, |area| allowed.contains(&area), cx) {
             Some(neighbor) => TabMoveDestination::At {
                 anchor: workbench
                     .capture_tab_move(neighbor, workbench.pane(neighbor).unwrap().active_tab_id())
@@ -251,23 +256,24 @@ impl KnotWindow {
     }
 
     /// The maximized pane while it is still focused; anything else ends it.
-    /// Hiding a dock remembers its maximized pane, and showing the dock with
-    /// that pane focused maximizes it again.
+    /// Hiding a tool window remembers its maximized pane, and showing the
+    /// window with that pane focused maximizes it again.
     pub(super) fn maximized_pane(&mut self, cx: &App) -> Option<PaneId> {
         let workbench = self.workbench.read(cx);
         if let Some(pane) = self.maximized
-            && let Some(Area::Dock(dock)) = workbench.pane_area(pane)
-            && !workbench.area_shown(Area::Dock(dock))
+            && let Some(tool) = workbench.pane_tool(pane)
+            && !workbench.tool_visible(tool)
         {
-            self.hidden_maximized[dock.index()] = Some(pane);
+            self.hidden_maximized.push((tool, pane));
             self.maximized = None;
         }
         let focused = workbench.focused_pane_id();
-        for dock in DockLocation::ALL {
-            if workbench.area_shown(Area::Dock(dock))
-                && let Some(pane) = self.hidden_maximized[dock.index()].take()
-                && focused == Some(pane)
-            {
+        let (shown, hidden): (Vec<_>, Vec<_>) = std::mem::take(&mut self.hidden_maximized)
+            .into_iter()
+            .partition(|(tool, _)| workbench.tool_visible(*tool));
+        self.hidden_maximized = hidden;
+        for (_, pane) in shown {
+            if focused == Some(pane) {
                 self.maximized = Some(pane);
             }
         }

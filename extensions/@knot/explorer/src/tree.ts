@@ -27,7 +27,7 @@ export async function registerTree(state: ExplorerState) {
         },
       },
     },
-    placement: { location: "left", order: 0 },
+    placement: { location: "leftTop", order: 0 },
     actions: [
       { label: "New File", icon: "explorer.new-file", command: NEW_FILE },
       { label: "New Folder", icon: "explorer.new-folder", command: NEW_FOLDER },

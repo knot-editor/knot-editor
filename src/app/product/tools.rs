@@ -3,7 +3,7 @@
 use super::*;
 use crate::app::workbench::TabMoveDestination;
 #[cfg(any(test, feature = "test-support"))]
-use crate::app::workbench::ToolFrameId;
+use crate::app::workbench::{Slot, ToolFrameId};
 use knot_protocol::CommandOutcome;
 
 impl KnotWindow {
@@ -97,13 +97,8 @@ impl KnotWindow {
                 ToolContent::Extension(workbench_view),
                 definition.location,
             );
-            workbench.place_registered_tool(
-                id,
-                stored.as_ref(),
-                definition.location,
-                definition.order,
-                definition.visible,
-            );
+            workbench.set_tool_order(id, definition.order);
+            workbench.place_registered_tool(id, stored.as_ref(), definition.visible);
             if let Some(pane) = previous {
                 workbench.focus_pane(pane);
             }
@@ -226,7 +221,7 @@ impl KnotWindow {
         let destination = TabMoveDestination::Area(area);
         let workbench = self.workbench.read(cx);
         if workbench.pane_area(pane) == Some(area)
-            || !workbench.accepts_tab_move(source.tab.tab.surface.kind(), destination)
+            || !workbench.accepts_tab_move(source.tab.tab.surface, destination)
         {
             return Err(CommandOutcome::Unavailable);
         }
@@ -264,10 +259,10 @@ impl KnotWindow {
         cx.notify();
     }
 
-    /// Toggle a dock (see [`Workbench::toggle_dock`]).
-    pub(super) fn toggle_dock(&mut self, dock: DockLocation, cx: &mut Context<Self>) {
+    /// Toggle a side (see [`Workbench::toggle_side`]).
+    pub(super) fn toggle_side(&mut self, side: DockLocation, cx: &mut Context<Self>) {
         self.workbench
-            .update(cx, |workbench, _| workbench.toggle_dock(dock));
+            .update(cx, |workbench, _| workbench.toggle_side(side));
         self.publish_tool_layout(cx);
         self.focus_active_surface(cx);
         cx.notify();
@@ -337,11 +332,15 @@ impl KnotWindow {
                 let Some(id) = workbench.tool_by_stable_id(&definition.id) else {
                     continue;
                 };
-                workbench.hide_tool(id);
-                workbench.remember_tool_placement(id, definition.location, definition.order);
-                if definition.visible {
-                    workbench.show_tool(id);
-                }
+                workbench.reset_tool(
+                    id,
+                    definition.location,
+                    definition.order,
+                    definition.visible,
+                );
+            }
+            if let Some(id) = workbench.tool_by_stable_id(crate::app::terminal::TERMINAL_TOOL_ID) {
+                workbench.reset_tool(id, crate::app::terminal::TERMINAL_SLOT, 0, false);
             }
         });
         self.publish_tool_layout(cx);
@@ -358,8 +357,9 @@ impl KnotWindow {
             return;
         };
         self.workbench.update(cx, |workbench, _| {
-            workbench.set_dock_sizes(snapshot.dock_sizes());
-            workbench.set_terminal_home(snapshot.terminal_home);
+            if let Some(id) = workbench.tool_by_stable_id(crate::app::terminal::TERMINAL_TOOL_ID) {
+                workbench.place_registered_tool(id, Some(&snapshot), false);
+            }
         });
     }
 
@@ -379,12 +379,10 @@ impl KnotWindow {
                 TEST_TOOL_ID,
                 "Test Tool",
                 ToolContent::Extension(crate::app::workbench::ExtensionView::Tree(tree)),
-                DockLocation::Left,
+                Slot::LeftTop,
             );
-            if let Some(snapshot) = &stored {
-                workbench.set_dock_sizes(snapshot.dock_sizes());
-            }
-            workbench.place_registered_tool(id, stored.as_ref(), DockLocation::Left, 0, true);
+            workbench.set_tool_order(id, 0);
+            workbench.place_registered_tool(id, stored.as_ref(), true);
             if show {
                 workbench.show_tool(id);
             }

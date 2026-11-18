@@ -6,13 +6,13 @@ use knot_protocol::ExtensionKey;
 
 const SOURCE: &str = r#"
 import { workbench } from "knot";
-const bottom = { location: "bottom" };
 const plain = await workbench.registerView({
-  id: "frame.plain", title: "Plain", content: { kind: "text" }, placement: bottom,
+  id: "frame.plain", title: "Plain", content: { kind: "text" },
+  placement: { location: "bottomLeft" },
 });
 const numbered = await workbench.registerView({
   id: "frame.numbered", title: "Numbered", content: { kind: "text" }, gutter: true,
-  placement: bottom,
+  placement: { location: "bottomRight" },
 });
 await plain.setText("one\ntwo\n");
 await numbered.setText("one\ntwo\n");

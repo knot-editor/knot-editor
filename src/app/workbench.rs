@@ -13,10 +13,10 @@ use gpui::{App, AppContext, Context, Entity, EntityId, FocusHandle, Focusable};
 use knot_model::workbench as layout;
 pub(crate) use knot_model::workbench::{
     Area, Arrangement, BottomDockLayout, CloseConfirmation, CloseRequestOutcome, DockLocation,
-    DocumentCloseDisposition, DocumentId, PaneId, PresentationId, SplitDirection, SplitEdge,
-    SplitPlacement, StripeButton, Stripes, TabId, TabKind, TabMoveCapture, TabMoveDestination,
-    TabMovePlacement, TabSurfaceId, TerminalSessionId, ToolFrameId, WorkbenchLayout, WorkbenchTab,
-    neighbor,
+    DocumentCloseDisposition, DocumentId, PaneId, PresentationId, Slot, SplitDirection, SplitEdge,
+    SplitPlacement, StripeClick, Stripes, TabId, TabMoveCapture, TabMoveDestination,
+    TabMovePlacement, TabSurfaceId, TerminalSessionId, ToolFrameId, ToolKind, WorkbenchLayout,
+    WorkbenchTab, neighbor,
 };
 
 use super::{
@@ -141,7 +141,6 @@ pub(crate) enum ArrangedTab {
         model: Entity<Buffer>,
         view: EditorViewState,
     },
-    Tool(ToolFrameId),
     Terminal(TerminalSessionId, Option<Entity<TerminalView>>),
 }
 
@@ -158,7 +157,6 @@ impl ArrangedTab {
                 TabSurfaceId::Document(document),
                 Some(ArrangedView::Editor(model, view)),
             ),
-            Self::Tool(id) => (TabSurfaceId::Tool(id), None),
             Self::Terminal(session, view) => (
                 TabSurfaceId::Terminal(session),
                 view.map(ArrangedView::Terminal),
@@ -421,15 +419,15 @@ impl Workbench {
         Some((pane, tab))
     }
 
-    /// Open a terminal in `dock`'s last focused pane, creating the dock's
-    /// first pane when it has none, and show the dock.
-    pub(crate) fn open_terminal_in_dock(
+    /// Open a terminal in a container tool window's last focused pane,
+    /// creating its first pane when it has none, and show the window.
+    pub(crate) fn open_terminal_in_tool(
         &mut self,
-        dock: DockLocation,
+        tool: ToolFrameId,
         session: TerminalSessionId,
         view: Entity<TerminalView>,
     ) -> Option<(PaneId, TabId)> {
-        let (pane, tab) = self.layout.open_terminal_in_dock(dock, session)?;
+        let (pane, tab) = self.layout.open_terminal_in_tool(tool, session)?;
         self.views.insert(
             self.presentation_of(pane, tab),
             PresentationView::Terminal(view),
@@ -483,16 +481,34 @@ impl Workbench {
         stable_id: impl Into<String>,
         title: impl Into<String>,
         content: ToolContent,
-        dock: DockLocation,
+        slot: Slot,
     ) -> ToolFrameId {
         if let Some(id) = self.tool_presenting(content.entity_id()) {
             return id;
         }
-        let id = self.layout.register_tool(stable_id, title, dock);
+        let id = self
+            .layout
+            .register_tool(stable_id, title, slot, ToolKind::Fixed);
         let presentation = self.tool(id).unwrap().presentation;
         self.views
             .insert(presentation, PresentationView::Tool(content));
         id
+    }
+
+    /// Define a container tool window that holds the tabs opened into it, or
+    /// return the one already registered under `stable_id`.
+    pub(crate) fn register_container(
+        &mut self,
+        stable_id: &str,
+        title: impl Into<String>,
+        slot: Slot,
+    ) -> ToolFrameId {
+        match self.layout.tool_by_stable_id(stable_id) {
+            Some(id) => id,
+            None => self
+                .layout
+                .register_tool(stable_id, title, slot, ToolKind::Container),
+        }
     }
 
     pub(crate) fn unregister_tool(&mut self, id: ToolFrameId) {
@@ -752,13 +768,13 @@ mod tests {
                 "example.tool",
                 "Tool",
                 ToolContent::Extension(ExtensionView::Tree(tree.clone())),
-                DockLocation::Left,
+                Slot::LeftTop,
             );
             let again = workbench.register_tool(
                 "example.tool",
                 "Tool",
                 ToolContent::Extension(ExtensionView::Tree(tree)),
-                DockLocation::Left,
+                Slot::LeftTop,
             );
             assert_eq!(again, id);
             workbench.show_tool(id).unwrap();

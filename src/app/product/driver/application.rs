@@ -305,28 +305,21 @@ impl TestProduct {
             cx.global::<crate::app::tool_layout::ApplicationToolLayout>()
                 .0
                 .current()
-                .placement(id)
-                .is_some_and(|placement| {
-                    matches!(placement, knot_model::workbench::StoredPlacement::Docked(_))
-                })
+                .tool(id)
+                .is_some_and(|tool| tool.shown)
         })
     }
 
-    /// The tool a fresh window selects in its left dock's first pane.
+    /// The tool a fresh window shows in its left top slot.
     pub fn fresh_window_left_dock(&self, cx: &mut TestAppContext) -> Option<String> {
-        use knot_model::workbench::StoredNode;
         cx.read(|cx| {
-            let snapshot = cx
-                .global::<crate::app::tool_layout::ApplicationToolLayout>()
+            cx.global::<crate::app::tool_layout::ApplicationToolLayout>()
                 .0
-                .current();
-            let mut node = snapshot.docks[0].root.clone()?;
-            loop {
-                match node {
-                    StoredNode::Pane { selected, tools } => return tools.get(selected).cloned(),
-                    StoredNode::Split { first, .. } => node = *first,
-                }
-            }
+                .current()
+                .tools
+                .iter()
+                .find(|tool| tool.shown && tool.slot == knot_model::workbench::Slot::LeftTop)
+                .map(|tool| tool.id.clone())
         })
     }
 

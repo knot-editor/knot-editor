@@ -1,12 +1,12 @@
 //! The tool stripes on the left and right window edges: a button per tool
-//! and one for the dock terminals, grouped by home dock.
+//! window, grouped by the slot it sits in.
 
 use super::*;
 use crate::app::context_menu::ContextMenu;
 use crate::app::convert::ThemePaint as _;
 use crate::app::theme::{chrome, color, theme};
 use crate::app::tokens;
-use crate::app::workbench::{StripeButton, Stripes};
+use crate::app::workbench::{Slot, StripeClick, Stripes};
 use crate::app::zoom;
 use gpui_component::menu::PopupMenuItem;
 use knot_model::icons::IconDefinition;
@@ -14,7 +14,7 @@ use knot_model::icons::IconDefinition;
 /// A stripe button being dragged to another stripe.
 #[derive(Clone)]
 struct StripeDrag {
-    button: StripeButton,
+    tool: ToolFrameId,
     title: SharedString,
     icon: Option<IconDefinition>,
 }
@@ -50,7 +50,10 @@ fn stripe_face(icon: Option<IconDefinition>, title: &str) -> Div {
 impl KnotWindow {
     /// The left and right stripes; none when `workbench.toolStripes` is off,
     /// and a stripe without buttons is absent, except while a drag could
-    /// drop a button on it.
+    /// drop a button on it. The left stripe shows the left top group, a
+    /// separator, the left bottom group, and, after a separator, the bottom left group at its
+    /// lower end; the right stripe mirrors it with the right slots and the
+    /// bottom right group.
     pub(super) fn render_stripes(
         &self,
         cx: &mut Context<Self>,
@@ -59,7 +62,9 @@ impl KnotWindow {
         if !settings::boolean(settings::WORKBENCH_TOOL_STRIPES, cx) {
             return (None, None);
         }
-        let stripes = self.workbench.read(cx).stripes();
+        let workbench = self.workbench.read(cx);
+        let stripes = workbench.stripes();
+        let more = workbench.off_sidebar_tools();
         let stripe_width = chrome(cx).stripe_width;
         let stripe = |id: &'static str| {
             div()
@@ -75,87 +80,113 @@ impl KnotWindow {
                 .items_center()
         };
         let dragging = self.stripe_dragging.get();
-        let populated = |docks: &[DockLocation]| {
-            dragging || docks.iter().any(|dock| !stripes.group(*dock).is_empty())
+        let populated = |slots: [Slot; 3]| {
+            dragging || slots.iter().any(|slot| !stripes.group(*slot).is_empty())
         };
-        let left = populated(&[DockLocation::Left, DockLocation::Bottom]).then(|| {
+        let line = theme(cx).paint_color(color::STRIPE_SEPARATOR);
+        let separator = move || {
+            div()
+                .h(px(1.))
+                .my(zoom::rems(6.))
+                .w(zoom::rems(tokens::chrome::STRIPE_BUTTON * 0.8))
+                .bg(line)
+        };
+        // A separator sits between two groups that both have buttons.
+        let has = |slot: Slot| !stripes.group(slot).is_empty();
+        let split = |earlier: &[Slot], slot: Slot| has(slot) && earlier.iter().any(|s| has(*s));
+        let left = (populated([Slot::LeftTop, Slot::LeftBottom, Slot::BottomLeft])
+            || !more.is_empty())
+        .then(|| {
             stripe("stripe-left")
-                .child(
-                    self.render_stripe_group(DockLocation::Left, &stripes, cx)
-                        .flex_1(),
+                .child(self.render_stripe_group(Slot::LeftTop, &stripes, cx))
+                .when(split(&[Slot::LeftTop], Slot::LeftBottom), |s| {
+                    s.child(separator())
+                })
+                .child(self.render_stripe_group(Slot::LeftBottom, &stripes, cx))
+                .child(div().flex_1())
+                .when(
+                    split(&[Slot::LeftTop, Slot::LeftBottom], Slot::BottomLeft),
+                    |s| s.child(separator()),
                 )
-                .child(self.render_stripe_group(DockLocation::Bottom, &stripes, cx))
+                .child(self.render_stripe_group(Slot::BottomLeft, &stripes, cx))
+                .when(!more.is_empty(), |stripe| {
+                    stripe.child(self.render_more_button(more, cx))
+                })
         });
-        let right = populated(&[DockLocation::Right]).then(|| {
-            stripe("stripe-right").child(
-                self.render_stripe_group(DockLocation::Right, &stripes, cx)
-                    .flex_1(),
-            )
+        let right = populated([Slot::RightTop, Slot::RightBottom, Slot::BottomRight]).then(|| {
+            stripe("stripe-right")
+                .child(self.render_stripe_group(Slot::RightTop, &stripes, cx))
+                .when(split(&[Slot::RightTop], Slot::RightBottom), |s| {
+                    s.child(separator())
+                })
+                .child(self.render_stripe_group(Slot::RightBottom, &stripes, cx))
+                .child(div().flex_1())
+                .when(
+                    split(&[Slot::RightTop, Slot::RightBottom], Slot::BottomRight),
+                    |s| s.child(separator()),
+                )
+                .child(self.render_stripe_group(Slot::BottomRight, &stripes, cx))
         });
         (left, right)
     }
 
-    /// The buttons whose home is `dock`, which also takes a dragged button
-    /// as its new home.
+    /// The buttons of tool windows in `slot`, which also takes a dragged
+    /// button as its tool window's new slot.
     fn render_stripe_group(
         &self,
-        dock: DockLocation,
+        slot: Slot,
         stripes: &Stripes,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
         let drop_hint = theme(cx).paint_color(color::LIST_SELECTED_BACKGROUND);
         let buttons = stripes
-            .group(dock)
+            .group(slot)
             .iter()
-            .map(|button| self.render_stripe_button(*button, cx))
+            .map(|tool| self.render_stripe_button(*tool, cx))
             .collect::<Vec<_>>();
+        let dragging = self.stripe_dragging.get();
         div()
-            .id(("stripe-group", dock.index()))
-            .debug_selector(move || format!("stripe-group-{}", dock.index()))
+            .id(("stripe-group", slot.index()))
+            .debug_selector(move || format!("stripe-group-{}", slot.index()))
             .flex()
             .flex_col()
             .items_center()
             .gap_1()
             .w_full()
-            .when(dock == DockLocation::Bottom, |group| {
-                group
-                    .min_h(zoom::rems(tokens::chrome::STRIPE_GROUP_MIN_HEIGHT))
-                    .justify_end()
+            .when(dragging, |group| {
+                group.min_h(zoom::rems(tokens::chrome::STRIPE_GROUP_MIN_HEIGHT))
             })
             .drag_over::<StripeDrag>(move |style, _, _, _| style.bg(drop_hint))
             .on_drop(cx.listener(move |this, drag: &StripeDrag, _, cx| {
-                this.rehome_stripe_button(drag.button, dock, cx);
+                this.move_tool_to_slot(drag.tool, slot, cx);
             }))
             .children(buttons)
     }
 
-    fn render_stripe_button(&self, button: StripeButton, cx: &mut Context<Self>) -> AnyElement {
+    fn render_stripe_button(&self, id: ToolFrameId, cx: &mut Context<Self>) -> AnyElement {
         let workbench = self.workbench.read(cx);
-        let (key, title, icon) = match button {
-            StripeButton::Tool(id) => {
-                let tool = workbench.tool(id).expect("stripe buttons name live tools");
-                let icon = crate::app::icons::defined_icon(&format!("tool.{}", tool.stable_id), cx);
-                (tool.stable_id.clone(), tool.title.clone(), icon)
-            }
-            StripeButton::Terminal => (
-                "terminal".to_owned(),
-                "Terminal".to_owned(),
-                crate::app::icons::defined_icon("terminal", cx),
-            ),
-        };
-        let visible = workbench.stripe_button_visible(button);
+        let tool = workbench.tool(id).expect("stripe buttons name live tools");
+        let icon = crate::app::icons::defined_icon(&format!("tool.{}", tool.stable_id), cx);
+        let (key, title) = (tool.stable_id.clone(), tool.title.clone());
+        let visible = workbench.tool_visible(id);
+        let focused = workbench
+            .focused_pane_id()
+            .is_some_and(|pane| workbench.pane_tool(pane) == Some(id));
         let hover = theme(cx).paint_color(color::LIST_HOVER_BACKGROUND);
-        let selected = theme(cx).paint_color(color::STRIPE_SELECTED_BACKGROUND);
+        let selected = theme(cx).paint_color(if focused {
+            color::STRIPE_SELECTED_BACKGROUND
+        } else {
+            color::STRIPE_SHOWN_BACKGROUND
+        });
         let selected_text = theme(cx).paint_color(color::TEXT);
         let title = SharedString::from(title);
         let drag = StripeDrag {
-            button,
+            tool: id,
             title: title.clone(),
             icon: icon.clone(),
         };
         let selector = format!("stripe-button-{key}");
         let tooltip_title = title.clone();
-        let stable_id = key.clone();
         stripe_face(icon, &title)
             .id(SharedString::from(selector.clone()))
             .debug_selector(move || selector.clone())
@@ -186,72 +217,153 @@ impl KnotWindow {
             .on_mouse_down(
                 MouseButton::Right,
                 cx.listener(move |this, event: &MouseDownEvent, window, cx| {
-                    this.open_stripe_menu(button, event.position, window, cx);
+                    this.open_tool_menu(id, true, event.position, window, cx);
                     cx.stop_propagation();
                 }),
             )
-            .on_click(cx.listener(move |this, _, _, cx| match button {
-                StripeButton::Tool(_) => this.toggle_tool(&stable_id, cx),
-                StripeButton::Terminal => {
-                    this.toggle_terminal(cx).ok();
-                }
+            .on_click(cx.listener(move |this, _, _, cx| this.click_stripe_button(id, cx)))
+            .into_any_element()
+    }
+
+    /// The More tool windows button, which lists the tool windows without a
+    /// stripe button.
+    fn render_more_button(&self, tools: Vec<ToolFrameId>, cx: &mut Context<Self>) -> AnyElement {
+        let hover = theme(cx).paint_color(color::LIST_HOVER_BACKGROUND);
+        let titles = tools
+            .into_iter()
+            .filter_map(|id| Some((id, self.workbench.read(cx).tool(id)?.title.clone())))
+            .collect::<Vec<_>>();
+        stripe_face(None, "⋯")
+            .id("stripe-more")
+            .debug_selector(|| "stripe-more".to_owned())
+            .size(zoom::rems(tokens::chrome::STRIPE_BUTTON))
+            .flex_none()
+            .rounded(crate::app::zoom::rems(crate::app::tokens::radius::SM))
+            .cursor_pointer()
+            .hover(move |style| style.bg(hover))
+            .tooltip(|window, cx| {
+                gpui_component::tooltip::Tooltip::new("More tool windows")
+                    .text_xs()
+                    .build(window, cx)
+            })
+            .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
+                let position = event.position();
+                this.open_more_menu(titles.clone(), position, window, cx);
             }))
             .into_any_element()
     }
 
-    /// Make `dock` the home of a stripe button's surface: a shown tool moves
-    /// there, a hidden one stays hidden and returns there, and the terminals
-    /// in other docks move there and become the terminal home. Publishes the new home.
-    fn rehome_stripe_button(
-        &mut self,
-        button: StripeButton,
-        dock: DockLocation,
-        cx: &mut Context<Self>,
-    ) {
-        match button {
-            StripeButton::Terminal => {
-                let terminals = self.workbench.read(cx).dock_terminal_tabs_outside(dock);
-                self.workbench
-                    .update(cx, |workbench, _| workbench.set_terminal_home(dock));
-                for (pane, tab) in terminals {
-                    let _ = self.move_tab_to_area(pane, tab, Area::Dock(dock), cx);
-                }
-            }
-            StripeButton::Tool(id) => {
-                let shown = self.workbench.read(cx).tool_tab(id);
-                if let Some((pane, tab)) = shown {
-                    // A tool already in `dock` is unavailable to move: nothing to do.
-                    let _ = self.move_tab_to_area(pane, tab, Area::Dock(dock), cx);
-                } else {
-                    self.workbench
-                        .update(cx, |workbench, _| workbench.rehome_hidden_tool(id, dock));
-                }
-            }
+    /// A click on a tool's stripe button: a shown window hides, a hidden one
+    /// shows and takes focus. A container without tabs opens its first.
+    pub(super) fn click_stripe_button(&mut self, id: ToolFrameId, cx: &mut Context<Self>) {
+        let click = self
+            .workbench
+            .update(cx, |workbench, _| workbench.stripe_click(id));
+        match click {
+            StripeClick::Shown(..) => self.refresh_tool_tree(id, cx),
+            StripeClick::Empty => self.open_first_tab(id, cx),
+            StripeClick::Hidden => {}
         }
         self.publish_tool_layout(cx);
+        self.focus_active_surface(cx);
         cx.notify();
     }
 
-    /// Open the menu of a stripe button at `position`: show the tool beside
-    /// the others in its dock or hide it, and move its surface to another
-    /// dock. It takes focus, which returns to the active surface when it
-    /// closes.
-    fn open_stripe_menu(
+    /// Open the first tab of a container tool window that shows empty.
+    fn open_first_tab(&mut self, id: ToolFrameId, cx: &mut Context<Self>) {
+        let is_terminal = self
+            .workbench
+            .read(cx)
+            .tool(id)
+            .is_some_and(|tool| tool.stable_id == crate::app::terminal::TERMINAL_TOOL_ID);
+        if is_terminal {
+            let directory = self.terminal_directory(cx);
+            self.new_terminal_in_pane(
+                None,
+                super::operations::TerminalLocation::Dock,
+                directory,
+                cx,
+            );
+        }
+    }
+
+    /// Refresh the tree of a contributed tool window that just showed.
+    pub(super) fn refresh_tool_tree(&mut self, id: ToolFrameId, cx: &mut Context<Self>) {
+        let Some(stable_id) = self
+            .workbench
+            .read(cx)
+            .tool(id)
+            .map(|tool| tool.stable_id.clone())
+        else {
+            return;
+        };
+        if let Some(crate::app::workbench::ExtensionView::Tree(tree)) = self
+            .contributed_views
+            .get(&stable_id)
+            .map(|instance| instance.content.clone())
+        {
+            tree.update(cx, |tree, cx| tree.refresh_root(cx));
+        }
+    }
+
+    /// Move a tool window to `slot`, replacing the window shown there when
+    /// this one shows. Publishes the new slot.
+    pub(super) fn move_tool_to_slot(
         &mut self,
-        button: StripeButton,
+        id: ToolFrameId,
+        slot: Slot,
+        cx: &mut Context<Self>,
+    ) {
+        self.workbench
+            .update(cx, |workbench, _| workbench.place_tool(id, slot));
+        self.publish_tool_layout(cx);
+        self.focus_active_surface(cx);
+        cx.notify();
+    }
+
+    /// Hide a tool window and take its button off the stripes.
+    pub(super) fn remove_tool_from_sidebar(&mut self, id: ToolFrameId, cx: &mut Context<Self>) {
+        self.workbench
+            .update(cx, |workbench, _| workbench.remove_from_sidebar(id));
+        self.publish_tool_layout(cx);
+        self.focus_active_surface(cx);
+        cx.notify();
+    }
+
+    /// Bring a tool window off the sidebar back: it shows in its slot and its
+    /// button returns to that slot's stripe group.
+    pub(super) fn restore_tool_to_sidebar(&mut self, id: ToolFrameId, cx: &mut Context<Self>) {
+        let shown = self
+            .workbench
+            .update(cx, |workbench, _| workbench.show_tool(id).is_some());
+        if shown {
+            self.refresh_tool_tree(id, cx);
+        } else {
+            self.workbench
+                .update(cx, |workbench, _| workbench.add_to_sidebar(id));
+        }
+        self.publish_tool_layout(cx);
+        self.focus_active_surface(cx);
+        cx.notify();
+    }
+
+    /// Open the menu of a tool window at `position`: from its stripe button
+    /// (`with_hide`), Hide, and always Move to each other slot and Remove
+    /// from Sidebar. It takes focus, which returns to the active surface when
+    /// it closes.
+    pub(super) fn open_tool_menu(
+        &mut self,
+        id: ToolFrameId,
+        with_hide: bool,
         position: Point<Pixels>,
         native_window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let workbench = self.workbench.read(cx);
-        let (stable_id, visible, home) = match button {
-            StripeButton::Tool(id) => (
-                workbench.tool(id).map(|tool| tool.stable_id.clone()),
-                workbench.tool_visible(id),
-                workbench.tool_home(id),
-            ),
-            StripeButton::Terminal => (None, false, Some(workbench.terminal_home())),
+        let Some(tool) = workbench.tool(id) else {
+            return;
         };
+        let (visible, current) = (workbench.tool_visible(id), tool.slot());
         let window = cx.entity().downgrade();
         let menu = ContextMenu::open(
             native_window,
@@ -260,36 +372,59 @@ impl KnotWindow {
             None,
             move |menu| {
                 let mut items = Vec::new();
-                if let Some(stable_id) = stable_id {
+                if with_hide && visible {
                     let window = window.clone();
-                    let label = if visible { "Hide" } else { "Show Beside" };
-                    items.push(PopupMenuItem::new(label).on_click(move |_, _, cx| {
-                        let _ = window.update(cx, |this, cx| {
-                            if visible {
-                                this.hide_tool_by_stripe(&stable_id, cx);
-                            } else {
-                                this.show_tool_beside(&stable_id, cx);
-                            }
-                        });
+                    items.push(PopupMenuItem::new("Hide").on_click(move |_, _, cx| {
+                        let _ = window.update(cx, |this, cx| this.click_stripe_button(id, cx));
                     }));
                 }
-                for dock in DockLocation::ALL
-                    .into_iter()
-                    .filter(|dock| Some(*dock) != home)
-                {
+                for slot in Slot::ALL.into_iter().filter(|slot| *slot != current) {
                     let window = window.clone();
-                    let label = match (button, dock) {
-                        (StripeButton::Tool(_), _) => format!("Move to {} Dock", dock_name(dock)),
-                        (StripeButton::Terminal, _) => {
-                            format!("Open Terminals in {} Dock", dock_name(dock))
-                        }
-                    };
-                    items.push(PopupMenuItem::new(label).on_click(move |_, _, cx| {
-                        let _ = window
-                            .update(cx, |this, cx| this.rehome_stripe_button(button, dock, cx));
-                    }));
+                    items.push(
+                        PopupMenuItem::new(format!("Move to {}", slot_name(slot))).on_click(
+                            move |_, _, cx| {
+                                let _ = window
+                                    .update(cx, |this, cx| this.move_tool_to_slot(id, slot, cx));
+                            },
+                        ),
+                    );
                 }
+                let window = window.clone();
+                items.push(
+                    PopupMenuItem::new("Remove from Sidebar").on_click(move |_, _, cx| {
+                        let _ = window.update(cx, |this, cx| this.remove_tool_from_sidebar(id, cx));
+                    }),
+                );
                 items.into_iter().fold(menu, |menu, item| menu.item(item))
+            },
+            Self::close_stripe_menu,
+        );
+        self.stripe_menu = Some(menu);
+        self.set_focus(Focus::Popup, cx);
+        cx.notify();
+    }
+
+    /// Open the list of tool windows without a stripe button.
+    fn open_more_menu(
+        &mut self,
+        tools: Vec<(ToolFrameId, String)>,
+        position: Point<Pixels>,
+        native_window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let window = cx.entity().downgrade();
+        let menu = ContextMenu::open(
+            native_window,
+            cx,
+            position,
+            None,
+            move |menu| {
+                tools.iter().fold(menu, |menu, (id, title)| {
+                    let (window, id) = (window.clone(), *id);
+                    menu.item(PopupMenuItem::new(title.clone()).on_click(move |_, _, cx| {
+                        let _ = window.update(cx, |this, cx| this.restore_tool_to_sidebar(id, cx));
+                    }))
+                })
             },
             Self::close_stripe_menu,
         );
@@ -304,43 +439,16 @@ impl KnotWindow {
             cx.notify();
         }
     }
-
-    /// Show a tool beside the others in its dock (see
-    /// [`Workbench::show_tool_beside`]).
-    pub(super) fn show_tool_beside(&mut self, stable_id: &str, cx: &mut Context<Self>) {
-        let Some(id) = self.workbench.read(cx).tool_by_stable_id(stable_id) else {
-            return;
-        };
-        self.workbench
-            .update(cx, |workbench, _| workbench.show_tool_beside(id));
-        if let Some(crate::app::workbench::ExtensionView::Tree(tree)) = self
-            .contributed_views
-            .get(stable_id)
-            .map(|instance| instance.content.clone())
-        {
-            tree.update(cx, |tree, cx| tree.refresh_root(cx));
-        }
-        self.publish_tool_layout(cx);
-        self.focus_active_surface(cx);
-        cx.notify();
-    }
-
-    fn hide_tool_by_stripe(&mut self, stable_id: &str, cx: &mut Context<Self>) {
-        let Some(id) = self.workbench.read(cx).tool_by_stable_id(stable_id) else {
-            return;
-        };
-        self.workbench
-            .update(cx, |workbench, _| workbench.hide_tool(id));
-        self.publish_tool_layout(cx);
-        self.focus_active_surface(cx);
-        cx.notify();
-    }
 }
 
-fn dock_name(dock: DockLocation) -> &'static str {
-    match dock {
-        DockLocation::Left => "Left",
-        DockLocation::Right => "Right",
-        DockLocation::Bottom => "Bottom",
+/// How the menus name a slot.
+fn slot_name(slot: Slot) -> &'static str {
+    match slot {
+        Slot::LeftTop => "Left Top",
+        Slot::LeftBottom => "Left Bottom",
+        Slot::RightTop => "Right Top",
+        Slot::RightBottom => "Right Bottom",
+        Slot::BottomLeft => "Bottom Left",
+        Slot::BottomRight => "Bottom Right",
     }
 }

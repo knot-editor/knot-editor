@@ -290,11 +290,13 @@ fn toggle_explorer_hides_a_focused_explorer_and_shows_it_again(cx: &mut TestAppC
     let _ = &explorer.product;
 }
 
-fn tool_in(layout: &serde_json::Value, dock: &str) -> Option<String> {
-    layout["docks"][dock]["root"]["tabs"]
+/// The tool window the layout shows in `slot`.
+fn tool_in(layout: &serde_json::Value, slot: &str) -> Option<String> {
+    layout["tools"]
         .as_array()?
         .iter()
-        .find_map(|tab| tab["tool"].as_str().map(str::to_owned))
+        .find(|tool| tool["slot"] == slot && tool["shown"] == true)
+        .and_then(|tool| tool["tool"].as_str().map(str::to_owned))
 }
 
 #[gpui::test]
@@ -304,25 +306,24 @@ fn the_explorer_is_an_ordinary_tool_for_layout_memory(cx: &mut TestAppContext) {
     explorer.wait_for_labels(&["app", "docs", "src", "README.md"], cx);
     let window = &explorer.window;
     assert_eq!(
-        tool_in(&window.layout(cx), "left").as_deref(),
+        tool_in(&window.layout(cx), "leftTop").as_deref(),
         Some(VIEW),
-        "the explorer starts in the left dock"
+        "the explorer starts in the left top slot"
     );
 
-    explorer.tree.focus(cx);
+    window.move_tool(VIEW, "rightTop", cx);
     assert_eq!(
-        window.run_command("workbench.move-tab-to-right-dock", cx),
-        CommandOutcome::Completed
+        tool_in(&window.layout(cx), "rightTop").as_deref(),
+        Some(VIEW)
     );
-    assert_eq!(tool_in(&window.layout(cx), "right").as_deref(), Some(VIEW));
-    assert_eq!(tool_in(&window.layout(cx), "left"), None);
+    assert_eq!(tool_in(&window.layout(cx), "leftTop"), None);
 
     assert_eq!(
         window.run_command("workbench.reset-layout", cx),
         CommandOutcome::Completed
     );
     wait_until(cx, |cx| {
-        tool_in(&window.layout(cx), "left").as_deref() == Some(VIEW)
+        tool_in(&window.layout(cx), "leftTop").as_deref() == Some(VIEW)
     });
 }
 

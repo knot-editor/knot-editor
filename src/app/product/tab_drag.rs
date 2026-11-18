@@ -5,18 +5,10 @@ use super::*;
 use crate::app::convert::ThemePaint as _;
 use crate::app::theme::{color, theme};
 use crate::app::workbench::{
-    DockLocation, SplitEdge, TabKind, TabMoveCapture, TabMoveDestination, TabMovePlacement,
+    DockLocation, SplitEdge, TabMoveCapture, TabMoveDestination, TabMovePlacement, TabSurfaceId,
 };
 use knot_model::icons::IconDefinition;
 use std::rc::Rc;
-
-/// Distance from the workbench frame edge that starts a dock drop target for
-/// tabs whose kind allows the dock. Pane-edge splits keep handling the
-/// interior, so kinds kept out of the docks keep their pane-local split
-/// behavior at the edges.
-const WORKBENCH_EDGE_WIDTH: f32 = 20.;
-const DOCK_PREVIEW_SIDE: f32 = 240.;
-const DOCK_PREVIEW_BOTTOM: f32 = 220.;
 
 #[derive(Default)]
 pub(super) struct TabDragState {
@@ -32,6 +24,9 @@ pub(super) struct TabDragState {
 struct PaneGeometry {
     pane: PaneId,
     area: Area,
+    /// Whether the pane's window takes terminal tabs: the center and
+    /// containers.
+    terminals: bool,
     bounds: Bounds<Pixels>,
     tabs: Vec<(TabMoveCapture, Bounds<Pixels>)>,
     bar: Option<Bounds<Pixels>>,
@@ -44,66 +39,19 @@ struct DropTarget {
 }
 
 impl TabDragState {
-    fn workbench_dock_target(&self, position: Point<Pixels>, kind: TabKind) -> Option<DropTarget> {
-        let bounds = self.workbench?;
-        if !bounds.contains(&position) {
-            return None;
-        }
-        let edge = WORKBENCH_EDGE_WIDTH;
-        let left = position.x - bounds.left() < px(edge);
-        let right = bounds.right() - position.x < px(edge);
-        let bottom = bounds.bottom() - position.y < px(edge);
-        let (dock, preview) = if left {
-            (
-                DockLocation::Left,
-                Bounds::new(
-                    point(bounds.left(), bounds.top()),
-                    size(
-                        px(DOCK_PREVIEW_SIDE).min(bounds.size.width),
-                        bounds.size.height,
-                    ),
-                ),
-            )
-        } else if right {
-            let width = px(DOCK_PREVIEW_SIDE).min(bounds.size.width);
-            (
-                DockLocation::Right,
-                Bounds::new(
-                    point(bounds.right() - width, bounds.top()),
-                    size(width, bounds.size.height),
-                ),
-            )
-        } else if bottom {
-            let height = px(DOCK_PREVIEW_BOTTOM).min(bounds.size.height);
-            (
-                DockLocation::Bottom,
-                Bounds::new(
-                    point(bounds.left(), bounds.bottom() - height),
-                    size(bounds.size.width, height),
-                ),
-            )
-        } else {
-            return None;
-        };
-        if !kind.allows(Area::Dock(dock)) {
-            return None;
-        }
-        Some(DropTarget {
-            tab: TabMoveDestination::Area(Area::Dock(dock)),
-            bounds: preview,
-        })
-    }
-
-    /// The drop target under `position` for a tab of `kind`: only areas the
-    /// kind allows offer one.
-    fn target_at(&self, position: Point<Pixels>, kind: TabKind) -> Option<DropTarget> {
-        if let Some(dock) = self.workbench_dock_target(position, kind) {
-            return Some(dock);
-        }
+    /// The drop target under `position` for a tab showing `surface`: only
+    /// windows that take it offer one. Documents live in the center, a fixed
+    /// tool's tab in its own window, and terminals in the center or a
+    /// container.
+    fn target_at(&self, position: Point<Pixels>, surface: TabSurfaceId) -> Option<DropTarget> {
         if let Some(center) = self.empty_center
             && center.contains(&position)
         {
-            return kind.allows(Area::Center).then_some(DropTarget {
+            return matches!(
+                surface,
+                TabSurfaceId::Document(_) | TabSurfaceId::Terminal(_)
+            )
+            .then_some(DropTarget {
                 tab: TabMoveDestination::Empty,
                 bounds: center,
             });
@@ -112,7 +60,12 @@ impl TabDragState {
             .panes
             .iter()
             .find(|pane| pane.bounds.contains(&position))?;
-        if !kind.allows(pane.area) {
+        let allowed = match surface {
+            TabSurfaceId::Document(_) => pane.area == Area::Center,
+            TabSurfaceId::Terminal(_) => pane.terminals,
+            TabSurfaceId::Tool(tool) => pane.area == Area::Tool(tool),
+        };
+        if !allowed {
             return None;
         }
         let &(first, _) = pane.tabs.first()?;
@@ -179,6 +132,33 @@ impl TabDragState {
             },
             bounds: preview,
         })
+    }
+
+    /// The painted extent of a side's tool windows along the divider
+    /// between them: their height on the left and right, their width at the
+    /// bottom.
+    pub(super) fn side_extent(&self, workbench: &Workbench, side: DockLocation) -> Option<f32> {
+        let tools = workbench.side_tools(side);
+        let mut bounds = self
+            .panes
+            .iter()
+            .filter(|pane| matches!(pane.area, Area::Tool(id) if tools.contains(&Some(id))))
+            .map(|pane| pane.bounds);
+        let first = bounds.next()?;
+        let (start, end) = bounds.fold(
+            (first.origin, first.bottom_right()),
+            |(origin, corner), bounds| {
+                (
+                    point(origin.x.min(bounds.left()), origin.y.min(bounds.top())),
+                    point(corner.x.max(bounds.right()), corner.y.max(bounds.bottom())),
+                )
+            },
+        );
+        Some(f32::from(if side == DockLocation::Bottom {
+            end.x - start.x
+        } else {
+            end.y - start.y
+        }))
     }
 
     pub(super) fn begin_frame(&mut self) {
@@ -339,10 +319,11 @@ impl TabDragCoordinator {
         if !entry.accepts_drop {
             return DropAction::Invalid;
         }
-        let Some(target) = entry.state.borrow().target_at(
-            pointer - front.content.origin,
-            source.tab.tab.surface.kind(),
-        ) else {
+        let Some(target) = entry
+            .state
+            .borrow()
+            .target_at(pointer - front.content.origin, source.tab.tab.surface)
+        else {
             return DropAction::Invalid;
         };
         DropAction::Target(TabRelocationDestination {
@@ -358,10 +339,10 @@ impl TabDragCoordinator {
             .iter()
             .find(|window| window.frame.contains(&pointer))
             .map(|window| window.window);
-        let Some(kind) = self
+        let Some(surface) = self
             .active
             .as_ref()
-            .map(|active| active.source.tab.tab.surface.kind())
+            .map(|active| active.source.tab.tab.surface)
         else {
             return;
         };
@@ -378,7 +359,7 @@ impl TabDragCoordinator {
                     entry
                         .state
                         .borrow()
-                        .target_at(pointer - window.content.origin, kind)
+                        .target_at(pointer - window.content.origin, surface)
                 });
             entry.state.borrow_mut().preview = target;
         }
@@ -556,13 +537,19 @@ impl KnotWindow {
         .size_full()
     }
 
-    pub(super) fn pane_drag_geometry(&self, pane: PaneId, area: Area) -> impl IntoElement + use<> {
+    pub(super) fn pane_drag_geometry(
+        &self,
+        pane: PaneId,
+        area: Area,
+        terminals: bool,
+    ) -> impl IntoElement + use<> {
         let state = self.tab_drag.clone();
         canvas(
             move |bounds, _, _| {
                 state.borrow_mut().panes.push(PaneGeometry {
                     pane,
                     area,
+                    terminals,
                     bounds,
                     tabs: Vec::new(),
                     bar: None,
@@ -655,10 +642,20 @@ impl KnotWindow {
             return;
         }
         if event.keystroke.key == "escape"
+            && let Some(resize) = self.slot_resize.take()
+        {
+            self.workbench.update(cx, |workbench, _| {
+                workbench.set_side_share(resize.side, resize.start_share);
+            });
+            cx.stop_propagation();
+            cx.notify();
+            return;
+        }
+        if event.keystroke.key == "escape"
             && let Some(resize) = self.dock_resize.take()
         {
             self.workbench.update(cx, |workbench, _| {
-                workbench.set_dock_size(resize.dock, resize.start_size);
+                workbench.set_side_extent(resize.dock, resize.start_size);
             });
             cx.stop_propagation();
             cx.notify();
@@ -725,19 +722,44 @@ impl KnotWindow {
                                 });
                                 return;
                             }
+                            if let Some(resize) = window.read(cx).slot_resize
+                                && event.dragging()
+                            {
+                                let delta = event.position - resize.start_pointer;
+                                let delta = if resize.side == DockLocation::Bottom {
+                                    delta.x
+                                } else {
+                                    delta.y
+                                };
+                                let share =
+                                    resize.start_share + f32::from(delta) / resize.extent.max(1.);
+                                window.update(cx, |window, cx| {
+                                    window.workbench.update(cx, |workbench, _| {
+                                        workbench.set_side_share(resize.side, share);
+                                    });
+                                    cx.notify();
+                                });
+                                return;
+                            }
                             let resize = window.read(cx).dock_resize;
                             if let Some(resize) = resize
                                 && event.dragging()
                             {
                                 let delta = event.position - resize.start_pointer;
                                 let size = match resize.dock {
-                                    DockLocation::Left => resize.start_size + f32::from(delta.x),
-                                    DockLocation::Right => resize.start_size - f32::from(delta.x),
-                                    DockLocation::Bottom => resize.start_size - f32::from(delta.y),
+                                    crate::app::workbench::DockLocation::Left => {
+                                        resize.start_size + f32::from(delta.x)
+                                    }
+                                    crate::app::workbench::DockLocation::Right => {
+                                        resize.start_size - f32::from(delta.x)
+                                    }
+                                    crate::app::workbench::DockLocation::Bottom => {
+                                        resize.start_size - f32::from(delta.y)
+                                    }
                                 };
                                 window.update(cx, |window, cx| {
                                     window.workbench.update(cx, |workbench, _| {
-                                        workbench.set_dock_size(resize.dock, size);
+                                        workbench.set_side_extent(resize.dock, size);
                                     });
                                     cx.notify();
                                 });
@@ -782,6 +804,15 @@ impl KnotWindow {
                                 // A settled resize is a user customization; equal
                                 // snapshots are no-ops, so release without movement
                                 // never reaches storage.
+                                window.publish_tool_layout(cx);
+                                cx.notify();
+                            });
+                        }
+                        if let Some(window) = resize_window.upgrade()
+                            && window.read(cx).slot_resize.is_some()
+                        {
+                            window.update(cx, |window, cx| {
+                                window.slot_resize = None;
                                 window.publish_tool_layout(cx);
                                 cx.notify();
                             });

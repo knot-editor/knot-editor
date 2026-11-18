@@ -69,6 +69,8 @@ export const ONE_DARK: ThemeDefinition = {
     "notification.warning": yellow,
     "popover.background": panel,
     "popover.border": "#3b4048",
+    "stripe.separator": "#3b4048",
+    "stripe.shown.background": "#3a3f4b",
     "scrim": "#00000080",
     "scrollbar.thumb": "#4e566680",
     "statusBar.background": panel,

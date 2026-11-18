@@ -760,7 +760,10 @@ impl KnotWindow {
         };
         let plan = {
             let workbench = self.workbench.read(cx);
-            layout.plan(resolve, |tool| workbench.tool_by_stable_id(tool).is_some())
+            layout.plan(resolve, |tool| {
+                let id = workbench.tool_by_stable_id(tool)?;
+                Some((id, workbench.tool(id)?.kind()))
+            })
         };
         let documents = Self::documents(cx);
         let mut languages_changed = false;
@@ -795,12 +798,6 @@ impl KnotWindow {
                         view,
                     }
                 }
-                PlannedTab::Tool(tool) => ArrangedTab::Tool(
-                    self.workbench
-                        .read(cx)
-                        .tool_by_stable_id(&tool)
-                        .expect("planned tools are registered"),
-                ),
                 PlannedTab::Terminal { directory } => {
                     let (id, view) = match directory.filter(|directory| directory.is_dir()) {
                         Some(directory) => self.create_terminal_in(Some(directory), cx),

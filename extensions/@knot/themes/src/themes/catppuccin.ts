@@ -80,6 +80,8 @@ function catppuccin(name: string, appearance: "dark" | "light", p: Flavor): Them
       "notification.warning": p.yellow,
       "popover.background": dark ? p.mantle : p.base,
       "popover.border": dark ? p.surface0 : p.surface1,
+      "stripe.separator": dark ? p.surface0 : p.surface1,
+      "stripe.shown.background": p.surface1,
       "scrim": dark ? "#11111b99" : "#4c4f6933",
       "scrollbar.thumb": `${p.surface2}99`,
       "statusBar.background": p.mantle,

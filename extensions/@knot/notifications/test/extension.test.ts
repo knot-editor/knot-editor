@@ -19,7 +19,7 @@ const bell = () => host.statusItems(window).find((item) => item.id === "bell");
 test("the panel starts hidden at the bottom with an empty state and an idle bell", async () => {
   const view = host.view(VIEW_ID);
   assert.equal(view.visible, false);
-  assert.equal(view.contribution.placement?.location, "bottom");
+  assert.equal(view.contribution.placement?.location, "rightTop");
   assert.deepEqual((await rows()).map((row) => row.label), ["No notifications"]);
   assert.deepEqual(view.contribution.actions?.map((action) => action.command), [
     "notifications.mark-all-read",
