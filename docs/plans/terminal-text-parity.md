@@ -4,8 +4,9 @@ Status: checkpoint 1 complete; checkpoint 2 is next. No roadmap item.
 
 ## Goal
 
-The terminal looks as sharp as Ghostty with the same font: same row height
-and glyphs snapped to the emulator cell grid instead of soft, drifting runs.
+The terminal looks as sharp as Ghostty with the same font: same row height,
+glyphs snapped to the emulator cell grid instead of soft, drifting runs,
+and matching regular and bold glyph weight.
 
 ## Design
 
@@ -25,8 +26,10 @@ and glyphs snapped to the emulator cell grid instead of soft, drifting runs.
 
 ## Exclusions
 
-- Subpixel antialiasing / gamma tuning, palette or color changes, and font
-  fallback or weight changes.
+- Palette or color changes, font fallback changes, and new `font.weight`
+  semantics; checkpoint 3 matches Ghostty's rendering within the current
+  semantics (base weight 100-900, bold at 700) and may revisit AA/gamma
+  handling to do it.
 - Editor, text input, or picker typography.
 - A separate `cell-height`/`cell-width` setting; `font.lineHeight` remains
   the knob.
@@ -64,9 +67,27 @@ sit on-pixel at 1x/2x.
 Personal config root is `user_config_root` in
 `src/app/personal_config.rs`.
 
+## Checkpoint 3 — Regular-weight parity with Ghostty
+
+Deliverable: normal (non-bold) terminal glyphs render at the same visual
+weight as Ghostty with the same font, and bold cells stand out by the same
+margin.
+
+- Investigate the cause first: weight selection (`font.weight` into the
+  platform weight, `Font::bold()` mapping), synthetic emboldening anywhere
+  in the text stack, and rasterization differences (antialiasing, gamma).
+  Fix the actual cause; `font.weight` keeps its current meaning.
+- Validation: typography/view tests locking the investigated behavior;
+  `just check`.
+- Review gate: `just check`; zoomed side-by-side screenshots of the same
+  fixture as checkpoint 2 in Ghostty and Knot, comparing regular and bold
+  stem weight.
+
+**Implementation context.** `src/app/typography.rs` (`font`, `bold`),
+`src/app/terminal/view.rs` (paint loop ~line 1225, run font selection),
+the gpui text system (`font-kit`).
+
 ## Deferred
 
-- Subpixel-AA/gamma investigation if parity still looks off after the grid
-  lands; palette and fallback-font follow-ups.
-- Weight rendering: Knot looks a bit bolder than Ghostty at the same font
-  (reported at the checkpoint 1 gate); weight changes stay excluded for now.
+- Further subpixel-AA/gamma tuning if parity still looks off after the grid
+  and weight work lands; palette and fallback-font follow-ups.
