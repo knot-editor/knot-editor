@@ -30,15 +30,14 @@ point.
 
 1. D203 — Tool windows with a title and session tabs, as IntelliJ.
 2. D022 — Editor autocompletion.
-3. D175 — Type-ahead after a held Enter.
-4. D182 — Interleave extension roots at awaits: before D067.
-5. D087 — Extension entitlements: D085, D126, D067, and D101 need it.
-6. D129 — Refactor builtin language extensions.
-7. D138 — Extension startup report as an untitled document.
-8. D054 — Dedicated read-only generated text surface.
-9. D085 — Cross-file search.
-10. D197 — Diff view: D126 and D174 build on it.
-11. D126 — Git status and changes per root.
+3. D182 — Interleave extension roots at awaits: before D067.
+4. D087 — Extension entitlements: D085, D126, D067, and D101 need it.
+5. D129 — Refactor builtin language extensions.
+6. D138 — Extension startup report as an untitled document.
+7. D054 — Dedicated read-only generated text surface.
+8. D085 — Cross-file search.
+9. D197 — Diff view: D126 and D174 build on it.
+10. D126 — Git status and changes per root.
 
 Remove an item from this list when it is done or dropped.
 
@@ -53,14 +52,6 @@ decisions, and remove its plan with it. Reports under [reports/](reports/)
 hold the analyses that support some items.
 
 ## Bugs
-
-- **D175 — Type-ahead after a held Enter** 🚧
-  - Depends on: none
-  - Description: [Plan](plans/d175-type-ahead-after-held-enter.md). Enter on a query-driven picker whose rows are not yet current
-    waits for them, and keys typed meanwhile are swallowed. Fix it when dropped
-    keys are noticed in daily use, or another command opens something after a
-    picker: hold those keys and replay them through key routing once the opened
-    view has focus.
 
 ## Architecture and technical debt
 

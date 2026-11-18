@@ -61,6 +61,10 @@ after the key landed before the commit in 199–200 of 200 trials without orderi
 and in none with it. Releasing the hold on focus loss and after one second keeps
 a command awaiting a picker from swallowing its typing and a stuck extension
 from keeping the keyboard.
+Accepting an extension's picker or input holds the same way until the command
+tree that owns it settles, rather than the picker buffering keys while its rows
+are pending: keys typed after Enter then follow focus to whatever the command
+opens instead of landing in the view focus returned to.
 
 Overlapping bindings are not conflicts, because the latest write winning is the
 rule rather than an error; Show Keybindings lists every slot instead. The
