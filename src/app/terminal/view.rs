@@ -924,6 +924,27 @@ fn shaping_runs(
     runs
 }
 
+/// Split a jointly-shaped run into one piece per cell at the cells' byte
+/// boundaries, so each cell paints at its own snapped grid origin with the
+/// cell's fixed advance. Returns `None` when a glyph spans a cell boundary:
+/// the run shaped into a real ligature, which paints jointly clipped to its
+/// cells instead. Every boundary is a cell boundary by construction, so the
+/// split cannot fail on bounds or encoding.
+fn per_cell_pieces(shaped: &ShapedLine, cells: &[RenderCell]) -> Option<Vec<ShapedLine>> {
+    let mut cursor = shaped.cursor();
+    let mut pieces = Vec::with_capacity(cells.len());
+    let mut end = 0;
+    for cell in cells {
+        end += cell.text.len();
+        let piece = cursor.take_until(end);
+        if f32::from(piece.width()) <= 0. {
+            return None;
+        }
+        pieces.push(piece);
+    }
+    Some(pieces)
+}
+
 struct RenderCursor {
     line: usize,
     column: usize,
@@ -1265,18 +1286,54 @@ impl Element for TerminalElement {
                     &[run],
                     None,
                 );
-                let origin = layout.origin(bounds, cell.column, cell.line);
-                let width = cell_width * if cell.wide { 2 } else { cells.len() };
-                window.with_content_mask(
-                    Some(ContentMask {
-                        bounds: Bounds::new(origin, size(width, cell_height)),
-                    }),
-                    |window| {
-                        let origin = layout.text_origin(origin, shaped.ascent, shaped.descent);
-                        let _ =
-                            shaped.paint(origin, cell_height, TextAlign::Left, None, window, cx);
-                    },
-                );
+                // Each cell paints at its own snapped grid origin. A glyph
+                // spanning cells is a real ligature: it paints jointly,
+                // clipped to its cells.
+                let mut paint_text =
+                    |column: usize, line: usize, spans: usize, shaped: &ShapedLine| {
+                        let origin = layout.snap(layout.origin(bounds, column, line));
+                        let width = cell_width * spans;
+                        window.with_content_mask(
+                            Some(ContentMask {
+                                bounds: Bounds::new(origin, size(width, cell_height)),
+                            }),
+                            |window| {
+                                let origin = layout.snap(layout.text_origin(
+                                    origin,
+                                    shaped.ascent,
+                                    shaped.descent,
+                                ));
+                                let _ = shaped.paint(
+                                    origin,
+                                    cell_height,
+                                    TextAlign::Left,
+                                    None,
+                                    window,
+                                    cx,
+                                );
+                            },
+                        );
+                    };
+                match per_cell_pieces(&shaped, cells) {
+                    Some(pieces) => {
+                        for (cell, piece) in cells.iter().zip(&pieces) {
+                            paint_text(
+                                cell.column,
+                                cell.line,
+                                if cell.wide { 2 } else { 1 },
+                                piece,
+                            );
+                        }
+                    }
+                    None => {
+                        paint_text(
+                            cell.column,
+                            cell.line,
+                            if cell.wide { 2 } else { cells.len() },
+                            &shaped,
+                        );
+                    }
+                }
             }
         });
         if let Some(scrollbar) = snapshot.scrollbar {

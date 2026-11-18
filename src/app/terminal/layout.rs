@@ -119,6 +119,16 @@ impl TerminalLayout {
             origin.y + self.baseline - (self.cell_height - ascent - descent) / 2. - ascent,
         )
     }
+
+    /// Snap a viewport point to the physical pixel grid, so painted glyphs
+    /// sit on-pixel instead of straddling physical pixels. Cell sizes are
+    /// already whole physical pixels, so snapping every cell origin keeps
+    /// every column and row exactly one cell apart.
+    pub(crate) fn snap(self, origin: Point<Pixels>) -> Point<Pixels> {
+        let snap =
+            |value: Pixels| px((f32::from(value) * self.scale_factor).round() / self.scale_factor);
+        point(snap(origin.x), snap(origin.y))
+    }
 }
 
 #[cfg(test)]
@@ -186,6 +196,51 @@ mod tests {
             assert!(f32::from(painted.y).abs() < 0.001);
             assert!(layout.baseline >= shaped_ascent);
             assert!(layout.baseline + shaped_descent <= layout.cell_height);
+        }
+    }
+
+    #[test]
+    fn snapping_lands_on_the_physical_pixel_grid() {
+        for scale in [1., 1.25, 1.5, 2.] {
+            let layout =
+                TerminalLayout::from_metrics(px(14.), px(8.1), px(11.2), px(3.3), 1., scale);
+            for value in [10.25, 21.5, 0.1, -3.7, 100.] {
+                let snapped = layout.snap(point(px(value), px(value)));
+                // Snapping twice changes nothing.
+                assert_eq!(layout.snap(snapped), snapped);
+                // At most half a physical pixel away on both axes.
+                for axis in [snapped.x, snapped.y] {
+                    assert!(
+                        (f32::from(axis) - value).abs() * scale <= 0.5 + 1e-6,
+                        "scale {scale}, value {value}: snapped to {axis:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn snapped_cell_origins_keep_exact_cell_pitch() {
+        for scale in [1., 1.25, 1.5, 2.] {
+            let layout =
+                TerminalLayout::from_metrics(px(14.), px(8.1), px(11.2), px(3.3), 1., scale);
+            let bounds = Bounds::new(point(px(10.25), px(21.5)), size(px(800.), px(600.)));
+            let first = layout.snap(layout.origin(bounds, 0, 0));
+            for column in 0..80 {
+                let snapped = layout.snap(layout.origin(bounds, column, 0));
+                let drift = f32::from(snapped.x - (first.x + layout.cell_width * column)).abs();
+                assert!(
+                    drift < 0.001,
+                    "scale {scale}, column {column}: drift {drift}"
+                );
+                assert_eq!(snapped.y, first.y);
+            }
+            for line in 0..24 {
+                let snapped = layout.snap(layout.origin(bounds, 0, line));
+                let drift = f32::from(snapped.y - (first.y + layout.cell_height * line)).abs();
+                assert!(drift < 0.001, "scale {scale}, line {line}: drift {drift}");
+                assert_eq!(snapped.x, first.x);
+            }
         }
     }
 

@@ -391,4 +391,80 @@ mod shaping_runs {
         cells[2].column = 3;
         assert_eq!(runs(&cells, true), ["--", ">"]);
     }
+
+    #[test]
+    fn invisible_and_multibyte_cells_stay_single() {
+        let mut cells = line("--", 0);
+        cells[1].style.invisible = true;
+        assert_eq!(runs(&cells, true), ["-", "-"]);
+
+        // The combining mark is two bytes, so it never joins its neighbors.
+        assert_eq!(runs(&line("e\u{301}->", 0), true), ["e", "\u{301}", "->"]);
+    }
+
+    #[test]
+    fn background_differences_do_not_split_runs() {
+        // Backgrounds paint per cell under the text, so the run still shapes
+        // together and paints with each cell's own colors.
+        let mut cells = line("--", 0);
+        cells[1].background = Rgb::new(1, 2, 3);
+        assert_eq!(runs(&cells, true), ["--"]);
+    }
+
+    #[test]
+    fn strikethrough_boundaries_split_runs() {
+        let mut cells = line("--", 0);
+        cells[1].style.strikethrough = true;
+        assert_eq!(runs(&cells, true), ["-", "-"]);
+    }
+}
+
+#[cfg(unix)]
+#[gpui::test]
+fn punctuation_runs_split_into_per_cell_pieces(cx: &mut TestAppContext) {
+    use super::*;
+    use gpui::{SharedString, TextRun};
+
+    let session = cx.new(|cx| TerminalSession::new_with_options(read_line(), cx));
+    let (_view, cx) = cx.add_window_view(|_, cx| TerminalView::new(session.clone(), cx));
+    cx.update(|window, cx| {
+        let font = base_font(cx);
+        let run = |len: usize| TextRun {
+            len,
+            font: font.clone(),
+            color: paint_rgb(Rgb::new(255, 255, 255)),
+            background_color: None,
+            underline: None,
+            strikethrough: None,
+        };
+        let cell = |column: usize, text: &str| RenderCell {
+            line: 0,
+            column,
+            text: text.to_owned(),
+            wide: false,
+            foreground: Rgb::new(255, 255, 255),
+            background: Rgb::new(0, 0, 0),
+            style: Default::default(),
+            selected: false,
+        };
+        let text_system = window.text_system();
+        let shaped = text_system.shape_line(SharedString::from("->"), px(14.), &[run(2)], None);
+        let cells = [cell(0, "-"), cell(1, ">")];
+        // The test font has no `->` ligature, so the jointly-shaped run must
+        // split back into one piece per cell.
+        let pieces = per_cell_pieces(&shaped, &cells).expect("run splits per cell");
+        assert_eq!(pieces.len(), 2);
+        assert_eq!((pieces[0].len(), pieces[1].len()), (1, 1));
+        // Each piece keeps the cell's own fixed advance instead of carrying
+        // the run's proportional advances.
+        let single = text_system.shape_line(SharedString::from("-"), px(14.), &[run(1)], None);
+        for piece in &pieces {
+            let drift = f32::from(piece.width() - single.width()).abs();
+            assert!(
+                drift < 0.01,
+                "per-cell pieces keep fixed advances, drift {drift}"
+            );
+        }
+    });
+    cx.update(|_, cx| session.update(cx, |session, cx| session.close(cx)));
 }
