@@ -107,3 +107,5 @@ updated. Use ✅ and other emoji to mark executed steps.
 case".
 - There's a thing as being _too_ careful. This is a text editor, used by
 humans. Incredibily unlikely edge cases shouldn't be handled.
+- Be brief and direct. The user knows the repo rules; don't recite them or ask
+  permission for what was already asked.
