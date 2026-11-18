@@ -1,6 +1,6 @@
 # D155 — Word and line selection in terminals
 
-Status: 🚧 checkpoint 1 awaiting review. Roadmap item [D155](../roadmap.md).
+Status: 🚧 checkpoint 1 done, checkpoint 2 not started. Roadmap item [D155](../roadmap.md).
 
 ## Goal
 
@@ -46,30 +46,12 @@ or lines. A single click and drag still select cell by cell.
 
 ## Checkpoint 1 — Gesture replaces the hand-rolled selection ✅
 
-Deliverable: single click and drag select exactly as before, through the
-gesture, with the cell behavior for every click count.
-
-- ✅ Spike first: confirm the event options, position and viewport semantics,
-  and the click-count input against the pinned libghostty, and note any
-  finding in this plan.
-- ✅ Safe wrapper in `knot-terminal`; remove `start_selection`/`extend_selection`
-  state from the view.
-- ✅ Validation: `knot-terminal` tests for press/drag/release selecting the
-  expected text, including a drag across scrollback; existing
-  `mouse_tests.rs` selection tests pass (shift-forced local, wide glyphs,
-  reporting toggle), with drag ends moved past the cell middle.
-- Review gate: ✅ `just check`; confirm in the real app that click-drag
-  selection feels right with the half-cell rule.
-
-**Implementation context.** `crates/knot-terminal/src/grid.rs` (selection
-helpers: `select`, `extend_selection`, `grid_ref`, `set_selection`) is where
-the wrapper lives next to `Terminal`; bindings are already in
-`crates/knot-terminal/src/ffi.rs` (`ghostty_selection_gesture_*`). View
-state is `selection_anchor`/`local_dragged` in `src/app/terminal/view.rs`
-(`start_selection`, `extend_selection`, `mouse_down`, `mouse_up`, reset
-around line 321). Tests mirror `src/app/terminal/mouse_tests.rs`. The
-gesture must be freed with the terminal (see how `Terminal` frees other FFI
-objects).
+Approved. Local selection runs through the gesture wrapper in
+`crates/knot-terminal/src/grid.rs` (`select_press`, `select_drag`,
+`select_release`), owned by `Terminal`; the view in
+`src/app/terminal/view.rs` only forwards pointer events. Every click count
+still selects by cell. The click-count adapter and the half-cell edge rule
+are described under Design.
 
 ## Checkpoint 2 — Word and line behaviors ⬜
 
