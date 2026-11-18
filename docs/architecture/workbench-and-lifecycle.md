@@ -214,9 +214,9 @@ declaration, so a tool never joins the center and a document never enters a
 dock. A center tab sits on the tab background with an accent line under the
 active one; its close button shows on the active or hovered tab, a dirty
 document's dot takes the button's place until hover, and a pinned tab shows a
-pin icon. Every dock pane has a header instead of a tab bar: plain text tabs with
-the active one underlined in the accent (a pane with one tool tab shows only
-its title; terminal tabs always show it), a close button on terminal tabs, none on tool tabs, a new-terminal button on terminal panes, the
+pin icon. Every dock pane has a header instead of a tab bar: tabs styled like the
+center's, with a title alone for a pane with one tool tab (terminal tabs
+always show theirs), a close button on terminal tabs, none on tool tabs, a new-terminal button on terminal panes, the
 tree frame actions of the active tool, and a hide button at the right. Stripes
 on the left and right window edges
 (`workbench.toolStripes`; a stripe without buttons is not painted, except
