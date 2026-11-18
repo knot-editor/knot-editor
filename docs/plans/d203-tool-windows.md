@@ -156,47 +156,23 @@ Decisions that later checkpoints build on:
 
 ### 2. Terminal in `@knot/chrome`
 
-✅ Implemented; awaiting the review gate.
+✅ Done and approved. `@knot/chrome` registers the `builtin.terminal`
+container (the host reserves the `knot.` prefix), New Terminal, New Terminal
+in Editor, and `terminal.toggle`, and owns the directory rule; the native
+Terminal registration, commands, and `terminal_directory.rs` are gone.
+`registerView` takes container views with `newTab`, `terminals.open` takes
+`location`, and `workbench.lastFocusedDocument` and
+`PresentationInfo.directory` feed the rule. Package tests in
+`crates/knot-ext-workbench/tests/workbench/chrome.rs` cover placement, the
+rule, empty show, toggle, and restart. The `knot` crate's tests register a
+test Terminal container with stand-in commands.
 
-Decisions made while implementing:
-- The container's ID is `builtin.terminal`, since the host reserves `knot.`
-  for native IDs. The generated toggle command is checkpoint 3's; chrome
-  registers `terminal.toggle` meanwhile, calling the view's `toggle()`.
-- A terminal tab reports its current directory as `PresentationInfo.directory`,
-  and `lastFocusedDocument` reads a window's last focused document, so the
-  directory rule runs in JavaScript.
-- `terminals.open` defaults to `"editor"`; a window layout that names a
-  container not registered when it is restored drops that container's tabs
-  (the wait for late registration is not built; startup restores after
-  packages load).
-- The `knot` crate's own tests load no packages, so they register a test
-  Terminal container and stand-in `terminal.*` commands; the commands, directory
-  rule, empty show, toggle, and restart are tested through the real package in
-  `crates/knot-ext-workbench/tests/workbench/chrome.rs`.
-
-Deliverables:
-- The container-view API (`content` optional, `newTab`),
-  `terminals.open({ location })`, and `workbench.lastFocusedDocument`.
-- `@knot/chrome` registers `knot.terminal` (bottom left) and New Terminal and
-  New Terminal in Editor. New Terminal is the `newTab` command and owns the
-  directory rule: the focused terminal's directory, else the root containing
-  the last focused document, else the first root, else home.
-- Native registration of Terminal, `terminal.new`, `terminal.new-in-center`,
-  `terminal.toggle`, and `knot-model/src/terminal_directory.rs` go away.
-
-Validation: package tests through the real editor for New Terminal placement,
-the directory rule, empty show, toggle, and restore. Rust tests for the
-removed native paths are deleted.
-
-Review gate: daily terminal use, including restart with terminals in a tool
-window and in the center.
-
-**Implementation context:**
-- `extensions/@knot/chrome/src/` (mirror `menus.ts` and `extension.ts`).
-- `src/app/extensions/host/handlers.rs` and `crates/knot-protocol/src/`,
-  mirroring `registerView` and `terminals.open`.
-- `src/app/product/commands.rs` (terminal commands) and the window's
-  last-focused-document tracking that `terminal_directory.rs` reads today.
+Decisions that later checkpoints build on:
+- `terminal.toggle` is chrome's own command until checkpoint 3 generates
+  Toggle <Tool> commands.
+- A window layout naming a container not yet registered drops its tabs; the
+  wait for late registration is not built. Startup restores after packages
+  load.
 
 ### 3. IntelliJ commands
 
