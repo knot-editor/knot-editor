@@ -68,6 +68,7 @@ pub(super) enum ListenerNotification {
     Timer,
 }
 
+#[allow(clippy::large_enum_variant)]
 pub(super) enum EngineWork {
     ApplicationChange {
         subscription: WorkbenchSubscriptionId,

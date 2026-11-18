@@ -1,4 +1,4 @@
-// Window chrome: the context menu items, and the status bar items for the
+// Window chrome: the context menu items, the Terminal window, and the status bar items for the
 // editor a window describes: the cursor position and selection size, the
 // indentation, and the language. Each window follows its own `statusTarget`
 // and sets its items as that window's values, so two windows show their own
@@ -9,6 +9,7 @@ import type {
   StatusItemOptions, ViewTarget, WindowInfo, WindowTarget,
 } from "knot";
 import { registerMenus } from "./menus.js";
+import { registerTerminal } from "./terminal.js";
 import {
   COUNT_LIMIT, columnAt, indentationText, languageText, positionText, selectionSize,
 } from "./text.js";
@@ -183,6 +184,7 @@ export async function start() {
   for (const window of observation.snapshot.windows) await follow(window);
 
   await registerMenus();
+  await registerTerminal();
   await commands.register(INDENTATION_COMMAND, changeIndentation, {
     title: "Change Indentation…",
     description: "Indent with spaces or tabs, change the tab size, or convert the document's indentation.",

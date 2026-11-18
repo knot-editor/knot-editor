@@ -2,7 +2,8 @@
 use gpui::TestAppContext;
 
 use super::bundled::only;
-use knot::test_support::{TestProduct, wait_until};
+use super::projects::file_uri;
+use knot::test_support::{CommandOutcome, TestProduct, wait_until};
 
 #[gpui::test]
 fn the_items_follow_the_selection_and_the_document_of_the_status_target(cx: &mut TestAppContext) {
@@ -75,4 +76,110 @@ fn the_editor_menu_offers_the_clipboard_at_the_pointer_and_at_the_caret(cx: &mut
         cx.read_from_clipboard().and_then(|item| item.text()),
         Some("one".to_owned())
     );
+}
+
+const TERMINAL: &str = "builtin.terminal";
+
+fn canonical(path: &std::path::Path) -> std::path::PathBuf {
+    std::fs::canonicalize(path).unwrap()
+}
+
+#[gpui::test]
+fn new_terminal_opens_in_the_terminal_window_in_the_root_of_the_last_document(
+    cx: &mut TestAppContext,
+) {
+    let temp = tempfile::tempdir().unwrap();
+    let first = temp.path().join("first");
+    let second = temp.path().join("second");
+    std::fs::create_dir_all(&first).unwrap();
+    std::fs::create_dir_all(second.join("src")).unwrap();
+    std::fs::write(second.join("src/lib.rs"), "").unwrap();
+    let product = TestProduct::launch(only(&["@knot/chrome"]), cx);
+    let window = product.active_window(cx);
+    window.set_roots(&[&file_uri(&first), &file_uri(&second)], cx);
+    window.open_path(&second.join("src/lib.rs"), cx);
+
+    wait_until(cx, |cx| {
+        window.run_command("terminal.new", cx) == CommandOutcome::Completed
+    });
+    wait_until(cx, |cx| !window.terminals(TERMINAL, cx).is_empty());
+    let terminals = window.terminals(TERMINAL, cx);
+    assert_eq!(terminals.len(), 1);
+    assert!(terminals[0].0, "the terminal is in the Terminal window");
+    assert_eq!(
+        terminals[0].1.as_deref().map(canonical),
+        Some(canonical(&second))
+    );
+    assert!(window.tool_shown(TERMINAL, cx));
+
+    // From a focused terminal, the next one starts where that shell is.
+    window.run_command("terminal.new", cx);
+    wait_until(cx, |cx| window.terminals(TERMINAL, cx).len() == 2);
+    assert_eq!(
+        window.terminals(TERMINAL, cx)[1]
+            .1
+            .as_deref()
+            .map(canonical),
+        Some(canonical(&second))
+    );
+}
+
+#[gpui::test]
+fn new_terminal_in_editor_opens_in_the_center(cx: &mut TestAppContext) {
+    let temp = tempfile::tempdir().unwrap();
+    let product = TestProduct::launch(only(&["@knot/chrome"]), cx);
+    let window = product.active_window(cx);
+    window.set_roots(&[&file_uri(temp.path())], cx);
+    window.run_command("terminal.new-in-center", cx);
+    wait_until(cx, |cx| !window.terminals(TERMINAL, cx).is_empty());
+    let terminals = window.terminals(TERMINAL, cx);
+    assert_eq!(terminals.len(), 1);
+    assert!(!terminals[0].0, "the terminal is in the center");
+    assert_eq!(
+        terminals[0].1.as_deref().map(canonical),
+        Some(canonical(temp.path()))
+    );
+}
+
+#[gpui::test]
+fn showing_the_empty_terminal_window_opens_a_terminal_and_toggle_hides_it(cx: &mut TestAppContext) {
+    let product = TestProduct::launch(only(&["@knot/chrome"]), cx);
+    let window = product.active_window(cx);
+    wait_until(cx, |cx| window.has_tool(TERMINAL, cx));
+    assert!(!window.tool_shown(TERMINAL, cx));
+
+    window.click_tool_button(TERMINAL, cx);
+    wait_until(cx, |cx| window.terminals(TERMINAL, cx).len() == 1);
+    assert!(window.tool_shown(TERMINAL, cx));
+
+    // The toggle hides the focused window, keeping its shell, and shows it again.
+    window.run_command("terminal.toggle", cx);
+    wait_until(cx, |cx| !window.tool_shown(TERMINAL, cx));
+    assert_eq!(window.terminals(TERMINAL, cx).len(), 1);
+    window.run_command("terminal.toggle", cx);
+    wait_until(cx, |cx| window.tool_shown(TERMINAL, cx));
+    assert_eq!(window.terminals(TERMINAL, cx).len(), 1);
+}
+
+#[gpui::test]
+fn terminals_in_the_terminal_window_and_the_editor_return_after_a_restart(cx: &mut TestAppContext) {
+    let temp = tempfile::tempdir().unwrap();
+    let product = TestProduct::launch(only(&["@knot/chrome"]), cx);
+    let window = product.active_window(cx);
+    window.set_roots(&[&file_uri(temp.path())], cx);
+    window.run_command("terminal.new", cx);
+    wait_until(cx, |cx| window.terminals(TERMINAL, cx).len() == 1);
+    window.run_command("terminal.new-in-center", cx);
+    wait_until(cx, |cx| window.terminals(TERMINAL, cx).len() == 2);
+
+    product.relaunch_restoring(&[&window], cx);
+    let restored = product.active_window(cx);
+    wait_until(cx, |cx| restored.terminals(TERMINAL, cx).len() == 2);
+    let mut homes = restored
+        .terminals(TERMINAL, cx)
+        .into_iter()
+        .map(|(in_window, _)| in_window)
+        .collect::<Vec<_>>();
+    homes.sort();
+    assert_eq!(homes, [false, true]);
 }

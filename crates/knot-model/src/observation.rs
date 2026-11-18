@@ -237,6 +237,7 @@ mod tests {
             target: target.clone(),
             current_target: Some(view.clone()),
             status_target: None,
+            last_focused_document: None,
             panes: vec![PaneInfo {
                 target: pane,
                 selected: view.clone(),
@@ -246,6 +247,7 @@ mod tests {
                     document: Some("document".into()),
                     buffer: Some(BufferHandle::new(1)),
                     tool: None,
+                    directory: None,
                 }],
             }],
             workspace: WorkspaceInfo {

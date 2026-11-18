@@ -156,6 +156,24 @@ Decisions that later checkpoints build on:
 
 ### 2. Terminal in `@knot/chrome`
 
+✅ Implemented; awaiting the review gate.
+
+Decisions made while implementing:
+- The container's ID is `builtin.terminal`, since the host reserves `knot.`
+  for native IDs. The generated toggle command is checkpoint 3's; chrome
+  registers `terminal.toggle` meanwhile, calling the view's `toggle()`.
+- A terminal tab reports its current directory as `PresentationInfo.directory`,
+  and `lastFocusedDocument` reads a window's last focused document, so the
+  directory rule runs in JavaScript.
+- `terminals.open` defaults to `"editor"`; a window layout that names a
+  container not registered when it is restored drops that container's tabs
+  (the wait for late registration is not built; startup restores after
+  packages load).
+- The `knot` crate's own tests load no packages, so they register a test
+  Terminal container and stand-in `terminal.*` commands; the commands, directory
+  rule, empty show, toggle, and restart are tested through the real package in
+  `crates/knot-ext-workbench/tests/workbench/chrome.rs`.
+
 Deliverables:
 - The container-view API (`content` optional, `newTab`),
   `terminals.open({ location })`, and `workbench.lastFocusedDocument`.

@@ -1187,14 +1187,17 @@ directory:
 await terminals.open({ cwd: "file:///Users/me/project/" });
 ```
 
-Without `cwd` the shell starts where New Terminal would: the focused
-terminal's current directory, else the root containing the window's most
-recently focused document, else its first root, else the home directory.
+Without `cwd` the shell starts in the home directory; choosing a better
+directory is the caller's policy. `@knot/chrome`'s New Terminal uses the focused
+terminal's directory (`PresentationInfo.directory`), else the root containing
+`workbench.lastFocusedDocument(window)`, else the first root.
 
-`location` chooses where the tab opens. `"dock"`, the default, follows New
-Terminal: beside the captured terminal, else beside the most recently used dock
-terminal, else in the terminal home dock, which it shows. `"center"` opens it in
-the last focused center pane.
+`location` chooses where the tab opens. `"editor"`, the default, opens it in
+the last focused center pane. A container view's ID opens it beside the
+captured terminal when that is in the container, else in the container's last
+focused pane, which it shows. A container is a view registered without
+`content`; its optional `newTab` command runs from the `+` button and when the
+window is shown empty.
 
 Pass an explicit live target when acting on a previously selected window, pane,
 or presentation. Omitting it captures the command's originating window, or the

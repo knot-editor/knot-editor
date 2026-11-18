@@ -312,6 +312,67 @@ impl TestWindow {
         assert!(result.unwrap().is_ok(), "{} did not open", path.display());
     }
 
+    /// Each terminal of the window with the directory its shell is in, and
+    /// whether it is in the tool window `tool`.
+    pub fn terminals(
+        &self,
+        tool: &str,
+        cx: &mut TestAppContext,
+    ) -> Vec<(bool, Option<std::path::PathBuf>)> {
+        cx.read(|cx| {
+            let workbench = self.window.read(cx).workbench.read(cx);
+            let tool = workbench.tool_by_stable_id(tool);
+            workbench
+                .tab_snapshots()
+                .into_iter()
+                .filter_map(|tab| match tab.surface {
+                    TabSurfaceId::Terminal(id) => Some((
+                        tool.is_some() && workbench.pane_tool(tab.pane_id) == tool,
+                        KnotWindow::terminal_session_directory(id, cx),
+                    )),
+                    _ => None,
+                })
+                .collect()
+        })
+    }
+
+    /// Whether a tool window `stable_id` is registered.
+    pub fn has_tool(&self, stable_id: &str, cx: &mut TestAppContext) -> bool {
+        cx.read(|cx| {
+            self.window
+                .read(cx)
+                .workbench
+                .read(cx)
+                .tool_by_stable_id(stable_id)
+                .is_some()
+        })
+    }
+
+    /// Whether the tool window `stable_id` is shown.
+    pub fn tool_shown(&self, stable_id: &str, cx: &mut TestAppContext) -> bool {
+        cx.read(|cx| {
+            let workbench = self.window.read(cx).workbench.read(cx);
+            workbench
+                .tool_by_stable_id(stable_id)
+                .is_some_and(|tool| workbench.tool_visible(tool))
+        })
+    }
+
+    /// Click the stripe button of the tool window `stable_id`.
+    pub fn click_tool_button(&self, stable_id: &str, cx: &mut TestAppContext) {
+        in_window(self.native_window, cx, |cx| {
+            self.window.update(cx, |window, cx| {
+                let tool = window
+                    .workbench
+                    .read(cx)
+                    .tool_by_stable_id(stable_id)
+                    .expect("the tool window is registered");
+                window.click_stripe_button(tool, cx);
+            })
+        });
+        cx.run_until_parked();
+    }
+
     /// Open an untitled document in the center.
     pub fn new_document(&self, cx: &mut TestAppContext) {
         self.window

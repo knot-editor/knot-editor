@@ -537,16 +537,13 @@ above a `--- terminal restarted ---` divider with new output continuing
 below. Shutdown and child reaping run off the foreground.
 
 A new session's working directory is chosen when it is created and kept across
-restart. New Terminal, splitting a terminal pane, and `terminals.open` without
-a directory start in the focused (or split) terminal's current directory.
-Otherwise the window picks the innermost root containing the window's
-most recently focused document, otherwise the first root, otherwise the home
-directory, skipping roots that are not existing local directories. A terminal
-tab restored in place starts in its recorded directory, or by this rule when
-that no longer exists; restoration installs a window's roots before its layout,
-so restored shells see them. `terminals.open` also accepts an explicit
-directory. The rule lives in
-[terminal_directory.rs](../../crates/knot-model/src/terminal_directory.rs).
+restart. The opener chooses it: `@knot/chrome`'s New Terminal passes the focused
+terminal's directory, else the root containing the last focused document, else
+the first root. Splitting a terminal pane uses the split terminal's current
+directory, and a session opened without one starts in the home directory. A
+terminal tab restored in place starts in its recorded directory, or the home
+directory when that no longer exists; restoration installs a window's roots
+before its layout.
 
 A session reports its shell's current working directory: the last local
 directory the shell reported through OSC 7, 9, or 1337 since it started

@@ -2,10 +2,10 @@
 
 /// The stable ID of the Terminal container tool window the test fixtures
 /// register as `@knot/chrome` does.
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(test)]
 pub(crate) const TERMINAL_TOOL_ID: &str = "builtin.terminal";
 /// The slot the test Terminal window docks in.
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(test)]
 pub(crate) const TERMINAL_SLOT: crate::app::workbench::Slot =
     crate::app::workbench::Slot::BottomLeft;
 
