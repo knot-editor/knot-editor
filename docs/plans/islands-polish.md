@@ -1,6 +1,6 @@
 # Islands look: match IntelliJ's new UI
 
-Status: 🚧 approved, not started.
+Status: 🚧 checkpoint 1 approved ✅; checkpoint 2 waits for the IntelliJ light reference screenshot.
 
 ## Goal
 
@@ -42,25 +42,13 @@ screenshots, not by reading values.
 - New layout modes, icon sets, or fonts. Matching IntelliJ's colors exactly
   applies to Islands only; other themes keep their palettes.
 
-## Checkpoint 1: Islands Dark matches the reference
+## Checkpoint 1: Islands Dark matches the reference ✅
 
-**Deliverables:** updated Islands Dark values; the shared chrome and
-focused-border treatment applied to the other dark themes (`catppuccin.ts`, `tokyo-night.ts`, and `one-dark.ts` and
-`solarized.ts` where it fits); theme tests updated.
-
-**Implementation context:** `extensions/@knot/themes/src/chrome.ts`
-(`ISLANDS_CHROME`), `extensions/@knot/themes/src/themes/islands.ts`; chrome
-values are consumed in `src/app/themes/` and covered by
-`src/app/themes/tests.rs`, `src/app/product/tests/{themes,chrome}.rs`, and
-`extensions/@knot/themes/test/`. If a value is missing from `ThemeChrome`,
-extend `crates/knot-model/src/theme.rs`, `knot.d.ts`, and
-`docs/schemas/knot.schema.json`.
-
-**Validation:** `just check`; before/after screenshots of Knot beside the
-IntelliJ and herdr references.
-
-**Review gate:** the user looks at the screenshots and the running app
-(selecting Islands Dark) and says whether it is close enough or what feels off.
+Approved. Islands Dark takes its colors from IntelliJ's Islands Dark, tabs are
+pills (`tabRadius`, `tabInset` chrome values), and every dark theme marks the
+focused pane with a soft border derived from its own palette. The values live
+in `extensions/@knot/themes/src/`; the theme model is
+[semantic UI](../architecture/semantic-ui.md#themes-and-color-keys).
 
 ## Checkpoint 2: Light themes
 
