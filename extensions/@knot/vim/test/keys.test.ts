@@ -55,6 +55,18 @@ test("dot repeats the last change, with an optional count", () => {
   assert.equal(parseIn(true, ["."]).command, null, "dot means nothing in visual mode");
 });
 
+test("q records into a letter register and @ plays one, with a count", () => {
+  assert.deepEqual(parse("q", "a").command, { kind: "record", register: "a" });
+  assert.deepEqual(parse("q", "A").command, { kind: "record", register: "A" });
+  assert.equal(parse("q", "1").command, null);
+  assert.deepEqual(parse("@", "a").command, { kind: "macro", register: "a", count: 1 });
+  assert.deepEqual(parse("3", "@", "b").command, { kind: "macro", register: "b", count: 3 });
+  assert.deepEqual(parse("@", "@").command, { kind: "macro", register: "@", count: 1 });
+  assert.equal(parse("@", "A").command, null);
+  assert.equal(parse("d", "q").command, null, "an operator waits for a motion");
+  assert.equal(parseIn(true, ["q"]).command, null, "recording starts in normal mode");
+});
+
 test("a huge count is clamped", () => {
   const keys = [..."123456789"];
   assert.deepEqual(parse(...keys, "l").command, { kind: "motion", motion: "right", count: 99_999 });

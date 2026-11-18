@@ -82,6 +82,12 @@ export type Command =
   | { readonly kind: "repeat"; readonly count: number | null }
   | { readonly kind: "undo"; readonly count: number }
   | { readonly kind: "redo"; readonly count: number }
+  /** `q{register}`: starts recording keys into a macro register, which an
+   * uppercase name appends to. A bare `q` stops, and is not parsed here. */
+  | { readonly kind: "record"; readonly register: string }
+  /** `@{register}`: plays a macro `count` times; `@@` is the register `@`,
+   * the last one played. */
+  | { readonly kind: "macro"; readonly register: string; readonly count: number }
   /** `m`: sets a mark at the caret. */
   | { readonly kind: "set-mark"; readonly name: string }
   | { readonly kind: "scroll"; readonly scroll: Scroll; readonly count: number | null }
@@ -280,6 +286,10 @@ export function feed(pending: Pending, key: string, visual = false): Fed {
     }
     case "'": case "`":
       return MARK.test(key) ? motion({ mark: key, exact: pending.prefix === "`" }) : done(null);
+    case "q":
+      return /^[a-zA-Z]$/.test(key) ? done({ kind: "record", register: key }) : done(null);
+    case "@":
+      return /^[a-z@]$/.test(key) ? done({ kind: "macro", register: key, count: count ?? 1 }) : done(null);
     case "m":
       return MARK.test(key) ? done({ kind: "set-mark", name: key }) : done(null);
     case "r": {
@@ -364,6 +374,7 @@ export function feed(pending: Pending, key: string, visual = false): Fed {
   if (key === '"') return next({ prefix: '"' });
   if (key === "r") return next({ prefix: "r" });
   if (key === "m" && !visual) return next({ prefix: "m" });
+  if ((key === "q" || key === "@") && !visual) return next({ prefix: key });
   if ((key === "<c-o>" || key === "<tab>") && !visual) {
     return done({ kind: "jump", count: (key === "<c-o>" ? -1 : 1) * (count ?? 1) });
   }

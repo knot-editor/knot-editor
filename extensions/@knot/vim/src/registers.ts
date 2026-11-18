@@ -2,7 +2,7 @@
 // are the system clipboard, which the caller reads and writes; this model
 // keeps the rest and remembers what it last gave the clipboard, so a paste
 // of that same text is linewise when the yank was.
-import type { JsonValue } from "knot";
+import type { JsonValue, RecordedCommand } from "knot";
 
 /** Text in a register. Linewise text ends with a line break. */
 export type Register = Readonly<{ text: string; linewise: boolean }>;
@@ -21,6 +21,9 @@ export type HistoryList = "search" | "command";
 
 export class Registers {
   private readonly stored = new Map<string, Register>();
+  /** The keys recorded into lettered registers, which `@` plays; their text
+   * in `stored` only shows what was typed. */
+  private readonly macros = new Map<string, readonly RecordedCommand[]>();
   private readonly history: Record<HistoryList, string[]> = { search: [], command: [] };
   /** What the package last put on the clipboard. */
   private clipboard: Register | null = null;
@@ -53,6 +56,7 @@ export class Registers {
     }
     const lower = name.toLowerCase();
     const previous = this.stored.get(lower);
+    this.macros.delete(lower);
     this.stored.set(lower, name !== lower && previous !== undefined ? appended(previous, value) : value);
     return null;
   }
@@ -60,6 +64,19 @@ export class Registers {
   /** Sets a register no yank or delete writes, such as `":` or `".`. */
   set(name: string, value: Register) {
     if (STORED.test(name)) this.stored.set(name, value);
+  }
+
+  /** Records a macro into `name`, which an uppercase name appends to. */
+  recordMacro(name: string, entries: readonly RecordedCommand[]) {
+    const lower = name.toLowerCase();
+    const all = name === lower ? entries : [...(this.macros.get(lower) ?? []), ...entries];
+    this.macros.set(lower, all);
+    this.stored.set(lower, { text: macroText(all), linewise: false });
+  }
+
+  /** The macro `name` holds, or null for a register no `q` recorded into. */
+  macro(name: string): readonly RecordedCommand[] | null {
+    return this.macros.get(name) ?? null;
   }
 
   /** A stored register's text, for any name but the clipboard's and `"%`. */
@@ -91,6 +108,7 @@ export class Registers {
   /** Empties every register and forgets what the package gave the clipboard. */
   clear() {
     this.stored.clear();
+    this.macros.clear();
     this.clipboard = null;
     this.history.search = [];
     this.history.command = [];
@@ -99,9 +117,12 @@ export class Registers {
   toJson(): JsonValue {
     const registers: Record<string, JsonValue> = {};
     for (const [name, { text, linewise }] of this.stored) registers[name] = { text, linewise };
+    const macros: Record<string, JsonValue> = {};
+    for (const [name, entries] of this.macros) macros[name] = entries as unknown as JsonValue;
     return {
-      version: 1,
+      version: 2,
       registers,
+      macros,
       clipboard: this.clipboard === null ? null : { ...this.clipboard },
       history: { search: [...this.history.search], command: [...this.history.command] },
     };
@@ -110,11 +131,17 @@ export class Registers {
   /** Restores registers saved by `toJson`, ignoring anything else. */
   static fromJson(value: JsonValue | undefined): Registers {
     const registers = new Registers();
-    if (!isObject(value) || value.version !== 1) return registers;
+    if (!isObject(value) || value.version !== 2) return registers;
     if (isObject(value.registers)) {
       for (const [name, entry] of Object.entries(value.registers)) {
         const register = registerOf(entry);
         if (register !== null && STORED.test(name)) registers.stored.set(name, register);
+      }
+    }
+    if (isObject(value.macros)) {
+      for (const [name, entries] of Object.entries(value.macros)) {
+        const macro = macroOf(entries);
+        if (macro !== null && registers.stored.has(name)) registers.macros.set(name, macro);
       }
     }
     registers.clipboard = registerOf(value.clipboard);
@@ -146,4 +173,25 @@ function isObject(value: JsonValue | undefined): value is { readonly [key: strin
 function registerOf(value: JsonValue | undefined): Register | null {
   if (!isObject(value) || typeof value.text !== "string" || typeof value.linewise !== "boolean") return null;
   return { text: value.text, linewise: value.linewise };
+}
+
+/** What a macro shows as in its register: the text and keys it typed. */
+function macroText(entries: readonly RecordedCommand[]): string {
+  return entries.map(({ command, arguments: args }) => {
+    const { text, key } = (args ?? {}) as { text?: unknown; key?: unknown };
+    if (command === "vim.leave-insert") return "<esc>";
+    if (command === "editor.insert-newline") return "\n";
+    if (command === "vim.key") return typeof key === "string" ? key : "";
+    return (command === "vim.type" || command === "editor.type") && typeof text === "string" ? text : "";
+  }).join("");
+}
+
+function macroOf(value: JsonValue | undefined): readonly RecordedCommand[] | null {
+  if (!Array.isArray(value)) return null;
+  const entries: RecordedCommand[] = [];
+  for (const entry of value) {
+    if (!isObject(entry) || typeof entry.command !== "string") return null;
+    entries.push(entry.arguments === undefined ? { command: entry.command } : { command: entry.command, arguments: entry.arguments });
+  }
+  return entries;
 }

@@ -87,8 +87,9 @@ test("registers round-trip through JSON and ignore what they do not know", () =>
   assert.deepEqual(restored.get("q"), chars("q"));
   assert.deepEqual(restored.get("1"), lines("d\n"));
   assert.deepEqual(restored.fromClipboard("d\n"), lines("d\n"));
-  assert.equal(Registers.fromJson({ version: 2 }).get("q"), null);
-  assert.equal(Registers.fromJson({ version: 1, registers: { "!": { text: "x", linewise: false } } }).get("!"), null);
+  assert.equal(Registers.fromJson({ version: 1 }).get("q"), null);
+  assert.equal(Registers.fromJson({ version: 1, registers: { q: { text: "x", linewise: false } } }).get("q"), null);
+  assert.equal(Registers.fromJson({ version: 2, registers: { "!": { text: "x", linewise: false } } }).get("!"), null);
 });
 
 test("history keeps entries newest first, moves repeats forward, and is capped", () => {
@@ -121,4 +122,37 @@ test("the last inserted text is stored for reading but no yank writes it", () =>
   registers.record(".", chars("yanked"), "yank", false);
   assert.deepEqual(registers.get("."), chars("typed"));
   assert.deepEqual(Registers.fromJson(registers.toJson()).get("."), chars("typed"));
+});
+
+const type = (text: string) => ({ command: "vim.type", arguments: { text } });
+const leave = { command: "vim.leave-insert" };
+
+test("a macro replaces its register's text, and an uppercase name appends", () => {
+  const registers = new Registers();
+  registers.recordMacro("a", [type("i"), { command: "editor.type", arguments: { text: "hi" } }, leave]);
+  assert.deepEqual(registers.macro("a"), [type("i"), { command: "editor.type", arguments: { text: "hi" } }, leave]);
+  assert.deepEqual(registers.get("a"), chars("ihi<esc>"));
+  registers.recordMacro("A", [type("x")]);
+  assert.equal(registers.macro("a")?.length, 4);
+  assert.deepEqual(registers.get("a"), chars("ihi<esc>x"));
+  registers.recordMacro("a", [type("j")]);
+  assert.deepEqual(registers.macro("a"), [type("j")]);
+});
+
+test("writing a register drops the macro it held", () => {
+  const registers = new Registers();
+  registers.recordMacro("a", [type("x")]);
+  registers.record("a", chars("text"), "yank", false);
+  assert.equal(registers.macro("a"), null);
+  assert.deepEqual(registers.get("a"), chars("text"));
+});
+
+test("macros persist with the registers", () => {
+  const registers = new Registers();
+  registers.recordMacro("a", [type("x"), { command: "vim.answer", arguments: { text: "foo" } }, leave]);
+  const restored = Registers.fromJson(JSON.parse(JSON.stringify(registers.toJson())));
+  assert.deepEqual(restored.macro("a"), registers.macro("a"));
+  assert.deepEqual(restored.get("a"), registers.get("a"));
+  registers.clear();
+  assert.equal(registers.macro("a"), null);
 });
