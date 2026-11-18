@@ -131,70 +131,28 @@ after this lands, not before.
 
 ### 1. Slots and tool windows
 
-Status: ✅ implemented, 🚧 awaiting the review gate.
+✅ Done and approved. Tool windows dock in six slots with slot-grouped stripes,
+headers, the ⋯ list, per-window sizes and shares, and the native Terminal
+container; layouts, the tool-layout record, and `registerView` follow. The
+docs are updated in Finish.
 
-Deliverables:
-- ✅ Docks become six slots of tool windows, each owning a split tree, with the
-  title, actions, ⋮ menu, and hide in the header and double-click to
-  maximize. Existing tools are fixed tool windows.
-- ✅ Stripes are grouped by slot. A click on a hidden window shows it, replacing
-  the one in its slot, and a click on a visible one hides it. Drag and Move to
-  move a window between slots. Remove from Sidebar and the ⋯ button work,
-  and picking from ⋯ restores the button. Show Beside goes away.
-- ✅ Per-tool-window sizes and side shares, and the side extent rule.
-- ✅ Native code registers the Terminal container window for now, with the
-  placement rules above, shell-name labels, and New Terminal opening into it.
-  Closing or moving out its last tab hides it.
-  The terminal stripe button, terminal home dock, and dock-terminal recency go
-  away.
-- ✅ Relocation, directional focus, maximize, resize (side size and slot ratio),
-  closure, Reset Layout, window layouts, and the tool-layout record follow the
-  new model. `placement.location`, `WindowLayout`, and `LayoutDock` change
-  as above, and bundled packages use the default slots above.
-
-Scope decisions while implementing:
-- A tool window keeps its size when moved to another slot, as each window
-  remembers its own; it does not take the new side's default.
+Decisions that later checkpoints build on:
+- A tool window keeps its size when moved to another slot.
 - The left/right/bottom dock toggles and Move Tab to Center stay until
   checkpoint 3; the dock toggles act on a side (focus a shown window, hide
-  the side, or show the windows it showed last). The three Move Tab to
-  Left/Right/Bottom Dock commands are already gone, since tool tabs never move.
-- A terminal tab is allowed in the center and any container; with one
-  container it needs no recorded home, which waits for a second container.
+  the side, or show the windows it showed last). The Move Tab to
+  Left/Right/Bottom Dock commands are gone, since tool tabs never move.
+- A terminal tab is allowed in the center and any container; its home is not
+  recorded until a second container exists.
 - A window layout records the center and each tool window; a fixed window
   records no tabs, so focus on a fixed tool window is not restored. Layout
   entries of a container that has not registered yet wait for it in
-  checkpoint 2, when JavaScript registers containers; the native Terminal
-  window registers with the window.
-- Rename Session and persisted names belong to checkpoint 3; the label is the
-  shell name with the lowest free ` (N)` suffix, kept on the session.
-
-Validation: model tests for slot transitions, replacement, hidden tool windows
-keeping their tabs, stripe click show/hide, sizes, sidebar removal, placement
-rules, container empty show and last-tab hide (closed or moved out), labels,
-layout capture/restore pruning,
-and record install. Product tests for stripes, the ⋯ list, headers and their
-menu, double-click maximize, drag between slots and between container and
-center, and closure.
-Update `src/app/product/tests/{stripes,dock_header,tool_layout,navigation,terminal}.rs`.
-
-Review gate: arrange tools in all six slots, swap tools within a slot, move
-the Terminal window to right top, split inside it, move a terminal to the
-editor and back, restart, open a fresh window.
-
-**Implementation context:**
-- Model: `crates/knot-model/src/workbench.rs` (`Area`, `TabKind::allows`) and
-  `workbench/{tools,stripes,arrange,resize,relocate,close,closure,terminals}.rs`.
-  `ToolFrame`, `ToolPlacement`, and `StoredDock`/`StoredNode` become slot and
-  tool-window records. `show_tool_replacing` becomes the only show, and
-  `terminals.rs` shrinks to the container's terminal placement.
-- App: `src/app/workbench.rs` (view retention for hidden tool windows) and
-  `src/app/product/{render,stripes,tools,tab_drag,navigation,commands,tool_picker}.rs`.
-  `render_pane` splits into the tool-window title row and the pane tab strips.
-  Persistence is in `src/app/window_layout.rs` and `src/app/tool_layout.rs`.
-- Contract: `crates/knot-host/src/js/knot.d.ts` (`ViewLocation`,
-  `WindowLayout`, `LayoutDock`), `docs/schemas/knot.schema.json`, and
-  `extensions/@knot/{explorer,find,notifications}`.
+  checkpoint 2, when JavaScript registers containers.
+- Rename Session and persisted names belong to checkpoint 3; a terminal's
+  label is the shell name with the lowest free ` (N)` suffix, kept on the
+  session.
+- Themes gained `stripe.separator` and `stripe.shown.background`; the focused
+  window's button uses `stripe.selected.background`.
 
 ### 2. Terminal in `@knot/chrome`
 
