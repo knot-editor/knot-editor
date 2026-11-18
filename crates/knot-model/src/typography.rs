@@ -259,15 +259,9 @@ mod tests {
         store
             .set(FONT_LINE_HEIGHT, json!(1.5), SettingsScope::default())
             .unwrap();
-        assert_eq!(
-            FontSettings::resolve(&store, &terminal()).line_height,
-            1.5
-        );
+        assert_eq!(FontSettings::resolve(&store, &terminal()).line_height, 1.5);
         store.set(FONT_LINE_HEIGHT, json!(1.4), terminal()).unwrap();
-        assert_eq!(
-            FontSettings::resolve(&store, &terminal()).line_height,
-            1.4
-        );
+        assert_eq!(FontSettings::resolve(&store, &terminal()).line_height, 1.4);
         assert_eq!(
             FontSettings::resolve(&store, &SettingsScope::default()).line_height,
             1.5
@@ -285,7 +279,9 @@ mod tests {
                 FontSettings::resolve(&store, &SettingsScope::default()).line_height,
                 expected
             );
-            store.set(FONT_LINE_HEIGHT, json!(value), terminal()).unwrap();
+            store
+                .set(FONT_LINE_HEIGHT, json!(value), terminal())
+                .unwrap();
             assert_eq!(
                 FontSettings::resolve(&store, &terminal()).line_height,
                 expected

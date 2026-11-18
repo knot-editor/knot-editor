@@ -54,8 +54,12 @@ fn measured_layout_drives_the_grid_and_frames_paint_cells(cx: &mut TestAppContex
     cx.update(|window, cx| {
         let view = view.read(cx);
         let layout = view.layout.unwrap();
-        let measured =
-            TerminalLayout::measure(window, &base_font(cx), px(14.), font_settings(cx).line_height);
+        let measured = TerminalLayout::measure(
+            window,
+            &base_font(cx),
+            px(14.),
+            font_settings(cx).line_height,
+        );
         assert_eq!(layout.cell_width, measured.cell_width);
         assert_eq!(layout.cell_height, measured.cell_height);
         assert_eq!(
