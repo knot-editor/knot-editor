@@ -5,6 +5,12 @@
 //! the dispatch turn. The window owns the hold, so it works with or
 //! without a window.
 //!
+//! Accepting a picker or input an extension command shows holds later
+//! input the same way until the command settles, so keys typed after Enter
+//! reach what the command opens. Enter on supplied rows that are not yet
+//! current holds from that Enter, with the waiting picker as the held view;
+//! Escape then dismisses the picker and drops what was held.
+//!
 //! The hold ends when the command completes, when a picker, input, or the
 //! palette takes focus from the held view, when a key arrives after focus
 //! left it otherwise, or after a timeout, so a stuck extension never keeps
@@ -18,7 +24,7 @@ use crate::app::convert::keystroke_to_gpui;
 use crate::app::editor::Editor;
 use crate::app::keys::Keystroke;
 use knot_protocol::CommandOutcome;
-use knot_protocol::{Command, CommandArgumentValue};
+use knot_protocol::{Command, CommandArgumentValue, CommandInvocationId};
 
 /// How long a command may hold later input before it is released anyway.
 pub(super) const KEY_HOLD_TIMEOUT: Duration = Duration::from_secs(1);
@@ -39,9 +45,53 @@ impl KnotWindow {
         editor: Option<Entity<Editor>>,
         cx: &mut Context<Self>,
     ) {
-        if let Some(generation) = self.start_key_hold(editor.as_ref().map(Entity::downgrade), cx) {
+        let focus = self.focus_target(cx);
+        if let Some(generation) = self.start_key_hold(focus, editor.as_ref().map(Entity::downgrade))
+        {
             self.release_key_hold_after(generation, completion, cx);
         }
+    }
+
+    /// Hold the window's later input until the command tree `invocation`
+    /// belongs to settles, with `focus` as the held view.
+    pub(super) fn hold_keys_for_command(
+        &mut self,
+        invocation: CommandInvocationId,
+        focus: FocusTarget,
+        editor: Option<Entity<Editor>>,
+        cx: &mut Context<Self>,
+    ) {
+        if self.key_hold.is_some() {
+            return;
+        }
+        let Some(settled) = crate::app::extensions::host::entity(cx)
+            .and_then(|host| host.update(cx, |host, _| host.watch_command_settle(invocation)))
+        else {
+            return;
+        };
+        if let Some(generation) = self.start_key_hold(focus, editor.as_ref().map(Entity::downgrade))
+        {
+            self.release_key_hold_after(generation, settled, cx);
+        }
+    }
+
+    /// Move the hold a waiting picker started to the view and editor focus
+    /// returns to once the picker confirms; false when no such hold is active.
+    pub(super) fn retarget_picker_hold(
+        &mut self,
+        focus: FocusTarget,
+        editor: Option<Entity<Editor>>,
+    ) -> bool {
+        let Some(hold) = self
+            .key_hold
+            .as_mut()
+            .filter(|hold| hold.focus.layer == Focus::Transient)
+        else {
+            return false;
+        };
+        hold.focus = focus;
+        hold.editor = editor.as_ref().map(Entity::downgrade);
+        true
     }
 
     /// Stop holding input and replay what waited, because an interaction the
@@ -54,12 +104,16 @@ impl KnotWindow {
         cx.defer(move |cx| release_key_hold(&window, generation, cx));
     }
 
-    /// Begin holding input; `None` when a hold is already active.
-    fn start_key_hold(&mut self, editor: Option<WeakEntity<Editor>>, cx: &App) -> Option<u64> {
+    /// Begin holding input for the view `focus`; `None` when a hold is
+    /// already active.
+    fn start_key_hold(
+        &mut self,
+        focus: FocusTarget,
+        editor: Option<WeakEntity<Editor>>,
+    ) -> Option<u64> {
         if self.key_hold.is_some() {
             return None;
         }
-        let focus = self.focus_target(cx);
         self.key_hold_generation += 1;
         self.key_hold = Some(KeyHold {
             generation: self.key_hold_generation,
@@ -92,11 +146,21 @@ impl KnotWindow {
 
     /// Queue a key while the window holds its input; true when it did.
     /// A key arriving after focus left the held view releases the hold.
+    /// Escape at a waiting picker drops the hold and reaches the picker.
     pub(super) fn hold_key(&mut self, keystroke: &Keystroke, cx: &mut Context<Self>) -> bool {
         let focused = self.focus_target(cx);
         let Some(hold) = self.key_hold.as_mut() else {
             return false;
         };
+        // Only a waiting picker's hold has the transient layer as its view:
+        // any other hold releases when an interaction takes focus.
+        if hold.focus.layer == Focus::Transient
+            && focused == hold.focus
+            && keystroke.key.eq_ignore_ascii_case("escape")
+        {
+            self.key_hold = None;
+            return false;
+        }
         hold.queue.push_back(HeldInput::Key(keystroke.clone()));
         if focused != hold.focus {
             let generation = hold.generation;
@@ -129,7 +193,8 @@ impl KnotWindow {
         let Some(command) = editor.read(cx).text_command(cx) else {
             return false;
         };
-        let Some(generation) = self.start_key_hold(Some(editor.downgrade()), cx) else {
+        let focus = self.focus_target(cx);
+        let Some(generation) = self.start_key_hold(focus, Some(editor.downgrade())) else {
             return false;
         };
         // The command is dispatched once the caller is done with the editor,

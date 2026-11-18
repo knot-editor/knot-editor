@@ -35,6 +35,20 @@ const SOURCE: &str = r#"
       await editor.focusBarField("recall", "query");
     });
     keymaps.bind("f4", "hold.bar");
+    // A picker whose rows wait for "go <query>" on the clipboard, then a new
+    // document for what was picked.
+    await commands.register("hold.open", async () => {
+      const picked = await workbench.showPicker({
+        title: "Open",
+        onQuery: async (query) => {
+          await workbench.writeClipboardText(`waiting ${query}`);
+          while ((await workbench.readClipboardText()) !== `go ${query}`) {}
+          return [{ id: query, label: query }];
+        },
+      });
+      if (picked.kind === "selected") await commands.invoke("file.new");
+    });
+    keymaps.bind("f9", "hold.open");
     keymaps.bind("f8", "hold.home");
     keymaps.bind("f7", "hold.enter");
     keymaps.bind("h", "hold.left", { view: "editor", context: "modal" });
@@ -160,9 +174,142 @@ impl Fixture {
         cx.read(|cx| self.window.read(cx).holds_keys())
     }
 
+    fn focused_text(&self, cx: &mut TestAppContext) -> String {
+        let editor = focused_editor(&self.window, cx);
+        cx.read(|cx| editor.read(cx).editor().read(cx).model().read(cx).text())
+    }
+
+    /// Open the `hold.open` picker and type `query` into it, with its rows
+    /// for `query` shown when `answer` is set and still pending otherwise.
+    fn open_picker(&self, query: &str, answer: bool, cx: &mut TestAppContext) {
+        self.keys("f9", cx);
+        answer_query("", cx);
+        wait_for_api_condition(cx, |cx| self.picker_labels(cx) == [""]);
+        self.keys(query, cx);
+        wait_for_clipboard_text(&format!("waiting {query}"), cx);
+        if answer {
+            answer_query(query, cx);
+            wait_for_api_condition(cx, |cx| self.picker_labels(cx) == [query]);
+        }
+    }
+
+    fn picker_labels(&self, cx: &gpui::App) -> Vec<String> {
+        let Some(crate::app::transient::TransientSurface::Picker(picker)) = self
+            .window
+            .read(cx)
+            .transient
+            .as_ref()
+            .and_then(|active| active.surface.as_ref())
+        else {
+            return Vec::new();
+        };
+        let picker = picker.read(cx);
+        picker
+            .visible_entries()
+            .into_iter()
+            .map(|entry| picker.entry(entry).label.clone())
+            .collect()
+    }
+
     fn settle(&self, cx: &mut TestAppContext) {
         wait_for_api_condition(cx, |cx| !self.window.read(cx).holds_keys());
     }
+}
+
+/// Let the `hold.open` rows for `query` arrive once the picker asks for them.
+fn answer_query(query: &str, cx: &mut TestAppContext) {
+    wait_for_clipboard_text(&format!("waiting {query}"), cx);
+    cx.write_to_clipboard(gpui::ClipboardItem::new_string(format!("go {query}")));
+}
+
+fn wait_for_clipboard_text(expected: &str, cx: &mut TestAppContext) {
+    wait_for_api_condition(cx, |cx| {
+        cx.read_from_clipboard()
+            .and_then(|item| item.text())
+            .as_deref()
+            == Some(expected)
+    });
+}
+
+#[gpui::test]
+fn keys_after_enter_on_current_rows_reach_the_opened_document(cx: &mut TestAppContext) {
+    let fixture = fixture("xyz", cx);
+    fixture.open_picker("a", true, cx);
+    fixture.keys("enter b c", cx);
+    fixture.settle(cx);
+    assert_ne!(focused_editor(&fixture.window, cx), fixture.editor);
+    assert_eq!(fixture.focused_text(cx), "bc");
+    assert_eq!(fixture.text(cx), "xyz");
+}
+
+#[gpui::test]
+fn keys_after_enter_on_pending_rows_reach_the_opened_document(cx: &mut TestAppContext) {
+    let fixture = fixture("xyz", cx);
+    fixture.open_picker("a", false, cx);
+    fixture.keys("enter b c", cx);
+    assert!(fixture.holds_keys(cx));
+    answer_query("a", cx);
+    fixture.settle(cx);
+    assert_ne!(focused_editor(&fixture.window, cx), fixture.editor);
+    assert_eq!(fixture.focused_text(cx), "bc");
+    assert_eq!(fixture.text(cx), "xyz");
+}
+
+#[gpui::test]
+fn escape_at_a_pending_picker_dismisses_it_and_drops_the_held_keys(cx: &mut TestAppContext) {
+    let fixture = fixture("xyz", cx);
+    fixture.open_picker("a", false, cx);
+    fixture.keys("enter b escape", cx);
+    assert!(!fixture.holds_keys(cx));
+    cx.read(|cx| assert!(fixture.window.read(cx).transient.is_none()));
+    fixture.keys("c", cx);
+    answer_query("a", cx);
+    cx.run_until_parked();
+    assert_eq!(focused_editor(&fixture.window, cx), fixture.editor);
+    assert_eq!(fixture.text(cx), "xyzc");
+}
+
+#[gpui::test]
+fn keys_after_accepting_an_input_wait_for_the_command_in_the_restored_view(
+    cx: &mut TestAppContext,
+) {
+    let fixture = fixture("xyz", cx);
+    fixture
+        .host
+        .update(cx, |host, _| host.hold_clipboard_writes());
+    fixture.keys("f6 a enter b c", cx);
+    wait_for_api_condition(cx, |cx| {
+        fixture.host.read(cx).pending_view_request_count() == 1
+    });
+    assert!(fixture.holds_keys(cx));
+    assert_eq!(fixture.text(cx), "xyz");
+    fixture
+        .host
+        .update(cx, |host, cx| host.release_view_requests(cx));
+    fixture.settle(cx);
+    assert_eq!(fixture.text(cx), "xyzbc");
+}
+
+#[gpui::test]
+fn the_timeout_releases_keys_held_after_accepting_an_input(cx: &mut TestAppContext) {
+    let fixture = fixture("xyz", cx);
+    fixture
+        .host
+        .update(cx, |host, _| host.hold_clipboard_writes());
+    fixture.keys("f6 a enter b", cx);
+    wait_for_api_condition(cx, |cx| {
+        fixture.host.read(cx).pending_view_request_count() == 1
+    });
+    assert!(fixture.holds_keys(cx));
+    cx.executor()
+        .advance_clock(super::super::key_hold::KEY_HOLD_TIMEOUT);
+    cx.run_until_parked();
+    assert!(!fixture.holds_keys(cx));
+    assert_eq!(fixture.text(cx), "xyzb");
+    fixture
+        .host
+        .update(cx, |host, cx| host.release_view_requests(cx));
+    cx.run_until_parked();
 }
 
 #[gpui::test]

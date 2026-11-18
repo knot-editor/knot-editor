@@ -1542,11 +1542,45 @@ impl KnotWindow {
         let Some(mut active) = self.transient.take() else {
             return;
         };
+        let accepted = matches!(
+            outcome,
+            TransientOutcome::Picker(_) | TransientOutcome::Input(..)
+        );
         active.settle(outcome);
         if active.focus.is_some() {
+            if accepted && let Some(invocation) = active.owner.and_then(|owner| owner.invocation) {
+                self.hold_keys_after_accepting(invocation, active.restore_focus, cx);
+            }
             self.set_focus(active.restore_focus, cx);
         }
         cx.notify();
+    }
+
+    /// Hold later input until the command whose interaction was accepted
+    /// settles, so keys typed after Enter reach what it opens. The held view
+    /// is the one focus returns to.
+    fn hold_keys_after_accepting(
+        &mut self,
+        invocation: knot_protocol::CommandInvocationId,
+        restore_focus: Focus,
+        cx: &mut Context<Self>,
+    ) {
+        let focus = FocusTarget {
+            layer: restore_focus,
+            ..self.focus_target(cx)
+        };
+        let editor = match (
+            restore_focus,
+            self.workbench.read(cx).focused_command_view(),
+        ) {
+            (Focus::Workbench, Some(super::workbench::CommandView::Editor(view))) => {
+                Some(view.read(cx).editor().clone())
+            }
+            _ => None,
+        };
+        if !self.retarget_picker_hold(focus, editor.clone()) {
+            self.hold_keys_for_command(invocation, focus, editor, cx);
+        }
     }
 
     /// Focus the pane the palette opened from, or the focused pane when that
@@ -1759,6 +1793,13 @@ impl KnotWindow {
                     PickerEvent::Queried(query, tab) => {
                         if let Some(queries) = &queries {
                             queries.send_replace(Some((query.clone(), tab.clone())));
+                        }
+                        return;
+                    }
+                    PickerEvent::Pending => {
+                        if let Some(invocation) = owner.and_then(|owner| owner.invocation) {
+                            let focus = this.focus_target(cx);
+                            this.hold_keys_for_command(invocation, focus, None, cx);
                         }
                         return;
                     }

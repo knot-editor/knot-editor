@@ -77,6 +77,9 @@ pub(crate) enum PickerEvent {
     /// The highlighted entry changed; `None` when nothing matches.
     Highlighted(Option<usize>),
     Confirmed(usize),
+    /// Enter on supplied rows that do not answer the query yet: the picker
+    /// confirms once [`Picker::supply`] answers it.
+    Pending,
     Dismissed,
     /// A picker whose rows are supplied: the query or the active tab, whose
     /// ID is given, changed and the owner should answer with
@@ -420,7 +423,9 @@ impl Picker {
 
     pub(crate) fn confirm(&mut self, cx: &mut Context<Self>) {
         if self.supplied && self.answered != Some((self.query(cx), self.active_tab_id())) {
-            self.confirm_pending = true;
+            if !std::mem::replace(&mut self.confirm_pending, true) {
+                cx.emit(PickerEvent::Pending);
+            }
             return;
         }
         if let Some(entry) = self.selected_entry() {
@@ -1007,10 +1012,21 @@ mod tests {
             picker.supply("", None, vec![row("old")], cx);
             picker.insert_text("ab", cx);
             picker.confirm(cx);
-            // Typing after the held Enter does not reach the field.
+            // A second Enter while waiting announces nothing new; the
+            // window holds the keys typed meanwhile, and the field stays
+            // frozen against what slips through.
+            picker.confirm(cx);
             picker.insert_text("zz", cx);
             assert_eq!(picker.query(cx), "ab");
         });
+        assert_eq!(
+            events
+                .borrow()
+                .iter()
+                .filter(|event| **event == PickerEvent::Pending)
+                .count(),
+            1
+        );
         picker.update(cx, |picker, cx| {
             // An answer to an older query does not release it.
             picker.supply("", None, vec![row("stale")], cx);

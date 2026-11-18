@@ -377,7 +377,8 @@ answered before the highlight it replaces. Rows apply only while the field
 and the active tab still hold the query and tab last delivered; otherwise they
 are dropped. Enter on
 rows that do not answer the field waits for the rows that do, freezing the
-field meanwhile, and then confirms the highlighted row.
+field meanwhile, and then confirms the highlighted row; the window holds the
+keys typed meanwhile ([ordered delivery](commands.md#ordered-delivery)).
 
 A picker may show scope tabs in a strip under its field, the first active
 unless `initialTab` names another.

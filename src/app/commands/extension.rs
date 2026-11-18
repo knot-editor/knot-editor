@@ -103,6 +103,8 @@ pub(crate) struct ExtensionCommandBridge {
     roots: VecDeque<CommandInvocationId>,
     active_root: Option<CommandInvocationId>,
     events: VecDeque<ExtensionCommandEvent>,
+    /// Callers waiting for a root invocation, children included, to settle.
+    settle_watchers: HashMap<CommandInvocationId, Vec<CommandCompletion>>,
 }
 
 impl ExtensionCommandBridge {
@@ -125,6 +127,7 @@ impl ExtensionCommandBridge {
             roots: VecDeque::new(),
             active_root: None,
             events: VecDeque::new(),
+            settle_watchers: HashMap::new(),
         }
     }
 
@@ -334,6 +337,21 @@ impl ExtensionCommandBridge {
         self.invocations
             .contains_key(&invocation)
             .then(|| self.root_for(invocation))
+    }
+
+    /// Wait for the root of `invocation` to settle, which happens after all
+    /// of its children; `None` when the invocation is already gone.
+    pub(crate) fn watch_root_settle(
+        &mut self,
+        invocation: CommandInvocationId,
+    ) -> Option<tokio::sync::oneshot::Receiver<CommandOutcome>> {
+        let root = self.root_of(invocation)?;
+        let (completion, receiver) = CommandCompletion::new();
+        self.settle_watchers
+            .entry(root)
+            .or_default()
+            .push(completion);
+        Some(receiver)
     }
 
     pub(crate) fn admit_child(
@@ -642,11 +660,16 @@ impl ExtensionCommandBridge {
             if parent_ready {
                 self.settle(parent);
             }
-        } else if self.active_root == Some(invocation) {
-            self.active_root = None;
-            self.start_next_root();
         } else {
-            self.roots.retain(|root| *root != invocation);
+            for watcher in self.settle_watchers.remove(&invocation).unwrap_or_default() {
+                watcher.complete(outcome.clone());
+            }
+            if self.active_root == Some(invocation) {
+                self.active_root = None;
+                self.start_next_root();
+            } else {
+                self.roots.retain(|root| *root != invocation);
+            }
         }
     }
 

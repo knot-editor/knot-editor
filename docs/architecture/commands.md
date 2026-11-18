@@ -175,6 +175,15 @@ of a command's input reach it, on the first key after focus leaves the held
 view otherwise, and after one second, so a stuck extension never keeps the
 keyboard. Composition preedit is not queued, since the IME already shows it.
 
+Accepting a picker or input that an extension command shows holds the same
+way, until the command and the children it invoked settle, so keys typed after
+Enter reach whatever the command opens instead of the view focus returns to.
+The held view is the one focus returns to; a command that opens a tab moves
+focus, and the next key releases there. Enter on supplied rows that do not
+answer the field yet holds from that Enter, with the waiting picker as the held
+view; Escape then dismisses the picker and drops the held keys. The one-second
+release counts from Enter.
+
 ### Recording
 
 An editor keeps the input recordings in progress as plain data, one list of

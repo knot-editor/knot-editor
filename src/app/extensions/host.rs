@@ -2801,6 +2801,15 @@ impl ProductExtensionHost {
         })
     }
 
+    /// Wait for the command tree `invocation` belongs to to settle; `None`
+    /// when it already has.
+    pub(crate) fn watch_command_settle(
+        &mut self,
+        invocation: CommandInvocationId,
+    ) -> Option<tokio::sync::oneshot::Receiver<knot_protocol::CommandOutcome>> {
+        self.commands.watch_root_settle(invocation)
+    }
+
     #[cfg(test)]
     pub(crate) fn cancel_active_test_commands(&mut self, cx: &mut Context<Self>) {
         for invocation in self.command_targets.keys().copied().collect::<Vec<_>>() {

@@ -323,6 +323,8 @@ fn window_child_settles_after_routed_dispatch() {
     assert!(response.is_none());
     let child = child.unwrap();
     assert!(bridge.drain_events().next().is_none());
+    // Watching the child waits for its root.
+    let mut settled = bridge.watch_root_settle(child).unwrap();
     bridge.complete(child, CommandOutcome::Completed);
     assert_eq!(
         pending_reply.try_recv().unwrap(),
@@ -330,6 +332,10 @@ fn window_child_settles_after_routed_dispatch() {
             outcome: CommandOutcome::Completed
         })
     );
+    assert!(settled.try_recv().is_err());
+    bridge.complete(root.id, CommandOutcome::Completed);
+    assert_eq!(settled.try_recv().unwrap(), CommandOutcome::Completed);
+    assert!(bridge.watch_root_settle(root.id).is_none());
 }
 
 #[test]
