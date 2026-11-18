@@ -28,18 +28,18 @@ point.
 
 ## Next up
 
-1. D155 — Word and line selection in terminals.
-2. D202 — Paste a URL over a selection as a Markdown link.
-3. D140 — Placeholder text in input fields.
-4. D022 — Editor autocompletion.
-5. D182 — Interleave extension roots at awaits: before D067.
-6. D087 — Extension entitlements: D085, D126, D067, and D101 need it.
-7. D129 — Refactor builtin language extensions.
-8. D138 — Extension startup report as an untitled document.
-9. D054 — Dedicated read-only generated text surface.
-10. D085 — Cross-file search.
-11. D197 — Diff view: D126 and D174 build on it.
-12. D126 — Git status and changes per root.
+- D155 — Word and line selection in terminals.
+- D202 — Paste a URL over a selection as a Markdown link.
+- D140 — Placeholder text in input fields.
+- D022 — Editor autocompletion.
+- D182 — Interleave extension roots at awaits: before D067.
+- D087 — Extension entitlements: D085, D126, D067, and D101 need it.
+- D129 — Refactor builtin language extensions.
+- D138 — Extension startup report as an untitled document.
+- D054 — Dedicated read-only generated text surface.
+- D085 — Cross-file search.
+- D197 — Diff view: D126 and D174 build on it.
+- D126 — Git status and changes per root.
 
 Remove an item from this list when it is done or dropped.
 
