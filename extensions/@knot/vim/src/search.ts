@@ -7,7 +7,7 @@ import type { ByteRange, EditorViewState } from "knot";
 import type { SearchMotion } from "./keys.js";
 import type { BufferLines } from "./lines.js";
 import type { Position } from "./motions.js";
-import type { Moved, State } from "./normal.js";
+import { type Moved, prompted, type State } from "./normal.js";
 import { caseSensitive, type Syntax, translate, wordPattern } from "./pattern.js";
 import { nextColumn } from "./text.js";
 
@@ -237,6 +237,10 @@ function fail(state: State, message: string): null {
  * to search for the last pattern again. The editor's view is as it was
  * afterwards. */
 async function prompt(state: State, lines: BufferLines, from: Position, forward: boolean): Promise<string | null> {
+  return prompted(state, () => ask(state, lines, from, forward));
+}
+
+async function ask(state: State, lines: BufferLines, from: Position, forward: boolean): Promise<string | null> {
   const view = await state.handle.viewState();
   const input = await workbench.showInput({
     title: forward ? "Search Forward" : "Search Backward",

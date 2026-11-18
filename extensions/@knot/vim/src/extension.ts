@@ -5,7 +5,9 @@
 // `vim.insert` context, where typing is native and Escape returns to normal
 // mode.
 import { commands, documents, keymaps, settings, storage, windows, workbench } from "knot";
-import type { CommandContext, DocumentId, EditorHandle, JsonValue, StatusItem, ViewTarget, WindowTarget } from "knot";
+import type {
+  CommandContext, DocumentId, EditorHandle, JsonValue, RecordedCommand, StatusItem, ViewTarget, WindowTarget,
+} from "knot";
 import { commandLine } from "./command-line.js";
 import { Highlights } from "./highlight.js";
 import { JumpList } from "./jumps.js";
@@ -13,7 +15,7 @@ import { EMPTY, feed, type Pending, pendingText, type WindowAction } from "./key
 import { BufferLines } from "./lines.js";
 import { lineStart } from "./motions.js";
 import {
-  INSERT, isVisual, leaveInsert, type Mode, moveOnto, NORMAL, run, setMode, type Shared, type State,
+  INSERT, isVisual, leaveInsert, type Mode, moveOnto, NORMAL, type Player, run, setMode, type Shared, type State,
 } from "./normal.js";
 import { Registers } from "./registers.js";
 import { defineSearchSettings } from "./search.js";
@@ -92,6 +94,7 @@ export async function start() {
     registers,
     lastFind: null,
     lastChange: null,
+    lastMacro: null,
     search: { forward: true, smart: true },
     highlights: new Highlights(),
     saveRegisters() {
@@ -131,6 +134,7 @@ export async function start() {
     registers.clear();
     shared.lastFind = null;
     shared.lastChange = null;
+    shared.lastMacro = null;
     shared.search = { forward: true, smart: true };
     for (const buffer of shared.marks.values()) {
       for (const mark of buffer.values()) mark.dispose().catch(() => {});
@@ -254,6 +258,7 @@ class Vim {
       target, handle, buffer: tab.buffer, document: tab.document, shared: this.shared,
       language: info.language, mode: "normal", pending: EMPTY, operatorShown: false, message: null,
       want: null, caret: null, group: null, recording: null, change: null, replaying: null,
+      macro: null, player: null, failed: false,
       repeat: { count: 1, open: false }, opened: false, visual: null, selected: null, previous: null,
       jumps: new JumpList(), context: null, scroll: null, foldsOff: null,
     };
@@ -281,6 +286,7 @@ class Vim {
     await this.shared.highlights.draw(state, null, null);
     await state.group?.dispose();
     await state.recording?.dispose();
+    await state.macro?.recording.dispose();
     disposeMarks(state);
     await state.handle.setKeyContext(NORMAL, false);
     await state.handle.setKeyContext(INSERT, false);
@@ -323,8 +329,20 @@ class Vim {
     const state = await this.stateOf(context);
     if (state === null) return;
     state.message = null;
+    if (!(await this.feedKeys(state, keys))) return this.showStatus(state.target.window);
+    await showOperator(state, state.mode === "normal" && state.pending.operator !== null);
+    await this.showStatus(state.target.window);
+  }
+
+  /** Parses keys and runs the commands they complete; false when the editor
+   * closed meanwhile. */
+  private async feedKeys(state: Followed, keys: readonly string[]): Promise<boolean> {
     for (const key of keys) {
       if (state.mode === "insert") break;
+      if (key === "q" && state.macro !== null && state.pending.typed === "") {
+        await this.stopMacro(state);
+        continue;
+      }
       const visual = isVisual(state.mode);
       const fed = feed(state.pending, key, visual);
       if ("pending" in fed) {
@@ -336,7 +354,7 @@ class Vim {
         if (command === null) continue;
         if (command.kind === "window") {
           await whileOpen(() => windowCommand(command.action, command.count));
-          if (this.states.get(state.target) !== state) return this.showStatus(state.target.window);
+          if (this.states.get(state.target) !== state) return false;
           continue;
         }
         if (command.kind === "ex") {
@@ -346,7 +364,16 @@ class Vim {
             if (visual) await runVisual(state, { kind: "leave-visual" });
             state.message = await commandLine(state, visual ? "'<,'>" : "");
           });
-          if (this.states.get(state.target) !== state) return this.showStatus(state.target.window);
+          if (this.states.get(state.target) !== state) return false;
+          continue;
+        }
+        if (command.kind === "record") {
+          state.macro = { register: command.register, entries: [], recording: await state.handle.record() };
+          continue;
+        }
+        if (command.kind === "macro") {
+          await this.play(state, command.register, command.count);
+          if (this.states.get(state.target) !== state) return false;
           continue;
         }
         if (visual || command.kind === "visual" || command.kind === "reselect") {
@@ -356,17 +383,93 @@ class Vim {
         }
       }
     }
-    await showOperator(state, state.mode === "normal" && state.pending.operator !== null);
-    await this.showStatus(state.target.window);
+    return true;
+  }
+
+  /** Ends the macro recording, keeping its keys but for the `q` that ended it. */
+  private async stopMacro(state: Followed) {
+    const { macro } = state;
+    if (macro === null) return;
+    state.macro = null;
+    const entries = [...macro.entries, ...await macro.recording.stop()];
+    const last = entries.at(-1);
+    if (last?.command === "vim.type" && textArgument(last.arguments as JsonValue) === "q") entries.pop();
+    this.shared.registers.recordMacro(macro.register, entries);
+    this.shared.saveRegisters();
+  }
+
+  /** Plays a macro `count` times, from the register `@` names the last one
+   * played. It stops at a failed motion, as Vim does, and when a step leaves
+   * the editor: the window shows another tab, or the editor closed. */
+  private async play(state: Followed, register: string, count: number) {
+    const { shared } = this;
+    const name = register === "@" ? shared.lastMacro : register;
+    const entries = name === null ? null : shared.registers.macro(name);
+    if (name === null || entries === null) return;
+    shared.lastMacro = name;
+    const outer = state.player;
+    const player = outer ?? { answer: null, session: null };
+    state.player = player;
+    try {
+      for (let time = 0; time < count; time++) {
+        for (const entry of entries) {
+          state.failed = false;
+          if (!(await this.step(state, player, entry))) return;
+          if (state.failed || !(await this.stillShown(state))) {
+            // A macro that called this one stops too.
+            state.failed = true;
+            return;
+          }
+        }
+      }
+    } finally {
+      state.player = outer;
+    }
+  }
+
+  /** Runs one recorded step; false when the editor closed. */
+  private async step(state: Followed, player: Player, entry: RecordedCommand): Promise<boolean> {
+    const { command } = entry;
+    const args = entry.arguments as JsonValue;
+    player.session?.push(entry);
+    try {
+      if (command === "vim.answer") {
+        player.answer = (args as { text: string }).text;
+      } else if (command === "vim.type") {
+        const text = textArgument(args);
+        if (text !== null) return await this.feedKeys(state, [...text]);
+      } else if (command === "vim.key") {
+        const key = keyArgument(args);
+        if (key !== null) return await this.feedKeys(state, [key]);
+      } else if (command === "vim.leave-insert") {
+        if (state.mode === "insert") await this.finishInsert(state);
+      } else {
+        await commands.invoke(command, args as never);
+      }
+    } catch (error) {
+      const code = (error as { code?: string }).code;
+      if (code !== "InvalidTarget" && code !== "BufferClosed") throw error;
+      return false;
+    }
+    return this.states.get(state.target) === state;
+  }
+
+  /** Whether the window still shows the editor a macro plays in. */
+  private async stillShown(state: Followed): Promise<boolean> {
+    return (await windows.get(state.target.window))?.statusTarget === state.target;
   }
 
   async leaveInsert(context: CommandContext) {
     const state = await this.stateOf(context);
     if (state === null || state.mode !== "insert") return;
+    await this.finishInsert(state);
+    await this.showStatus(state.target.window);
+  }
+
+  private async finishInsert(state: Followed) {
     await leaveInsert(state);
     // A selection made while inserting carries on in visual mode.
     await followSelection(state);
-    await this.showStatus(state.target.window);
   }
 
   /** Shows the mode and pending keys of the window's active editor, or
@@ -374,7 +477,7 @@ class Vim {
   private async showStatus(window: WindowTarget) {
     const target = this.active.get(window)?.target;
     const state = target === undefined ? undefined : this.states.get(target);
-    const mode = state === undefined ? null : state.message ?? MODE_TEXT[state.mode];
+    const mode = state === undefined ? null : state.message ?? MODE_TEXT[state.mode] + recordingText(state);
     const keys = state === undefined ? null : pendingText(state.pending);
     const shown = this.shown.get(window);
     this.shown.set(window, { mode, keys });
@@ -450,6 +553,11 @@ async function windowCommand(action: WindowAction, count: number | null) {
 const MODE_TEXT: Readonly<Record<Mode, string>> = {
   normal: "", insert: "-- INSERT --", visual: "-- VISUAL --", "visual-line": "-- VISUAL LINE --",
 };
+
+/** What the mode shows while a macro records. */
+function recordingText(state: State): string {
+  return state.macro === null ? "" : `recording @${state.macro.register}`;
+}
 
 /** Runs `body`, ignoring the failure of an editor or document that closed
  * meanwhile. */

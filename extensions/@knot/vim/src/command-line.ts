@@ -7,7 +7,7 @@ import {
   type ExRange, type SetArgument,
 } from "./ex.js";
 import { BufferLines } from "./lines.js";
-import { grouped, markOffset, moveTo, run, type State } from "./normal.js";
+import { grouped, markOffset, moveTo, prompted, run, type State } from "./normal.js";
 import { translateReplacement } from "./pattern.js";
 import { compile, IGNORE_CASE, invalidPattern, searchSettings, SMART_CASE } from "./search.js";
 import { firstNonBlank } from "./text.js";
@@ -52,27 +52,33 @@ function fileCompletion(head: string, row: FileRow): InputCompletion {
  * Under `:e`, the list is the files provider's, and Enter on a row opens it. */
 export async function commandLine(state: State, initial: string): Promise<string | null> {
   let files: readonly FileRow[] = [];
-  const input = await workbench.showInput({
-    title: "Ex Command",
-    prompt: ":",
-    value: initial,
-    history: state.shared.registers.entries("command"),
-    onChange: async (line) => {
-      const target = fileCompletionTarget(line);
-      if (target === null) {
-        files = [];
-        return { items: await completeEx(line) };
-      }
-      files = await fileRows(target.query);
-      return { items: files.map((row) => fileCompletion(target.head, row)) };
-    },
+  let highlighted: number | null = null;
+  const value = await prompted(state, async () => {
+    const input = await workbench.showInput({
+      title: "Ex Command",
+      prompt: ":",
+      value: initial,
+      history: state.shared.registers.entries("command"),
+      onChange: async (line) => {
+        const target = fileCompletionTarget(line);
+        if (target === null) {
+          files = [];
+          return { items: await completeEx(line) };
+        }
+        files = await fileRows(target.query);
+        return { items: files.map((row) => fileCompletion(target.head, row)) };
+      },
+    });
+    if (input.kind === "dismissed") return null;
+    highlighted = input.highlighted;
+    return input.value;
   });
-  if (input.kind === "dismissed") return null;
-  const row = input.highlighted === null ? undefined : files[input.highlighted];
+  if (value === null) return null;
+  const row = highlighted === null ? undefined : files[highlighted];
   if (row !== undefined) return open(row.id, row.label);
-  const command = parseEx(input.value);
+  const command = parseEx(value);
   if (command.kind === "none") return null;
-  const line = input.value.replace(/^[\s:]+/, "").trimEnd();
+  const line = value.replace(/^[\s:]+/, "").trimEnd();
   state.shared.registers.set(":", { text: line, linewise: false });
   state.shared.registers.remember("command", line);
   state.shared.saveRegisters();

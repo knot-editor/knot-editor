@@ -45,6 +45,8 @@ export type Shared = {
   saveRegisters(): void;
   /** The last change, which `.` repeats. */
   lastChange: Change | null;
+  /** The register `@@` plays again. */
+  lastMacro: string | null;
   /** Buffer marks `a`–`z`, by document. */
   readonly marks: Map<DocumentId, Map<string, Mark>>;
   /** Global marks `A`–`Z`, each in some open document. */
@@ -57,6 +59,18 @@ export type Shared = {
 /** A change `.` repeats: the command that made it and, for one that entered
  * insert mode, the input typed there. */
 export type Change = { command: Command; insert: readonly RecordedCommand[] | null };
+
+/** A macro being recorded: the keys so far, and the recording of those after
+ * the last prompt, whose answers the editor does not receive. */
+export type Macro = { readonly register: string; readonly entries: RecordedCommand[]; recording: Recording };
+
+/** A macro being played. */
+export type Player = {
+  /** The text a prompt takes as its answer, null to dismiss it. */
+  answer: string | null;
+  /** The insert session's input so far, null outside one. */
+  session: RecordedCommand[] | null;
+};
 
 export type GlobalMark = Readonly<{ document: DocumentId; mark: Mark }>;
 
@@ -85,6 +99,12 @@ export type State = {
   change: Change | null;
   /** While `.` runs, the input it replays, which a counted insert repeats. */
   replaying: readonly RecordedCommand[] | null;
+  /** The macro being recorded. */
+  macro: Macro | null;
+  /** The macro being played. */
+  player: Player | null;
+  /** Whether a motion failed since a macro step began, which stops the macro. */
+  failed: boolean;
   /** How many times the insert session's input runs in all, and whether each
    * further run starts on a new line, as for `o` and `O`. */
   repeat: { count: number; open: boolean };
@@ -120,7 +140,11 @@ export async function setMode(state: State, mode: Mode) {
   }
   // Visual modes share normal mode's keys, context, and caret.
   if ((was === "insert") === (mode === "insert") && was !== mode) return;
-  if (mode === "insert" && state.replaying === null) state.recording = await state.handle.record();
+  if (mode === "insert" && state.replaying === null) {
+    // A playing macro's input is not recorded; it keeps its own.
+    if (state.player === null) state.recording = await state.handle.record();
+    else state.player.session = [];
+  }
   await state.handle.setKeyContext(NORMAL, mode !== "insert");
   await state.handle.setKeyContext(INSERT, mode === "insert");
   await state.handle.setCursorStyle(mode === "insert" ? null : "block");
@@ -723,11 +747,44 @@ async function motion(state: State, name: Motion, count: number | null) {
   const moved = await resolve(state, lines, from, name, count, null);
   if (moved === null) {
     // A failed `%` may have moved the native caret.
+    state.failed = true;
     await moveTo(state, lines, from);
     return;
   }
+  const stuck = name === "left" || name === "right" ? same(moved.to, from) : moved.to.line === from.line;
+  if (typeof name === "string" && STEPS.has(name) && stuck) state.failed = true;
   if (moved.jump === true) await recordJump(state, caret);
   await land(state, lines, moved.to.line === from.line ? moved : await intoShownLine(state, lines, moved));
+}
+
+/** The motions that fail when they cannot move, as `j` on the last line. */
+const STEPS = new Set<Motion>(["left", "right", "up", "down"]);
+
+function same(a: Position, b: Position): boolean {
+  return a.line === b.line && a.col === b.col;
+}
+
+/** A prompt's answer: the text a playing macro recorded for it, or what
+ * `ask` gets, which a recording macro keeps for playing. Null is a dismissed
+ * prompt. */
+export async function prompted(state: State, ask: () => Promise<string | null>): Promise<string | null> {
+  if (state.player !== null) {
+    const { answer } = state.player;
+    state.player.answer = null;
+    return answer;
+  }
+  const { macro } = state;
+  if (macro === null) return ask();
+  // The prompt's own typing never reaches the editor. The key that opened it
+  // moves after its answer, and what follows is recorded afresh.
+  const segment = [...await macro.recording.stop()];
+  const opener = segment.pop();
+  macro.entries.push(...segment);
+  macro.recording = await state.handle.record();
+  const text = await ask();
+  if (text !== null) macro.entries.push({ command: "vim.answer", arguments: { text } });
+  if (opener !== undefined) macro.entries.push(opener);
+  return text;
 }
 
 /** Moves the caret where a motion went, onto its line's last character at
@@ -876,6 +933,7 @@ async function operate(
     }
   }
   if (region === null) {
+    state.failed = true;
     await moveTo(state, lines, from);
     return;
   }
@@ -1167,11 +1225,13 @@ async function enterInsert(state: State, at: InsertAt, count: number) {
 async function finishSession(state: State): Promise<readonly RecordedCommand[]> {
   const recording = state.recording;
   state.recording = null;
+  const session = state.player?.session ?? null;
+  if (state.player !== null) state.player.session = null;
   const change = state.change;
   state.change = null;
   if (state.replaying !== null) return state.replaying;
-  if (recording === null) return [];
-  const entries = [...await recording.stop()];
+  if (recording === null && session === null) return [];
+  const entries = recording === null ? session! : [...await recording.stop()];
   if (entries.at(-1)?.command === "vim.leave-insert") entries.pop();
   if (change !== null) change.insert = entries;
   const text = entries.map(({ command, arguments: args }) => {

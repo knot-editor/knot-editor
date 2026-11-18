@@ -282,7 +282,7 @@ fn run_topic(topic: &str, cx: &mut TestAppContext) {
 topics!(
     package("vim"),
     run_topic;
-    ex, folding, insert, marks, motions, objects, operators, registers, repeat, scrolling, search, substitute, visual
+    ex, folding, insert, macros, marks, motions, objects, operators, registers, repeat, scrolling, search, substitute, visual
 );
 
 #[gpui::test]
@@ -477,6 +477,62 @@ fn registers_persist_across_a_package_restart(cx: &mut TestAppContext) {
     // Linewise text stays linewise, and characterwise text characterwise.
     test_editor.press("j\"ap\"bP", cx);
     assert_eq!(test_editor.marked(cx), "one\ntwo\non‸eone");
+}
+
+#[gpui::test]
+fn macros_persist_across_a_package_restart(cx: &mut TestAppContext) {
+    let product = start(cx);
+    let test_editor = open(&product, "abcdefgh", 0, cx);
+    test_editor.press("qaxxqqbxq", cx);
+
+    restart_vim(&product, &test_editor, cx);
+
+    test_editor.press("@a@b", cx);
+    assert_eq!(test_editor.marked(cx), "‸gh");
+    // The register's text shows what the macro typed.
+    test_editor.press("\"ap", cx);
+    assert_eq!(test_editor.marked(cx), "gx‸xh");
+}
+
+#[gpui::test]
+fn the_mode_shows_the_macro_being_recorded(cx: &mut TestAppContext) {
+    let product = start(cx);
+    let test_editor = open(&product, "abc", 0, cx);
+    let recording = |cx: &mut TestAppContext| {
+        test_editor
+            .status(cx)
+            .0
+            .iter()
+            .any(|item| item.contains("recording"))
+    };
+    assert!(!recording(cx));
+
+    test_editor.press("qa", cx);
+    assert!(shows(&test_editor, "recording @a", cx));
+    test_editor.press("i", cx);
+    assert!(shows(&test_editor, "-- INSERT --recording @a", cx));
+    test_editor.press("<esc>q", cx);
+    assert!(!recording(cx));
+}
+
+/// A step that moves focus to another editor ends the macro there, so it
+/// never edits the other buffer.
+#[gpui::test]
+fn a_macro_stops_when_a_step_moves_focus_to_another_pane(cx: &mut TestAppContext) {
+    let product = start(cx);
+    let test_editor = open(&product, "abcdef", 0, cx);
+    // With one pane, `ctrl-w w` leaves focus where it is.
+    test_editor.press("qax<c-w>wxq", cx);
+    assert_eq!(test_editor.marked(cx), "‸cdef");
+
+    test_editor.press("<c-w>v", cx);
+    assert_eq!(test_editor.pane_count(cx), 2);
+    assert_eq!(test_editor.focused_pane(cx), 1);
+    // The first `x` runs in the new pane; `ctrl-w w` then moves focus away
+    // and the second `x` does not run.
+    test_editor.press("@a", cx);
+    assert_eq!(test_editor.focused_pane(cx), 0);
+    assert_eq!(test_editor.marked(cx).replace('‸', ""), "def");
 }
 
 #[gpui::test]

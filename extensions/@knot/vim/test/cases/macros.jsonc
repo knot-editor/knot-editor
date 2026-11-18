@@ -1,0 +1,60 @@
+// Vim behavior cases in the format described in
+// crates/knot-ext-vim/tests/vim.rs: a Rust product test types `keys` through the
+// real editor with this package enabled. Topic: macros (`q`, `@`, and `@@`).
+{
+  "cases": [
+    // Recording and playing.
+    { "name": "@ plays the keys recorded", "before": ["‸a b c d"], "keys": "qadwq@a", "after": ["‸c d"] },
+    { "name": "recording runs the keys as they are typed", "before": ["‸abc"], "keys": "qaxq", "after": ["‸bc"] },
+    { "name": "a count plays the macro that many times", "before": ["‸abcdef"], "keys": "qaxq3@a", "after": ["‸ef"] },
+    { "name": "@@ plays the last macro again", "before": ["‸abcdef"], "keys": "qaxq@a@@", "after": ["‸def"] },
+    { "name": "@@ with nothing played does nothing", "before": ["‸abc"], "keys": "@@", "after": ["‸abc"] },
+    { "name": "an empty register plays nothing", "before": ["‸abc"], "keys": "@a", "after": ["‸abc"] },
+    { "name": "q ends a recording before any key", "before": ["‸abc"], "keys": "qaq@ax", "after": ["‸bc"] },
+    { "name": "a count inside a macro stays", "before": ["‸abcdef"], "keys": "qa2xq@a", "after": ["‸ef"] },
+    { "name": "q{A} appends to the register", "before": ["‸abcdef"], "keys": "qaxqqAxq@a", "after": ["‸ef"] },
+    { "name": "q{a} records over the register", "before": ["‸abcdef"], "keys": "qaxqqaxxq@a", "after": ["‸f"] },
+    { "name": "a macro plays another one", "before": ["‸abcdef"], "keys": "qbxqqa@bxq@a", "after": ["‸f"] },
+    { "name": "a macro runs visual mode", "before": ["‸abcdef"], "keys": "qavlxq@a", "after": ["‸ef"] },
+    { "name": "a macro repeats a change with .", "before": ["‸a b c d"], "keys": "dwqa.q@a", "after": ["‸d"] },
+
+    // Insert mode.
+    {
+      "name": "a macro types text and leaves insert mode",
+      "before": ["‸a", "b", "c"], "keys": "qaAx<esc>jq@a", "after": ["ax", "bx", "‸c"]
+    },
+    { "name": "a macro replays Backspace in its typing", "before": ["‸"], "keys": "qaiab<bs>c<esc>q@a", "after": ["aa‸cc"] },
+    { "name": "a macro replays a newline in its typing", "before": ["‸x"], "keys": "qaA<cr>y<esc>q@a", "after": ["x", "y", "‸y"] },
+    { "name": "a macro opens lines with o", "before": ["‸a"], "keys": "qaob<esc>q@a", "after": ["a", "b", "‸b"] },
+    { "name": "a macro with a counted insert", "before": ["‸"], "keys": "qa2ix<esc>q@a", "after": ["xx‸xx"] },
+    { "name": ". repeats what a macro inserted", "before": ["‸"], "keys": "qaixy<esc>q@a.", "after": ["xxx‸yyy"] },
+    { "name": "an undo takes back the macro's last change", "before": ["‸abcdef"], "keys": "qaxxq@au", "after": ["‸def"] },
+
+    // Prompts.
+    {
+      "name": "a macro searches again for what it searched",
+      "before": ["‸x foo", "y foo z"], "keys": "qa/foo<cr>xq@a", "after": ["x oo", "y ‸oo z"]
+    },
+    {
+      "name": "a macro searches backward",
+      "before": ["foo a", "foo ‸b"], "keys": "qa?foo<cr>xq@a", "after": ["‸oo a", "oo b"]
+    },
+    { "name": "a macro takes an operator over a search", "before": ["‸a foo b foo c"], "keys": "qad/foo<cr>q@a", "after": ["‸foo c"] },
+    {
+      "name": "a macro runs an ex command",
+      "before": ["‸a a", "a a"], "keys": "qa:s/a/b/<cr>jq@a", "after": ["b a", "‸b a"]
+    },
+    { "name": "a dismissed prompt stops the macro", "before": ["‸a foo"], "keys": "qa/foo<esc>xq@a", "after": ["‸ foo"] },
+
+    // Stopping.
+    {
+      "name": "a failed motion stops the macro",
+      "before": ["‸abc", "def", "ghi"], "keys": "qajxq5@a", "after": ["abc", "ef", "‸hi"]
+    },
+    { "name": "a failed search stops the macro", "before": ["‸abc"], "keys": "qa/z<cr>xq@a", "after": ["‸bc"] },
+    {
+      "name": "a macro that calls itself runs until a motion fails",
+      "before": ["‸a", "b", "c", "d"], "keys": "qaqqaAx<esc>j@aq@a", "after": ["ax", "bx", "cx", "d‸x"]
+    }
+  ]
+}
