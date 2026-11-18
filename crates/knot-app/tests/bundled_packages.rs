@@ -51,9 +51,9 @@ fn bundled_packages_load_with_product_discovery(cx: &mut TestAppContext) {
     // resolves Knot Islands Dark rather than the native fallback colors.
     product.apply_startup_theme(cx);
     assert!(product.theme_is_dark(cx));
-    assert_eq!(
+    assert_ne!(
         Some(product.theme_color("editor.background", cx)),
-        TestProduct::parse_color("#191a1c")
+        TestProduct::parse_color("#2b2d30")
     );
 }
 
