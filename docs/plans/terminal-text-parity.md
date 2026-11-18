@@ -1,6 +1,6 @@
 # Terminal text parity with Ghostty
 
-Status: checkpoint 1 implemented, awaiting its review gate. No roadmap item.
+Status: checkpoint 1 complete; checkpoint 2 is next. No roadmap item.
 
 ## Goal
 
@@ -31,30 +31,14 @@ and glyphs snapped to the emulator cell grid instead of soft, drifting runs.
 - A separate `cell-height`/`cell-width` setting; `font.lineHeight` remains
   the knob.
 
-## Checkpoint 1 — Terminal line height 1.0 ⬜
+## Checkpoint 1 — Terminal line height 1.0 ✅
 
-Deliverable: a stock terminal measures rows at 1.0 × (ascent + descent)
-while editors stay at 1.2; an explicit `font.lineHeight` still wins in both
-scopes.
-
-- Scoped default in `FontSettings::resolve` (or the settings default for
-  the terminal scope), docs in `docs/settings.md`, behavior sentences in
-  [workbench and lifecycle](../architecture/workbench-and-lifecycle.md)
-  (terminal geometry) and
-  [editor and languages](../architecture/editor-and-languages.md) if they
-  state a single default.
-- Validation: `knot-model` typography tests for the scoped default,
-  explicit-value override, and clamping; `terminal/layout` tests for cell
-  height at 1.0; existing editor tests unchanged.
-- Review gate: `just check`; open identical `ls` output in Ghostty and Knot
-  at the same font/size and compare row heights.
-
-**Implementation context.** `crates/knot-model/src/typography.rs`
-(`FontSettings::resolve`, `DEFAULT` line-height tests ~lines 162-223),
-`crates/knot-model/src/settings.rs` (`FONT_LINE_HEIGHT` default/docs),
-`src/app/terminal/layout.rs` (`TerminalLayout::measure`/`from_metrics`),
-`src/app/terminal/view/tests.rs` (font-size/grid tests). Mirror how
-`font.family` already scopes per view (`{ view: "terminal" }`).
+Done: stock terminals measure rows at 1.0 × (ascent + descent) while
+editors stay at 1.2; an explicit `font.lineHeight` at any matching scope
+wins. See `font.lineHeight` in [settings](../settings.md) and the terminal
+geometry in [workbench and lifecycle](../architecture/workbench-and-lifecycle.md).
+Review gate passed: `just check` green, and side-by-side `ls` output in
+Ghostty and Knot measures the same row height.
 
 ## Checkpoint 2 — Per-cell grid painting
 
@@ -84,3 +68,5 @@ Personal config root is `user_config_root` in
 
 - Subpixel-AA/gamma investigation if parity still looks off after the grid
   lands; palette and fallback-font follow-ups.
+- Weight rendering: Knot looks a bit bolder than Ghostty at the same font
+  (reported at the checkpoint 1 gate); weight changes stay excluded for now.
