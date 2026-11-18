@@ -79,13 +79,13 @@ themes; native code owns grammars, parsing, and the defaults of the color keys
 it paints with, and the application theme maps color keys and highlight names
 to styles.
 Each window owns a workbench of areas, a center of document and terminal tabs
-surrounded by docks of native tool tabs, each split into panes, along with
+surrounded by six slots of tool windows, each a split tree of tabbed panes, along with
 Knot-side focus and key routing; tabs hold identities, and the window's
 workbench entity owns the view behind each one; the application keeps the
 registry of open windows, and a native window renders one window and forwards
 raw input to it.
 The workbench retains native tool definitions independently of visible tab
-attachments, including dock placement and hide/reopen state. The application
+attachments, including slot placement and hide/reopen state. The application
 owns one SQLite state database of UI-state records: a versioned tool-only
 layout snapshot, which fresh windows inherit while already-open windows stay
 independent; one record of every window's roots and layout that

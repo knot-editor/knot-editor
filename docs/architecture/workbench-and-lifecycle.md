@@ -75,7 +75,7 @@ closes. Launch, restoration, tab transfer to a new window, and
 [session replacement](#session-replacement) build the window first and then open
 a native window for it. Extensions see a window's ID as `WindowTarget.window`.
 
-A window paints the center and each shown dock as cards on the
+A window paints the center and each shown tool window as cards on the
 `window.background` color; the theme's [chrome](semantic-ui.md#themes-and-color-keys)
 sets their corner radius, gap, window margin, and border, so a theme may be
 Islands (rounded cards with gaps) or flat (square cards meeting at borders).
@@ -95,7 +95,7 @@ Native prompts go through the window, which asks its native window; a window
 without a native window answers nothing, which callers treat as cancellation.
 The native window stays an adapter for raw input: key-downs and typed text
 reach the window through it (see [keymaps](commands.md#keymaps)), and tab drags
-and dock resizing are pointer input. Every surface's state, the editor, trees,
+and tool-window resizing are pointer input. Every surface's state, the editor, trees,
 terminals, the palette, pickers, and text fields, runs without a native window,
 so a window without one takes keys and text and gives each to the surface with
 Knot-side focus, and keys after an extension command wait for it there too.
@@ -110,7 +110,7 @@ and which persists as the `zoom` record of the state database. Each product
 window sets its rem size from it, so chrome styled in rems scales, and surfaces
 that measure in pixels multiply by the same factor: editors and terminals size
 their text as `font.size` times the factor, and pixel chrome such as tabs, the
-picker, and text inputs scales its constants. Dock sizes stay window pixels, as
+picker, and text inputs scales its constants. Tool-window sizes stay window pixels, as
 on a window resize.
 
 ## Status bar
@@ -185,9 +185,9 @@ error keeps its diagnostic window.
 ## Workbench and protected closure
 
 The layout model (`knot_model::workbench`) owns a window's areas: a center of
-documents and terminals surrounded by left, right, and bottom docks of tools,
-each a binary split tree of panes; stable pane/tab identities, ordered tabs,
-and the focused pane. A tab holds the
+documents and terminals surrounded by six dock slots, each showing at most one
+tool window; the center and every tool window are the same binary split tree of
+tabbed panes; stable pane/tab identities, ordered tabs, and the focused pane. A tab holds the
 identity of what it shows (a document, a terminal session, or a tool) and a
 presentation identity, which captured targets compare. The window's workbench
 entity pairs the layout with the view behind each presentation: it creates a
@@ -195,56 +195,74 @@ view when a transition opens a tab and drops it once no tab or tool presents
 it. A document tab presents one `EditorView` of an application-owned document,
 fresh whenever it opens, shows another document, or moves to another window. A
 terminal tab presents the sole attached view of an application-owned session,
-with no document model. A tool tab presents its tool's native frame, whose
+with no document model. A fixed tool window's tab presents its tool's native frame, whose
 definition and presentation survive hiding.
-By default the side docks span the window's height and the bottom dock sits
-under the center between them; `workbench.bottomDockLayout` set to `full` runs
-the bottom dock across the window's width under the side docks. Painting,
-directional navigation, and `Workbench::area_rects` share the arrangement. Each dock has an absolute window-local size, a visible
-flag, and its own last focused pane; hiding a dock keeps its arrangement, and
-focusing a pane of a hidden dock shows it. Toggling a dock or a tool follows
-one pattern: a hidden one shows and takes focus, a shown but unfocused one
-takes focus, and a focused one hides, returning focus to the center's last
-focused pane. A tool's home is the dock it is in or last left, so moving it
-to another dock rehomes it. Move Tab to Left, Right, or Bottom Dock and Move
-Tab to Center move a tab to the end of that area's last focused pane, and
-are unavailable when the tab is already there. Each tab kind declares the areas it
-may occupy (`TabKind::allows`): documents the center, tools the docks, and
-terminals either. Placement, relocation, directional moves, and restore check the
-declaration, so a tool never joins the center and a document never enters a
-dock. A center tab sits on the tab background with an accent line under the
+The slots are left top and bottom, right top and bottom, and bottom left and
+right. A side's extent is the size of the window in its first slot, else its
+second; when both show, the side splits by the share of the first. Each tool
+window remembers its own size and share, keeping them when it moves to another
+slot, and resizing a side sets the size of the window there. By default the
+side slots span the window's height and the bottom slots sit under the center
+between them; `workbench.bottomDockLayout` set to `full` runs them across the
+window's width under the side slots. Painting, directional navigation, and
+`Workbench::area_rects` share the arrangement. Hiding a tool window keeps its
+tabs and views, so shells keep running, and focusing a pane of a hidden one
+shows it.
+
+A tool window is fixed or a container. A fixed one (Explorer, Notifications)
+holds the single tree or text tab it registered with and shows only a title
+row. A container (Terminal) holds tabs opened into it: every pane shows its tab
+strip, even with one tab, and a `+` button that runs the container's `newTab`
+command, which also runs when the window is shown empty. Closing or moving out
+a container's last tab hides it, and a pane whose last tab goes away.
+Split Right and Down open a new tab in a new pane beside the current one, Split
+and Move moves the current tab there, and Unsplit merges the panes back. Each
+tab kind declares where it may live (`TabKind::allows`), and placement,
+relocation, directional moves, and restore check it: documents live in the
+center, a fixed tool's tab in its own window, and a terminal in the center or
+in the container it was opened into, never in another tool window. Open as
+Editor Tab and Return to Tool Window, or a drag onto the center or any strip of
+the container, move a terminal between them.
+
+Toggling a tool window follows one pattern: a hidden one shows and takes
+focus, a shown but unfocused one takes focus, and a focused one hides,
+returning focus to the center's last focused pane. Every registered tool has a
+generated `<viewId>.toggle` command. Hide Active Tool Window (from the editor,
+the most recently active visible window), Jump to Last Tool Window, Hide All
+Tool Windows (run again, it restores the windows it hid), Maximize Tool Window,
+the Stretch commands, Move to a slot, and the split commands are workbench
+transitions. Esc in a tool window focuses the center and leaves the window
+shown; `terminal.escapeToEditor` set to false sends it to the shell.
+
+A center tab sits on the tab background with an accent line under the
 active one; its close button shows on the active or hovered tab, a dirty
 document's dot takes the button's place until hover, and a pinned tab shows a
-pin icon. Every dock pane has a header instead of a tab bar: tabs styled like the
-center's, with a title alone for a pane with one tool tab (terminal tabs
-always show theirs), a close button on terminal tabs, none on tool tabs, a new-terminal button on terminal panes, the
-tree frame actions of the active tool, and a hide button at the right. Stripes
-on the left and right window edges
-(`workbench.toolStripes`; a stripe without buttons is not painted, except
-while a button is dragged) show a button for every tool by home dock, bottom-dock
-tools at the left stripe's lower end, plus the terminal button in the terminal
-home's group (`Workbench::stripes`). A click toggles the tool, or the dock
-terminals. Like a stripe elsewhere, a click shows a hidden tool in place of the
-other tools in its pane, which hide and keep their places; terminals stay, and
-a tool already showing only takes focus, so tabs the user grouped stay grouped
-(`Workbench::show_tool_replacing`). Programmatic shows and dock toggles add
-tabs. The button's right-click menu shows the tool in a pane of its own beside
-the dock's last focused pane (`Workbench::show_tool_beside`), hides it, or
-moves it to another dock. Dragging a button to another stripe rehomes it,
-moving a shown tool and leaving a hidden one hidden; the terminal button moves
-every dock terminal to the target dock and makes it the terminal home.
-Splitting a document creates another view; splitting a terminal creates
-another session, in a dock as in the center. Empty panes collapse, keeping their siblings' ratios. The
+pin icon. A tool window's header carries its bold title at the start of its
+first pane, and its actions, options menu, and hide button at the end;
+double-clicking it maximizes the window. The options menu offers Move to
+(slots), Stretch, and Remove from Sidebar. Stripes on the left and right window
+edges (`workbench.toolStripes`; a stripe without buttons is not painted,
+except while a button is dragged) group buttons by slot (`Workbench::stripes`):
+the left stripe shows left top, a separator, left bottom, and bottom left at
+its lower end, and the right stripe mirrors it. A click shows a hidden tool
+window in its slot, hiding the one there, or hides a shown one
+(`Workbench::stripe_click`); an empty container opens its first tab. Dragging a
+button to another group, or the button menu's Move to, moves the window to
+that slot. A tool window removed from the sidebar has no button and hides; the
+More tool windows button on the left stripe lists such windows, and picking one
+shows it and restores its button. A tool window's badge paints a blue or red
+dot on its button, which `ViewRegistration.setBadge` sets in every window.
+Splitting a document creates another view. Empty panes collapse, keeping their siblings' ratios. The
 center may be empty; it then paints a blank surface that takes keyboard focus
 while no pane has it, opens new documents and terminals, and accepts dropped
 tabs. When the focused pane goes, focus moves to another pane of its area, then
-the center's last focused pane, else to the empty center; a dock takes focus
-only when the user or a command focuses it, so a fresh window or an emptied
-center never leaves keys aimed at a tool.
+the center's last focused pane, else to the empty center; a tool window takes
+focus only when the user or a command focuses it, so a fresh window or an
+emptied center never leaves keys aimed at a tool.
 
 Each split gives a ratio of its extent to its first child, addressed by its
-boundary pane, the first pane of its second child. Grow and shrink move a dock
-pane's dock size, or a center pane's nearest split, by a step; equalize gives
+boundary pane, the first pane of its second child. Grow and shrink move a tool
+window's size, or a center pane's nearest split, by a step; equalize gives
 every pane of a same-direction chain in the focused pane's area an even share. Each pane keeps its
 tabs in recently activated order; a recent-tab walk (`workbench::RecentWalk`) shows tabs without
 reordering them and commits one activation when ctrl is released. Pinned tabs
@@ -255,7 +273,7 @@ double-clicked, moved, kept open by command, or opened again without
 `preview`; the
 `workbench.previewTabs` setting turns previews into regular tabs. Directional
 focus and moves find the neighbor across areas from pane rectangles laid out
-from ratios and dock sizes over the painted workbench, so they work while a
+from ratios and tool-window sizes over the painted workbench, so they work while a
 pane is maximized; a move goes only to a neighbor whose area allows the tab,
 and with none splits the pane on that side. Focus commands given
 `{ withinArea: true }` stay in the focused pane's area, which keeps Vim's
@@ -263,16 +281,16 @@ and with none splits the pane on that side. Focus commands given
 commands walk the focused pane's area in layout order, and the workbench
 remembers the previously focused pane. Resizing can be limited to the width or
 the height, which changes the nearest split along that axis, or, along a
-dock's axis, its size. Maximize is window render state that lasts while its pane stays focused, in a
-dock as in the center; hiding a dock keeps its maximized pane, and showing the
-dock with that pane focused maximizes it again.
+side's axis, the size of its tool window. Maximize is window render state that lasts while its pane stays focused, in a
+tool window as in the center; hiding the window keeps its maximized pane, and
+showing it with that pane focused maximizes it again.
 
 One application-level coordinator protects tab, pane, window, and quit
 closure. The window collects its open views and the documents' state
 and runs the prompts, saves, and closes; which views a close covers, which
 dirty documents need a prompt, and whether a plan still holds at commit are
 decided by `knot_model::workbench::closure`. A close covers a tab; Close Other
-Tabs a pane's unpinned tabs but the origin; Close Tabs to the Right its unpinned tabs after the origin; Close Pane every tab of the pane, hiding tools in a dock, and Close Other
+Tabs a pane's unpinned tabs but the origin; Close Tabs to the Right its unpinned tabs after the origin; Close Pane every tab of the pane, hiding a fixed tool window, and Close Other
 Panes every tab of the window's other panes in the origin's area. Window and
 quit closes need no origin tab. The
 coordinator captures exact window, workbench, tab, surface, and presentation identities,
@@ -299,7 +317,7 @@ window registry counts views in open windows without retaining windows or
 workbenches. Final application document removal explicitly closes its model,
 invalidating transport access even if a stale view retains the entity. Nonfinal
 view closure leaves the shared document open. Closing the final document or
-terminal leaves an empty center, beside any docks, and keeps hidden tool
+terminal leaves an empty center, beside any tool windows, and keeps hidden tool
 definitions; no placeholder document replaces it. Closing a tool hides its
 attachment without entering document confirmation. Close Tab with no focused
 tab, as in an empty center, closes the window through window closure. A window
@@ -320,19 +338,19 @@ awaiting observation listeners.
 One versioned `WindowLayout` value serves both restorers: native window hot exit
 and extension sessions through `workbench.captureLayout`. It records logical
 window bounds, windowed, maximized, or fullscreen state, and the display UUID;
-the center's split tree and each dock's size, visibility, and split tree, with
-each split's ratio; ordered tabs, which are pinned, and the selected tab per
+the center's split tree and each tool window's slot, size, share, visibility,
+and split tree, with each split's ratio; ordered tabs, which are pinned, and the selected tab per
 pane; the focused pane; and each editor tab's view state. Preview, maximize, recent order, and the reopen stack
 are not recorded, so restored tabs are regular. Every tab kind is
 restored by position and records only what recreates it: a document tab its
-document identity, resource URI, and explicit language, a tool tab its stable
-tool ID, and a terminal tab its shell's working directory, so a restored
-terminal starts a fresh shell there. The value never contains pane, tab, view,
+document identity, resource URI, and explicit language, a fixed tool window records no tabs, and a terminal tab its shell's working
+directory and label, so a restored terminal starts a fresh shell there under
+its name. The value never contains pane, tab, view,
 or window handles.
 
 Restoring plans a pruned arrangement in one place for both restorers. Document
 tabs resolve to the window's entry with the same document identity, else the
-same normalized URI. Unmatched documents, unregistered or repeated tools, tabs whose kind the area
+same normalized URI. Unmatched documents, containers not registered, tabs whose kind the area
 does not allow, and repeated documents within a pane are dropped, then empty
 panes and one-child splits collapse; an out-of-range selection or focus falls
 back to the first tab or the center.
@@ -352,7 +370,7 @@ moving an existing window stays deferred. Saved bounds are kept when enough of
 their title bar lies on a connected display; otherwise the window is sized to
 fit and centered on its saved display if connected, else on the primary one.
 
-Cursor, selection, and scroll changes, focus, dock resizing, window bounds, and
+Cursor, selection, and scroll changes, focus, tool-window resizing, window bounds, and
 other window changes restart a per-window trailing-edge debounce of about a
 second. When it settles the window captures its layout: a layout that differs
 from the last one it reported sends a `viewStateChanged` observation event, and
@@ -430,14 +448,13 @@ reveals still apply. Terminal cross-window moves hand off the sole attachment to
 a destination view of the same session; same-window moves retain their view.
 Replacement or pane/window transfer invalidates old exact command targets.
 
-Native tools stay in their owning window and in the docks. A drag
-offers targets only in areas its tab's kind allows: dropping near a workbench
-left/right/bottom edge moves a dock-capable tab to the end of that dock, while
-other kinds keep the pane-local edge split there, and panes or an empty center
-of a disallowed area show no target and refuse the release. Releasing a tool
-outside all Knot frames cancels without creating a window. Dock-adjacent dividers drag to resize the
-window-local dock size up to the window edge, keeping only the dock minimum;
-other dividers drag the split's ratio, leaving each side a minimum size.
+Fixed tool windows stay in their owning window. A drag
+offers targets only where its tab's kind allows: a terminal can drop on the
+center or any strip of its container, and panes of a disallowed area show no
+target and refuse the release. Releasing a tool outside all Knot frames cancels
+without creating a window. Dividers beside a tool window drag its size up to
+the window edge, keeping only the minimum; other dividers drag the split's
+ratio, leaving each side a minimum size.
 
 Transfers do not enter protected closure or remove documents or windows. An
 emptied source keeps an empty center. New-window transfer creates and validates
@@ -456,7 +473,7 @@ lifetime.
 Tab bars accept insertion, pane bodies accept append or edge splits, and an
 empty center accepts a document or terminal as its first pane. Invalid
 space inside Knot frames rejects a drop; release outside all Knot frames creates
-a window near the pointer. Preview rendering, hit-test thresholds, workbench-edge dock targets, divider
+a window near the pointer. Preview rendering, hit-test thresholds, divider
 drag handling, and coordinate fallbacks live in the [relocation
 code](../../src/app/product/tab_drag.rs).
 
@@ -467,18 +484,14 @@ snapshot in the application state database: one SQLite file with a table per
 UI-state record and one connection that serializes their writes, which also
 backs [native window hot exit](#native-window-hot-exit). Quit flushes every
 pending record. Unsaved-text recovery keeps its own database, because a
-damaged recovery file is preserved and reported rather than treated as empty. It records each dock's size, visibility, and split tree of stable namespaced
-tool IDs with each pane's selection, and the dock each hidden tool returns to,
-so each tool's home reaches fresh windows, and the terminal home dock. Documents,
-terminals, the center, and live handles never enter the record.
+damaged recovery file is preserved and reported rather than treated as empty. It records, per tool window by stable namespaced ID, its slot, whether it
+shows and has a stripe button, and its size and share of its side. Tabs,
+documents, terminals, the center, and live handles never enter the record.
 
-A fresh window takes the stored dock sizes and gives each tool its stored place
-as the tool registers, as packages attach. While a dock still holds
-exactly the record's arrangement of the tools registered so far, the record's
-tree is installed over it, so tools attaching one by one in any order rebuild
-the stored arrangement and selection; a dock the user has changed meanwhile is
-joined at its end instead. Already-open windows keep their live arrangements. Only explicit
-user arrangements publish a new default: moves, dock resizes, and show/hide
+A fresh window gives each tool window its stored place as the tool registers,
+as packages attach; a tool the record does not name takes its declared
+slot. Already-open windows keep their live arrangements. Only explicit
+user arrangements publish a new default: moves, resizes, and show/hide
 changes, including a command-invoked extension show, hide, or focus. Divider
 dragging coalesces through a trailing-edge debounce so one settled arrangement
 reaches storage, and identical publishes skip storage. Restore, window
@@ -486,14 +499,14 @@ activation, listener callbacks, automatic presentation, and document structure
 changes never publish. The cache updates synchronously so the next window
 inherits immediately; writes run off the foreground and the quit path flushes a
 pending write before exit. Reset Layout returns to product defaults, every
-tool to its declared dock. A missing,
-corrupt, or version-mismatched record falls back to defaults, and unknown stored
-IDs are skipped without creating blank frames.
+tool window to its declared slot. A missing, corrupt, or version-mismatched
+record falls back to defaults, and unknown stored IDs are skipped without
+creating blank frames.
 
 Tool frames stay workbench-owned behind stable namespaced IDs and explicit
 native content variants. Extension contributions attach through this contract
 instead of receiving layout storage or persisting live handles. A contributed
-frame currently provides either a semantic tree or read-only text; text content
+view provides a semantic tree, read-only text, or, as a container, no content of its own; text content
 owns a private buffer rendered by the editor and never enters the document
 collection or persistence.
 
@@ -512,19 +525,15 @@ replaces the whole set computed from live foreground state.
 
 ## Terminal sessions and views
 
-A terminal tab lives in the center or in any dock, as an ordinary flat tab. The
-terminal home is the dock new terminals open in when none lives in a dock; it
-starts at the bottom, and moving a terminal tab into a dock makes that dock the
-home, which the tool-layout record carries to fresh windows. The workbench
-tracks dock terminals by recent focus. Toggle Terminal (ctrl-`) shows and
-focuses the most recently used dock terminal, hides its dock when it is already
-focused, and with no dock terminal opens one in the home dock; center terminals
-are ignored. New Terminal opens beside the focused terminal wherever it is,
-otherwise beside the most recently used dock terminal, else in the home dock,
-and shows the dock; New Terminal in Center opens in the last focused center
-pane. `terminals.open` takes the same choice as `location`. Window layouts
-restore dock terminals in their docks, while resetting the layout or
-rebuilding a dock from the tool record moves the dock's terminals to the center.
+A terminal tab lives in the center or in the container tool window it was
+opened into. The Terminal container, New Terminal, New Terminal in Editor, and
+`terminal.toggle` (ctrl-`) belong to the bundled `@knot/chrome` package;
+the engine, restore, and sessions stay native. A terminal is labelled after its
+shell with the lowest free ` (N)` suffix from 2 in its window, and reads the
+same in the tool window and the center; Rename Session sets a name, which
+layouts keep. `terminals.open` takes the destination as `location`, `"editor"`
+or a container's view ID. Window layouts restore a container's terminals in
+it, and a layout naming a container that has not registered drops its tabs.
 
 The application registry owns stable `TerminalSession`s. A session owns its PTY,
 libghostty terminal, process status, authoritative size, session preferences, and

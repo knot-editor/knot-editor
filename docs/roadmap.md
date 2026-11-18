@@ -28,19 +28,18 @@ point.
 
 ## Next up
 
-1. D203 — Tool windows with a title and session tabs, as IntelliJ.
-2. D155 — Word and line selection in terminals.
-3. D202 — Paste a URL over a selection as a Markdown link.
-4. D140 — Placeholder text in input fields.
-5. D022 — Editor autocompletion.
-6. D182 — Interleave extension roots at awaits: before D067.
-7. D087 — Extension entitlements: D085, D126, D067, and D101 need it.
-8. D129 — Refactor builtin language extensions.
-9. D138 — Extension startup report as an untitled document.
-10. D054 — Dedicated read-only generated text surface.
-11. D085 — Cross-file search.
-12. D197 — Diff view: D126 and D174 build on it.
-13. D126 — Git status and changes per root.
+1. D155 — Word and line selection in terminals.
+2. D202 — Paste a URL over a selection as a Markdown link.
+3. D140 — Placeholder text in input fields.
+4. D022 — Editor autocompletion.
+5. D182 — Interleave extension roots at awaits: before D067.
+6. D087 — Extension entitlements: D085, D126, D067, and D101 need it.
+7. D129 — Refactor builtin language extensions.
+8. D138 — Extension startup report as an untitled document.
+9. D054 — Dedicated read-only generated text surface.
+10. D085 — Cross-file search.
+11. D197 — Diff view: D126 and D174 build on it.
+12. D126 — Git status and changes per root.
 
 Remove an item from this list when it is done or dropped.
 
@@ -578,18 +577,6 @@ Kakoune mode could use them too. The
     file's end, as view state does.
 
 ### Terminal
-
-- **D203 — Tool windows with a title and session tabs** 🚧
-  - Depends on: none
-  - Description: [Plan](plans/d203-tool-windows.md). A dock pane's tabs are the tools, and terminals are flat tabs
-    among them, so a terminal pane reads "Terminal Terminal Terminal" and a
-    tool has no title of its own. IntelliJ gives each tool window one bold
-    title and, for a terminal, an inner strip of numbered sessions, with the
-    stripe switching tools. Users find that clearer. Do it first: redesign
-    docks so a tool window shows its title, a terminal window shows the
-    session tabs under it, and splitting, moving to the center, focus, and
-    closure keep working, which revisits the decision that terminals are
-    ordinary flat tabs.
 
 - **D041 — Terminal titles, bells, and notifications**
   - Depends on: none

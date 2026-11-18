@@ -248,7 +248,7 @@ lookup and command invocation require a running command. Await disposal and
 view invalidation to observe completion, and use host error `code` values
 when handling failures. See the API reference for precise rules.
 
-## Contribute a dockable view
+## Contribute a tool window
 
 Register one lifecycle-owned view definition before or after windows exist. The contribution ID is stable, namespaced, and doubles as the native view
 kind for commands and keybindings:
@@ -266,7 +266,7 @@ const view = await workbench.registerView({
       },
     },
   },
-  placement: { location: "left", visible: true },
+  placement: { location: "leftTop", visible: true },
 });
 
 await view.invalidate(null);        // every live window
@@ -276,11 +276,16 @@ await view.focus();
 await view.dispose();
 ```
 
-Each window owns at most one native instance. Views are tools and live
-in the left, right, or bottom dock, never among documents, with a stripe button
-on the window edge unless the user turned stripes off. Users can drag them
-between docks and hide them, and remembered user layout overrides registration
-defaults in later windows. Programmatic `show`/`hide`/`focus` affects live windows only and never
+Each window owns at most one native instance. A view is a tool window that
+shows in one of six slots (`leftTop`, `leftBottom`, `rightTop`, `rightBottom`,
+`bottomLeft`, `bottomRight`; a slot shows one tool window at a time), never
+among documents, with a stripe button on the window edge unless the user turned
+stripes off. Users can drag them between slots and hide them, and remembered
+user layout overrides registration defaults in later windows.
+`view.setBadge("info" | "error" | null)` paints a blue or red dot on its stripe
+button, as the Notifications package does for unread notices. A view
+registered without `content` is a container, which holds tabs opened into it;
+see `terminals.open`. Programmatic `show`/`hide`/`focus` affects live windows only and never
 changes the fresh-window default. Pass a live `WindowTarget` from
 `context.target.windowTarget` or `windows.*` to target one window.
 `context.target.viewTarget` is the tab the command was captured on, or null
@@ -372,7 +377,7 @@ const log = await workbench.registerView({
   id: "example.log",
   title: "Log",
   content: { kind: "text" },
-  placement: { location: "bottom" },
+  placement: { location: "bottomRight" },
 });
 
 await log.setText("first line\n");

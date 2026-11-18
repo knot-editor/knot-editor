@@ -165,8 +165,8 @@ touches.
 ## [Workbench and lifecycle](decisions/workbench-and-lifecycle.md)
 
 - [Workbench layout and view lifetime](decisions/workbench-and-lifecycle.md#workbench-layout-and-view-lifetime):
-  a center and three dock areas of split trees, protected closure, tools as
-  tabs, stripes that replace.
+  a center and six slots of tool windows as split trees, protected closure,
+  terminals in a container, stripes that replace within a slot.
 - [Workbench navigation](decisions/workbench-and-lifecycle.md#workbench-navigation):
   a command for every operation; momentary state is never recorded.
 - [Terminal](decisions/workbench-and-lifecycle.md#terminal): libghostty-vt from

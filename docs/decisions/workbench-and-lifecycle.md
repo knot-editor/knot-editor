@@ -14,28 +14,32 @@ Empty-workbench replacement is window policy rather than a layout invariant.
 Application-wide drag coordination exists because macOS delivers a pressed drag
 to the window it started in, so no single window can hit-test the destination.
 
-A window is a center of documents surrounded by left, right, and bottom docks,
-each its own split tree of the same pane and tab types, rather than one
-free-form tree whose groups are docks. Every surface then has a home, so
-toggle commands can show, focus, or hide it wherever the user keeps it, and a
-dock hides whole with its arrangement. Free-form docks gave no such home, and
-every placement rule had to name kinds; each kind instead declares the areas it
-allows. Tools are tabs rather than a separate sidebar model, so they share
-lifecycle, observation, and command targeting with documents and terminals, and
-one `CommandView` path resolves focus and targets for every surface. The
-workbench keeps hidden tool definitions so native state survives hiding without
-retaining closed documents.
+A window is a center of documents surrounded by six dock slots, each showing
+at most one tool window, and a tool window is the same split tree of tabbed
+panes as the center, as IntelliJ's. Every surface then has a home, so toggle
+commands can show, focus, or hide it wherever the user keeps it, and a tool
+window hides whole with its tabs. Docks as split trees of tools gave a side
+room for several tools at once and no place for a tool to own its tabs; each tab
+kind instead declares where it may live. Tools are tabs rather than a separate
+sidebar model, so they share lifecycle, observation, and command targeting with
+documents and terminals, and one `CommandView` path resolves focus and targets
+for every surface. The workbench keeps hidden tool definitions so native state
+survives hiding without retaining closed documents. The model follows IntelliJ
+first; a comparison with VS Code and Zed is deferred until it has been used.
 
-Terminals in docks are ordinary flat tabs, not a terminal panel with an inner
-tab strip, so splitting, moving, and focus need no second tab model. Floating
-tool windows and a top dock were left out as more surface than daily use asks
-for. A stripe button replaces the other tools of its pane instead of adding a
-tab, as IntelliJ, VS Code, and Zed do, and the button's menu offers Show
-Beside; switching among tools by a tab strip in the dock was rejected because
-users found stacked tabs confusing.
+Terminals live in a container tool window that `@knot/chrome` registers, rather
+than as flat tabs in any dock: a container owns its tabs, strip, and `+`, so a
+later agent window needs no second tab model, and splitting, moving, and focus
+stay the center's. The package owns the new-tab command and starting directory
+so that policy is JavaScript. Floating, windowed, and sliding tool windows and
+a top dock were left out as more surface than daily use asks for. A stripe
+button shows its window in its slot and hides the one there, keeping that
+window's tabs, as IntelliJ does; switching among tools by a tab strip in the
+dock was rejected because users found stacked tabs confusing, and Show Beside
+went with the dock.
 
-Maximizing a dock pane while its dock is hidden is remembered and restored when
-the dock shows again, as VS Code's `preserve` and Zed's zoom do, because losing
+Maximizing a tool window's pane while the window is hidden is remembered and
+restored when it shows again, as VS Code's `preserve` and Zed's zoom do, because losing
 a deliberate maximize to a toggle surprises more than keeping it.
 
 Tool-layout memory stores only tools; document structure is never reproduced

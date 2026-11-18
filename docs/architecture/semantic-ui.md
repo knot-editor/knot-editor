@@ -257,7 +257,7 @@ button that shows its label as a tooltip.
 
 Frame, group, and row actions are semantic command references with JSON
 arguments, never drawing callbacks. The native view renders row actions as
-controls on the row, and frame actions in the header of the dock pane that
+controls on the row, and frame actions in the header of the tool window that
 shows the tree, which keeps keyboard focus,
 and emits the same captured-window command event as activation, with the action
 arguments instead of null; the event names the window and the tree, which
