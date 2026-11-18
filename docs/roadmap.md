@@ -28,17 +28,16 @@ point.
 
 ## Next up
 
-1. D113 — Command and input recording.
-2. D022 — Editor autocompletion.
-3. D175 — Type-ahead after a held Enter.
-4. D182 — Interleave extension roots at awaits: before D067.
-5. D087 — Extension entitlements: D085, D126, D067, and D101 need it.
-6. D129 — Refactor builtin language extensions.
-7. D138 — Extension startup report as an untitled document.
-8. D054 — Dedicated read-only generated text surface.
-9. D085 — Cross-file search.
-10. D197 — Diff view: D126 and D174 build on it.
-11. D126 — Git status and changes per root.
+1. D022 — Editor autocompletion.
+2. D175 — Type-ahead after a held Enter.
+3. D182 — Interleave extension roots at awaits: before D067.
+4. D087 — Extension entitlements: D085, D126, D067, and D101 need it.
+5. D129 — Refactor builtin language extensions.
+6. D138 — Extension startup report as an untitled document.
+7. D054 — Dedicated read-only generated text surface.
+8. D085 — Cross-file search.
+9. D197 — Diff view: D126 and D174 build on it.
+10. D126 — Git status and changes per root.
 
 Remove an item from this list when it is done or dropped.
 
@@ -494,19 +493,6 @@ hold the analyses that support some items.
     `textobjects` queries beside `folds` and `indents`, and expose node queries
     through the extension API without exposing tree-sitter objects.
 
-- **D113 — Command and input recording** 🚧
-  - Depends on: none
-  - Description: Nothing can observe the stream of invoked commands together
-    with the text typed between them, so neither repeat nor macros can be
-    built. It covers user macros and repetition. The first Vim mode
-    ships without `.`, `q`, the `".` register (the last inserted text), and
-    counts on insert commands such as `3ihi<Esc>`, which all need the text
-    typed in insert mode. Do it when daily Vim use misses them, or a user macro
-    workflow is selected: record a view's invoked commands with arguments plus
-    its typed text as edits, and replay the recording through ordinary dispatch. The
-    [plan](plans/d113-command-and-input-recording.md) holds the design and
-    checkpoints.
-
 - **D147 — Key contexts on non-editor views**
   - Depends on: none
   - Description: Extensions set key contexts on editor views only. Terminals,
@@ -522,7 +508,7 @@ Kakoune mode could use them too. The
 [extensibility report](reports/extensibility.md) maps Vim's needs onto them.
 
 - **D146 — Broad Ex command set**
-  - Depends on: D113
+  - Depends on: none
   - Description: The first Vim mode implements a core Ex set: `:w`, `:q`,
     `:q!`, `:wq`, `:x`, `:e`, `:<line>`, and `:set` for a few options.
     `:g` and `:v`, `:normal`, `:sort`, `:d`,
@@ -533,7 +519,7 @@ Kakoune mode could use them too. The
     neither primitive exists. Do it when daily Vim use reaches for one of them:
     add it inside the Vim package over existing primitives, or add the missing
     generic primitive first. `:normal` and `:g` with a normal-mode command also
-    need replaying keys through the mode, which D113's recording provides, and
+    need replaying keys through the mode, as macros do, and
     `:g` and `:v` can reuse the search patterns of `@knot/vim`.
 
 - **D201 — Preview replacement results**

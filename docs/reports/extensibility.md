@@ -94,7 +94,7 @@ What is missing for editing-level extensibility:
 | `iw`, `ip`, `i(` | Text scanning | Possible in JS | — |
 | `if`, `ia`, `ic` (function, argument, class) | Syntax-tree node queries | Not exposed | D066 |
 | `ciw…<Esc>` as one undo step | Undo groups spanning batches and typing | `editor.beginUndoGroup()` | D111 |
-| `.` repeat, `q` macros | Record commands with arguments plus typed text; replay through dispatch | Not possible | D113 |
+| `.` repeat, `q` macros | Record commands with arguments plus typed text; replay through dispatch | `editor.record()` | D113 |
 | Registers | Extension state plus clipboard read and write | Write only | D109 |
 | Marks, jumplist | Anchored positions without decoration | Only decorated contributions | D109 |
 | `/` search highlights, visual feedback | Decoration styles | `background`, `line`, `underline`, and `wavy` in any color key | D114 |

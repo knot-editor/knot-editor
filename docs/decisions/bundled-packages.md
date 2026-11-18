@@ -62,9 +62,13 @@ ordinary text math, over line snapshots, stays pure. Indentation, joining, `%`,
 and visual rows invoke native commands so they follow the language. The unnamed
 register is the system clipboard, as `clipboard=unnamedplus` makes it, with a
 remembered linewise flag. `ctrl-w` treats a window as a tab, as other editors'
-Vim modes do, so `c` and `q` close the tab and cycling skips docks. `.` and
-counted inserts replay an insert session's input from an
-[editor recording](../architecture/commands.md#recording); visual-block waits for multiple selections.
+Vim modes do, so `c` and `q` close the tab and cycling skips docks. `.`,
+counted inserts, and macros replay input from an
+[editor recording](../architecture/commands.md#recording) through the package's
+own parser and ordinary command dispatch, so a replay targets the editor that
+started it and a macro stops when focus leaves that editor, since following
+focus waits for [D182](../roadmap.md); visual-block waits for multiple
+selections.
 
 Search and substitution run on the buffer's native regex `find` and `replace`
 rather than a second matching engine in JavaScript, so no text crosses the
@@ -82,7 +86,7 @@ recalled into Find's literal search would be noise.
 References: [extension guide](../extension-api.md#bind-keys-and-modal-contexts),
 [text search](../architecture/core-and-buffers.md#text-search),
 [settings](../settings.md#bundled-packages) and
-[roadmap](../roadmap.md) (D113, D142, D151, D201).
+[roadmap](../roadmap.md) (D142, D151, D182, D201).
 
 ## Bundled explorer
 

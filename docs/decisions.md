@@ -147,8 +147,9 @@ touches.
   tabbed picker for files, buffers, and commands; scope by tab, not prefix; a
   minimal native palette as the fallback.
 - [Bundled Vim mode](decisions/bundled-packages.md#bundled-vim-mode): public
-  APIs only, a JavaScript state machine over typed text; search and `:s` on
-  the native regex find and replace, Vim patterns translated to its syntax.
+  APIs only, a JavaScript state machine over typed text; `.` and macros replay
+  editor recordings; search and `:s` on the native regex find and replace,
+  Vim patterns translated to its syntax.
 - [Bundled explorer](decisions/bundled-packages.md#bundled-explorer): public
   API only, every gap closed generally; the taken item stays in the extension.
 - [Bundled project registry](decisions/bundled-packages.md#bundled-project-registry):

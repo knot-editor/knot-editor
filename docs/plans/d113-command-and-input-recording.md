@@ -1,6 +1,6 @@
 # D113: Command and input recording
 
-Status: 🚧 checkpoint 1 done; checkpoint 2 done; checkpoint 3 not started. Roadmap item [D113](../roadmap.md). Builds on
+Status: 🚧 checkpoint 1 done; checkpoint 2 done; checkpoint 3 ready for review. Roadmap item [D113](../roadmap.md). Builds on
 [command dispatch](../architecture/commands.md#dispatch),
 [text bindings](../architecture/commands.md#text-bindings),
 [ordered delivery](../architecture/commands.md#ordered-delivery), and the
@@ -96,22 +96,30 @@ mode's `ctrl-r .` is not built, since insert mode has no register paste yet.
 Auto-closed brackets are not covered by the product cases, whose buffers have
 no language.
 
-### 3. Vim macros
+### 3. Vim macros 🔎
 
 Deliverables:
-- `q{a-z}`, `q{A-Z}`, `q`, `@{reg}`, `{count}@{reg}`, `@@`; the `recording @a`
+- ✅ `q{a-z}`, `q{A-Z}`, `q`, `@{reg}`, `{count}@{reg}`, `@@`; the `recording @a`
   status; macros persisted with the registers; replay stopping when focus
-  leaves the editor or a step is unavailable.
-- [Bundled Vim decision](../decisions/bundled-packages.md#bundled-vim-mode)
+  leaves the editor, a step fails, or the editor closes.
+- ✅ [Bundled Vim decision](../decisions/bundled-packages.md#bundled-vim-mode)
   and [index](../decisions.md) updated with recording and replay; D113 closed
-  in the roadmap and D150's dependency note adjusted.
+  in the roadmap and D146's dependency adjusted.
+- Scope decisions: a failed motion (`j` on the last line, a missing search
+  match, a dismissed prompt) ends the macro, as in Vim, which is what lets a
+  macro that calls itself run to the end of the buffer. A search or Ex prompt's
+  typed line is not editor input, so the recording keeps it as a `vim.answer`
+  step before the key that opened the prompt. Registers named by digits and
+  `"` do not hold macros, and a macro recorded in one editor is played in the
+  editor that runs `@`. A replayed insert session becomes the input `.` repeats.
+  Ex commands that open files (`:e`) replay as the typed line.
 
 Validation:
-- `extensions/@knot/vim/test/cases/macros.jsonc`: macros mixing normal and
-  insert keys, searches, counts, appending, `@@`, a macro that invokes `.`, a
-  macro that stops at a tab switch, persistence across `vim.reset`-free
-  restarts of the package where the runner supports it.
-- `extensions/@knot/vim/test/registers.test.ts` for the stored format.
+- ✅ `extensions/@knot/vim/test/cases/macros.jsonc` and product tests for
+  persistence across a package restart, the status text, and a macro stopping
+  when a step moves focus to another pane (the case runner has one editor, so
+  that one is a Rust test).
+- ✅ `extensions/@knot/vim/test/registers.test.ts` and `keys.test.ts`.
 - `just check`.
 
 Review gate: recording and replaying real macros through `Try:` commands.
@@ -119,7 +127,7 @@ Review gate: recording and replaying real macros through `Try:` commands.
 Implementation context:
 - Keys: `q` and `@` in `src/keys.ts`; recording start and stop in
   `src/extension.ts` (`Vim.keys`, status items) using the followed editor's
-  handle; replay loop beside `run` in `src/normal.ts`, feeding Vim's own
-  entries to `feed` and the rest to `commands.invoke`, checking the window's
-  active target after each step.
+  handle; the replay loop in `Vim.play`, feeding Vim's own entries to the
+  parser and the rest to `commands.invoke`, checking the window's active
+  target after each step; prompts answer through `prompted` in `src/normal.ts`.
 - Storage: `Registers.toJson`/`fromJson` in `src/registers.ts`.
