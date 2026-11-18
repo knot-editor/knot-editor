@@ -118,7 +118,7 @@ export const TOKYO_NIGHT_LIGHT: ThemeDefinition = {
   colors: {
     "background": "#cbccd1",
     "card.background": "#d5d6db",
-    "card.focusedBorder": "#34548a",
+    "card.focusedBorder": "#8990b3",
     "tab.accent": "#34548a",
     "toolbar.background": "#cbccd1",
     "window.background": "#cbccd1",

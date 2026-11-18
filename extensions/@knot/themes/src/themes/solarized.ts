@@ -149,6 +149,7 @@ export const SOLARIZED_LIGHT: ThemeDefinition = {
   colors: {
     ...ansi,
     ...accents,
+    "card.focusedBorder": base1,
     "background": base2,
     "card.background": base3,
     "tab.accent": blue,

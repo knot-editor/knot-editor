@@ -33,7 +33,7 @@ function catppuccin(name: string, appearance: "dark" | "light", p: Flavor): Them
     colors: {
       "background": p.mantle,
       "card.background": p.base,
-      "card.focusedBorder": dark ? p.overlay2 : p.blue,
+      "card.focusedBorder": dark ? p.overlay2 : p.overlay1,
       "tab.accent": p.blue,
       "toolbar.background": p.mantle,
       "window.background": p.mantle,

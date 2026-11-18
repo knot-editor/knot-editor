@@ -1,6 +1,6 @@
 # Islands look: match IntelliJ's new UI
 
-Status: 🚧 checkpoint 1 approved ✅; checkpoint 2 waits for the IntelliJ light reference screenshot.
+Status: 🚧 checkpoint 1 approved ✅; checkpoint 2 implemented ✅, waiting on the user's review.
 
 ## Goal
 
@@ -50,7 +50,7 @@ focused pane with a soft border derived from its own palette. The values live
 in `extensions/@knot/themes/src/`; the theme model is
 [semantic UI](../architecture/semantic-ui.md#themes-and-color-keys).
 
-## Checkpoint 2: Light themes
+## Checkpoint 2: Light themes ✅ (awaiting review)
 
 **Deliverables:** Islands Light matched to the user's IntelliJ light
 screenshot, and the focused-border and chrome treatment applied to the other
@@ -60,5 +60,10 @@ light themes (`one-light.ts`, Solarized Light, light Catppuccin).
 Starts only when the user has provided the reference screenshot.
 
 **Validation:** `just check`; before/after screenshots beside the reference.
+
+**Done:** Islands Light is sampled from the user's IntelliJ light screenshot
+(window frame, status bar, blue focused and grey unfocused tab pills); Latte,
+Tokyo Night Light, One Light and Solarized Light get a soft focused-pane border
+from their own palettes. `just check` passes.
 
 **Review gate:** the user looks at the light themes in the running app.

@@ -22,7 +22,7 @@ export const ONE_LIGHT: ThemeDefinition = {
   colors: {
     "background": panel,
     "card.background": bg,
-    "card.focusedBorder": blue,
+    "card.focusedBorder": "#a0a1a7",
     "tab.accent": accent,
     "toolbar.background": panel,
     "window.background": panel,
