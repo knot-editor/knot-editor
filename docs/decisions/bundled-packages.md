@@ -62,8 +62,9 @@ ordinary text math, over line snapshots, stays pure. Indentation, joining, `%`,
 and visual rows invoke native commands so they follow the language. The unnamed
 register is the system clipboard, as `clipboard=unnamedplus` makes it, with a
 remembered linewise flag. `ctrl-w` treats a window as a tab, as other editors'
-Vim modes do, so `c` and `q` close the tab and cycling skips docks. `.` repeat
-and visual-block wait for recording and multiple selections.
+Vim modes do, so `c` and `q` close the tab and cycling skips docks. `.` and
+counted inserts replay an insert session's input from an
+[editor recording](../architecture/commands.md#recording); visual-block waits for multiple selections.
 
 Search and substitution run on the buffer's native regex `find` and `replace`
 rather than a second matching engine in JavaScript, so no text crosses the

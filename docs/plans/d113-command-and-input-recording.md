@@ -1,6 +1,6 @@
 # D113: Command and input recording
 
-Status: 🚧 checkpoint 1 done; checkpoint 2 not started. Roadmap item [D113](../roadmap.md). Builds on
+Status: 🚧 checkpoint 1 done; checkpoint 2 implemented, awaiting its review gate. Roadmap item [D113](../roadmap.md). Builds on
 [command dispatch](../architecture/commands.md#dispatch),
 [text bindings](../architecture/commands.md#text-bindings),
 [ordered delivery](../architecture/commands.md#ordered-delivery), and the
@@ -86,7 +86,7 @@ opening the palette are left out. Auto-closed brackets are covered by the
 model's `type_text` tests, not the product tests, whose buffers have no
 language.
 
-### 2. Vim `.`, `".`, and counts on insert commands
+### 2. Vim `.`, `".`, and counts on insert commands ✅ (review gate pending)
 
 Deliverables:
 - `.` and `{count}.` for operators, `x`, `p`, `r`, `J`, `~`, indentation, and
@@ -107,6 +107,12 @@ Validation:
 
 Review gate: daily Vim use of `.` and counted inserts through `Try:` commands
 on a scratch buffer.
+
+Scope decisions: a visual operator repeats as the same operator over as much
+text from the caret (lines, or characters on one line); a characterwise
+selection over line breaks and visual `p` and `r` are not repeated. A search
+operator repeats with `n`. The `".` register is stored with the others. Insert
+mode's `ctrl-r .` is not built, since insert mode has no register paste yet.
 
 Implementation context:
 - Parser: `extensions/@knot/vim/src/keys.ts` (add the `.` command, keep counts
