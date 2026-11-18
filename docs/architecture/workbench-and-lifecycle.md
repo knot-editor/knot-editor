@@ -574,7 +574,8 @@ Measured view geometry supplies drawing, baseline, cell hit testing, viewport
 size, and PTY pixel dimensions at the destination window's scale. Cells are
 measured for `font.size` and the `font.*` family settings resolved under
 `{ view: "terminal" }`, with the size times the zoom factor; cell height
-follows `font.lineHeight` as in editors, with the baseline centered in the
+follows `font.lineHeight`, which defaults to 1.0 in terminals and 1.2
+elsewhere, with the baseline centered in the
 cell. A change resizes the PTY grid. Fallback glyphs
 stay within emulator cell allocations. Each cell is shaped and clipped alone,
 except that with `font.ligatures` on, consecutive single-width ASCII

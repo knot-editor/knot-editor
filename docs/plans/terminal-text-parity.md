@@ -1,6 +1,6 @@
 # Terminal text parity with Ghostty
 
-Status: draft, awaiting agreement. No roadmap item.
+Status: checkpoint 1 implemented, awaiting its review gate. No roadmap item.
 
 ## Goal
 
