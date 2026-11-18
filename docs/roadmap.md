@@ -359,7 +359,7 @@ hold the analyses that support some items.
     how such views behave in closure, recovery, and restoration. It builds on
     the editor handle's cursor and selection access and the decoration styles.
 
-- **D140 — Placeholder text in input fields**
+- **D140 — Placeholder text in input fields** 🚧
   - Depends on: none
   - Description: `TextInput` renders placeholder text, which editor bars use,
     but `workbench.showInput` and the palette query have no way to set one, so
@@ -369,7 +369,8 @@ hold the analyses that support some items.
     empty field, as Zed's Go to Line does. Update `@knot/go-to-line` to show
     the current position as `line:column` there. Search Everywhere also needs
     its own placeholder per tab, so opening it on Files or Actions reads
-    differently from the All tab instead of every tab showing the same hint.
+    differently from the All tab instead of every tab showing the same hint. The
+    [plan](plans/d140-input-placeholders.md) holds the design and checkpoints.
 
 - **D180 — Modal surface for informational views**
   - Depends on: none
