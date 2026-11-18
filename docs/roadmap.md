@@ -28,7 +28,6 @@ point.
 
 ## Next up
 
-- D155 — Word and line selection in terminals 🚧.
 - D202 — Paste a URL over a selection as a Markdown link.
 - D140 — Placeholder text in input fields.
 - D022 — Editor autocompletion.
@@ -608,17 +607,6 @@ Kakoune mode could use them too. The
     when review commands should start their fixtures directly: add a command
     and arguments to the terminal options, run instead of the shell, and
     define how restart and exit treat such a terminal.
-
-- **D155 — Word and line selection in terminals** 🚧
-  - Depends on: none
-  - Description: A terminal's local selection is always character by
-    character: double- and triple-click start a plain selection, unlike editors
-    and most terminal emulators. Do it when selecting a path, URL, or line from
-    terminal output by dragging gets in the way: start the emulator's semantic
-    selection on a double click and its line selection on a triple click while
-    mouse reporting is off, so a drag afterwards extends by words or lines, with
-    the emulator's default word separators. Plan:
-    [d155-terminal-word-line-selection.md](plans/d155-terminal-word-line-selection.md).
 
 - **D042 — Additional terminal link destinations**
   - Depends on: none
