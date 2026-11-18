@@ -51,7 +51,7 @@ impl KnotWindow {
     /// The left and right stripes; none when `workbench.toolStripes` is off,
     /// and a stripe without buttons is absent, except while a drag could
     /// drop a button on it. The left stripe shows the left top group, a
-    /// separator, the left bottom group, and, after a separator, the bottom left group at its
+    /// separator, the left bottom group, and the bottom left group at its
     /// lower end; the right stripe mirrors it with the right slots and the
     /// bottom right group.
     pub(super) fn render_stripes(
@@ -104,10 +104,6 @@ impl KnotWindow {
                 })
                 .child(self.render_stripe_group(Slot::LeftBottom, &stripes, cx))
                 .child(div().flex_1())
-                .when(
-                    split(&[Slot::LeftTop, Slot::LeftBottom], Slot::BottomLeft),
-                    |s| s.child(separator()),
-                )
                 .child(self.render_stripe_group(Slot::BottomLeft, &stripes, cx))
                 .when(!more.is_empty(), |stripe| {
                     stripe.child(self.render_more_button(more, cx))
@@ -121,10 +117,6 @@ impl KnotWindow {
                 })
                 .child(self.render_stripe_group(Slot::RightBottom, &stripes, cx))
                 .child(div().flex_1())
-                .when(
-                    split(&[Slot::RightTop, Slot::RightBottom], Slot::BottomRight),
-                    |s| s.child(separator()),
-                )
                 .child(self.render_stripe_group(Slot::BottomRight, &stripes, cx))
         });
         (left, right)
