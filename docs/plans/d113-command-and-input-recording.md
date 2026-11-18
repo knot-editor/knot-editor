@@ -1,6 +1,6 @@
 # D113: Command and input recording
 
-Status: 🚧 checkpoint 1 awaiting review. Roadmap item [D113](../roadmap.md). Builds on
+Status: 🚧 checkpoint 1 done; checkpoint 2 not started. Roadmap item [D113](../roadmap.md). Builds on
 [command dispatch](../architecture/commands.md#dispatch),
 [text bindings](../architecture/commands.md#text-bindings),
 [ordered delivery](../architecture/commands.md#ordered-delivery), and the
@@ -76,58 +76,15 @@ commands such as `3ihi<Esc>`.
 
 ## Checkpoints
 
-### 1. Recording primitive and `editor.type` 🔍 awaiting review
+### 1. Recording primitive and `editor.type` ✅
 
-Deliverables:
-- ✅ `editor.type { text, replace? }`, a native editor command hidden from the
-  palette, typing as the keyboard does.
-- ✅ Recording in the window at the three input points plus completion
-  acceptance; `EditorHandle.record()` and `Recording.stop()` in the public API
-  with lifecycle-owned cleanup.
-- ✅ [Commands](../architecture/commands.md) gains a Recording section;
-  [extension guide](../extension-api.md) documents recording and replay.
-
-Validation:
-- ✅ Model tests for `type_text` with `replace` and for the recording buffer.
-- ✅ Product tests through the extension API: keys and typed text are recorded in
-  order with arguments; text-binding commands are recorded as their command;
-  palette and child invocations are not; input to another tab is not; two
-  recordings overlap independently; tab close, disposal, and teardown end a
-  recording; replaying a recording with `commands.invoke` reproduces the
-  buffer, including auto-closed brackets and an accepted completion.
-- ✅ `just check`.
-
-Review gate: the API shape and the recorded entries for a typical insert
-session, inspected through a `Try:` command that records and replays.
-
-Scope notes: the view and editor record typed text and accepted completions
-(so the fallback needs no window hop), the window records key and text-binding
-commands, and keys in a focused bar field are not recorded. Auto-closed
-brackets are covered by the model's `type_text` tests, since product-test
-buffers have no language.
-
-Implementation context:
-- Input points: `run_key_command` in `src/app/product/key_routing.rs`,
-  `take_typed_text` and `type_into_editor` in `src/app/product/key_hold.rs`,
-  `replace_text_in_range` in `src/app/editor/input.rs` (route the fallback
-  through the window so it records), completion acceptance in
-  `src/app/editor/completion.rs`.
-- `editor.type`: declare beside the other editor commands in
-  `src/app/editor/native_commands.rs` with its name in
-  `knot_model::editor::commands`; reuse `EditorState::type_text` in
-  `crates/knot-model/src/editor/input.rs`, adding the `replace` deletion in
-  the same edit.
-- Recording state: a small model type in `crates/knot-model/src/editor/`
-  (entries per recording ID) held by the editor, so it runs headless; the host
-  owns IDs and owners, mirroring `begin_undo_group`/`end_undo_group` in
-  `src/app/extensions/host.rs` and their handlers in
-  `src/app/extensions/host/handlers.rs`, including teardown and stale-tab
-  cleanup.
-- Public contract: `crates/knot-host/src/js/knot.d.ts` (`EditorHandle`, new
-  `Recording` and `RecordedCommand` types), the JS shim beside it, and
-  `docs/schemas/knot.schema.json` if it lists editor operations.
-- Tests: `src/app/product/tests/editor_api.rs` for the API,
-  `src/app/editor/tests.rs` for the command.
+Complete and approved. Behavior lives in
+[Commands](../architecture/commands.md#recording) and the
+[extension guide](../extension-api.md). Key commands record only when they are
+extension commands or native editor commands, so window-level ones such as
+opening the palette are left out. Auto-closed brackets are covered by the
+model's `type_text` tests, not the product tests, whose buffers have no
+language.
 
 ### 2. Vim `.`, `".`, and counts on insert commands
 
