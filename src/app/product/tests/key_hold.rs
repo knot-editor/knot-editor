@@ -211,6 +211,16 @@ impl Fixture {
             .collect()
     }
 
+    /// Confirm the palette entry that best matches `query`.
+    fn run_from_palette(&self, query: &str, cx: &mut TestAppContext) {
+        let picker = self.window.update(cx, |window, cx| {
+            window.open_command_palette(cx);
+            window.command_palette.as_ref().unwrap().picker().clone()
+        });
+        picker.update(cx, |picker, cx| picker.set_query(query, cx));
+        self.keys("enter", cx);
+    }
+
     fn settle(&self, cx: &mut TestAppContext) {
         wait_for_api_condition(cx, |cx| !self.window.read(cx).holds_keys());
     }
@@ -314,6 +324,36 @@ fn the_timeout_releases_keys_held_after_accepting_an_input(cx: &mut TestAppConte
         .host
         .update(cx, |host, cx| host.release_view_requests(cx));
     cx.run_until_parked();
+}
+
+#[gpui::test]
+fn keys_after_a_palette_command_apply_after_it(cx: &mut TestAppContext) {
+    let fixture = fixture("xyz", cx);
+    fixture
+        .host
+        .update(cx, |host, _| host.hold_clipboard_writes());
+    fixture.run_from_palette("hold.home", cx);
+    fixture.keys("a", cx);
+    wait_for_api_condition(cx, |cx| {
+        fixture.host.read(cx).pending_view_request_count() == 1
+    });
+    assert!(fixture.holds_keys(cx));
+    assert_eq!(fixture.text(cx), "xyz");
+    fixture
+        .host
+        .update(cx, |host, cx| host.release_view_requests(cx));
+    fixture.settle(cx);
+    assert_eq!(fixture.text(cx), "axyz");
+}
+
+#[gpui::test]
+fn keys_after_a_palette_command_reach_the_input_it_opens(cx: &mut TestAppContext) {
+    let fixture = fixture("xyz", cx);
+    fixture.run_from_palette("hold.ask", cx);
+    fixture.keys("a b enter", cx);
+    wait_for_clipboard_text("ab", cx);
+    fixture.settle(cx);
+    assert_eq!(fixture.text(cx), "xyz");
 }
 
 #[gpui::test]

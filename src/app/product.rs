@@ -1519,7 +1519,7 @@ impl KnotWindow {
             this.restore_palette_origin_focus(&palette.origin(), cx);
             if let PickerEvent::Confirmed(entry) = event {
                 let command = palette.command(*entry);
-                this.dispatch_command(command, palette.origin(), cx);
+                this.dispatch_holding_keys(command, palette.origin(), cx);
             }
             this.refocus_active_transient(cx);
             cx.notify();

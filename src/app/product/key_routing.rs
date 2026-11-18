@@ -342,6 +342,36 @@ impl KnotWindow {
             .is_some_and(|picker| picker.update(cx, |picker, cx| picker.cycle_tab(delta, cx)))
     }
 
+    /// Whether `command` runs natively, in the dispatch turn.
+    fn is_native_command(command: &Command, cx: &App) -> bool {
+        matches!(
+            Self::command_dispatcher(cx)
+                .read(cx)
+                .catalog()
+                .borrow()
+                .resolve(command.name.as_ref()),
+            Ok(crate::app::commands::catalog::CommandTargetKind::Native)
+        )
+    }
+
+    /// Dispatch `command` against `target`. Later input waits for an
+    /// extension command, as it does for a key.
+    pub(super) fn dispatch_holding_keys(
+        &mut self,
+        command: Command,
+        target: ProductCommandTarget,
+        cx: &mut Context<Self>,
+    ) {
+        let native = Self::is_native_command(&command, cx);
+        let editor = Self::target_editor(&target, cx).map(|view| view.read(cx).editor().clone());
+        let execution = Self::command_dispatcher(cx).update(cx, |dispatcher, cx| {
+            dispatcher.dispatch(command, target, cx)
+        });
+        if !native && self.key_hold.is_none() {
+            self.hold_keys_until(execution.completion, editor, cx);
+        }
+    }
+
     /// The editor a captured target's focus is in.
     fn target_editor(target: &ProductCommandTarget, cx: &App) -> Option<Entity<EditorView>> {
         Self::target_view_kind(target, cx)?;
@@ -363,14 +393,7 @@ impl KnotWindow {
         }
         let editor = Self::target_editor(&target, cx);
         let dispatcher = Self::command_dispatcher(cx);
-        let native = matches!(
-            dispatcher
-                .read(cx)
-                .catalog()
-                .borrow()
-                .resolve(command.name.as_ref()),
-            Ok(crate::app::commands::catalog::CommandTargetKind::Native)
-        );
+        let native = Self::is_native_command(&command, cx);
         // Only commands that act on the editor's text record; a window-level
         // command such as opening the palette is not input to replay. A key in
         // a bar field edits the bar, not the document.

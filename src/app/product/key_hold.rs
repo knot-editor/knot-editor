@@ -1,5 +1,5 @@
-//! Ordered key delivery: while an extension command a key invoked is
-//! unfinished, later keys in the window and committed text in the held
+//! Ordered key delivery: while an extension command a key or the fallback
+//! palette invoked is unfinished, later keys in the window and committed text in the held
 //! editor wait, then replay in order, so each key sees the state the
 //! previous one committed. Native commands need no hold because they run in
 //! the dispatch turn. The window owns the hold, so it works with or

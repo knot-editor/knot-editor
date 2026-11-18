@@ -160,8 +160,8 @@ touches the buffer and the IME's commit routes as text.
 
 ### Ordered delivery
 
-A key that dispatches an extension command holds its window's later input
-until that command finishes, with or without a native window: the window queues
+A key or fallback palette entry that dispatches an extension command holds its
+window's later input until that command finishes, with or without a native window: the window queues
 later key-downs before matching them, and committed text for the held editor,
 in one queue. Release replays the queue in order, a key through the native
 window's keystroke dispatch when the window has one and otherwise through the
