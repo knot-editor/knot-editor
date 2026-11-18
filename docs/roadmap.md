@@ -28,16 +28,17 @@ point.
 
 ## Next up
 
-1. D022 — Editor autocompletion.
-2. D175 — Type-ahead after a held Enter.
-3. D182 — Interleave extension roots at awaits: before D067.
-4. D087 — Extension entitlements: D085, D126, D067, and D101 need it.
-5. D129 — Refactor builtin language extensions.
-6. D138 — Extension startup report as an untitled document.
-7. D054 — Dedicated read-only generated text surface.
-8. D085 — Cross-file search.
-9. D197 — Diff view: D126 and D174 build on it.
-10. D126 — Git status and changes per root.
+1. D203 — Tool windows with a title and session tabs, as IntelliJ.
+2. D022 — Editor autocompletion.
+3. D175 — Type-ahead after a held Enter.
+4. D182 — Interleave extension roots at awaits: before D067.
+5. D087 — Extension entitlements: D085, D126, D067, and D101 need it.
+6. D129 — Refactor builtin language extensions.
+7. D138 — Extension startup report as an untitled document.
+8. D054 — Dedicated read-only generated text surface.
+9. D085 — Cross-file search.
+10. D197 — Diff view: D126 and D174 build on it.
+11. D126 — Git status and changes per root.
 
 Remove an item from this list when it is done or dropped.
 
@@ -564,6 +565,18 @@ Kakoune mode could use them too. The
     file's end, as view state does.
 
 ### Terminal
+
+- **D203 — Tool windows with a title and session tabs**
+  - Depends on: none
+  - Description: A dock pane's tabs are the tools, and terminals are flat tabs
+    among them, so a terminal pane reads "Terminal Terminal Terminal" and a
+    tool has no title of its own. IntelliJ gives each tool window one bold
+    title and, for a terminal, an inner strip of numbered sessions, with the
+    stripe switching tools. Users find that clearer. Do it first: redesign
+    docks so a tool window shows its title, a terminal window shows the
+    session tabs under it, and splitting, moving to the center, focus, and
+    closure keep working, which revisits the decision that terminals are
+    ordinary flat tabs.
 
 - **D041 — Terminal titles, bells, and notifications**
   - Depends on: none
