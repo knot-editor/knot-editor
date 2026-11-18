@@ -176,37 +176,15 @@ Decisions that later checkpoints build on:
 
 ### 3. IntelliJ commands
 
-✅ Implemented; ⏳ awaiting the review gate. Decisions: the generated command
-for a tool is `<viewId>.toggle` (`builtin.terminal.toggle` for Terminal), and
-the keybindings cmd-b, cmd-alt-b, and cmd-j now run the Explorer,
-Notifications, and Terminal toggles. Open as Editor Tab replaces Move Tab to
-Center, and Return to Tool Window moves a terminal tab to the first container
-that accepts it. Split and Move always splits and needs a second tab. Go to
-Next/Previous Splitter walk the focused area's panes. A terminal's label is
-recorded in the window layout (version 4). The ⋮ menu gained Stretch items and
-Move to Editor.
+✅ Done and approved. Tool windows have the IntelliJ command set, generated
+`<viewId>.toggle` commands, and Esc to the editor (`terminal.escapeToEditor`).
+The docs are updated in Finish.
 
-Deliverables:
-- Generated Toggle <Tool> commands, Hide Active Tool Window (from the editor
-  too), Jump to Last Tool Window, Hide All Tool Windows, Maximize Tool Window,
-  Stretch to Left/Right/Top/Bottom, Move to (slot), Open as Editor Tab, Return
-  to Tool Window, Split and Move Right/Down, Unsplit, Go to Next/Previous
-  Splitter, and Rename Session, with Hide All restoring what it hid. The ⋮
-  menu gains Resize.
-- Esc in a tool window focuses the editor, and `terminal.escapeToEditor`
-  (default true) lets a terminal send Esc to the shell instead.
-- The dock toggle and Move Tab to Left/Right/Bottom Dock and Center commands go
-  away. Existing keybindings and Vim `ctrl-w` keep working.
-
-Validation: command tests for each, plus Esc from a tree tool and from a
-terminal under both values of the setting.
-
-Review gate: drive the workbench from the palette alone.
-
-**Implementation context:** `src/app/product/commands.rs` (the dock macros
-at its end), `src/app/commands/` keymaps, `src/app/product/tool_picker.rs`
-(Toggle Tool…), `extensions/@knot/vim`, `src/app/terminal/input.rs` (Esc),
-and terminal settings in `knot.d.ts` and `docs/schemas/knot.schema.json`.
+Decisions that later checkpoints build on:
+- The generated toggle for a tool is `<viewId>.toggle`; the keybindings
+  cmd-b, cmd-alt-b, and cmd-j run the Explorer, Notifications, and Terminal
+  toggles.
+- A terminal's label is recorded in the window layout (version 4).
 
 ### 4. Notifications in one place
 
