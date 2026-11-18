@@ -91,6 +91,7 @@ export async function start() {
   const shared: Shared = {
     registers,
     lastFind: null,
+    lastChange: null,
     search: { forward: true, smart: true },
     highlights: new Highlights(),
     saveRegisters() {
@@ -129,6 +130,7 @@ export async function start() {
     await shared.highlights.hide();
     registers.clear();
     shared.lastFind = null;
+    shared.lastChange = null;
     shared.search = { forward: true, smart: true };
     for (const buffer of shared.marks.values()) {
       for (const mark of buffer.values()) mark.dispose().catch(() => {});
@@ -251,7 +253,8 @@ class Vim {
     const state: Followed = {
       target, handle, buffer: tab.buffer, document: tab.document, shared: this.shared,
       language: info.language, mode: "normal", pending: EMPTY, operatorShown: false, message: null,
-      want: null, caret: null, group: null, opened: false, visual: null, selected: null, previous: null,
+      want: null, caret: null, group: null, recording: null, change: null, replaying: null,
+      repeat: { count: 1, open: false }, opened: false, visual: null, selected: null, previous: null,
       jumps: new JumpList(), context: null, scroll: null, foldsOff: null,
     };
     this.states.set(target, state);
@@ -277,6 +280,7 @@ class Vim {
     this.shared.highlights.unfollow(state);
     await this.shared.highlights.draw(state, null, null);
     await state.group?.dispose();
+    await state.recording?.dispose();
     disposeMarks(state);
     await state.handle.setKeyContext(NORMAL, false);
     await state.handle.setKeyContext(INSERT, false);

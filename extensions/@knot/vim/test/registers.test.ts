@@ -114,3 +114,11 @@ test("history and the search register survive a save, and clear empties them", (
   assert.deepEqual(restored.entries("search"), []);
   assert.equal(restored.get("/"), null);
 });
+
+test("the last inserted text is stored for reading but no yank writes it", () => {
+  const registers = new Registers();
+  registers.set(".", chars("typed"));
+  registers.record(".", chars("yanked"), "yank", false);
+  assert.deepEqual(registers.get("."), chars("typed"));
+  assert.deepEqual(Registers.fromJson(registers.toJson()).get("."), chars("typed"));
+});

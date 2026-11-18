@@ -11,7 +11,7 @@ export type Register = Readonly<{ text: string; linewise: boolean }>;
 const WRITABLE = /^[a-zA-Z+*_]$/;
 
 /** Registers the model stores and persists. */
-const STORED = /^[a-z0-9:/-]$/;
+const STORED = /^[a-z0-9:/.-]$/;
 
 /** The most entries a prompt's history keeps. */
 export const HISTORY_LIMIT = 100;
@@ -57,7 +57,7 @@ export class Registers {
     return null;
   }
 
-  /** Sets a register no yank or delete writes, such as `":`. */
+  /** Sets a register no yank or delete writes, such as `":` or `".`. */
   set(name: string, value: Register) {
     if (STORED.test(name)) this.stored.set(name, value);
   }

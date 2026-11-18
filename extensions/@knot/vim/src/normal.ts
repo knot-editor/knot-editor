@@ -3,7 +3,9 @@
 // Text math is done here over line snapshots; indentation, joining, bracket
 // matching, and visual-row movement are the native editor commands.
 import { commands, documents, languages, settings, workbench } from "knot";
-import type { Buffer, Disposable, DocumentId, EditorHandle, EditorSelection, FoldRange, Mark, ViewTarget } from "knot";
+import type {
+  Buffer, Disposable, DocumentId, EditorHandle, EditorSelection, FoldRange, Mark, RecordedCommand, Recording, ViewTarget,
+} from "knot";
 import { JumpList, type LineOf } from "./jumps.js";
 import { closedAt, createFold, foldMotion, intoShownLine, lastLine, linesDown, linesUp, runFold, shownLine } from "./folds.js";
 import type { Command, FindKind, InsertAt, MarkMotion, Motion, Operator, Scroll, Target } from "./keys.js";
@@ -41,6 +43,8 @@ export type Shared = {
   readonly highlights: Highlights;
   /** Persists the registers after they change. */
   saveRegisters(): void;
+  /** The last change, which `.` repeats. */
+  lastChange: Change | null;
   /** Buffer marks `a`–`z`, by document. */
   readonly marks: Map<DocumentId, Map<string, Mark>>;
   /** Global marks `A`–`Z`, each in some open document. */
@@ -49,6 +53,10 @@ export type Shared = {
    * `offset`, or at its line's first non-blank unless `exact`. */
   jumpToDocument(document: DocumentId, offset: number, exact: boolean): Promise<void>;
 };
+
+/** A change `.` repeats: the command that made it and, for one that entered
+ * insert mode, the input typed there. */
+export type Change = { command: Command; insert: readonly RecordedCommand[] | null };
 
 export type GlobalMark = Readonly<{ document: DocumentId; mark: Mark }>;
 
@@ -70,6 +78,16 @@ export type State = {
   caret: number | null;
   /** The undo group of the current insert session. */
   group: Disposable | null;
+  /** The input of the current insert session, null outside one and while
+   * `.` replays it. */
+  recording: Recording | null;
+  /** The change whose insert session is running, which receives its input. */
+  change: Change | null;
+  /** While `.` runs, the input it replays, which a counted insert repeats. */
+  replaying: readonly RecordedCommand[] | null;
+  /** How many times the insert session's input runs in all, and whether each
+   * further run starts on a new line, as for `o` and `O`. */
+  repeat: { count: number; open: boolean };
   /** Whether insert mode began on a line of its own, from `o`, `O`, or a
    * linewise change, whose indentation alone is removed again on Escape. */
   opened: boolean;
@@ -102,6 +120,7 @@ export async function setMode(state: State, mode: Mode) {
   }
   // Visual modes share normal mode's keys, context, and caret.
   if ((was === "insert") === (mode === "insert") && was !== mode) return;
+  if (mode === "insert" && state.replaying === null) state.recording = await state.handle.record();
   await state.handle.setKeyContext(NORMAL, mode !== "insert");
   await state.handle.setKeyContext(INSERT, mode === "insert");
   await state.handle.setCursorStyle(mode === "insert" ? null : "block");
@@ -136,8 +155,107 @@ export async function moveOnto(state: State, lines: BufferLines, position: Posit
   await moveTo(state, lines, { line: position.line, col: Math.min(position.col, lastColumn(text)) });
 }
 
-export async function run(state: State, command: Command) {
+/** The command `.` repeats for `command`, or null when it is no change. A
+ * search is repeated with `n`, since the pattern is already set. */
+function repeatable(command: Command): Command | null {
   switch (command.kind) {
+    case "operator": {
+      const { operator, target } = command;
+      if (operator === "y" || operator === "zf" || target.kind === "selection") return null;
+      const motion = target.kind === "motion" ? target.motion : null;
+      if (typeof motion === "object" && motion !== null && "search" in motion && motion.search === "prompt") {
+        return { ...command, target: { kind: "motion", motion: { search: "repeat", reverse: false } } };
+      }
+      return command;
+    }
+    case "put":
+    case "replace":
+    case "toggle-case":
+    case "join":
+    case "insert":
+      return command;
+    default:
+      return null;
+  }
+}
+
+/** Makes `command` the change `.` repeats, if it is one. */
+export function rememberChange(state: State, command: Command) {
+  const repeated = repeatable(command);
+  if (repeated === null) return;
+  state.change = state.shared.lastChange = { command: repeated, insert: null };
+}
+
+/** Makes an operator over the visual selection the change `.` repeats, as
+ * the same operator over as much text from the caret. A selection over line
+ * breaks is not repeated. */
+export async function rememberSelection(
+  state: State,
+  lines: BufferLines,
+  operator: Operator,
+  register: string | null,
+  region: Region,
+) {
+  let target: Target;
+  let count: number;
+  if (region.linewise) {
+    target = { kind: "line" };
+    count = region.end.line - region.start.line + 1;
+  } else if (region.start.line === region.end.line) {
+    const text = await lines.text(region.start.line);
+    count = 0;
+    for (let col = region.start.col; col < region.end.col; col = nextColumn(text, col)) count++;
+    target = { kind: "motion", motion: "right" };
+  } else {
+    return;
+  }
+  rememberChange(state, { kind: "operator", operator, register, count, target });
+}
+
+/** `.`: runs the last change again, with its input if it entered insert
+ * mode, as one undo step. A count replaces the change's own. */
+async function repeatChange(state: State, count: number | null) {
+  const change = state.shared.lastChange;
+  if (change === null) return;
+  if (count !== null) change.command = withCount(change.command, count);
+  const entries = change.insert ?? [];
+  state.replaying = entries;
+  try {
+    await run(state, change.command, true);
+    if (state.mode === "insert") {
+      await replay(entries);
+      await leaveInsert(state);
+    }
+  } finally {
+    state.replaying = null;
+  }
+}
+
+function withCount(command: Command, count: number): Command {
+  switch (command.kind) {
+    case "operator":
+    case "put":
+    case "replace":
+    case "toggle-case":
+    case "join":
+    case "insert":
+      return { ...command, count };
+    default:
+      return command;
+  }
+}
+
+async function replay(entries: readonly RecordedCommand[]) {
+  for (const { command, arguments: args } of entries) await commands.invoke(command, args as never);
+}
+
+/** Runs a command; `repeating` is whether `.` runs it again. */
+export async function run(state: State, command: Command, repeating = false) {
+  if (!repeating) rememberChange(state, command);
+  switch (command.kind) {
+    case "repeat":
+      await repeatChange(state, command.count);
+      break;
     case "motion":
       await motion(state, command.motion, command.count);
       break;
@@ -157,7 +275,7 @@ export async function run(state: State, command: Command) {
       await join(state, command.count);
       break;
     case "insert":
-      await enterInsert(state, command.at);
+      await enterInsert(state, command.at, command.count);
       break;
     case "set-mark":
       await setMark(state, command.name);
@@ -876,6 +994,7 @@ async function change(state: State, lines: BufferLines, region: Region, register
   }
   state.group = group;
   state.opened = region.linewise;
+  state.repeat = { count: 1, open: false };
   await setMode(state, "insert");
   state.caret = caret;
   await state.handle.setSelection({ anchor: caret, caret });
@@ -1001,9 +1120,10 @@ export async function join(state: State, count: number) {
 }
 
 
-async function enterInsert(state: State, at: InsertAt) {
+async function enterInsert(state: State, at: InsertAt, count: number) {
   state.group = await openGroup(state);
   state.opened = at === "o" || at === "O";
+  state.repeat = { count, open: state.opened };
   await setMode(state, "insert");
   const lines = new BufferLines(state.buffer);
   const from = await lines.position((await state.handle.selection()).caret);
@@ -1042,7 +1162,36 @@ async function enterInsert(state: State, at: InsertAt) {
   }
 }
 
+/** Ends the insert session's recording and returns its input, which becomes
+ * what `.` replays and the `".` register. */
+async function finishSession(state: State): Promise<readonly RecordedCommand[]> {
+  const recording = state.recording;
+  state.recording = null;
+  const change = state.change;
+  state.change = null;
+  if (state.replaying !== null) return state.replaying;
+  if (recording === null) return [];
+  const entries = [...await recording.stop()];
+  if (entries.at(-1)?.command === "vim.leave-insert") entries.pop();
+  if (change !== null) change.insert = entries;
+  const text = entries.map(({ command, arguments: args }) => {
+    if (command === "editor.insert-newline") return "\n";
+    return command === "editor.type" ? (args as { text: string }).text : "";
+  }).join("");
+  state.shared.registers.set(".", { text, linewise: false });
+  state.shared.saveRegisters();
+  return entries;
+}
+
 export async function leaveInsert(state: State) {
+  const entries = await finishSession(state);
+  // A count runs the typed input again, on a new line each time after `o`.
+  const { count, open } = state.repeat;
+  state.repeat = { count: 1, open: false };
+  for (let n = 1; n < count; n++) {
+    if (open) await commands.invoke("editor.insert-newline");
+    await replay(entries);
+  }
   const lines = new BufferLines(state.buffer);
   const { anchor, caret } = await state.handle.selection();
   const from = await lines.position(caret);

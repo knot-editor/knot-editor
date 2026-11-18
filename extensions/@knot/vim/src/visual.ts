@@ -9,7 +9,7 @@ import { BufferLines } from "./lines.js";
 import { lineStart, type Position } from "./motions.js";
 import {
   applyOperator, aroundFolds, clampCaret, grouped, isVisual, join, type Moved, moveOnto, moveTo, readRegister, record, recordJump,
-  regionText, replace, reposition, resolve, scroll, setMode, type State, cellsAt, towardWant,
+  regionText, rememberChange, rememberSelection, replace, reposition, resolve, scroll, setMode, type State, cellsAt, towardWant,
 } from "./normal.js";
 import { type Region, textObject } from "./objects.js";
 import { lastColumn, nextColumn, previousColumn, utf8Length } from "./text.js";
@@ -80,6 +80,7 @@ export async function runVisual(state: State, command: Command) {
       const selected = await selectedRegion(state, lines, linewise);
       const { from } = selected;
       const region = selected.region.linewise ? await aroundFolds(state, selected.region) : selected.region;
+      await rememberSelection(state, lines, command.operator, command.register, region);
       await exit(state);
       // A count on `>` and `<` is how many times to shift.
       await applyOperator(state, lines, command.operator, command.register, region, from, false, command.count ?? 1);
@@ -91,9 +92,11 @@ export async function runVisual(state: State, command: Command) {
       return replaceSelection(state, lines, command.char);
     case "join": {
       const { region } = await selectedRegion(state, lines, true);
+      const count = Math.max(2, region.end.line - region.start.line + 1);
+      rememberChange(state, { kind: "join", count });
       await exit(state);
       await moveTo(state, lines, { line: region.start.line, col: 0 });
-      await join(state, Math.max(2, region.end.line - region.start.line + 1));
+      await join(state, count);
       return;
     }
   }

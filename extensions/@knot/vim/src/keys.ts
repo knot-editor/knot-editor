@@ -76,7 +76,10 @@ export type Command =
   | { readonly kind: "replace"; readonly char: string; readonly count: number }
   | { readonly kind: "toggle-case"; readonly count: number }
   | { readonly kind: "join"; readonly count: number }
-  | { readonly kind: "insert"; readonly at: InsertAt }
+  /** An insert command; the typed text repeats `count` times. */
+  | { readonly kind: "insert"; readonly at: InsertAt; readonly count: number }
+  /** `.`: repeats the last change, with `count` in place of its own. */
+  | { readonly kind: "repeat"; readonly count: number | null }
   | { readonly kind: "undo"; readonly count: number }
   | { readonly kind: "redo"; readonly count: number }
   /** `m`: sets a mark at the caret. */
@@ -231,7 +234,7 @@ const VISUAL_SHORTHANDS: Readonly<Record<string, readonly [Operator, boolean]>> 
 const INSERTS = new Set<string>(["i", "a", "I", "A", "o", "O"]);
 
 /** Registers a `"` prefix may name: `"` itself is the unnamed register. */
-const REGISTER = /^[a-zA-Z0-9"+*_%:/-]$/;
+const REGISTER = /^[a-zA-Z0-9"+*_%:/.-]$/;
 
 /** Marks `'` and `` ` `` may jump to, and `m` may set. */
 const MARK = /^[a-zA-Z'`]$/;
@@ -375,6 +378,7 @@ export function feed(pending: Pending, key: string, visual = false): Fed {
     if (key === "J") return done({ kind: "join", count: count ?? 1 });
     return done(null);
   }
+  if (key === ".") return done({ kind: "repeat", count });
   const shorthand = SHORTHANDS[key];
   if (shorthand !== undefined) {
     return done({ kind: "operator", operator: shorthand[0], register, count, target: shorthand[1] });
@@ -382,7 +386,7 @@ export function feed(pending: Pending, key: string, visual = false): Fed {
   if (key === "p" || key === "P") return done({ kind: "put", before: key === "P", register, count: count ?? 1 });
   if (key === "~") return done({ kind: "toggle-case", count: count ?? 1 });
   if (key === "J") return done({ kind: "join", count: count ?? 1 });
-  if (INSERTS.has(key)) return done({ kind: "insert", at: key as InsertAt });
+  if (INSERTS.has(key)) return done({ kind: "insert", at: key as InsertAt, count: count ?? 1 });
   if (key === "u") return done({ kind: "undo", count: count ?? 1 });
   if (key === "<c-r>") return done({ kind: "redo", count: count ?? 1 });
   return done(null);

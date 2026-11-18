@@ -42,9 +42,17 @@ test("Escape and unknown keys cancel pending input", () => {
 });
 
 test("insert, undo, and redo commands", () => {
-  assert.deepEqual(parse("A").command, { kind: "insert", at: "A" });
+  assert.deepEqual(parse("A").command, { kind: "insert", at: "A", count: 1 });
+  assert.deepEqual(parse("3", "i").command, { kind: "insert", at: "i", count: 3 });
   assert.deepEqual(parse("3", "u").command, { kind: "undo", count: 3 });
   assert.deepEqual(parse("<c-r>").command, { kind: "redo", count: 1 });
+});
+
+test("dot repeats the last change, with an optional count", () => {
+  assert.deepEqual(parse(".").command, { kind: "repeat", count: null });
+  assert.deepEqual(parse("3", ".").command, { kind: "repeat", count: 3 });
+  assert.equal(parse("d", ".").command, null, "an operator waits for a motion");
+  assert.equal(parseIn(true, ["."]).command, null, "dot means nothing in visual mode");
 });
 
 test("a huge count is clamped", () => {

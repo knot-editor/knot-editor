@@ -177,7 +177,7 @@ fn start_with_language_fixture(cx: &mut TestAppContext) -> TestProduct {
 fn needs_language_fixture(topic: &str) -> bool {
     matches!(
         topic,
-        "ex" | "folding" | "insert" | "motions" | "operators" | "visual"
+        "ex" | "folding" | "insert" | "motions" | "operators" | "repeat" | "visual"
     )
 }
 
@@ -282,7 +282,7 @@ fn run_topic(topic: &str, cx: &mut TestAppContext) {
 topics!(
     package("vim"),
     run_topic;
-    ex, folding, insert, marks, motions, objects, operators, registers, scrolling, search, substitute, visual
+    ex, folding, insert, marks, motions, objects, operators, registers, repeat, scrolling, search, substitute, visual
 );
 
 #[gpui::test]

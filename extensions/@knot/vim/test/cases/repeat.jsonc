@@ -1,0 +1,56 @@
+// Vim behavior cases in the format described in
+// crates/knot-ext-vim/tests/vim.rs: a Rust product test types `keys` through the
+// real editor with this package enabled. Topic: repeat (`.`, the `".`
+// register, and counts on insert commands).
+{
+  "cases": [
+    // Counts on insert commands.
+    { "name": "3i repeats the typed text", "before": ["‸"], "keys": "3ihi<esc>", "after": ["hihih‸i"] },
+    { "name": "3A repeats at the line end", "before": ["‸a"], "keys": "3Ax<esc>", "after": ["axx‸x"] },
+    { "name": "2o opens a line for each run", "before": ["‸a", "b"], "keys": "2ox<esc>", "after": ["a", "x", "‸x", "b"] },
+    { "name": "2O opens lines above", "before": ["‸a"], "keys": "2Ox<esc>", "after": ["x", "‸x", "a"] },
+    { "name": "a counted insert repeats Backspace and newlines", "before": ["‸"], "keys": "2iab<bs>c<cr><esc>", "after": ["ac", "ac", "‸"] },
+    { "name": "a counted insert undoes as one step", "before": ["‸"], "keys": "3ix<esc>u", "after": ["‸"] },
+    { "name": "a count of one types once", "before": ["‸"], "keys": "1ix<esc>", "after": ["‸x"] },
+
+    // Repeating changes.
+    { "name": ". repeats an operator over a motion", "before": ["‸one two three four"], "keys": "dw.", "after": ["‸three four"] },
+    { "name": ". repeats x", "before": ["‸abcd"], "keys": "x.", "after": ["‸cd"] },
+    { "name": "a count on . replaces the count", "before": ["‸abcdef"], "keys": "x3.", "after": ["‸ef"] },
+    { "name": "the count of . sticks", "before": ["‸abcdefghi"], "keys": "x2..", "after": ["‸fghi"] },
+    { "name": ". repeats dd", "before": ["‸a", "b", "c"], "keys": "dd.", "after": ["‸c"] },
+    { "name": ". repeats a change with its typed text", "before": ["‸one two three"], "keys": "cwx<esc>w.", "after": ["x ‸x three"] },
+    { "name": ". repeats a change's Backspace", "before": ["‸ab cd"], "keys": "cwxy<bs>z<esc>w.", "after": ["xz x‸z"] },
+    { "name": ". repeats an insert", "before": ["‸a b"], "keys": "ix<esc>w.", "after": ["xa ‸xb"] },
+    { "name": ". repeats a counted insert", "before": ["‸"], "keys": "2ix<esc>.", "after": ["xx‸xx"] },
+    { "name": "a count on . replaces an insert's count", "before": ["‸"], "keys": "2ix<esc>3.", "after": ["xxx‸xx"] },
+    { "name": ". repeats o with its text", "before": ["‸a"], "keys": "ox<esc>.", "after": ["a", "x", "‸x"] },
+    { "name": ". repeats A", "before": ["‸a", "b"], "keys": "A!<esc>j.", "after": ["a!", "b‸!"] },
+    { "name": ". repeats newlines typed in an insert", "before": ["‸a", "b"], "keys": "Ax<cr>y<esc>j.", "after": ["ax", "y", "bx", "‸y"] },
+    { "name": ". repeats a put", "before": ["‸a b"], "keys": "yiwwp.", "after": ["a ba‸a"] },
+    { "name": ". repeats r", "before": ["‸abc"], "keys": "rxl.", "after": ["x‸xc"] },
+    { "name": ". repeats ~", "before": ["‸abc"], "keys": "~.", "after": ["AB‸c"] },
+    { "name": ". repeats J", "before": ["‸a", "b", "c"], "keys": "J.", "after": ["a b‸ c"] },
+    { "name": ". repeats indentation", "before": ["‸a", "b"], "keys": ">>j.", "after": ["    a", "    ‸b"] },
+    { "name": ". repeats a case operator", "before": ["‸ab cd"], "keys": "gUiww.", "after": ["AB ‸CD"] },
+    { "name": ". does not repeat a yank", "before": ["‸ab cd"], "keys": "xyiw.", "after": ["‸ cd"] },
+    { "name": ". repeats a delete over a search", "before": ["‸a x b x c x"], "keys": "d/x<cr>.", "after": ["‸x c x"] },
+    { "name": ". with no change does nothing", "before": ["a‸b"], "keys": ".", "after": ["a‸b"] },
+    { "name": ". repeats in another buffer position after motions", "before": ["‸a b", "c d"], "keys": "dwj0.", "after": ["b", "‸d"] },
+
+    // Undo of a repeat.
+    { "name": "a repeated change undoes as one step", "before": ["‸one two"], "keys": "cwx<esc>w.u", "after": ["x ‸two"] },
+    { "name": "a repeated counted insert undoes as one step", "before": ["‸"], "keys": "ix<esc>3.u", "after": ["‸x"] },
+
+    // Visual changes.
+    { "name": ". repeats a charwise visual delete", "before": ["‸abcdef"], "keys": "vld.", "after": ["‸ef"] },
+    { "name": ". repeats a linewise visual delete", "before": ["‸a", "b", "c", "d", "e"], "keys": "Vjd.", "after": ["‸e"] },
+    { "name": ". repeats a visual change with its text", "before": ["‸abcd"], "keys": "vlcx<esc>l.", "after": ["x‸x"] },
+    { "name": ". repeats a visual join", "before": ["‸a", "b", "c", "d"], "keys": "VjJ.", "after": ["a b‸ c", "d"] },
+
+    // The ". register.
+    { "name": "\". pastes the last inserted text", "before": ["‸a"], "keys": "Ax<cr>y<esc>\".p", "after": ["ax", "y‸x", "y"] },
+    { "name": "\". holds only typed text", "before": ["‸a"], "keys": "ixy<esc>\".p", "after": ["xyx‸ya"] },
+    { "name": "a change fills \".", "before": ["‸ab cd"], "keys": "cwz<esc>w\".P", "after": ["z ‸zcd"] }
+  ]
+}
