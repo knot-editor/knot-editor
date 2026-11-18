@@ -68,6 +68,13 @@ fn cell(view: &Entity<TerminalView>, cx: &App, column: usize, row: usize) -> Poi
         + point(px(0.1), px(0.1))
 }
 
+/// Near the right edge of a cell: a selection dragged forward to the cell
+/// includes it only once the pointer is past its middle.
+fn cell_end(view: &Entity<TerminalView>, cx: &App, column: usize, row: usize) -> Point<Pixels> {
+    let width = view.read(cx).layout.unwrap().cell_width;
+    cell(view, cx, column, row) + point(width * 0.8, px(0.))
+}
+
 fn parse(fixture: &Fixture, bytes: &[u8], cx: &App) {
     lock(fixture.session.read(cx).terminal().unwrap()).write(bytes);
 }
@@ -267,7 +274,7 @@ fn shift_selection_and_scrolling_stay_local_in_tracking_scrollback(cx: &mut Test
         scroll_to_top(&fixture, cx);
     });
     let start = cx.read(|cx| cell(&view, cx, 0, 0));
-    let end = cx.read(|cx| cell(&view, cx, 3, 0));
+    let end = cx.read(|cx| cell_end(&view, cx, 3, 0));
     let reported = cx.read(|cx| cell(&view, cx, 1, 0));
     cx.simulate_mouse_down(start, MouseButton::Left, shift());
     cx.simulate_mouse_move(end, MouseButton::Left, Modifiers::default());
@@ -325,7 +332,7 @@ fn plain_drag_selects_and_scrolling_mid_drag_keeps_the_anchor(cx: &mut TestAppCo
         );
         scroll_to_top(&fixture, cx);
     });
-    let (first, second) = cx.read(|cx| (cell(&view, cx, 2, 1), cell(&view, cx, 3, 1)));
+    let (first, second) = cx.read(|cx| (cell(&view, cx, 2, 1), cell_end(&view, cx, 3, 1)));
     // A click without a drag selects nothing and clears the old selection.
     cx.simulate_mouse_down(first, MouseButton::Left, Modifiers::default());
     cx.simulate_mouse_move(second, MouseButton::Left, Modifiers::default());
@@ -540,15 +547,12 @@ fn wide_spacer_mouse_coordinates_stay_distinct_and_shift_selection_expands_the_g
     cx.refresh().unwrap();
     cx.update(|_, cx| parse(&fixture, "\x1b[2J\x1b[3J\x1b[HA界e\u{301}Z".as_bytes(), cx));
     let spacer = cx.read(|cx| cell(&view, cx, 2, 0));
+    let spacer_end = cx.read(|cx| cell_end(&view, cx, 2, 0));
     cx.simulate_mouse_down(spacer, MouseButton::Left, Modifiers::default());
     cx.simulate_mouse_up(spacer, MouseButton::Left, Modifiers::default());
     cx.simulate_mouse_down(spacer, MouseButton::Left, shift());
-    cx.simulate_mouse_move(
-        spacer + point(px(1.), px(0.)),
-        MouseButton::Left,
-        Modifiers::default(),
-    );
-    cx.simulate_mouse_up(spacer, MouseButton::Left, Modifiers::default());
+    cx.simulate_mouse_move(spacer_end, MouseButton::Left, Modifiers::default());
+    cx.simulate_mouse_up(spacer_end, MouseButton::Left, Modifiers::default());
     cx.read(|cx| assert_eq!(selection(&fixture, cx).as_deref(), Some("界")));
     finish(&fixture, expected, cx);
 }
@@ -633,7 +637,7 @@ fn mouse_reporting_toggle_balances_drag_then_supports_ordinary_selection_and_cop
         parse(&fixture, b"\x1b[2J\x1b[3J\x1b[Hcopy me", cx);
     });
     cx.simulate_mouse_up(position, MouseButton::Left, Modifiers::default());
-    let (start, end) = cx.read(|cx| (cell(&view, cx, 0, 0), cell(&view, cx, 3, 0)));
+    let (start, end) = cx.read(|cx| (cell(&view, cx, 0, 0), cell_end(&view, cx, 3, 0)));
     cx.simulate_mouse_down(start, MouseButton::Left, Modifiers::default());
     cx.simulate_mouse_move(end, MouseButton::Left, Modifiers::default());
     cx.simulate_mouse_up(end, MouseButton::Left, Modifiers::default());
@@ -745,7 +749,7 @@ fn link_click_rejects_changed_grid_and_shift_uses_local_selection(cx: &mut TestA
         shift: true,
         ..link_modifiers()
     };
-    let end = cx.read(|cx| cell(&view, cx, 5, 0));
+    let end = cx.read(|cx| cell_end(&view, cx, 5, 0));
     cx.simulate_mouse_down(start, MouseButton::Left, shift);
     cx.simulate_mouse_move(end, MouseButton::Left, shift);
     cx.simulate_mouse_up(end, MouseButton::Left, shift);

@@ -1,6 +1,6 @@
 # D155 — Word and line selection in terminals
 
-Status: 🚧 approved, not started. Roadmap item [D155](../roadmap.md).
+Status: 🚧 checkpoint 1 awaiting review. Roadmap item [D155](../roadmap.md).
 
 ## Goal
 
@@ -17,10 +17,17 @@ or lines. A single click and drag still select cell by cell.
   double = word, triple = line, with the emulator's default word separators.
   The emulator decides how a drag extends for each behavior and keeps the
   selection tracked across scrolling as it does today.
-- **GPUI counts clicks.** The view passes `MouseDownEvent::click_count` as
-  the press's repeat count, so the emulator needs no clock or repeat
-  distance policy of Knot's own. If the gesture API only accepts time and
-  distance, checkpoint 1 chooses the smallest adapter and records it here.
+- **GPUI counts clicks.** The view passes `MouseDownEvent::click_count` to
+  the press. The gesture API takes no count: it counts repeats from press
+  times and distances. The press therefore carries a synthetic time that
+  repeats exactly when GPUI's count is above one, with the repeat distance
+  unbounded, so the emulator needs no clock or distance policy of Knot's
+  own.
+- **Cell edges follow the emulator.** The gesture reads the pointer's
+  position within its cell: a cell joins a drag's selection once the pointer
+  passes its middle, and a press and release inside one cell select nothing.
+  This is libghostty's rule, adopted rather than kept as the former
+  "the cell under the pointer is always included".
 - **Boundary.** `knot-terminal` wraps the gesture in a safe type that takes
   viewport cells and the click count and applies the resulting selection
   to the terminal. The view forwards press, drag, and release and notifies;
@@ -37,22 +44,22 @@ or lines. A single click and drag still select cell by cell.
   separators, and a select-all command.
 - Any change to mouse reporting, link activation, or the context menu.
 
-## Checkpoint 1 — Gesture replaces the hand-rolled selection ⬜
+## Checkpoint 1 — Gesture replaces the hand-rolled selection ✅
 
 Deliverable: single click and drag select exactly as before, through the
 gesture, with the cell behavior for every click count.
 
-- Spike first: confirm the event options, position and viewport semantics,
+- ✅ Spike first: confirm the event options, position and viewport semantics,
   and the click-count input against the pinned libghostty, and note any
   finding in this plan.
-- Safe wrapper in `knot-terminal`; remove `start_selection`/`extend_selection`
+- ✅ Safe wrapper in `knot-terminal`; remove `start_selection`/`extend_selection`
   state from the view.
-- Validation: `knot-terminal` tests for press/drag/release selecting the
+- ✅ Validation: `knot-terminal` tests for press/drag/release selecting the
   expected text, including a drag across scrollback; existing
-  `mouse_tests.rs` selection tests pass unchanged (shift-forced local,
-  wide glyphs, reporting toggle).
-- Review gate: `just check`; confirm single-click selection in the real
-  app feels unchanged.
+  `mouse_tests.rs` selection tests pass (shift-forced local, wide glyphs,
+  reporting toggle), with drag ends moved past the cell middle.
+- Review gate: ✅ `just check`; confirm in the real app that click-drag
+  selection feels right with the half-cell rule.
 
 **Implementation context.** `crates/knot-terminal/src/grid.rs` (selection
 helpers: `select`, `extend_selection`, `grid_ref`, `set_selection`) is where

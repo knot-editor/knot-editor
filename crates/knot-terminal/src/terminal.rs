@@ -135,6 +135,11 @@ pub struct Terminal {
     /// Owned; freed after `raw`. Accessed only through this pointer, and
     /// never during a terminal call, since callbacks reach it then.
     callbacks: *mut Callbacks,
+    /// Owned; freed before `raw`, which it releases tracked cells from.
+    pub(crate) gesture: ffi::GhosttySelectionGesture,
+    /// The synthetic time of the last selection press; see
+    /// [`Terminal::select_press`].
+    pub(crate) gesture_clock_ns: u64,
 }
 
 // SAFETY: the library creates no threads and keeps no thread-local state for
@@ -158,7 +163,18 @@ impl Terminal {
             size,
             handler: None,
         }));
-        let mut terminal = Self { raw, callbacks };
+        let mut gesture = ptr::null_mut();
+        // SAFETY: `gesture` is a valid out pointer; the default allocator is used.
+        check(
+            unsafe { ffi::ghostty_selection_gesture_new(ptr::null(), &mut gesture) },
+            "ghostty_selection_gesture_new",
+        );
+        let mut terminal = Self {
+            raw,
+            callbacks,
+            gesture,
+            gesture_clock_ns: 0,
+        };
         // SAFETY: the callbacks live until `drop` frees them after the terminal.
         unsafe { events::register(raw, callbacks) };
         terminal.set(
@@ -348,9 +364,11 @@ impl Terminal {
 
 impl Drop for Terminal {
     fn drop(&mut self) {
-        // SAFETY: both are owned and never used again; the terminal goes
-        // first, so no callback can reach the callbacks afterwards.
+        // SAFETY: all are owned and never used again; the gesture goes
+        // first, while the terminal is live, and the terminal before the
+        // callbacks, so none can reach them afterwards.
         unsafe {
+            ffi::ghostty_selection_gesture_free(self.gesture, self.raw);
             ffi::ghostty_terminal_free(self.raw);
             drop(Box::from_raw(self.callbacks));
         }

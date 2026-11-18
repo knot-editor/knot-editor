@@ -111,7 +111,7 @@ fn measured_layout_drives_the_grid_and_frames_paint_cells(cx: &mut TestAppContex
     let start = layout.origin(bounds, 3, 0) + point(px(0.1), px(0.1));
     cx.simulate_mouse_down(start, MouseButton::Left, gpui::Modifiers::default());
     cx.simulate_mouse_move(
-        start + point(layout.cell_width / 2., px(0.)),
+        start + point(layout.cell_width * 0.8, px(0.)),
         MouseButton::Left,
         gpui::Modifiers::default(),
     );

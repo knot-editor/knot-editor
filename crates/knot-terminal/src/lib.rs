@@ -29,7 +29,7 @@ mod terminal;
 
 pub use directory::local_directory;
 pub use events::TerminalEvent;
-pub use grid::Point;
+pub use grid::{Point, Pointer};
 pub use input::{Key, KeyAction, KeyEvent, Modifiers, MouseAction, MouseButton, MouseEvent};
 pub use pty::{ExitStatus, Pty, PtyEvent, PtyOptions, Shell};
 pub use render::{

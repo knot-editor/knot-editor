@@ -4,7 +4,8 @@
 use std::sync::{Arc, Mutex};
 
 use knot_terminal::{
-    Mode, Point, RenderState, Rgb, Scroll, Terminal, TerminalEvent, TerminalSize, default_palette,
+    Mode, Point, Pointer, RenderState, Rgb, Scroll, Terminal, TerminalEvent, TerminalSize,
+    default_palette,
 };
 
 fn size(columns: u16, rows: u16) -> TerminalSize {
@@ -188,6 +189,36 @@ fn modes_follow_the_program() {
     }
 }
 
+/// The pointer in `cell` of the test terminals' 9x18 cells, `fraction` of
+/// the way across it.
+fn pointer_at(cell: Point, fraction: f64) -> Pointer {
+    Pointer {
+        cell,
+        x: (f64::from(cell.column) + fraction) * 9.,
+        y: f64::from(cell.row) * 18. + 9.,
+    }
+}
+
+/// The pointer in the half of `cell` that includes it in a selection
+/// dragged forward when it is the last cell, and backward when the first.
+fn pointer(cell: Point) -> Pointer {
+    pointer_at(cell, 0.75)
+}
+
+fn press(terminal: &mut Terminal, cell: Point, click_count: u8) {
+    terminal.select_press(pointer(cell), click_count);
+}
+
+/// A single click at `from`, dragged to `to` and held; both cells are
+/// selected, whichever way the drag goes.
+fn drag(terminal: &mut Terminal, from: Point, to: Point) {
+    terminal.select_release(pointer(from));
+    let forward = (from.row, from.column) <= (to.row, to.column);
+    let (first, last) = if forward { (0.25, 0.75) } else { (0.75, 0.25) };
+    terminal.select_press(pointer_at(from, first), 1);
+    terminal.select_drag(pointer_at(to, last));
+}
+
 #[test]
 fn selection_joins_soft_wraps_and_follows_scrolling() {
     let (mut terminal, _) = recording(10, 3);
@@ -196,33 +227,54 @@ fn selection_joins_soft_wraps_and_follows_scrolling() {
     assert!(!terminal.has_selection());
     assert_eq!(terminal.selection_text(), None);
 
-    terminal.select(Point::new(7, 0), Point::new(2, 1));
+    drag(&mut terminal, Point::new(7, 0), Point::new(2, 1));
     assert_eq!(terminal.selection_text().as_deref(), Some("hijklm"));
-    terminal.extend_selection(Point::new(3, 2));
+    terminal.select_drag(pointer(Point::new(3, 2)));
     assert_eq!(terminal.selection_text().as_deref(), Some("hijklmno\nnext"));
+    terminal.select_release(pointer(Point::new(3, 2)));
 
     // Selecting backwards keeps the anchor.
-    terminal.select(Point::new(4, 1), Point::new(8, 0));
+    drag(&mut terminal, Point::new(4, 1), Point::new(8, 0));
     assert_eq!(terminal.selection_text().as_deref(), Some("ijklmno"));
 
     // Output scrolls the selected cells into the scrollback; the selection
     // follows them, and extending it from the viewport keeps its anchor.
-    terminal.select(Point::new(0, 2), Point::new(3, 2));
+    drag(&mut terminal, Point::new(0, 2), Point::new(3, 2));
     terminal.write(b"\r\nmore\r\nlines");
     assert_eq!(terminal.selection_text().as_deref(), Some("next"));
-    terminal.extend_selection(Point::new(4, 2));
+    terminal.select_drag(pointer(Point::new(4, 2)));
     assert_eq!(
         terminal.selection_text().as_deref(),
         Some("next\nmore\nlines")
     );
+    terminal.select_release(pointer(Point::new(4, 2)));
 
     // Selecting in a scrolled viewport selects the rows shown.
     terminal.scroll_viewport(Scroll::Top);
-    terminal.select(Point::new(0, 0), Point::new(4, 0));
+    drag(&mut terminal, Point::new(0, 0), Point::new(4, 0));
     assert_eq!(terminal.selection_text().as_deref(), Some("abcde"));
 
+    // A plain click selects nothing and clears the selection.
+    press(&mut terminal, Point::new(1, 0), 1);
+    terminal.select_release(pointer(Point::new(1, 0)));
+    assert!(!terminal.has_selection());
+
+    drag(&mut terminal, Point::new(0, 0), Point::new(4, 0));
     terminal.clear_selection();
     assert!(!terminal.has_selection());
+}
+
+#[test]
+fn repeated_presses_select_by_cell() {
+    let (mut terminal, _) = recording(20, 3);
+    terminal.write(b"one two three");
+    for click_count in [1, 2, 3, 4] {
+        terminal.select_release(pointer(Point::new(5, 0)));
+        terminal.select_press(pointer_at(Point::new(5, 0), 0.25), click_count);
+        terminal.select_drag(pointer_at(Point::new(6, 0), 0.75));
+        assert_eq!(terminal.selection_text().as_deref(), Some("wo"));
+        terminal.select_release(pointer(Point::new(6, 0)));
+    }
 }
 
 #[test]

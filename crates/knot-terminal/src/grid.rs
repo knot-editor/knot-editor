@@ -10,6 +10,12 @@ use crate::{
     terminal::{Terminal, check},
 };
 
+const EMPTY_REF: ffi::GhosttyGridRef = ffi::GhosttyGridRef {
+    node: ptr::null_mut(),
+    x: 0,
+    y: 0,
+};
+
 /// A cell in the viewport: its column and its row from the top.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Point {
@@ -23,10 +29,22 @@ impl Point {
     }
 }
 
+/// The pointer over the viewport: the cell it is in and its position in
+/// pixels from the grid's top left, using the terminal's cell size.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Pointer {
+    pub cell: Point,
+    pub x: f64,
+    pub y: f64,
+}
+
+/// The longest gap between presses that still repeat a click. Presses the
+/// caller says repeat are spaced well inside it, the others well beyond.
+const REPEAT_INTERVAL_NS: u64 = 1_000_000;
+
 impl Terminal {
     /// Selects the cells from `anchor` to `to`, both included, in reading
-    /// order. The terminal tracks the selected cells as output scrolls them,
-    /// and drops the selection when they leave the scrollback.
+    /// order, without a gesture.
     pub fn select(&mut self, anchor: Point, to: Point) {
         let (Some(start), Some(end)) = (self.grid_ref(anchor), self.grid_ref(to)) else {
             return;
@@ -38,15 +56,116 @@ impl Terminal {
         });
     }
 
-    /// Moves the end of the selection to `to`, keeping its anchor even if
-    /// the anchor has scrolled out of the viewport. Does nothing without a
-    /// selection.
-    pub fn extend_selection(&mut self, to: Point) {
-        let (Some(mut selection), Some(end)) = (self.selection(), self.grid_ref(to)) else {
+    /// Starts a selection gesture at `at`, replacing the selection.
+    ///
+    /// `click_count` is the caller's count of presses in a row: one selects
+    /// cell by cell, and larger counts select by larger units while the
+    /// press is held. The emulator counts repeats from press times and
+    /// distances, so the press carries a synthetic time that repeats exactly
+    /// when `click_count` is above one. The terminal tracks the selected
+    /// cells as output scrolls them, and drops the selection when they leave
+    /// the scrollback.
+    pub fn select_press(&mut self, at: Pointer, click_count: u8) {
+        self.gesture_clock_ns += if click_count > 1 {
+            1
+        } else {
+            2 * REPEAT_INTERVAL_NS
+        };
+        self.clear_selection();
+        let Some(reference) = self.grid_ref(at.cell) else {
             return;
         };
-        selection.end = end;
-        self.set_selection(&selection);
+        let event = GestureEvent::new(ffi::GHOSTTY_SELECTION_GESTURE_EVENT_TYPE_PRESS);
+        event.set(ffi::GHOSTTY_SELECTION_GESTURE_EVENT_OPT_REF, &reference);
+        event.set(
+            ffi::GHOSTTY_SELECTION_GESTURE_EVENT_OPT_POSITION,
+            &position(at),
+        );
+        event.set(
+            ffi::GHOSTTY_SELECTION_GESTURE_EVENT_OPT_TIME_NS,
+            &self.gesture_clock_ns,
+        );
+        event.set(
+            ffi::GHOSTTY_SELECTION_GESTURE_EVENT_OPT_REPEAT_INTERVAL_NS,
+            &REPEAT_INTERVAL_NS,
+        );
+        event.set(
+            ffi::GHOSTTY_SELECTION_GESTURE_EVENT_OPT_REPEAT_DISTANCE,
+            &f64::MAX,
+        );
+        let cells = ffi::GhosttySelectionGestureBehaviors {
+            single_click: ffi::GHOSTTY_SELECTION_GESTURE_BEHAVIOR_CELL,
+            double_click: ffi::GHOSTTY_SELECTION_GESTURE_BEHAVIOR_CELL,
+            triple_click: ffi::GHOSTTY_SELECTION_GESTURE_BEHAVIOR_CELL,
+        };
+        event.set(ffi::GHOSTTY_SELECTION_GESTURE_EVENT_OPT_BEHAVIORS, &cells);
+        self.apply_gesture(&event);
+    }
+
+    /// Moves the gesture's pointer to `at`, extending the selection from
+    /// the press by the unit the press chose. Does nothing without a press.
+    pub fn select_drag(&mut self, at: Pointer) {
+        let Some(reference) = self.grid_ref(at.cell) else {
+            return;
+        };
+        let size = self.size();
+        let geometry = ffi::GhosttySelectionGestureGeometry {
+            columns: size.columns.into(),
+            cell_width: size.cell_width.max(1),
+            padding_left: 0,
+            screen_height: (u32::from(size.rows) * size.cell_height).max(1),
+        };
+        let event = GestureEvent::new(ffi::GHOSTTY_SELECTION_GESTURE_EVENT_TYPE_DRAG);
+        event.set(ffi::GHOSTTY_SELECTION_GESTURE_EVENT_OPT_REF, &reference);
+        event.set(
+            ffi::GHOSTTY_SELECTION_GESTURE_EVENT_OPT_POSITION,
+            &position(at),
+        );
+        event.set(ffi::GHOSTTY_SELECTION_GESTURE_EVENT_OPT_GEOMETRY, &geometry);
+        self.apply_gesture(&event);
+    }
+
+    /// Ends the gesture at `at`. A press that dragged first takes the drag
+    /// to `at`; a plain click selects nothing.
+    pub fn select_release(&mut self, at: Pointer) {
+        let mut dragged = false;
+        // SAFETY: the data kind writes one `bool`.
+        let result = unsafe {
+            ffi::ghostty_selection_gesture_get(
+                self.gesture,
+                self.raw,
+                ffi::GHOSTTY_SELECTION_GESTURE_DATA_DRAGGED,
+                (&mut dragged as *mut bool).cast(),
+            )
+        };
+        if result == ffi::GHOSTTY_SUCCESS && dragged {
+            self.select_drag(at);
+        }
+        let event = GestureEvent::new(ffi::GHOSTTY_SELECTION_GESTURE_EVENT_TYPE_RELEASE);
+        if let Some(reference) = self.grid_ref(at.cell) {
+            event.set(ffi::GHOSTTY_SELECTION_GESTURE_EVENT_OPT_REF, &reference);
+        }
+        self.apply_gesture(&event);
+    }
+
+    /// Applies `event` and installs the selection it produces, if any.
+    fn apply_gesture(&mut self, event: &GestureEvent) {
+        let mut selection = ffi::GhosttySelection {
+            start: EMPTY_REF,
+            end: EMPTY_REF,
+            rectangle: false,
+        };
+        // SAFETY: the handles are live; the output is a valid selection.
+        let result = unsafe {
+            ffi::ghostty_selection_gesture_event(self.gesture, self.raw, event.0, &mut selection)
+        };
+        match result {
+            ffi::GHOSTTY_NO_VALUE => {}
+            result => {
+                check(result, "applying a selection gesture event");
+                self.set_selection(&selection);
+            }
+        }
     }
 
     pub fn clear_selection(&mut self) {
@@ -222,5 +341,42 @@ impl Terminal {
             ffi::ghostty_free(ptr::null(), text, len);
             string
         }
+    }
+}
+
+fn position(at: Pointer) -> ffi::GhosttySurfacePosition {
+    ffi::GhosttySurfacePosition { x: at.x, y: at.y }
+}
+
+/// An owned gesture event, freed on drop.
+struct GestureEvent(ffi::GhosttySelectionGestureEvent);
+
+impl GestureEvent {
+    fn new(kind: ffi::GhosttySelectionGestureEventType) -> Self {
+        let mut event = ptr::null_mut();
+        // SAFETY: `event` is a valid out pointer; the default allocator is used.
+        check(
+            unsafe { ffi::ghostty_selection_gesture_event_new(ptr::null(), &mut event, kind) },
+            "ghostty_selection_gesture_event_new",
+        );
+        Self(event)
+    }
+
+    /// Sets `option`, whose documented value type is `T`.
+    fn set<T>(&self, option: ffi::GhosttySelectionGestureEventOption, value: &T) {
+        // SAFETY: the handle is live; the library copies the value.
+        check(
+            unsafe {
+                ffi::ghostty_selection_gesture_event_set(self.0, option, (value as *const T).cast())
+            },
+            "setting a selection gesture event option",
+        );
+    }
+}
+
+impl Drop for GestureEvent {
+    fn drop(&mut self) {
+        // SAFETY: owned and never used again.
+        unsafe { ffi::ghostty_selection_gesture_event_free(self.0) };
     }
 }

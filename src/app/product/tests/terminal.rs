@@ -116,7 +116,7 @@ async fn terminal_mouse_reporting_toggle_routes_to_the_focused_session_and_plain
                 px(session.read(cx).size().cell_width as f32 / native_window.scale_factor());
             (
                 bounds.origin + point(px(0.1), px(0.1)),
-                bounds.origin + point(width * 3 + px(0.1), px(0.1)),
+                bounds.origin + point(width * 3.8, px(0.1)),
             )
         })
         .unwrap();

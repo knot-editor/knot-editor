@@ -3,8 +3,8 @@ use gpui::prelude::FluentBuilder;
 use gpui::*;
 use knot_terminal::{
     CellWidth, CursorStyle as TerminalCursor, Key, KeyEvent, Mode, MouseAction,
-    MouseButton as ReportButton, MouseEvent as ReportEvent, Point as TerminalPoint, RenderState,
-    Rgb, Scroll, TerminalSize, Underline,
+    MouseButton as ReportButton, MouseEvent as ReportEvent, Point as TerminalPoint,
+    Pointer as TerminalPointer, RenderState, Rgb, Scroll, TerminalSize, Underline,
 };
 use std::ops::Range;
 use std::rc::Rc;
@@ -68,8 +68,6 @@ pub(crate) struct TerminalView {
     focus_subscriptions: Vec<Subscription>,
     render_state: RenderState,
     /// Where a local left press began, while it is held.
-    selection_anchor: Option<TerminalPoint>,
-    local_dragged: bool,
     /// The links of the last painted frame.
     links: Option<LinkGrid>,
     hovered_link: Option<LinkTarget>,
@@ -201,8 +199,6 @@ impl TerminalView {
             layout: None,
             focus_subscriptions: Vec::new(),
             render_state: RenderState::new(),
-            selection_anchor: None,
-            local_dragged: false,
             links: None,
             hovered_link: None,
             armed_link: None,
@@ -318,8 +314,6 @@ impl TerminalView {
         self.clear_links();
         self.pointer.clear();
         self.reported_position = None;
-        self.selection_anchor = None;
-        self.local_dragged = false;
     }
 
     fn clear_links(&mut self) {
@@ -378,36 +372,41 @@ impl TerminalView {
     }
 
     /// Starts a local selection at `position`, clearing the previous one.
-    fn start_selection(&mut self, position: Point<Pixels>, cx: &mut Context<Self>) {
-        let Some((column, row)) = self.viewport_cell(position, cx) else {
+    fn start_selection(
+        &mut self,
+        position: Point<Pixels>,
+        click_count: usize,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(at) = self.terminal_pointer(position, cx) else {
             return;
         };
-        self.selection_anchor = Some(TerminalPoint::new(column as u16, row as u16));
-        self.local_dragged = false;
+        let click_count = click_count.clamp(1, usize::from(u8::MAX)) as u8;
         self.session
             .read(cx)
-            .with_terminal(|terminal| terminal.clear_selection());
+            .with_terminal(|terminal| terminal.select_press(at, click_count));
         cx.notify();
     }
 
-    /// Selects from the anchor to the cell under `position`. The terminal
-    /// keeps the anchor on its text as the viewport scrolls.
+    /// Extends the selection to `position`. The terminal keeps the anchor
+    /// on its text as the viewport scrolls.
     fn extend_selection(&mut self, position: Point<Pixels>, cx: &mut Context<Self>) {
-        let (Some(anchor), Some((column, row))) =
-            (self.selection_anchor, self.viewport_cell(position, cx))
-        else {
+        let Some(at) = self.terminal_pointer(position, cx) else {
             return;
         };
-        let to = TerminalPoint::new(column as u16, row as u16);
-        let first = !self.local_dragged;
-        self.local_dragged = true;
-        self.session.read(cx).with_terminal(|terminal| {
-            if first {
-                terminal.select(anchor, to);
-            } else {
-                terminal.extend_selection(to);
-            }
-        });
+        self.session
+            .read(cx)
+            .with_terminal(|terminal| terminal.select_drag(at));
+        cx.notify();
+    }
+
+    fn end_selection(&mut self, position: Point<Pixels>, cx: &mut Context<Self>) {
+        let Some(at) = self.terminal_pointer(position, cx) else {
+            return;
+        };
+        self.session
+            .read(cx)
+            .with_terminal(|terminal| terminal.select_release(at));
         cx.notify();
     }
 
@@ -479,6 +478,17 @@ impl TerminalView {
             (row as f32 + within(position.y - origin.y, layout.cell_height))
                 * size.cell_height as f32,
         ))
+    }
+
+    /// The pointer at `position` as the terminal's selection gesture reads it.
+    fn terminal_pointer(&self, position: Point<Pixels>, cx: &App) -> Option<TerminalPointer> {
+        let (column, row) = self.viewport_cell(position, cx)?;
+        let (x, y) = self.report_position(position, cx)?;
+        Some(TerminalPointer {
+            cell: TerminalPoint::new(column as u16, row as u16),
+            x: x.into(),
+            y: y.into(),
+        })
     }
 
     fn report(
@@ -593,7 +603,7 @@ impl TerminalView {
         }
         if event.button == MouseButton::Left {
             self.pointer.press(event.button, PointerOwner::Local);
-            self.start_selection(event.position, cx);
+            self.start_selection(event.position, event.click_count, cx);
             return true;
         }
         false
@@ -683,11 +693,7 @@ impl TerminalView {
                 true
             }
             Some(PointerOwner::Local) => {
-                if self.local_dragged {
-                    self.extend_selection(event.position, cx);
-                }
-                self.selection_anchor = None;
-                self.local_dragged = false;
+                self.end_selection(event.position, cx);
                 true
             }
             None => false,
