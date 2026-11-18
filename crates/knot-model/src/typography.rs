@@ -44,6 +44,13 @@ pub const DEFAULT_FALLBACKS: &[&str] = if cfg!(target_os = "macos") {
     ]
 };
 
+/// The default `font.lineHeight` for the terminal scope, matching Ghostty's
+/// stock look; every other scope defaults to 1.2.
+pub const TERMINAL_LINE_HEIGHT: f32 = 1.0;
+
+/// The default `font.lineHeight` outside the terminal scope.
+pub const DEFAULT_LINE_HEIGHT: f32 = 1.2;
+
 /// The resolved font choice of one settings scope.
 #[derive(Clone, Debug, PartialEq)]
 pub struct FontSettings {
@@ -97,13 +104,23 @@ impl FontSettings {
                 .unwrap_or(400.)
                 .clamp(100., 900.) as f32,
             line_height: store
-                .get(FONT_LINE_HEIGHT, scope)
+                .find(FONT_LINE_HEIGHT, scope)
                 .and_then(Value::as_f64)
-                .unwrap_or(1.2)
+                .unwrap_or(default_line_height(scope))
                 .clamp(0.8, 3.) as f32,
             ligatures,
             features: features(ligatures, &strings(FONT_FEATURES)),
         }
+    }
+}
+
+/// The `font.lineHeight` fallback for `scope`: an explicit value at any
+/// matching scope wins, so only the terminal scope's own default applies here.
+fn default_line_height(scope: &SettingsScope) -> f64 {
+    if scope.view.as_deref() == Some("terminal") {
+        f64::from(TERMINAL_LINE_HEIGHT)
+    } else {
+        f64::from(DEFAULT_LINE_HEIGHT)
     }
 }
 
@@ -213,6 +230,51 @@ mod tests {
     }
 
     #[test]
+    fn terminal_line_height_defaults_to_one() {
+        let store = SettingsStore::default();
+        assert_eq!(
+            FontSettings::resolve(&store, &terminal()).line_height,
+            TERMINAL_LINE_HEIGHT
+        );
+        assert_eq!(
+            FontSettings::resolve(&store, &SettingsScope::default()).line_height,
+            DEFAULT_LINE_HEIGHT
+        );
+        assert_eq!(
+            FontSettings::resolve(
+                &store,
+                &SettingsScope {
+                    view: Some("editor".into()),
+                    ..Default::default()
+                }
+            )
+            .line_height,
+            DEFAULT_LINE_HEIGHT
+        );
+    }
+
+    #[test]
+    fn explicit_line_height_wins_in_the_terminal_scope() {
+        let mut store = SettingsStore::default();
+        store
+            .set(FONT_LINE_HEIGHT, json!(1.5), SettingsScope::default())
+            .unwrap();
+        assert_eq!(
+            FontSettings::resolve(&store, &terminal()).line_height,
+            1.5
+        );
+        store.set(FONT_LINE_HEIGHT, json!(1.4), terminal()).unwrap();
+        assert_eq!(
+            FontSettings::resolve(&store, &terminal()).line_height,
+            1.4
+        );
+        assert_eq!(
+            FontSettings::resolve(&store, &SettingsScope::default()).line_height,
+            1.5
+        );
+    }
+
+    #[test]
     fn line_height_is_clamped() {
         let mut store = SettingsStore::default();
         for (value, expected) in [(0.5, 0.8), (1.5, 1.5), (4., 3.)] {
@@ -221,6 +283,11 @@ mod tests {
                 .unwrap();
             assert_eq!(
                 FontSettings::resolve(&store, &SettingsScope::default()).line_height,
+                expected
+            );
+            store.set(FONT_LINE_HEIGHT, json!(value), terminal()).unwrap();
+            assert_eq!(
+                FontSettings::resolve(&store, &terminal()).line_height,
                 expected
             );
         }

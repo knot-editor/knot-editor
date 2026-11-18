@@ -652,14 +652,22 @@ impl SettingsStore {
     /// entry matches. `None` for an undefined key.
     pub fn get(&self, key: &str, context: &SettingsScope) -> Option<&Value> {
         let definition = &self.definitions.get(key)?.definition;
-        let resolved = self
-            .entries
+        Some(self.find(key, context).unwrap_or(&definition.default))
+    }
+
+    /// The matching entry's value for `context`, ignoring the definition's
+    /// default. `None` for an undefined key or when no entry matches.
+    pub fn find(&self, key: &str, context: &SettingsScope) -> Option<&Value> {
+        if !self.definitions.contains_key(key) {
+            return None;
+        }
+        self.entries
             .get(key)
             .into_iter()
             .flatten()
             .filter(|entry| entry.scope.matches(context))
-            .max_by_key(|entry| (entry.scope.fact_count(), entry.sequence));
-        Some(resolved.map_or(&definition.default, |entry| &entry.value))
+            .max_by_key(|entry| (entry.scope.fact_count(), entry.sequence))
+            .map(|entry| &entry.value)
     }
 }
 

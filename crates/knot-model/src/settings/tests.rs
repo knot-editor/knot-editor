@@ -92,6 +92,16 @@ fn text_lists_accept_only_strings() {
 }
 
 #[test]
+fn find_skips_the_default_and_reports_undefined_keys() {
+    let mut store = store_with_integer();
+    assert_eq!(store.find(KEY, &rust_editor()), None);
+    assert_eq!(store.find("test.missing", &rust_editor()), None);
+    store.set(KEY, json!(2), SettingsScope::default()).unwrap();
+    assert_eq!(store.find(KEY, &rust_editor()), Some(&json!(2)));
+    assert_eq!(store.find("test.missing", &rust_editor()), None);
+}
+
+#[test]
 fn unscoped_value_replaces_the_default() {
     let mut store = store_with_integer();
     assert_eq!(store.get(KEY, &rust_editor()), Some(&json!(10)));
