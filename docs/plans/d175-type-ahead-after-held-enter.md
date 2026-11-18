@@ -1,6 +1,6 @@
 # D175 — Type-ahead after a held Enter
 
-Status: 🚧 approved, not started. Source: D175 in the [roadmap](../roadmap.md).
+Status: 🚧 checkpoint 1 implemented, awaiting review. Source: D175 in the [roadmap](../roadmap.md).
 
 ## Outcome
 
@@ -59,25 +59,27 @@ text, then replays them in order on release.
 
 ## Checkpoints
 
-### 1. Hold after an accepted interaction
+### 1. Hold after an accepted interaction — 🔍 awaiting review
 
 Deliverables:
 
-- A settle watcher on `ExtensionCommandBridge` for an invocation's root.
-- On an accepted extension picker or input with an invocation, the window
+- ✅ A settle watcher on `ExtensionCommandBridge` for an invocation's root.
+- ✅ On an accepted extension picker or input with an invocation, the window
   starts a hold that targets the restored view and releases when the root
   settles or the timeout passes.
-- The pending-rows Enter starts the hold immediately. The picker stops
-  dropping keys itself. Escape while pending dismisses the picker and discards
-  the queue.
-- Update [ordered delivery](../architecture/commands.md#ordered-delivery)
-  and the D175-related sentence in
-  [commands and settings](../decisions/commands-and-settings.md) if the
-  release rules it cites change.
+- ✅ The pending-rows Enter starts the hold immediately (`PickerEvent::Pending`),
+  with the waiting picker as the held view, retargeted to the restored view
+  on confirm. Escape while pending dismisses the picker and discards the
+  queue. The picker keeps freezing its field while pending, as a guard for
+  input that does not pass through the window's key path.
+- ✅ Updated [ordered delivery](../architecture/commands.md#ordered-delivery)
+  and the supplied-picker paragraph of
+  [semantic UI](../architecture/semantic-ui.md); the decision sentence still
+  holds.
 
 Validation:
 
-- Product tests in `src/app/product/tests/key_hold.rs`, driven by a test
+- ✅ Product tests in `src/app/product/tests/key_hold.rs`, driven by a test
   extension command that shows a supplied picker and then opens a document:
   - keys typed after Enter on current rows reach the opened document, not
     the previous editor;
@@ -87,7 +89,10 @@ Validation:
   - a command that settles without moving focus replays into the restored
     view;
   - the timeout releases a stuck command.
-- Update the picker unit test
+
+  The restored-view and timeout cases use an input, whose command's clipboard
+  write the test holds.
+- ✅ Update the picker unit test
   `enter_on_rows_for_older_text_waits_for_the_answer` to the new
   responsibility split. The picker still confirms on the answer, and the
   window owns the queued keys.
@@ -114,10 +119,11 @@ Implementation context:
 - Mirror the existing hold tests and fixture in
   `src/app/product/tests/key_hold.rs`.
 
-Review gate: run `just check`. In the real app, use `Try:` commands that
-open a deliberately slow supplied picker and then open a file. Type ahead
-through Enter and confirm the text lands in the opened file. Confirm Escape
-while pending discards the typing.
+Review gate: ✅ `just check`. In the real app, run **Try: Slow picker, then
+open a document** (cmd-alt-p) and **Try: Input, then open a document**
+(cmd-alt-i). Type ahead through Enter and confirm the text lands in the new
+document. In the slow picker, type, press Enter, type, then Escape before the
+rows arrive (700 ms) and confirm the typing is discarded.
 
 ### 2. Palette dispatches hold
 
