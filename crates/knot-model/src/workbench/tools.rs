@@ -143,6 +143,8 @@ pub struct ToolFrame {
     pub(super) order: usize,
     /// When the window last showed, 0 for never.
     pub(super) shown_at: u64,
+    /// When focus last entered the window, 0 for never.
+    pub(super) active_at: u64,
     pub(super) tree: AreaTree,
 }
 
@@ -252,6 +254,7 @@ impl Workbench {
             share: 0.5,
             order: usize::MAX,
             shown_at: 0,
+            active_at: 0,
             tree: AreaTree::default(),
         });
         if kind == ToolKind::Fixed {
@@ -481,48 +484,119 @@ impl Workbench {
         }
     }
 
-    /// Toggle a side: while focus is in one of its windows they all hide;
-    /// while the side shows windows, one takes focus; and while it shows
-    /// none, each slot shows the window it showed last, else its first on the
-    /// sidebar. Returns whether the side shows afterwards.
-    pub fn toggle_side(&mut self, side: DockLocation) -> bool {
-        let shown = self
-            .side_tools(side)
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>();
-        let focused = self
-            .focused_pane_id()
+    /// The tool window the tool commands act on: the focused one, else the
+    /// shown one focus entered last.
+    pub fn active_tool(&self) -> Option<ToolFrameId> {
+        self.focused_pane_id()
             .and_then(|pane| self.pane_tool(pane))
-            .is_some_and(|tool| shown.contains(&tool));
-        if focused {
-            for id in shown {
-                self.hide_tool(id);
+            .or_else(|| {
+                self.tools
+                    .iter()
+                    .filter(|tool| tool.shown)
+                    .max_by_key(|tool| tool.active_at)
+                    .map(|tool| tool.id)
+            })
+    }
+
+    /// The tool window focus entered last other than the focused one.
+    pub fn last_tool(&self) -> Option<ToolFrameId> {
+        let focused = self.focused_pane_id().and_then(|pane| self.pane_tool(pane));
+        self.tools
+            .iter()
+            .filter(|tool| tool.active_at > 0 && Some(tool.id) != focused && tool.sidebar)
+            .max_by_key(|tool| tool.active_at)
+            .map(|tool| tool.id)
+    }
+
+    /// Hide every shown tool window and remember them, or, when none shows,
+    /// show again the ones the last call hid. Returns whether anything
+    /// changed.
+    pub fn toggle_hide_all_tools(&mut self) -> bool {
+        let shown = self
+            .tools
+            .iter()
+            .filter(|tool| tool.shown)
+            .map(|tool| tool.id)
+            .collect::<Vec<_>>();
+        if !shown.is_empty() {
+            for id in &shown {
+                self.hide_tool(*id);
             }
+            self.hidden_by_hide_all = shown;
             self.focus_center();
+            return true;
+        }
+        let restored = std::mem::take(&mut self.hidden_by_hide_all)
+            .into_iter()
+            .filter(|id| self.tool(*id).is_some_and(|tool| tool.sidebar))
+            .collect::<Vec<_>>();
+        for id in &restored {
+            self.reveal_tool(*id);
+        }
+        self.settle_focus(None);
+        !restored.is_empty()
+    }
+
+    /// Move the edge of a tool window's side toward `edge`: a left window
+    /// stretched right grows, and a right one stretched right shrinks.
+    /// Returns whether the side's extent changed.
+    pub fn stretch_tool(&mut self, id: ToolFrameId, edge: SplitEdge) -> bool {
+        let Some(side) = self.tool(id).map(|tool| tool.slot.side()) else {
             return false;
-        }
-        if let Some(id) = shown.first() {
-            return self.show_tool(*id).is_some();
-        }
-        let mut revealed = Vec::new();
-        for first in [true, false] {
-            let slot = side.slot(first);
-            let candidate = self
-                .tools
-                .iter()
-                .filter(|tool| tool.slot == slot && tool.sidebar && tool.tree.layout.is_some())
-                .max_by_key(|tool| (tool.shown_at, std::cmp::Reverse(tool.order)))
-                .map(|tool| tool.id);
-            if let Some(id) = candidate {
-                self.reveal_tool(id);
-                revealed.push(id);
+        };
+        let sign = match (side, edge) {
+            (DockLocation::Left, SplitEdge::Right)
+            | (DockLocation::Right, SplitEdge::Left)
+            | (DockLocation::Bottom, SplitEdge::Top) => 1.,
+            (DockLocation::Left, SplitEdge::Left)
+            | (DockLocation::Right, SplitEdge::Right)
+            | (DockLocation::Bottom, SplitEdge::Bottom) => -1.,
+            _ => return false,
+        };
+        let Some(before) = self.side_extent(side) else {
+            return false;
+        };
+        self.set_side_extent(side, before + sign * super::resize::DOCK_RESIZE_STEP);
+        self.side_extent(side) != Some(before)
+    }
+
+    /// Move every tab of the other panes of `pane`'s area into `pane`, in
+    /// layout order. Returns whether any pane merged.
+    pub fn unsplit(&mut self, pane: PaneId) -> bool {
+        let Some(area) = self.pane_area(pane) else {
+            return false;
+        };
+        let others = self
+            .area_panes(area)
+            .into_iter()
+            .filter(|other| *other != pane)
+            .collect::<Vec<_>>();
+        for other in &others {
+            let tabs = self
+                .pane(*other)
+                .map(|pane| pane.tabs().iter().map(|tab| tab.id()).collect::<Vec<_>>())
+                .unwrap_or_default();
+            for tab in tabs {
+                let Some(anchor) = self
+                    .pane(pane)
+                    .and_then(|pane| self.capture_tab_move(pane.id(), pane.active_tab_id()))
+                else {
+                    return false;
+                };
+                let Some(source) = self.capture_tab_move(*other, tab) else {
+                    continue;
+                };
+                self.relocate_tab(
+                    source,
+                    TabMoveDestination::At {
+                        anchor,
+                        placement: TabMovePlacement::End,
+                    },
+                );
             }
         }
-        if let Some(id) = revealed.first() {
-            self.show_tool(*id);
-        }
-        !revealed.is_empty()
+        self.set_focus(pane);
+        !others.is_empty()
     }
 
     /// Move a tool window to `slot`, replacing the window shown there when
@@ -937,5 +1011,109 @@ mod tests {
                 .transfer_tab_to(&mut destination, tool, TabMoveDestination::Empty)
                 .is_none()
         );
+    }
+
+    #[test]
+    fn the_active_and_last_tool_follow_where_focus_entered() {
+        let workbench = &mut Workbench::empty();
+        workbench.open_document_in_center(DocumentId::new(1));
+        let explorer = fixed(workbench, "explorer", Slot::LeftTop);
+        let notices = fixed(workbench, "notices", Slot::RightTop);
+        assert_eq!(workbench.active_tool(), None);
+        assert_eq!(workbench.last_tool(), None);
+
+        workbench.show_tool(explorer).unwrap();
+        workbench.show_tool(notices).unwrap();
+        assert_eq!(workbench.active_tool(), Some(notices));
+        assert_eq!(workbench.last_tool(), Some(explorer));
+
+        // From the editor, the active tool is the one focus entered last.
+        workbench.focus_center();
+        assert_eq!(workbench.active_tool(), Some(notices));
+        assert_eq!(workbench.last_tool(), Some(notices));
+        workbench.hide_tool(notices);
+        assert_eq!(workbench.active_tool(), Some(explorer));
+    }
+
+    #[test]
+    fn hide_all_restores_the_windows_it_hid() {
+        let workbench = &mut Workbench::empty();
+        let (center, _) = workbench.open_document_in_center(DocumentId::new(1));
+        let explorer = fixed(workbench, "explorer", Slot::LeftTop);
+        let notices = fixed(workbench, "notices", Slot::RightTop);
+        workbench.show_tool(explorer).unwrap();
+        workbench.show_tool(notices).unwrap();
+
+        assert!(workbench.toggle_hide_all_tools());
+        assert!(!workbench.tool_visible(explorer) && !workbench.tool_visible(notices));
+        assert_eq!(workbench.focused_pane_id(), Some(center));
+        assert!(workbench.toggle_hide_all_tools());
+        assert!(workbench.tool_visible(explorer) && workbench.tool_visible(notices));
+
+        // With every window hidden by hand, there is nothing to restore.
+        workbench.hide_tool(explorer);
+        workbench.hide_tool(notices);
+        assert!(!workbench.toggle_hide_all_tools());
+    }
+
+    #[test]
+    fn stretch_moves_the_edge_of_the_side() {
+        let workbench = &mut Workbench::empty();
+        workbench.open_document_in_center(DocumentId::new(1));
+        let left = fixed(workbench, "left", Slot::LeftTop);
+        let bottom = fixed(workbench, "bottom", Slot::BottomLeft);
+        workbench.show_tool(left).unwrap();
+        workbench.show_tool(bottom).unwrap();
+        let (width, height) = (
+            workbench.tool_size(left).unwrap(),
+            workbench.tool_size(bottom).unwrap(),
+        );
+
+        assert!(workbench.stretch_tool(left, SplitEdge::Right));
+        assert!(workbench.tool_size(left).unwrap() > width);
+        assert!(workbench.stretch_tool(left, SplitEdge::Left));
+        assert_eq!(workbench.tool_size(left), Some(width));
+        assert!(!workbench.stretch_tool(left, SplitEdge::Top));
+        assert!(workbench.stretch_tool(bottom, SplitEdge::Top));
+        assert!(workbench.tool_size(bottom).unwrap() > height);
+        assert!(!workbench.stretch_tool(bottom, SplitEdge::Left));
+    }
+
+    #[test]
+    fn unsplit_merges_the_panes_of_a_window_in_order() {
+        let workbench = &mut Workbench::empty();
+        workbench.open_document_in_center(DocumentId::new(1));
+        let terminal = workbench.register_tool(
+            "terminal",
+            "Terminal",
+            Slot::BottomLeft,
+            ToolKind::Container,
+        );
+        let (first, _) = workbench
+            .open_terminal_in_tool(terminal, TerminalSessionId(1))
+            .unwrap();
+        let (_, second_tab) = workbench
+            .open_terminal_in_tool(terminal, TerminalSessionId(2))
+            .unwrap();
+        let split = workbench
+            .capture_tab_move(first, second_tab)
+            .map(|source| {
+                workbench.relocate_tab(
+                    source,
+                    TabMoveDestination::At {
+                        anchor: source,
+                        placement: TabMovePlacement::Split(SplitEdge::Right),
+                    },
+                )
+            })
+            .unwrap();
+        assert!(split.is_some());
+        assert_eq!(workbench.area_panes(Area::Tool(terminal)).len(), 2);
+
+        assert!(workbench.unsplit(first));
+        let panes = workbench.area_panes(Area::Tool(terminal));
+        assert_eq!(panes, [first]);
+        assert_eq!(workbench.pane(first).unwrap().tabs().len(), 2);
+        assert!(!workbench.unsplit(first));
     }
 }

@@ -153,10 +153,10 @@ fn showing_the_empty_terminal_window_opens_a_terminal_and_toggle_hides_it(cx: &m
     assert!(window.tool_shown(TERMINAL, cx));
 
     // The toggle hides the focused window, keeping its shell, and shows it again.
-    window.run_command("terminal.toggle", cx);
+    window.run_command("builtin.terminal.toggle", cx);
     wait_until(cx, |cx| !window.tool_shown(TERMINAL, cx));
     assert_eq!(window.terminals(TERMINAL, cx).len(), 1);
-    window.run_command("terminal.toggle", cx);
+    window.run_command("builtin.terminal.toggle", cx);
     wait_until(cx, |cx| window.tool_shown(TERMINAL, cx));
     assert_eq!(window.terminals(TERMINAL, cx).len(), 1);
 }

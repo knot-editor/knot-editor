@@ -97,6 +97,8 @@ pub const NOTIFICATIONS_TIMEOUT: &str = "notifications.timeout";
 pub const NOTIFICATIONS_MAX_VISIBLE: &str = "notifications.maxVisible";
 /// Whether new terminals report mouse input to the running program.
 pub const TERMINAL_MOUSE_REPORTING_ENABLED: &str = "terminal.mouseReportingEnabled";
+/// Whether Esc in a terminal focuses the editor instead of reaching the shell.
+pub const TERMINAL_ESCAPE_TO_EDITOR: &str = "terminal.escapeToEditor";
 /// The cursor shape new terminals start with: `block`, `bar`, `underline`, or
 /// `hollow`.
 pub const TERMINAL_CURSOR_STYLE: &str = "terminal.cursorStyle";
@@ -477,6 +479,12 @@ fn native_definitions() -> Vec<SettingDefinition> {
             value_type: SettingType::Boolean,
             default: true.into(),
             description: "Report mouse input to the program in new terminals; the toggle still flips it per session".into(),
+        },
+        SettingDefinition {
+            key: TERMINAL_ESCAPE_TO_EDITOR.into(),
+            value_type: SettingType::Boolean,
+            default: true.into(),
+            description: "Esc in a terminal focuses the editor; when off, Esc goes to the shell".into(),
         },
         text(
             TERMINAL_CURSOR_STYLE,

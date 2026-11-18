@@ -437,7 +437,12 @@ fn a_full_width_bottom_dock_runs_under_the_side_docks(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn hiding_a_dock_keeps_its_maximized_pane_for_the_next_show(cx: &mut TestAppContext) {
-    use crate::app::commands::dispatch::{TOGGLE_LEFT_DOCK_COMMAND, TOGGLE_MAXIMIZE_PANE_COMMAND};
+    use crate::app::commands::dispatch::{HIDE_ACTIVE_TOOL_COMMAND, TOGGLE_MAXIMIZE_PANE_COMMAND};
+    let show = |window: &Entity<KnotWindow>, cx: &mut TestAppContext| {
+        window.update(cx, |window, cx| {
+            window.toggle_tool(crate::app::product::tools::TEST_TOOL_ID, cx)
+        });
+    };
     let (window, native_window) = docked_window(cx);
     let (dock, main) = dock_and_main(&window, cx);
     focus(&window, native_window, dock, cx);
@@ -446,20 +451,137 @@ fn hiding_a_dock_keeps_its_maximized_pane_for_the_next_show(cx: &mut TestAppCont
     assert!(!painted(&window, main, cx));
 
     // Hiding the focused dock returns focus to the center.
-    run(&window, native_window, TOGGLE_LEFT_DOCK_COMMAND, cx);
+    run(&window, native_window, HIDE_ACTIVE_TOOL_COMMAND, cx);
     assert_eq!(focused(&window, cx), main);
     assert!(painted(&window, main, cx));
 
     // Showing it focuses the dock pane and maximizes it again.
-    run(&window, native_window, TOGGLE_LEFT_DOCK_COMMAND, cx);
+    show(&window, cx);
     assert_eq!(focused(&window, cx), dock);
     assert!(painted(&window, dock, cx));
     assert!(!painted(&window, main, cx));
 
     // The memory is spent: hide, show, and a plain focus change restore nothing.
     run(&window, native_window, TOGGLE_MAXIMIZE_PANE_COMMAND, cx);
-    run(&window, native_window, TOGGLE_LEFT_DOCK_COMMAND, cx);
-    run(&window, native_window, TOGGLE_LEFT_DOCK_COMMAND, cx);
+    run(&window, native_window, HIDE_ACTIVE_TOOL_COMMAND, cx);
+    show(&window, cx);
     assert!(painted(&window, main, cx));
     assert!(painted(&window, dock, cx));
+}
+
+fn tool_state(
+    window: &Entity<KnotWindow>,
+    cx: &TestAppContext,
+) -> (bool, crate::app::workbench::Slot, f32) {
+    cx.read(|cx| {
+        let workbench = window.read(cx).workbench.read(cx);
+        let tool = workbench
+            .tool_by_stable_id(crate::app::product::tools::TEST_TOOL_ID)
+            .unwrap();
+        let frame = workbench.tool(tool).unwrap();
+        (frame.is_shown(), frame.slot(), frame.size())
+    })
+}
+
+#[gpui::test]
+fn tool_commands_hide_jump_hide_all_stretch_and_move(cx: &mut TestAppContext) {
+    use crate::app::commands::dispatch::{
+        HIDE_ACTIVE_TOOL_COMMAND, HIDE_ALL_TOOLS_COMMAND, JUMP_TO_LAST_TOOL_COMMAND,
+        MOVE_TOOL_TO_RIGHT_TOP_COMMAND, STRETCH_LEFT_COMMAND, STRETCH_RIGHT_COMMAND,
+        STRETCH_TOP_COMMAND,
+    };
+    use crate::app::workbench::Slot;
+    let (window, native_window) = docked_window(cx);
+    let (dock, main) = dock_and_main(&window, cx);
+
+    // From the editor, Hide Active Tool Window hides the tool used last.
+    assert_eq!(focused(&window, cx), main);
+    assert_eq!(
+        run(&window, native_window, HIDE_ACTIVE_TOOL_COMMAND, cx),
+        CommandOutcome::Completed
+    );
+    assert!(!tool_state(&window, cx).0);
+    assert_eq!(
+        run(&window, native_window, HIDE_ACTIVE_TOOL_COMMAND, cx),
+        CommandOutcome::Unavailable
+    );
+
+    // Jump to Last Tool Window shows and focuses it again.
+    assert_eq!(
+        run(&window, native_window, JUMP_TO_LAST_TOOL_COMMAND, cx),
+        CommandOutcome::Completed
+    );
+    assert!(tool_state(&window, cx).0);
+    assert_eq!(focused(&window, cx), dock);
+
+    // Stretch moves the edge: a left window grows to the right.
+    let (_, _, size) = tool_state(&window, cx);
+    assert_eq!(
+        run(&window, native_window, STRETCH_RIGHT_COMMAND, cx),
+        CommandOutcome::Completed
+    );
+    assert!(tool_state(&window, cx).2 > size);
+    assert_eq!(
+        run(&window, native_window, STRETCH_LEFT_COMMAND, cx),
+        CommandOutcome::Completed
+    );
+    assert_eq!(tool_state(&window, cx).2, size);
+    assert_eq!(
+        run(&window, native_window, STRETCH_TOP_COMMAND, cx),
+        CommandOutcome::Unavailable
+    );
+
+    // Move to puts the window in another slot, and not in its own.
+    assert_eq!(
+        run(&window, native_window, MOVE_TOOL_TO_RIGHT_TOP_COMMAND, cx),
+        CommandOutcome::Completed
+    );
+    assert_eq!(tool_state(&window, cx).1, Slot::RightTop);
+    assert_eq!(
+        run(&window, native_window, MOVE_TOOL_TO_RIGHT_TOP_COMMAND, cx),
+        CommandOutcome::Unavailable
+    );
+
+    // Hide All Tool Windows hides what shows, and run again shows it back.
+    assert_eq!(
+        run(&window, native_window, HIDE_ALL_TOOLS_COMMAND, cx),
+        CommandOutcome::Completed
+    );
+    assert!(!tool_state(&window, cx).0);
+    assert_eq!(focused(&window, cx), main);
+    assert_eq!(
+        run(&window, native_window, HIDE_ALL_TOOLS_COMMAND, cx),
+        CommandOutcome::Completed
+    );
+    assert!(tool_state(&window, cx).0);
+}
+
+#[gpui::test]
+fn maximize_tool_window_applies_to_a_focused_tool_only(cx: &mut TestAppContext) {
+    use crate::app::commands::dispatch::MAXIMIZE_TOOL_COMMAND;
+    let (window, native_window) = docked_window(cx);
+    let (dock, main) = dock_and_main(&window, cx);
+    assert_eq!(
+        run(&window, native_window, MAXIMIZE_TOOL_COMMAND, cx),
+        CommandOutcome::Unavailable
+    );
+    focus(&window, native_window, dock, cx);
+    assert_eq!(
+        run(&window, native_window, MAXIMIZE_TOOL_COMMAND, cx),
+        CommandOutcome::Completed
+    );
+    assert!(painted(&window, dock, cx));
+    assert!(!painted(&window, main, cx));
+    run(&window, native_window, MAXIMIZE_TOOL_COMMAND, cx);
+    assert!(painted(&window, main, cx));
+}
+
+#[gpui::test]
+fn escape_in_a_tool_focuses_the_editor_and_leaves_the_tool_shown(cx: &mut TestAppContext) {
+    let (window, native_window) = docked_window(cx);
+    let (dock, main) = dock_and_main(&window, cx);
+    focus(&window, native_window, dock, cx);
+    press_keys(&window, "escape", cx);
+    assert_eq!(focused(&window, cx), main);
+    assert!(tool_state(&window, cx).0);
 }

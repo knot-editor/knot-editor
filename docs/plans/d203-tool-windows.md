@@ -176,6 +176,16 @@ Decisions that later checkpoints build on:
 
 ### 3. IntelliJ commands
 
+✅ Implemented; ⏳ awaiting the review gate. Decisions: the generated command
+for a tool is `<viewId>.toggle` (`builtin.terminal.toggle` for Terminal), and
+the keybindings cmd-b, cmd-alt-b, and cmd-j now run the Explorer,
+Notifications, and Terminal toggles. Open as Editor Tab replaces Move Tab to
+Center, and Return to Tool Window moves a terminal tab to the first container
+that accepts it. Split and Move always splits and needs a second tab. Go to
+Next/Previous Splitter walk the focused area's panes. A terminal's label is
+recorded in the window layout (version 4). The ⋮ menu gained Stretch items and
+Move to Editor.
+
 Deliverables:
 - Generated Toggle <Tool> commands, Hide Active Tool Window (from the editor
   too), Jump to Last Tool Window, Hide All Tool Windows, Maximize Tool Window,

@@ -2862,10 +2862,23 @@ impl ProductExtensionHost {
         crate::app::extensions::semantics::SemanticError,
     > {
         let id = arguments.id.clone();
+        let title = arguments.title.clone();
         let registration = self
             .semantics
             .register_tree_provider(request, arguments, cx)?;
-        self.commands.catalog().borrow_mut().declare_view_kind(&id);
+        {
+            let catalog = self.commands.catalog();
+            let mut catalog = catalog.borrow_mut();
+            catalog.declare_view_kind(&id);
+            let _ = catalog.register_native(
+                crate::app::commands::dispatch::tool_toggle_command(&id).into(),
+                crate::app::commands::catalog::CommandMetadata {
+                    title: format!("Toggle {title}"),
+                    description: Some(format!("Show and focus {title}, or hide it when focused.")),
+                    palette: true,
+                },
+            );
+        }
         if cx.has_global::<crate::app::commands::keymaps::ApplicationKeymaps>() {
             let _ = cx
                 .global_mut::<crate::app::commands::keymaps::ApplicationKeymaps>()
@@ -2891,7 +2904,12 @@ impl ProductExtensionHost {
     }
 
     fn remove_view_kind(&mut self, id: &str, cx: &mut App) {
-        self.commands.catalog().borrow_mut().remove_view_kind(id);
+        {
+            let catalog = self.commands.catalog();
+            let mut catalog = catalog.borrow_mut();
+            catalog.remove_view_kind(id);
+            catalog.unregister_native(&crate::app::commands::dispatch::tool_toggle_command(id));
+        }
         if cx.has_global::<crate::app::commands::keymaps::ApplicationKeymaps>()
             && cx
                 .global_mut::<crate::app::commands::keymaps::ApplicationKeymaps>()

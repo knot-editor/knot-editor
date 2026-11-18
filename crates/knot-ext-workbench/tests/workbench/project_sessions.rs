@@ -225,7 +225,7 @@ fn closing_the_last_window_suspends_without_captures(cx: &mut TestAppContext) {
     );
     assert_eq!(windows[0]["selected"], 0);
     // Each session window keeps its captured layout.
-    assert_eq!(windows[0]["layout"]["version"], 3);
+    assert_eq!(windows[0]["layout"]["version"], 4);
 
     // Closing the last one suspends the project with its last membership,
     // which records the dirty document's identity once tracking sees it.

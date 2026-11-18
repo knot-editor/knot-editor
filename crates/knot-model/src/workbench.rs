@@ -406,6 +406,8 @@ pub struct Workbench {
     next_tool_id: u64,
     /// Counts window reveals, for [`ToolFrame::shown_at`].
     reveal_clock: u64,
+    /// The tool windows the last Hide All Tool Windows hid.
+    hidden_by_hide_all: Vec<ToolFrameId>,
     panes: Vec<Pane>,
     focused_pane: Option<PaneId>,
     /// The pane that had focus before the focused one, for going back.
@@ -422,6 +424,7 @@ impl Workbench {
             next_presentation_id: 1,
             next_tool_id: 1,
             reveal_clock: 0,
+            hidden_by_hide_all: Vec::new(),
             panes: Vec::new(),
             focused_pane: None,
             previous_pane: None,
@@ -588,6 +591,9 @@ impl Workbench {
         self.tree_mut(area).focused = Some(pane_id);
         if let Area::Tool(id) = area {
             self.reveal_tool(id);
+            self.reveal_clock += 1;
+            let clock = self.reveal_clock;
+            self.tool_mut(id).active_at = clock;
         }
     }
 

@@ -75,6 +75,7 @@ and `icons.pack` when the user runs Select Icon Pack.
 | Key | Type | Default | Scope | Owner | Description |
 | --- | --- | --- | --- | --- | --- |
 | `terminal.mouseReportingEnabled` | boolean | `true` | Global | native | Report mouse input to the program in new terminals; Toggle Terminal Mouse Reporting still flips it per session. |
+| `terminal.escapeToEditor` | boolean | `true` | Global | native | Esc in a terminal focuses the editor and leaves its tool window shown; when off, Esc goes to the shell. |
 | `terminal.cursorStyle` | string: `block`, `bar`, `underline`, `hollow` | `"block"` | Global; other text means `block` | native | The cursor shape new terminals start with; a program's own shape still wins. |
 
 ## Workbench

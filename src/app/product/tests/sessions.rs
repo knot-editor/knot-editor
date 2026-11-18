@@ -1251,7 +1251,7 @@ fn layouts_prune_unknown_tabs_hide_unnamed_tools_and_ignore_unsupported_versions
     // The second center pane holds only an unmatched document, the first
     // repeats its document, and the unknown tool window is dropped.
     let layout = json!({
-        "version": 3, "geometry": null, "focused": 1,
+        "version": 4, "geometry": null, "focused": 1,
         "center": { "kind": "split", "direction": "vertical", "ratio": 0.5,
             "first": { "kind": "pane", "selected": 5, "tabs": [
                 { "kind": "document", "document": null, "uri": "mem://product/a/one.txt", "view": view },

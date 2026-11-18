@@ -1,12 +1,11 @@
-// The Terminal tool window and its commands: New Terminal, New Terminal in
-// Editor, and Toggle Terminal. New Terminal owns where a shell starts.
+// The Terminal tool window and its commands: New Terminal and New Terminal in
+// Editor. New Terminal owns where a shell starts.
 import { commands, files, terminals, windows, workbench } from "knot";
 import type { CommandContext, WindowInfo } from "knot";
 
 export const TERMINAL_VIEW = "builtin.terminal";
 export const NEW_TERMINAL = "terminal.new";
 export const NEW_TERMINAL_IN_EDITOR = "terminal.new-in-center";
-export const TOGGLE_TERMINAL = "terminal.toggle";
 
 const withSlash = (uri: string) => (uri.endsWith("/") ? uri : `${uri}/`);
 
@@ -43,7 +42,7 @@ async function open(context: CommandContext, location: string) {
 }
 
 export async function registerTerminal() {
-  const view = await workbench.registerView({
+  await workbench.registerView({
     id: TERMINAL_VIEW,
     title: "Terminal",
     newTab: NEW_TERMINAL,
@@ -56,9 +55,5 @@ export async function registerTerminal() {
   await commands.register(NEW_TERMINAL_IN_EDITOR, (context) => open(context, "editor"), {
     title: "New Terminal in Editor",
     description: "Open a terminal in the last focused editor pane.",
-  });
-  await commands.register(TOGGLE_TERMINAL, () => view.toggle(), {
-    title: "Toggle Terminal",
-    description: "Show and focus the Terminal window, or hide it when it has focus.",
   });
 }

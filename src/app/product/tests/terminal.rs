@@ -1508,7 +1508,7 @@ async fn a_terminal_moves_between_the_center_and_its_window_and_the_slot_reaches
     assert_eq!(terminal_panes(&window, cx), [(right, 1)]);
     assert!(cx.read(|cx| window.read(cx).workbench.read(cx).tool_visible(tool)));
     let to_center =
-        dispatch_product_command(&window, native_window, "workbench.move-tab-to-center", cx);
+        dispatch_product_command(&window, native_window, "workbench.open-as-editor-tab", cx);
     assert_eq!(
         to_center.completion.await.unwrap(),
         CommandOutcome::Completed
@@ -1662,4 +1662,166 @@ async fn restart_command_and_overlay_restart_the_focused_session(cx: &mut TestAp
         assert_eq!(workbench.pane(pane).unwrap().active_tab().id(), tab);
     });
     session.update(cx, |session, cx| session.close(cx));
+}
+
+fn open_terminals_in_window(
+    window: &Entity<KnotWindow>,
+    native_window: gpui::AnyWindowHandle,
+    count: usize,
+    cx: &mut TestAppContext,
+) {
+    for _ in 0..count {
+        let new = dispatch_product_command(window, native_window, NEW_TERMINAL_COMMAND, cx);
+        assert_eq!(wait_for_command(new, cx), CommandOutcome::Completed);
+    }
+}
+
+fn run_command(
+    window: &Entity<KnotWindow>,
+    native_window: gpui::AnyWindowHandle,
+    name: &'static str,
+    cx: &mut TestAppContext,
+) -> CommandOutcome {
+    wait_for_command(
+        dispatch_product_command(window, native_window, name, cx),
+        cx,
+    )
+}
+
+#[gpui::test]
+fn a_container_splits_moves_unsplits_and_walks_its_panes(cx: &mut TestAppContext) {
+    use crate::app::commands::dispatch::{
+        NEXT_SPLITTER_COMMAND, OPEN_AS_EDITOR_TAB_COMMAND, PREVIOUS_SPLITTER_COMMAND,
+        RETURN_TO_TOOL_WINDOW_COMMAND, SPLIT_AND_MOVE_DOWN_COMMAND, SPLIT_AND_MOVE_RIGHT_COMMAND,
+        UNSPLIT_COMMAND,
+    };
+    use crate::app::workbench::Area;
+    let documents = install_globals(cx);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (window, native_window) = product_window(document, model, cx);
+    let (area, _) = terminal_area(&window, cx);
+
+    open_terminals_in_window(&window, native_window, 2, cx);
+    assert_eq!(terminal_panes(&window, cx), [(area, 2)]);
+    // A lone tab has nothing to split away from.
+    open_terminals_in_window(&window, native_window, 0, cx);
+
+    assert_eq!(
+        run_command(&window, native_window, SPLIT_AND_MOVE_RIGHT_COMMAND, cx),
+        CommandOutcome::Completed
+    );
+    assert_eq!(terminal_panes(&window, cx), [(area, 1), (area, 1)]);
+    assert_eq!(
+        run_command(&window, native_window, SPLIT_AND_MOVE_DOWN_COMMAND, cx),
+        CommandOutcome::Unavailable
+    );
+
+    // The splitter commands walk the window's panes and wrap.
+    let focused_pane =
+        |cx: &TestAppContext| cx.read(|cx| window.read(cx).workbench.read(cx).focused_pane_id());
+    let first = focused_pane(cx);
+    run_command(&window, native_window, NEXT_SPLITTER_COMMAND, cx);
+    let second = focused_pane(cx);
+    assert_ne!(first, second);
+    run_command(&window, native_window, NEXT_SPLITTER_COMMAND, cx);
+    assert_eq!(focused_pane(cx), first);
+    run_command(&window, native_window, PREVIOUS_SPLITTER_COMMAND, cx);
+    assert_eq!(focused_pane(cx), second);
+
+    assert_eq!(
+        run_command(&window, native_window, UNSPLIT_COMMAND, cx),
+        CommandOutcome::Completed
+    );
+    assert_eq!(terminal_panes(&window, cx), [(area, 2)]);
+    assert_eq!(
+        run_command(&window, native_window, UNSPLIT_COMMAND, cx),
+        CommandOutcome::Unavailable
+    );
+
+    // A terminal tab goes to the editor and back to its window.
+    assert_eq!(
+        run_command(&window, native_window, OPEN_AS_EDITOR_TAB_COMMAND, cx),
+        CommandOutcome::Completed
+    );
+    assert_eq!(terminal_panes(&window, cx), [(Area::Center, 1), (area, 1)]);
+    assert_eq!(
+        run_command(&window, native_window, RETURN_TO_TOOL_WINDOW_COMMAND, cx),
+        CommandOutcome::Completed
+    );
+    assert_eq!(terminal_panes(&window, cx), [(area, 2)]);
+    assert_eq!(
+        run_command(&window, native_window, RETURN_TO_TOOL_WINDOW_COMMAND, cx),
+        CommandOutcome::Unavailable
+    );
+}
+
+#[gpui::test]
+fn escape_in_a_terminal_follows_the_setting(cx: &mut TestAppContext) {
+    use crate::app::workbench::Area;
+    let documents = install_globals(cx);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (window, native_window) = product_window(document, model, cx);
+    let (area, tool) = terminal_area(&window, cx);
+    open_terminals_in_window(&window, native_window, 1, cx);
+    assert_eq!(focused_area(&window, cx), Some(area));
+
+    // The shell gets Esc when the setting is off.
+    cx.update(|cx| {
+        crate::app::settings::set_boolean(
+            knot_model::settings::TERMINAL_ESCAPE_TO_EDITOR,
+            false,
+            cx,
+        )
+    });
+    press_keys(&window, "escape", cx);
+    assert_eq!(focused_area(&window, cx), Some(area));
+
+    cx.update(|cx| {
+        crate::app::settings::set_boolean(knot_model::settings::TERMINAL_ESCAPE_TO_EDITOR, true, cx)
+    });
+    press_keys(&window, "escape", cx);
+    assert_eq!(focused_area(&window, cx), Some(Area::Center));
+    assert!(cx.read(|cx| window.read(cx).workbench.read(cx).tool_visible(tool)));
+
+    // A terminal in the editor keeps Esc for the shell.
+    let center =
+        dispatch_product_command(&window, native_window, NEW_TERMINAL_IN_CENTER_COMMAND, cx);
+    assert_eq!(wait_for_command(center, cx), CommandOutcome::Completed);
+    press_keys(&window, "escape", cx);
+    assert_eq!(focused_area(&window, cx), Some(Area::Center));
+}
+
+#[gpui::test]
+fn rename_session_labels_the_tab_and_the_label_persists(cx: &mut TestAppContext) {
+    use crate::app::commands::dispatch::RENAME_SESSION_COMMAND;
+    let documents = install_globals(cx);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (window, native_window) = product_window(document, model, cx);
+    open_terminals_in_window(&window, native_window, 1, cx);
+
+    let rename = dispatch_product_command(&window, native_window, RENAME_SESSION_COMMAND, cx);
+    assert_eq!(wait_for_command(rename, cx), CommandOutcome::Completed);
+    press_keys(&window, "ctrl-a ctrl-k", cx);
+    type_text(&window, "build", cx);
+    press_keys(&window, "enter", cx);
+
+    let session_name = |cx: &TestAppContext| {
+        cx.read(|cx| {
+            let workbench = window.read(cx).workbench.read(cx);
+            let pane = workbench.focused_pane().unwrap();
+            let TabSurfaceId::Terminal(id) = pane.active_tab().surface_id() else {
+                panic!("the terminal is focused");
+            };
+            KnotWindow::terminal_session_name(id, cx)
+        })
+    };
+    assert_eq!(session_name(cx).as_deref(), Some("build"));
+
+    // The window layout records the label.
+    let layout = cx.read(|cx| window.read(cx).capture_layout(None, cx));
+    let json = serde_json::to_string(&layout).unwrap();
+    assert!(json.contains("\"name\":\"build\""), "{json}");
 }

@@ -28,7 +28,7 @@ use super::{
 };
 pub(crate) use knot_model::workbench::{Arrangement, PlanNode, Rect, ToolArrangement};
 
-pub(crate) const WINDOW_LAYOUT_VERSION: u32 = 3;
+pub(crate) const WINDOW_LAYOUT_VERSION: u32 = 4;
 
 /// Maps a document tab's identity and URI to a live document.
 type Resolve<'a, D> = dyn FnMut(Option<&str>, Option<&str>) -> Option<D> + 'a;
@@ -104,6 +104,9 @@ pub(crate) enum LayoutTab {
         /// The shell's working directory as a file URI.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         directory: Option<String>,
+        /// The label its tab shows.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        name: Option<String>,
         #[serde(default, skip_serializing_if = "is_false")]
         pinned: bool,
     },
@@ -204,14 +207,14 @@ impl WindowLayout {
         workbench: &Workbench,
         geometry: Option<WindowGeometry>,
         documents: &DocumentCollection,
-        terminal_directory: &dyn Fn(TerminalSessionId) -> Option<std::path::PathBuf>,
+        terminal_directory: &dyn Fn(TerminalSessionId) -> TerminalFacts,
         cx: &App,
     ) -> Self {
         fn node(
             layout: &WorkbenchLayout,
             workbench: &Workbench,
             documents: &DocumentCollection,
-            terminal_directory: &dyn Fn(TerminalSessionId) -> Option<std::path::PathBuf>,
+            terminal_directory: &dyn Fn(TerminalSessionId) -> TerminalFacts,
             cx: &App,
         ) -> LayoutNode {
             match layout {
@@ -304,7 +307,7 @@ impl WindowLayout {
         workbench: &Workbench,
         tab: &WorkbenchTab,
         documents: &DocumentCollection,
-        terminal_directory: &dyn Fn(TerminalSessionId) -> Option<std::path::PathBuf>,
+        terminal_directory: &dyn Fn(TerminalSessionId) -> TerminalFacts,
         cx: &App,
     ) -> Option<LayoutTab> {
         Some(match tab.surface_id() {
@@ -328,12 +331,17 @@ impl WindowLayout {
                 }
             }
             TabSurfaceId::Tool(_) => return None,
-            TabSurfaceId::Terminal(id) => LayoutTab::Terminal {
-                directory: terminal_directory(id)
-                    .and_then(|path| url::Url::from_directory_path(path).ok())
-                    .map(String::from),
-                pinned: tab.is_pinned(),
-            },
+            TabSurfaceId::Terminal(id) => {
+                let facts = terminal_directory(id);
+                LayoutTab::Terminal {
+                    directory: facts
+                        .directory
+                        .and_then(|path| url::Url::from_directory_path(path).ok())
+                        .map(String::from),
+                    name: facts.name,
+                    pinned: tab.is_pinned(),
+                }
+            }
         })
     }
 
@@ -417,11 +425,14 @@ impl WindowLayout {
                                     view: view.clone(),
                                     language: language.clone(),
                                 }),
-                            LayoutTab::Terminal { directory, .. } => Some(PlannedTab::Terminal {
+                            LayoutTab::Terminal {
+                                directory, name, ..
+                            } => Some(PlannedTab::Terminal {
                                 directory: directory
                                     .as_deref()
                                     .and_then(|uri| url::Url::parse(uri).ok())
                                     .and_then(|url| url.to_file_path().ok()),
+                                name: name.clone(),
                             }),
                         };
                         if let Some(kept) = kept {
@@ -512,7 +523,15 @@ pub(crate) enum PlannedTab<D> {
     /// A fresh shell, started in `directory` when it still exists.
     Terminal {
         directory: Option<std::path::PathBuf>,
+        /// The label its tab shows, when recorded.
+        name: Option<String>,
     },
+}
+
+/// What a window layout records of a terminal session.
+pub(crate) struct TerminalFacts {
+    pub(crate) directory: Option<std::path::PathBuf>,
+    pub(crate) name: Option<String>,
 }
 
 /// A connected display: its persisted identity and logical bounds.
@@ -603,7 +622,7 @@ mod tests {
         focused: Option<usize>,
     ) -> WindowLayout {
         WindowLayout::decode(&json!({
-            "version": 3,
+            "version": 4,
             "geometry": null,
             "center": center,
             "tools": tools,
@@ -712,10 +731,10 @@ mod tests {
             json!({ "version": 2, "root": null, "focused": null, "geometry": null,
                     "docks": { "left": { "size": 240, "visible": true, "root": null } } }),
             json!("layout"),
-            json!({ "version": 3, "center": { "kind": "window" }, "focused": null,
+            json!({ "version": 4, "center": { "kind": "window" }, "focused": null,
                     "geometry": null, "tools": [] }),
-            json!({ "version": 3, "center": null, "focused": null, "geometry": null }),
-            json!({ "version": 3, "center": null, "focused": null, "tools": [],
+            json!({ "version": 4, "center": null, "focused": null, "geometry": null }),
+            json!({ "version": 4, "center": null, "focused": null, "tools": [],
                     "geometry": { "x": 0, "y": 0, "width": 0, "height": 10,
                                   "state": "windowed", "display": null } }),
             infinite,
@@ -735,7 +754,7 @@ mod tests {
                   "language": "rust",
                   "view": { "anchor": 0, "caret": 0, "top": 0, "scrollX": 0 } },
                 { "kind": "terminal" },
-                { "kind": "terminal", "directory": "file:///work/" },
+                { "kind": "terminal", "directory": "file:///work/", "name": "build" },
                 { "kind": "terminal", "directory": "not a uri" },
             ] }),
             json!([
@@ -775,14 +794,21 @@ mod tests {
                         view: view(0),
                         language: Some("rust".into()),
                     },
-                    PlannedTab::Terminal { directory: None },
+                    PlannedTab::Terminal {
+                        directory: None,
+                        name: None
+                    },
                     PlannedTab::Terminal {
                         directory: url::Url::parse("file:///work/")
                             .unwrap()
                             .to_file_path()
                             .ok(),
+                        name: Some("build".into()),
                     },
-                    PlannedTab::Terminal { directory: None },
+                    PlannedTab::Terminal {
+                        directory: None,
+                        name: None
+                    },
                 ],
             })
         );
@@ -804,7 +830,10 @@ mod tests {
                         // Focus counts panes across the center and containers.
                         focused: true,
                         pinned: 0,
-                        tabs: vec![PlannedTab::Terminal { directory: None }],
+                        tabs: vec![PlannedTab::Terminal {
+                            directory: None,
+                            name: None
+                        }],
                     })
                 ),
             ]
@@ -837,7 +866,13 @@ mod tests {
             panic!("expected a pane");
         };
         assert_eq!(pinned, 2);
-        assert_eq!(tabs[0], PlannedTab::Terminal { directory: None });
+        assert_eq!(
+            tabs[0],
+            PlannedTab::Terminal {
+                directory: None,
+                name: None
+            }
+        );
         assert!(matches!(tabs[1], PlannedTab::Document { document: 2, .. }));
         assert!(matches!(tabs[2], PlannedTab::Document { document: 1, .. }));
         // The selected tab was pruned, so the first kept tab is selected.

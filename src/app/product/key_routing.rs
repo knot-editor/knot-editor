@@ -105,7 +105,40 @@ impl KnotWindow {
         if self.focus == Focus::Popup {
             return false;
         }
-        self.deliver_key(&keystroke, cx)
+        let escape = keystroke.key == "escape" && !keystroke.modifiers.modified();
+        let in_tool = escape && self.focus == Focus::Workbench && self.focused_tool_view(cx);
+        let terminal = matches!(
+            self.focused_command_view(cx),
+            Some(CommandView::Terminal(_))
+        );
+        if in_tool && terminal && crate::app::settings::terminal_escape_to_editor(cx) {
+            return self.focus_editor_from_tool(cx);
+        }
+        let delivered = self.deliver_key(&keystroke, cx);
+        if in_tool && !terminal && !delivered {
+            return self.focus_editor_from_tool(cx);
+        }
+        delivered
+    }
+
+    /// Whether the focused pane belongs to a tool window.
+    fn focused_tool_view(&self, cx: &App) -> bool {
+        let workbench = self.workbench.read(cx);
+        workbench
+            .focused_pane_id()
+            .is_some_and(|pane| workbench.pane_tool(pane).is_some())
+    }
+
+    /// Focus the editor and leave the tool window shown.
+    fn focus_editor_from_tool(&mut self, cx: &mut Context<Self>) -> bool {
+        let Some(pane) = self.workbench.read(cx).center_pane() else {
+            return false;
+        };
+        self.workbench
+            .update(cx, |workbench, _| workbench.focus_pane(pane));
+        self.focus_active_surface(cx);
+        cx.notify();
+        true
     }
 
     /// Press a key in a window without a native window, as `key_down` takes it,

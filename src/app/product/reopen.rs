@@ -32,7 +32,7 @@ impl KnotWindow {
             workbench,
             &group.tabs()[index],
             Self::documents(cx).read(cx),
-            &|id| Self::terminal_session_directory(id, cx),
+            &|id| Self::terminal_facts(id, cx),
             cx,
         ) else {
             return;
@@ -57,7 +57,11 @@ impl KnotWindow {
         let closed = self.closed_tabs.pop().ok_or(CommandOutcome::Unavailable)?;
         let ClosedTab { tab, pane, index } = closed;
         match tab {
-            LayoutTab::Terminal { directory, pinned } => {
+            LayoutTab::Terminal {
+                directory,
+                name,
+                pinned,
+            } => {
                 let directory = directory
                     .and_then(|uri| url::Url::parse(&uri).ok())
                     .and_then(|url| url.to_file_path().ok())
@@ -66,6 +70,9 @@ impl KnotWindow {
                     Some(directory) => self.create_terminal_in(Some(directory), cx),
                     None => self.create_terminal(cx),
                 };
+                if let Some(name) = name {
+                    Self::set_terminal_name(id, name, cx);
+                }
                 self.install_reopened(
                     pane,
                     index,

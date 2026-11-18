@@ -429,6 +429,34 @@ pub(crate) fn dispatch_close_to_captured_target(
     Ok(())
 }
 
+/// The generated command that toggles the tool window of view `id`.
+pub(crate) fn tool_toggle_command(id: &str) -> String {
+    format!("{id}.toggle")
+}
+
+/// Run a generated Toggle <Tool> command on the target's window.
+fn claim_tool_toggle(
+    command: &Command,
+    target: &ProductCommandTarget,
+    cx: &mut App,
+) -> CommandClaim {
+    let Some(stable_id) = command.name.as_ref().strip_suffix(".toggle") else {
+        return CommandClaim::Declined;
+    };
+    let Some(window) = target.window(cx) else {
+        return CommandClaim::Declined;
+    };
+    let known = target
+        .workbench
+        .upgrade()
+        .is_some_and(|workbench| workbench.read(cx).tool_by_stable_id(stable_id).is_some());
+    if !known {
+        return CommandClaim::Declined;
+    }
+    window.update(cx, |window, cx| window.toggle_tool(stable_id, cx));
+    CommandClaim::Finished(CommandOutcome::Completed)
+}
+
 pub(crate) fn dispatch_to_captured_target(
     command: &Command,
     target: &ProductCommandTarget,
@@ -482,6 +510,10 @@ pub(crate) fn dispatch_to_captured_target(
         completion,
         cx,
     );
+    if !matches!(result, CommandClaim::Declined) {
+        return result;
+    }
+    let result = claim_tool_toggle(command, target, cx);
     if !matches!(result, CommandClaim::Declined) {
         return result;
     }

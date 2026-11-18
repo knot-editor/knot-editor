@@ -6,10 +6,11 @@ use crate::app::context_menu::ContextMenu;
 use crate::app::convert::ThemePaint as _;
 use crate::app::theme::{chrome, color, theme};
 use crate::app::tokens;
-use crate::app::workbench::{Slot, StripeClick, Stripes};
+use crate::app::workbench::{Slot, SplitEdge, StripeClick, Stripes};
 use crate::app::zoom;
 use gpui_component::menu::PopupMenuItem;
 use knot_model::icons::IconDefinition;
+use knot_model::workbench::TabKind;
 
 /// A stripe button being dragged to another stripe.
 #[derive(Clone)]
@@ -371,6 +372,18 @@ impl KnotWindow {
             return;
         };
         let (visible, current) = (workbench.tool_visible(id), tool.slot());
+        let side = current.side();
+        // The terminal tab a header menu can send to the editor.
+        let terminal = (!with_hide)
+            .then(|| {
+                let pane = workbench
+                    .focused_pane_id()
+                    .filter(|pane| workbench.pane_tool(*pane) == Some(id))
+                    .or_else(|| workbench.area_panes(Area::Tool(id)).first().copied())?;
+                let tab = workbench.pane(pane)?.active_tab();
+                (tab.surface_id().kind() == TabKind::Terminal).then(|| (pane, tab.id()))
+            })
+            .flatten();
         let window = cx.entity().downgrade();
         let menu = ContextMenu::open(
             native_window,
@@ -385,6 +398,16 @@ impl KnotWindow {
                         let _ = window.update(cx, |this, cx| this.click_stripe_button(id, cx));
                     }));
                 }
+                if let Some((pane, tab)) = terminal {
+                    let window = window.clone();
+                    items.push(
+                        PopupMenuItem::new("Move to Editor").on_click(move |_, _, cx| {
+                            let _ = window.update(cx, |this, cx| {
+                                let _ = this.move_tab_to_area(pane, tab, Area::Center, cx);
+                            });
+                        }),
+                    );
+                }
                 for slot in Slot::ALL.into_iter().filter(|slot| *slot != current) {
                     let window = window.clone();
                     items.push(
@@ -395,6 +418,24 @@ impl KnotWindow {
                             },
                         ),
                     );
+                }
+                let edges = match side {
+                    DockLocation::Bottom => {
+                        [(SplitEdge::Top, "Top"), (SplitEdge::Bottom, "Bottom")]
+                    }
+                    DockLocation::Left | DockLocation::Right => {
+                        [(SplitEdge::Left, "Left"), (SplitEdge::Right, "Right")]
+                    }
+                };
+                for (edge, name) in edges {
+                    let window = window.clone();
+                    items.push(PopupMenuItem::new(format!("Stretch to {name}")).on_click(
+                        move |_, _, cx| {
+                            let _ = window.update(cx, |this, cx| {
+                                let _ = this.stretch_tool_from_menu(id, edge, cx);
+                            });
+                        },
+                    ));
                 }
                 let window = window.clone();
                 items.push(

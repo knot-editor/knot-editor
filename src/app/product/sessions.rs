@@ -702,7 +702,7 @@ impl KnotWindow {
             self.workbench.read(cx),
             window.map(|window| window_geometry(window, cx)),
             Self::documents(cx).read(cx),
-            &|id| Self::terminal_session_directory(id, cx),
+            &|id| Self::terminal_facts(id, cx),
             cx,
         )
     }
@@ -721,7 +721,7 @@ impl KnotWindow {
             window.workbench.read(cx),
             geometry,
             Self::documents(cx).read(cx),
-            &|id| Self::terminal_session_directory(id, cx),
+            &|id| Self::terminal_facts(id, cx),
             cx,
         )
     }
@@ -798,11 +798,14 @@ impl KnotWindow {
                         view,
                     }
                 }
-                PlannedTab::Terminal { directory } => {
+                PlannedTab::Terminal { directory, name } => {
                     let (id, view) = match directory.filter(|directory| directory.is_dir()) {
                         Some(directory) => self.create_terminal_in(Some(directory), cx),
                         None => self.create_terminal(cx),
                     };
+                    if let Some(name) = name {
+                        Self::set_terminal_name(id, name, cx);
+                    }
                     ArrangedTab::Terminal(id, Some(view))
                 }
             })

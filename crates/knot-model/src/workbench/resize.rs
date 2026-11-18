@@ -50,7 +50,7 @@ impl BottomDockLayout {
 /// The share of a split's extent that one grow or shrink moves.
 const RESIZE_STEP: f32 = 0.05;
 /// Logical pixels that one grow or shrink adds to or removes from a dock.
-const DOCK_RESIZE_STEP: f32 = 40.;
+pub(super) const DOCK_RESIZE_STEP: f32 = 40.;
 
 fn find_split(layout: &WorkbenchLayout, boundary: PaneId) -> Option<&WorkbenchLayout> {
     if layout.boundary() == Some(boundary) {

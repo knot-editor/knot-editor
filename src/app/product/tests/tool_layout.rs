@@ -42,6 +42,21 @@ fn click_explorer(window: &Entity<KnotWindow>, cx: &mut TestAppContext) {
     });
 }
 
+fn toggle_explorer(window: &Entity<KnotWindow>, cx: &mut TestAppContext) {
+    let stable_id = cx.read(|cx| {
+        let id = explorer_id(window, cx);
+        window
+            .read(cx)
+            .workbench
+            .read(cx)
+            .tool(id)
+            .unwrap()
+            .stable_id
+            .clone()
+    });
+    window.update(cx, |window, cx| window.toggle_tool(&stable_id, cx));
+}
+
 fn open_workspace(window: &Entity<KnotWindow>, cx: &mut TestAppContext) {
     cx.set_global(ApplicationFileSystems(memory_filesystems()));
     window.update(cx, |window, cx| {
@@ -160,15 +175,13 @@ fn document_splits_and_side_toggles_reach_fresh_windows_only_as_tool_state(
 
     // The unfocused side takes focus, then hides back to the center.
     let center = cx.read(|cx| window.read(cx).workbench.read(cx).focused_pane_id());
-    let toggle = dispatch_product_command(&window, native_window, "workbench.toggle-left-dock", cx);
-    assert_eq!(wait_for_command(toggle, cx), CommandOutcome::Completed);
+    toggle_explorer(&window, cx);
     cx.read(|cx| {
         let workbench = window.read(cx).workbench.read(cx);
         let (pane, _) = workbench.tool_tab(explorer_id(&window, cx)).unwrap();
         assert_eq!(workbench.focused_pane_id(), Some(pane));
     });
-    let toggle = dispatch_product_command(&window, native_window, "workbench.toggle-left-dock", cx);
-    assert_eq!(wait_for_command(toggle, cx), CommandOutcome::Completed);
+    toggle_explorer(&window, cx);
     assert_eq!(
         cx.read(|cx| window.read(cx).workbench.read(cx).focused_pane_id()),
         center
@@ -182,9 +195,8 @@ fn document_splits_and_side_toggles_reach_fresh_windows_only_as_tool_state(
         assert!(matches!(workbench.center(), Some(WorkbenchLayout::Pane(_))));
     });
     assert!(!explorer_state(&fresh, cx).0);
-    // Toggling the side again shows the window it showed last.
-    let toggle = dispatch_product_command(&window, native_window, "workbench.toggle-left-dock", cx);
-    assert_eq!(wait_for_command(toggle, cx), CommandOutcome::Completed);
+    // Toggling the window again shows it.
+    toggle_explorer(&window, cx);
     assert!(explorer_state(&window, cx).0);
 }
 
@@ -283,7 +295,7 @@ fn fresh_window_with_hidden_tool_restores_nothing(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn move_tab_to_center_follows_the_kind(cx: &mut TestAppContext) {
+fn open_as_editor_tab_follows_the_kind(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
     let (window, native_window) = empty_headless_window(&documents, cx);
     let run = |name: &'static str, cx: &mut TestAppContext| {
@@ -294,7 +306,7 @@ fn move_tab_to_center_follows_the_kind(cx: &mut TestAppContext) {
     };
     // A document stays in the center, and the dock moves are gone.
     assert_eq!(
-        run("workbench.move-tab-to-center", cx),
+        run("workbench.open-as-editor-tab", cx),
         CommandOutcome::Unavailable
     );
     for name in [
@@ -315,7 +327,7 @@ fn move_tab_to_center_follows_the_kind(cx: &mut TestAppContext) {
         });
     });
     assert_eq!(
-        run("workbench.move-tab-to-center", cx),
+        run("workbench.open-as-editor-tab", cx),
         CommandOutcome::Unavailable
     );
     assert_eq!(stored(cx), published);

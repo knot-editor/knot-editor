@@ -20,12 +20,17 @@ pub(crate) const GO_TO_LINE_COMMAND: &str = "editor.go-to-line";
 pub(crate) const GO_TO_FILE_COMMAND: &str = "workspace.go-to-file";
 pub(crate) const GO_TO_BUFFER_COMMAND: &str = "workspace.go-to-buffer";
 pub(crate) const OPEN_RECENT_COMMAND: &str = "workspace.open-recent";
+/// The generated Toggle <Tool> commands the Knot preset binds.
+pub(crate) const TOGGLE_EXPLORER_COMMAND: &str = "builtin.explorer.toggle";
+pub(crate) const TOGGLE_NOTIFICATIONS_COMMAND: &str = "builtin.notifications.toggle";
 pub(crate) const FIND_COMMAND: &str = "editor.find";
 pub(crate) const REPLACE_COMMAND: &str = "editor.replace";
 pub(crate) const FIND_NEXT_COMMAND: &str = "editor.find-next";
 pub(crate) const FIND_PREVIOUS_COMMAND: &str = "editor.find-previous";
 #[cfg(test)]
 pub(crate) const BUNDLED_PACKAGE_COMMANDS: &[&str] = &[
+    TOGGLE_EXPLORER_COMMAND,
+    TOGGLE_NOTIFICATIONS_COMMAND,
     GO_TO_LINE_COMMAND,
     GO_TO_FILE_COMMAND,
     GO_TO_BUFFER_COMMAND,
@@ -210,9 +215,9 @@ const SHARED_BINDINGS: &[PresetEntry] = &[
     ("ctrl-shift-`", NEW_TERMINAL_COMMAND, None),
     // Keyboards report the shifted backtick as `~`.
     ("ctrl-~", NEW_TERMINAL_COMMAND, None),
-    ("secondary-b", TOGGLE_LEFT_DOCK_COMMAND, None),
-    ("secondary-alt-b", TOGGLE_RIGHT_DOCK_COMMAND, None),
-    ("secondary-j", TOGGLE_BOTTOM_DOCK_COMMAND, None),
+    ("secondary-b", TOGGLE_EXPLORER_COMMAND, None),
+    ("secondary-alt-b", TOGGLE_NOTIFICATIONS_COMMAND, None),
+    ("secondary-j", TOGGLE_TERMINAL_COMMAND, None),
     ("ctrl-tab", NEXT_RECENT_TAB_COMMAND, None),
     ("ctrl-shift-tab", PREVIOUS_RECENT_TAB_COMMAND, None),
     ("secondary-shift-t", REOPEN_CLOSED_TAB_COMMAND, None),

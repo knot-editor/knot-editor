@@ -290,15 +290,6 @@ impl KnotWindow {
         cx.notify();
     }
 
-    /// Toggle a side (see [`Workbench::toggle_side`]).
-    pub(super) fn toggle_side(&mut self, side: DockLocation, cx: &mut Context<Self>) {
-        self.workbench
-            .update(cx, |workbench, _| workbench.toggle_side(side));
-        self.publish_tool_layout(cx);
-        self.focus_active_surface(cx);
-        cx.notify();
-    }
-
     pub(super) fn install_workspace(
         &mut self,
         root: crate::app::resource::ResourceUri,

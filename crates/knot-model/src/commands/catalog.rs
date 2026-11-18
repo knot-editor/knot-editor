@@ -256,6 +256,17 @@ impl CommandCatalog {
         Ok(())
     }
 
+    /// Remove a native command registered at runtime.
+    pub fn unregister_native(&mut self, name: &str) {
+        if self
+            .by_name
+            .get(name)
+            .is_some_and(|entry| entry.definition.owner == CommandOwner::Native)
+        {
+            self.by_name.remove(name);
+        }
+    }
+
     pub fn definitions(&self) -> impl Iterator<Item = &CommandDefinition> {
         self.by_name.values().map(|entry| &entry.definition)
     }

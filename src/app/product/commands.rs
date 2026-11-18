@@ -1,7 +1,7 @@
 //! Workbench and application command declarations.
 use super::*;
 use crate::app::commands::declarations::{CommandContext, command};
-use crate::app::workbench::{PaneId, SplitDirection, SplitEdge, Workbench};
+use crate::app::workbench::{PaneId, Slot, SplitDirection, SplitEdge, Workbench};
 use knot_protocol::{CommandArgumentValue, CommandOutcome};
 
 #[command("file.new", title = "New Document", description = "Open an untitled document.", id = NEW_COMMAND, participant = Workbench)]
@@ -27,7 +27,7 @@ pub(crate) async fn new(context: CommandContext, (): ()) -> Result<(), CommandOu
 #[cfg(not(test))]
 pub(crate) const NEW_TERMINAL_COMMAND: &str = "terminal.new";
 #[cfg(not(test))]
-pub(crate) const TOGGLE_TERMINAL_COMMAND: &str = "terminal.toggle";
+pub(crate) const TOGGLE_TERMINAL_COMMAND: &str = "builtin.terminal.toggle";
 
 /// Stand-ins for chrome's terminal commands in the tests of this crate, which
 /// load no packages: they open in the test Terminal container, in the
@@ -76,7 +76,7 @@ pub(crate) async fn new_terminal_in_center(
 }
 
 #[cfg(test)]
-#[command("terminal.toggle", title = "Toggle Terminal", description = "Toggle the Terminal window.", id = TOGGLE_TERMINAL_COMMAND, participant = Workbench)]
+#[command("builtin.terminal.toggle", title = "Toggle Terminal", description = "Toggle the Terminal window.", id = TOGGLE_TERMINAL_COMMAND, participant = Workbench)]
 pub(crate) async fn toggle_terminal(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
     context
         .window(|window, _, cx| {
@@ -1001,42 +1001,155 @@ pub(crate) async fn add_folder(context: CommandContext, (): ()) -> Result<(), Co
         .await
 }
 
-macro_rules! toggle_dock {
-    ($($name:literal, $title:literal, $description:literal, $id:ident, $function:ident, $dock:expr;)*) => {$(
+#[command("workbench.hide-active-tool", title = "Hide Active Tool Window", description = "Hide the focused tool window, or the one used last.", id = HIDE_ACTIVE_TOOL_COMMAND, participant = Workbench)]
+pub(crate) async fn hide_active_tool(
+    context: CommandContext,
+    (): (),
+) -> Result<(), CommandOutcome> {
+    context
+        .window(|window, target, cx| window.hide_active_tool(target.tab.map(|tab| tab.pane), cx))
+        .await
+}
+
+#[command("workbench.jump-to-last-tool", title = "Jump to Last Tool Window", description = "Show and focus the tool window used before this one.", id = JUMP_TO_LAST_TOOL_COMMAND, participant = Workbench)]
+pub(crate) async fn jump_to_last_tool(
+    context: CommandContext,
+    (): (),
+) -> Result<(), CommandOutcome> {
+    context
+        .window(|window, _, cx| window.jump_to_last_tool(cx))
+        .await
+}
+
+#[command("workbench.hide-all-tools", title = "Hide All Tool Windows", description = "Hide every tool window, or show the ones hidden last.", id = HIDE_ALL_TOOLS_COMMAND, participant = Workbench)]
+pub(crate) async fn hide_all_tools(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
+    context
+        .window(|window, _, cx| window.hide_all_tools(cx))
+        .await
+}
+
+#[command("workbench.maximize-tool", title = "Maximize Tool Window", description = "Show only the focused tool window, or the whole layout again.", id = MAXIMIZE_TOOL_COMMAND, participant = Workbench)]
+pub(crate) async fn maximize_tool(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
+    context
+        .window(|window, target, cx| window.maximize_active_tool(target.tab()?.pane, cx))
+        .await
+}
+
+macro_rules! stretch_tool {
+    ($($name:literal, $title:literal, $description:literal, $id:ident, $function:ident, $edge:expr;)*) => {$(
         #[command($name, title = $title, description = $description, id = $id, participant = Workbench)]
         pub(crate) async fn $function(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
             context
-                .window(|window, _, cx| {
-                    window.toggle_side($dock, cx);
-                    Ok(())
+                .window(|window, target, cx| {
+                    window.stretch_active_tool(target.tab.map(|tab| tab.pane), $edge, cx)
                 })
                 .await
         }
     )*};
 }
 
-toggle_dock! {
-    "workbench.toggle-left-dock", "Toggle Left Dock", "Show and focus the left dock, or hide it when focused.", TOGGLE_LEFT_DOCK_COMMAND, toggle_left_dock, DockLocation::Left;
-    "workbench.toggle-right-dock", "Toggle Right Dock", "Show and focus the right dock, or hide it when focused.", TOGGLE_RIGHT_DOCK_COMMAND, toggle_right_dock, DockLocation::Right;
-    "workbench.toggle-bottom-dock", "Toggle Bottom Dock", "Show and focus the bottom dock, or hide it when focused.", TOGGLE_BOTTOM_DOCK_COMMAND, toggle_bottom_dock, DockLocation::Bottom;
+stretch_tool! {
+    "workbench.stretch-left", "Stretch to Left", "Move the tool window's edge left.", STRETCH_LEFT_COMMAND, stretch_left, SplitEdge::Left;
+    "workbench.stretch-right", "Stretch to Right", "Move the tool window's edge right.", STRETCH_RIGHT_COMMAND, stretch_right, SplitEdge::Right;
+    "workbench.stretch-top", "Stretch to Top", "Move the tool window's edge up.", STRETCH_TOP_COMMAND, stretch_top, SplitEdge::Top;
+    "workbench.stretch-bottom", "Stretch to Bottom", "Move the tool window's edge down.", STRETCH_BOTTOM_COMMAND, stretch_bottom, SplitEdge::Bottom;
 }
 
-macro_rules! move_tab_to_area {
-    ($($name:literal, $title:literal, $description:literal, $id:ident, $function:ident, $area:expr;)*) => {$(
+macro_rules! move_tool_to_slot {
+    ($($name:literal, $title:literal, $id:ident, $function:ident, $slot:expr;)*) => {$(
+        #[command($name, title = $title, description = "Move the tool window to another slot.", id = $id, participant = Workbench)]
+        pub(crate) async fn $function(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
+            context
+                .window(|window, target, cx| {
+                    window.move_active_tool(target.tab.map(|tab| tab.pane), $slot, cx)
+                })
+                .await
+        }
+    )*};
+}
+
+move_tool_to_slot! {
+    "workbench.move-tool-to-left-top", "Move to Left Top", MOVE_TOOL_TO_LEFT_TOP_COMMAND, move_tool_to_left_top, Slot::LeftTop;
+    "workbench.move-tool-to-left-bottom", "Move to Left Bottom", MOVE_TOOL_TO_LEFT_BOTTOM_COMMAND, move_tool_to_left_bottom, Slot::LeftBottom;
+    "workbench.move-tool-to-right-top", "Move to Right Top", MOVE_TOOL_TO_RIGHT_TOP_COMMAND, move_tool_to_right_top, Slot::RightTop;
+    "workbench.move-tool-to-right-bottom", "Move to Right Bottom", MOVE_TOOL_TO_RIGHT_BOTTOM_COMMAND, move_tool_to_right_bottom, Slot::RightBottom;
+    "workbench.move-tool-to-bottom-left", "Move to Bottom Left", MOVE_TOOL_TO_BOTTOM_LEFT_COMMAND, move_tool_to_bottom_left, Slot::BottomLeft;
+    "workbench.move-tool-to-bottom-right", "Move to Bottom Right", MOVE_TOOL_TO_BOTTOM_RIGHT_COMMAND, move_tool_to_bottom_right, Slot::BottomRight;
+}
+
+#[command("workbench.open-as-editor-tab", title = "Open as Editor Tab", description = "Move the focused terminal tab to the editor.", id = OPEN_AS_EDITOR_TAB_COMMAND, participant = Workbench)]
+pub(crate) async fn open_as_editor_tab(
+    context: CommandContext,
+    (): (),
+) -> Result<(), CommandOutcome> {
+    context
+        .window(|window, target, cx| {
+            let tab = target.tab()?;
+            window.move_tab_to_area(tab.pane, tab.tab, Area::Center, cx)
+        })
+        .await
+}
+
+#[command("workbench.return-to-tool-window", title = "Return to Tool Window", description = "Move the focused terminal tab back to its tool window.", id = RETURN_TO_TOOL_WINDOW_COMMAND, participant = Workbench)]
+pub(crate) async fn return_to_tool_window(
+    context: CommandContext,
+    (): (),
+) -> Result<(), CommandOutcome> {
+    context
+        .window(|window, target, cx| {
+            let tab = target.tab()?;
+            window.return_to_tool_window(tab.pane, tab.tab, cx)
+        })
+        .await
+}
+
+macro_rules! split_and_move {
+    ($($name:literal, $title:literal, $description:literal, $id:ident, $function:ident, $edge:expr;)*) => {$(
         #[command($name, title = $title, description = $description, id = $id, participant = Workbench)]
         pub(crate) async fn $function(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
             context
                 .window(|window, target, cx| {
                     let tab = target.tab()?;
-                    window.move_tab_to_area(tab.pane, tab.tab, $area, cx)
+                    window.split_and_move(tab.pane, tab.tab, $edge, cx)
                 })
                 .await
         }
     )*};
 }
 
-move_tab_to_area! {
-    "workbench.move-tab-to-center", "Move Tab to Center", "Move the focused tab to the center.", MOVE_TAB_TO_CENTER_COMMAND, move_tab_to_center, Area::Center;
+split_and_move! {
+    "workbench.split-and-move-right", "Split and Move Right", "Move the focused tab into a new pane on the right.", SPLIT_AND_MOVE_RIGHT_COMMAND, split_and_move_right, SplitEdge::Right;
+    "workbench.split-and-move-down", "Split and Move Down", "Move the focused tab into a new pane below.", SPLIT_AND_MOVE_DOWN_COMMAND, split_and_move_down, SplitEdge::Bottom;
+}
+
+#[command("workbench.unsplit", title = "Unsplit", description = "Merge the panes of the focused pane's area into it.", id = UNSPLIT_COMMAND, participant = Workbench)]
+pub(crate) async fn unsplit(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
+    context
+        .window(|window, target, cx| window.unsplit_pane(target.tab()?.pane, cx))
+        .await
+}
+
+#[command("workbench.next-splitter", title = "Go to Next Splitter", description = "Focus the next pane of the focused pane's area, wrapping.", id = NEXT_SPLITTER_COMMAND, participant = Workbench)]
+pub(crate) async fn next_splitter(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
+    focus_chosen(context, |workbench| workbench.cycle_pane_id(true)).await
+}
+
+#[command("workbench.previous-splitter", title = "Go to Previous Splitter", description = "Focus the previous pane of the focused pane's area, wrapping.", id = PREVIOUS_SPLITTER_COMMAND, participant = Workbench)]
+pub(crate) async fn previous_splitter(
+    context: CommandContext,
+    (): (),
+) -> Result<(), CommandOutcome> {
+    focus_chosen(context, |workbench| workbench.cycle_pane_id(false)).await
+}
+
+#[command("terminal.rename-session", title = "Rename Session", description = "Change the label of the focused terminal tab.", id = RENAME_SESSION_COMMAND, participant = Workbench)]
+pub(crate) async fn rename_session(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
+    context
+        .window(|window, target, cx| {
+            let tab = target.tab()?;
+            window.start_rename_session(tab.pane, tab.tab, cx)
+        })
+        .await
 }
 
 #[command("workbench.reset-layout", title = "Reset Layout", description = "Return docks and tools to their default arrangement.", id = RESET_LAYOUT_COMMAND, participant = Workbench)]

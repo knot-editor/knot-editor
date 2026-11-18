@@ -42,6 +42,7 @@ mod show_keybindings;
 mod stripes;
 pub(crate) mod surface_menu;
 mod tab_drag;
+mod tool_commands;
 mod tool_picker;
 mod tools;
 mod view_state;
@@ -1118,6 +1119,27 @@ impl KnotWindow {
             .map(|session| session.read(cx).name().to_owned())
     }
 
+    /// Label a terminal session's tab.
+    fn set_terminal_name(id: TerminalSessionId, name: String, cx: &mut App) {
+        let session = cx
+            .global::<ApplicationTerminalSessions>()
+            .0
+            .borrow()
+            .sessions
+            .get(&id)
+            .cloned();
+        if let Some(session) = session {
+            session.update(cx, |session, _| session.set_name(name));
+        }
+    }
+
+    fn terminal_facts(id: TerminalSessionId, cx: &App) -> crate::app::window_layout::TerminalFacts {
+        crate::app::window_layout::TerminalFacts {
+            directory: Self::terminal_session_directory(id, cx),
+            name: Self::terminal_session_name(id, cx),
+        }
+    }
+
     fn terminal_session_directory(id: TerminalSessionId, cx: &App) -> Option<std::path::PathBuf> {
         let sessions = cx.global::<ApplicationTerminalSessions>().0.borrow();
         sessions
@@ -1875,6 +1897,23 @@ impl KnotWindow {
         ),
         TransientError,
     > {
+        self.begin_owned_input(Some(owner), spec, changes, cx)
+    }
+
+    /// Present an input, owned by an extension or by the application.
+    pub(crate) fn begin_owned_input(
+        &mut self,
+        owner: Option<TransientOwner>,
+        spec: InputSpec,
+        changes: Option<tokio::sync::watch::Sender<Option<String>>>,
+        cx: &mut Context<Self>,
+    ) -> Result<
+        (
+            tokio::sync::oneshot::Receiver<TransientOutcome>,
+            WeakEntity<InputView>,
+        ),
+        TransientError,
+    > {
         self.transient_slot_free()?;
         let restore_focus = self.focus;
         let view = cx.new(|cx| InputView::new(spec, changes, cx));
@@ -1893,7 +1932,7 @@ impl KnotWindow {
         });
         let (completion, receiver) = tokio::sync::oneshot::channel();
         self.transient = Some(ActiveTransient {
-            owner: Some(owner),
+            owner,
             surface: Some(TransientSurface::Input(view)),
             focus: Some(focus),
             completion: Some(completion),
