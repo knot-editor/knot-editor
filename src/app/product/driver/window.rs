@@ -509,13 +509,6 @@ impl TestWindow {
         cx.run_until_parked();
     }
 
-    /// Lay out the tools as a fresh window does, from the stored layout.
-    pub fn restore_fresh_layout(&self, cx: &mut TestAppContext) {
-        self.window
-            .update(cx, |window, cx| window.restore_fresh_window_layout(cx));
-        cx.run_until_parked();
-    }
-
     /// The tree contributed as view `id`, waiting until it attaches.
     pub fn tree(&self, id: &str, cx: &mut TestAppContext) -> TestTree {
         let mut tree = None;

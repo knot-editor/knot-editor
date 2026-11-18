@@ -641,6 +641,9 @@ pub(crate) struct KnotWindow {
     notices: notifications::NoticePopups,
     application_focus: Vec<(FocusHandle, Subscription, Subscription)>,
     contributed_views: BTreeMap<String, ContributedView>,
+    /// The container tool windows contributed by extensions, by stable ID,
+    /// with the command that opens a tab in each.
+    contributed_containers: BTreeMap<String, Option<String>>,
     _contributed_view_release: Option<Subscription>,
     _window_closed: Option<Subscription>,
     _extension_host_release: Option<Subscription>,
@@ -770,13 +773,18 @@ impl KnotWindow {
         cx.global::<ApplicationWindows>()
             .register(cx.weak_entity(), &workbench);
         document_watch::install(cx);
-        workbench.update(cx, |workbench, _| {
-            workbench.register_container(
-                crate::app::terminal::TERMINAL_TOOL_ID,
-                "Terminal",
-                crate::app::terminal::TERMINAL_SLOT,
-            );
-        });
+        #[cfg(test)]
+        {
+            let stored = Self::stored_tool_layout(cx);
+            workbench.update(cx, |workbench, _| {
+                let id = workbench.register_container(
+                    crate::app::terminal::TERMINAL_TOOL_ID,
+                    "Terminal",
+                    crate::app::terminal::TERMINAL_SLOT,
+                );
+                workbench.place_registered_tool(id, stored.as_ref(), false);
+            });
+        }
         Self {
             workbench,
             native_window: None,
@@ -805,6 +813,7 @@ impl KnotWindow {
             notices: Default::default(),
             application_focus: Vec::new(),
             contributed_views: BTreeMap::new(),
+            contributed_containers: BTreeMap::new(),
             _contributed_view_release: None,
             _window_closed: None,
             _extension_host_release: None,
@@ -911,7 +920,12 @@ impl KnotWindow {
                 .borrow_mut()
                 .retain(|window| window.entity_id() != id);
         }
-        let ids = self.contributed_views.keys().cloned().collect::<Vec<_>>();
+        let ids = self
+            .contributed_views
+            .keys()
+            .chain(self.contributed_containers.keys())
+            .cloned()
+            .collect::<Vec<_>>();
         for id in ids {
             self.detach_contributed_view(&id, cx);
         }
@@ -997,8 +1011,10 @@ impl KnotWindow {
             self._extension_host_release = Some(cx.observe_release(&host, |this, _, cx| {
                 // The host is leased and losing ownership, so drop the frames
                 // without calling back into it.
-                let frames = std::mem::take(&mut this.contributed_views);
-                for (id, _instance) in frames {
+                let frames = std::mem::take(&mut this.contributed_views)
+                    .into_keys()
+                    .chain(std::mem::take(&mut this.contributed_containers).into_keys());
+                for id in frames {
                     if let Some(frame) = this.workbench.read(cx).tool_by_stable_id(&id) {
                         this.workbench
                             .update(cx, |workbench, _| workbench.unregister_tool(frame));
@@ -1093,21 +1109,6 @@ impl KnotWindow {
         self.follow_focus(cx);
     }
 
-    /// The directory a new terminal in this window starts in: the focused
-    /// terminal's current directory, otherwise the window's default.
-    fn terminal_directory(&self, cx: &App) -> Option<std::path::PathBuf> {
-        let focused = self
-            .workbench
-            .read(cx)
-            .focused_pane()
-            .map(|pane| pane.active_tab().surface_id());
-        match focused {
-            Some(TabSurfaceId::Terminal(id)) => Self::terminal_session_directory(id, cx),
-            _ => None,
-        }
-        .or_else(|| self.default_terminal_directory(cx))
-    }
-
     /// The label of a terminal session's tab.
     fn terminal_session_name(id: TerminalSessionId, cx: &App) -> Option<String> {
         let sessions = cx.global::<ApplicationTerminalSessions>().0.borrow();
@@ -1125,30 +1126,9 @@ impl KnotWindow {
             .and_then(|session| session.read(cx).current_directory())
     }
 
-    /// The window's default terminal directory: the root of its most recently
-    /// focused document, otherwise its first root, otherwise home.
-    fn default_terminal_directory(&self, cx: &App) -> Option<std::path::PathBuf> {
-        let document = self
-            .workbench
-            .read(cx)
-            .focused_pane()
-            .and_then(|pane| pane.active_tab().document_id())
-            .or(self.last_focused_document);
-        let documents = Self::documents(cx);
-        let uri = document
-            .and_then(|document| documents.read(cx).get(document))
-            .and_then(|document| document.resource_uri());
-        let roots = self.workspace.snapshot();
-        let roots = roots
-            .roots()
-            .iter()
-            .map(|root| root.uri.clone())
-            .collect::<Vec<_>>();
-        knot_model::terminal_directory::working_directory(
-            &roots,
-            uri,
-            directories::BaseDirs::new().map(|base| base.home_dir().to_owned()),
-        )
+    /// The directory a terminal starts in when its opener names none.
+    fn home_directory() -> Option<std::path::PathBuf> {
+        directories::BaseDirs::new().map(|base| base.home_dir().to_owned())
     }
 
     pub(crate) fn application_window(
@@ -1220,6 +1200,16 @@ impl KnotWindow {
                                 }
                                 TabSurfaceId::Document(_) | TabSurfaceId::Terminal(_) => None,
                             },
+                            directory: match tab.surface_id() {
+                                TabSurfaceId::Terminal(id) => {
+                                    Self::terminal_session_directory(id, cx).and_then(|path| {
+                                        url::Url::from_directory_path(path)
+                                            .ok()
+                                            .map(|url| url.to_string())
+                                    })
+                                }
+                                TabSurfaceId::Document(_) | TabSurfaceId::Tool(_) => None,
+                            },
                         }
                     })
                     .collect::<Vec<_>>();
@@ -1249,6 +1239,10 @@ impl KnotWindow {
             panes,
             current_target,
             status_target,
+            last_focused_document: self
+                .last_focused_document
+                .and_then(|id| documents.get(id))
+                .map(|document| document.identity().to_string()),
             workspace: operations::workspace_info(target, &workspace),
         }
     }
@@ -1261,8 +1255,7 @@ impl KnotWindow {
         &mut self,
         cx: &mut Context<Self>,
     ) -> (TerminalSessionId, Entity<TerminalView>) {
-        let directory = self.default_terminal_directory(cx);
-        self.create_terminal_in(directory, cx)
+        self.create_terminal_in(Self::home_directory(), cx)
     }
 
     fn create_terminal_in(
@@ -2086,14 +2079,14 @@ impl KnotWindow {
         ))
     }
 
-    /// Opens a focused terminal starting in `directory`. In the Terminal
-    /// window it opens beside the terminal in `pane` when that is in it, else
-    /// in its last focused pane; in the center, beside `pane` or in the
-    /// center pane.
+    /// Opens a focused terminal starting in `directory`, or the home
+    /// directory. In a container tool window it opens beside the terminal in
+    /// `pane` when that is in the container, else in its last focused pane; in
+    /// the center, beside `pane` or in the center pane.
     fn new_terminal_in_pane(
         &mut self,
         pane: Option<PaneId>,
-        location: operations::TerminalLocation,
+        location: &operations::TerminalLocation,
         directory: Option<std::path::PathBuf>,
         cx: &mut Context<Self>,
     ) -> Option<OpenTarget> {
@@ -2103,9 +2096,9 @@ impl KnotWindow {
             Center,
         }
         let destination = match location {
-            operations::TerminalLocation::Dock => {
+            operations::TerminalLocation::Container(stable_id) => {
                 let workbench = self.workbench.read(cx);
-                let tool = workbench.tool_by_stable_id(crate::app::terminal::TERMINAL_TOOL_ID)?;
+                let tool = workbench.tool_by_stable_id(stable_id)?;
                 let beside = pane.filter(|pane| {
                     workbench.pane_tool(*pane) == Some(tool)
                         && workbench.pane(*pane).is_some_and(|pane| {
@@ -2122,7 +2115,7 @@ impl KnotWindow {
                 None => Destination::Center,
             },
         };
-        let (id, view) = self.create_terminal_in(directory, cx);
+        let (id, view) = self.create_terminal_in(directory.or_else(Self::home_directory), cx);
         let Some((pane, tab)) = self.workbench.update(cx, |workbench, _| match destination {
             Destination::Pane(pane) => workbench
                 .open_terminal_tab(pane, id, view)
@@ -2142,31 +2135,6 @@ impl KnotWindow {
             tab,
             cx,
         ))
-    }
-
-    /// Toggle the Terminal window (see [`Workbench::toggle_tool`]); while it
-    /// has no tabs, open one.
-    pub(super) fn toggle_terminal(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) -> Result<(), knot_protocol::CommandOutcome> {
-        let tool = self
-            .workbench
-            .read(cx)
-            .tool_by_stable_id(crate::app::terminal::TERMINAL_TOOL_ID)
-            .ok_or(knot_protocol::CommandOutcome::InvalidTarget)?;
-        if self.workbench.read(cx).tool_is_empty(tool) {
-            let directory = self.terminal_directory(cx);
-            self.new_terminal_in_pane(None, operations::TerminalLocation::Dock, directory, cx)
-                .ok_or(knot_protocol::CommandOutcome::InvalidTarget)?;
-        } else {
-            self.workbench
-                .update(cx, |workbench, _| workbench.toggle_tool(tool));
-        }
-        self.publish_tool_layout(cx);
-        self.focus_active_surface(cx);
-        cx.notify();
-        Ok(())
     }
 
     #[cfg(test)]
@@ -2194,8 +2162,7 @@ impl KnotWindow {
             _ => None,
         };
         let new_session = terminal.map(|id| {
-            let directory = Self::terminal_session_directory(id, cx)
-                .or_else(|| self.default_terminal_directory(cx));
+            let directory = Self::terminal_session_directory(id, cx).or_else(Self::home_directory);
             self.create_terminal_in(directory, cx)
         });
         let split = self

@@ -201,7 +201,9 @@ fn a_container_shows_its_tab_strip_title_and_new_tab_button(cx: &mut TestAppCont
     let documents = install_globals(cx);
     cx.set_global(ApplicationFileSystems(memory_filesystems()));
     let (window, native_window) = empty_product_window(&documents, cx);
-    window.update(cx, |window, cx| window.toggle_terminal(cx).unwrap());
+    window.update(cx, |window, cx| {
+        window.toggle_tool(crate::app::terminal::TERMINAL_TOOL_ID, cx)
+    });
     cx.run_until_parked();
     let (pane, tool) = terminal_pane(&window, cx);
     let count = cx.read(|cx| {
@@ -291,7 +293,9 @@ fn a_terminal_tab_has_a_close_button_and_a_shell_label(cx: &mut TestAppContext) 
     let documents = install_globals(cx);
     cx.set_global(ApplicationFileSystems(memory_filesystems()));
     let (window, native_window) = empty_product_window(&documents, cx);
-    window.update(cx, |window, cx| window.toggle_terminal(cx).unwrap());
+    window.update(cx, |window, cx| {
+        window.toggle_tool(crate::app::terminal::TERMINAL_TOOL_ID, cx)
+    });
     cx.run_until_parked();
     let (pane, _) = terminal_pane(&window, cx);
     let tab = cx.read(|cx| {
@@ -351,7 +355,7 @@ fn two_windows_share_a_side_and_their_divider_sets_the_share(cx: &mut TestAppCon
             .tool_by_stable_id(crate::app::terminal::TERMINAL_TOOL_ID)
             .unwrap();
         window.move_tool_to_slot(terminal, crate::app::workbench::Slot::LeftBottom, cx);
-        window.toggle_terminal(cx).unwrap();
+        window.toggle_tool(crate::app::terminal::TERMINAL_TOOL_ID, cx);
     });
     cx.run_until_parked();
     let share = |cx: &gpui::App| {

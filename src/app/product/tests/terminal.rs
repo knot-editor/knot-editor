@@ -1181,10 +1181,6 @@ fn directory_uri(path: &Path) -> ResourceUri {
     ResourceUri::parse(url::Url::from_directory_path(path).unwrap().as_str()).unwrap()
 }
 
-fn home() -> Option<std::path::PathBuf> {
-    directories::BaseDirs::new().map(|base| base.home_dir().to_owned())
-}
-
 fn focus_document(
     window: &Entity<KnotWindow>,
     native_window: gpui::AnyWindowHandle,
@@ -1211,55 +1207,6 @@ fn focus_document(
 }
 
 #[gpui::test]
-async fn new_terminals_start_in_the_root_of_the_last_focused_document(cx: &mut TestAppContext) {
-    let temp = tempfile::tempdir().unwrap();
-    let first = temp.path().join("first");
-    let second = temp.path().join("second");
-    std::fs::create_dir_all(&first).unwrap();
-    std::fs::create_dir_all(&second).unwrap();
-    let documents = install_globals(cx);
-    let document = cx.update(|cx| {
-        let model = cx.new(|_| Buffer::new(BufferModel::from_text("")));
-        let uri = url::Url::from_file_path(second.join("src/lib.rs")).unwrap();
-        documents.update(cx, |documents, cx| {
-            documents.create_destination(
-                "lib.rs",
-                model,
-                ResourceUri::parse(uri.as_str()).unwrap(),
-                cx,
-            )
-        })
-    });
-    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (window, native_window) = product_window(document, model, cx);
-    window.update(cx, |window, cx| {
-        window.replace_workspace_roots(vec![directory_uri(&first), directory_uri(&second)], cx);
-    });
-    focus_document(&window, native_window, document, cx);
-
-    let command = dispatch_product_command(&window, native_window, NEW_TERMINAL_COMMAND, cx);
-    assert_eq!(command.completion.await.unwrap(), CommandOutcome::Completed);
-    assert_eq!(focused_terminal_directory(&window, cx), Some(second));
-
-    // A document outside every root falls back to the first root, and a
-    // window without roots to home.
-    window.update(cx, |window, cx| {
-        window.replace_workspace_roots(vec![directory_uri(&first)], cx);
-    });
-    focus_document(&window, native_window, document, cx);
-    let command = dispatch_product_command(&window, native_window, NEW_TERMINAL_COMMAND, cx);
-    assert_eq!(command.completion.await.unwrap(), CommandOutcome::Completed);
-    assert_eq!(focused_terminal_directory(&window, cx), Some(first));
-    window.update(cx, |window, cx| {
-        window.replace_workspace_roots(Vec::new(), cx)
-    });
-    focus_document(&window, native_window, document, cx);
-    let command = dispatch_product_command(&window, native_window, NEW_TERMINAL_COMMAND, cx);
-    assert_eq!(command.completion.await.unwrap(), CommandOutcome::Completed);
-    assert_eq!(focused_terminal_directory(&window, cx), home());
-}
-
-#[gpui::test]
 async fn new_terminals_from_a_focused_terminal_start_in_its_directory(cx: &mut TestAppContext) {
     let temp = tempfile::tempdir().unwrap();
     let root = temp_directory(&temp);
@@ -1276,7 +1223,7 @@ async fn new_terminals_from_a_focused_terminal_start_in_its_directory(cx: &mut T
             window
                 .new_terminal_in_pane(
                     Some(pane),
-                    crate::app::product::operations::TerminalLocation::Center,
+                    &crate::app::product::operations::TerminalLocation::Center,
                     Some(nested.clone()),
                     cx,
                 )
@@ -1285,7 +1232,7 @@ async fn new_terminals_from_a_focused_terminal_start_in_its_directory(cx: &mut T
     })
     .unwrap();
 
-    // New Terminal follows the focused terminal rather than the window's root.
+    // New Terminal follows the focused terminal.
     let command = dispatch_product_command(&window, native_window, NEW_TERMINAL_COMMAND, cx);
     assert_eq!(command.completion.await.unwrap(), CommandOutcome::Completed);
     assert_eq!(
@@ -1307,48 +1254,6 @@ async fn new_terminals_from_a_focused_terminal_start_in_its_directory(cx: &mut T
     })
     .unwrap();
     assert_eq!(focused_terminal_directory(&window, cx), Some(nested));
-
-    // A focused document uses the window's default again.
-    focus_document(&window, native_window, document, cx);
-    let command = dispatch_product_command(&window, native_window, NEW_TERMINAL_COMMAND, cx);
-    assert_eq!(command.completion.await.unwrap(), CommandOutcome::Completed);
-    assert_eq!(focused_terminal_directory(&window, cx), Some(root));
-}
-
-#[gpui::test]
-async fn restored_terminals_without_a_recorded_directory_start_in_their_windows_root(
-    cx: &mut TestAppContext,
-) {
-    let temp = tempfile::tempdir().unwrap();
-    let documents = install_globals(cx);
-    let document = cx.update(|cx| create_untitled_document(&documents, cx));
-    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (source, source_window) = product_window(document, model, cx);
-    let command =
-        dispatch_product_command(&source, source_window, NEW_TERMINAL_IN_CENTER_COMMAND, cx);
-    assert_eq!(command.completion.await.unwrap(), CommandOutcome::Completed);
-    let layout = cx
-        .update_window(source_window, |_, native_window, cx| {
-            source.read(cx).capture_layout(Some(native_window), cx)
-        })
-        .unwrap();
-    let mut value = serde_json::to_value(&layout).unwrap();
-    for tab in value["center"]["tabs"].as_array_mut().unwrap() {
-        tab.as_object_mut().unwrap().remove("directory");
-    }
-    let layout = crate::app::window_layout::WindowLayout::decode(&value).unwrap();
-
-    let document = cx.update(|cx| create_untitled_document(&documents, cx));
-    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
-    let (restored, _) = product_window(document, model, cx);
-    restored.update(cx, |window, cx| {
-        window.replace_workspace_roots(vec![directory_uri(temp.path())], cx);
-        window.apply_layout(&layout, &[], &[], cx);
-    });
-    assert_eq!(
-        focused_terminal_directory(&restored, cx),
-        Some(temp.path().to_owned())
-    );
 }
 
 /// The area and kind of the focused tab, and how many terminal sessions live.
@@ -1628,7 +1533,6 @@ async fn a_terminal_moves_between_the_center_and_its_window_and_the_slot_reaches
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (fresh, fresh_window) = product_window(document, model, cx);
-    fresh.update(cx, |fresh, cx| fresh.restore_fresh_window_layout(cx));
     assert_eq!(slot(&fresh, cx), Slot::RightTop);
     let toggle = dispatch_product_command(&fresh, fresh_window, TOGGLE_TERMINAL_COMMAND, cx);
     assert_eq!(toggle.completion.await.unwrap(), CommandOutcome::Completed);

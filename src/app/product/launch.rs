@@ -44,7 +44,6 @@ pub(super) fn open_product_window_with(
     let workbench = cx.new(|_| Workbench::empty());
     let window = cx.new(|cx| KnotWindow::new(workbench, cx));
     window.update(cx, |window, cx| {
-        window.restore_fresh_window_layout(cx);
         window.workbench.update(cx, |workbench, cx| {
             let first = restored
                 .into_iter()
@@ -200,7 +199,6 @@ pub(super) fn open_blank_window(
     };
     let workbench = cx.new(|_| Workbench::empty());
     let window = cx.new(|cx| KnotWindow::new(workbench, cx));
-    window.update(cx, |window, cx| window.restore_fresh_window_layout(cx));
     show_window(
         window.clone(),
         WindowOptions {

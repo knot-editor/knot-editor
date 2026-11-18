@@ -911,18 +911,19 @@ await commands.register("operations.terminal", async () => {{
   const [win] = await windows.list();
   const pane = win.panes.find(pane => pane.tabs.some(tab => tab.kind === "document")).target;
   const dock = win.panes.find(pane => pane.tabs.some(tab => tab.kind === "tool")).target;
-  const opened = await terminals.open({{ cwd: "{explicit}", target: pane, location: "center" }});
+  const opened = await terminals.open({{ cwd: "{explicit}", target: pane, location: "editor" }});
   if (opened.kind !== "terminal" || opened.document !== null || opened.buffer !== null || opened.tool !== null) throw new Error("metadata");
   if (opened.target.pane !== pane || !Object.isFrozen(opened)) throw new Error("destination");
   const listed = (await windows.get(win.target)).panes.flatMap(pane => pane.tabs);
   if (!listed.some(tab => tab.target === opened.target)) throw new Error("listing");
-  const docked = await terminals.open({{ target: dock }});
+  const docked = await terminals.open({{ location: "builtin.terminal", target: dock }});
   if (docked.kind !== "terminal" || docked.target.pane === dock) throw new Error("dock target");
   const home = (await windows.get(win.target)).panes.find(pane => pane.tabs.some(tab => tab.target === docked.target));
   if (!home || home.tabs.some(tab => tab.kind !== "terminal") || home.target === pane) throw new Error("terminal home dock");
-  const beside = await terminals.open({{ location: "dock", target: dock }});
+  const beside = await terminals.open({{ location: "builtin.terminal", target: dock }});
   if (beside.target.pane !== docked.target.pane) throw new Error("beside the recent dock terminal");
-  try {{ await terminals.open({{ location: "floating" }}); throw new Error("location accepted"); }}
+  await rejects(() => terminals.open({{ location: "no.such.view" }}), "InvalidTarget");
+  try {{ await terminals.open({{ location: 42 }}); throw new Error("location accepted"); }}
   catch (error) {{ if (!(error instanceof TypeError)) throw error; }}
   await rejects(() => terminals.open({{ cwd: "mem://product/src" }}), "InvalidUri");
   await rejects(() => terminals.open({{ cwd: "not a URI" }}), "InvalidUri");
@@ -977,10 +978,12 @@ await commands.register("operations.terminal", async () => {{
             })
             .collect::<Vec<_>>()
     });
-    // Without a directory, a terminal follows the focused one; the center
-    // terminal comes first, the dock terminals after it.
+    // Without a directory, a terminal starts in the home directory; the
+    // center terminal comes first, the tool window's terminals after it.
     let explicit = std::fs::canonicalize(explicit).unwrap();
     assert_eq!(directories.len(), 3);
     assert_eq!(directories[0], explicit);
+    let home = std::fs::canonicalize(directories::BaseDirs::new().unwrap().home_dir()).unwrap();
+    assert_eq!(directories[1..], [home.clone(), home]);
     host.update(cx, |host, cx| host.unload(key, cx).unwrap());
 }

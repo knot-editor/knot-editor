@@ -264,13 +264,8 @@ impl HostArguments for TerminalArguments {
                 .optional_text(4, "terminal location must be text")?
                 .as_deref()
             {
-                None | Some("dock") => product::operations::TerminalLocation::Dock,
-                Some("center") => product::operations::TerminalLocation::Center,
-                Some(_) => {
-                    return Err(DecodeError::Range(
-                        "terminal location must be dock or center",
-                    ));
-                }
+                None | Some("editor") => product::operations::TerminalLocation::Center,
+                Some(view) => product::operations::TerminalLocation::Container(view.to_owned()),
             },
         })
     }
@@ -302,7 +297,7 @@ async fn open_terminal(
     };
     let location = arguments.location;
     let target = context.foreground(move |_, cx| {
-        product::operations::open_terminal(destination, directory, location, cx)
+        product::operations::open_terminal(destination, directory, &location, cx)
     })??;
     Ok(knot_protocol::PresentationInfo {
         target,
@@ -310,6 +305,7 @@ async fn open_terminal(
         document: None,
         buffer: None,
         tool: None,
+        directory: None,
     })
 }
 
@@ -1241,6 +1237,8 @@ pub(crate) struct TreeArguments {
     pub language: Option<String>,
     /// Whether a text frame shows the editor gutter.
     pub gutter: bool,
+    /// A container's command that opens a tab in it.
+    pub new_tab: Option<String>,
 }
 impl HostArguments for TreeArguments {
     fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
@@ -1256,6 +1254,7 @@ impl HostArguments for TreeArguments {
         let content = match reader.text(7, "view content kind must be text")?.as_str() {
             "tree" => ViewContentKind::Tree,
             "text" => ViewContentKind::Text,
+            "container" => ViewContentKind::Container,
             _ => return Err(DecodeError::Type("invalid view content kind")),
         };
         let actions = serde_json::to_value(reader.command_arguments(8)?)
@@ -1272,6 +1271,7 @@ impl HostArguments for TreeArguments {
             visible: reader.integer(6)? != 0,
             language: reader.optional_text(9, "view language must be text or null")?,
             gutter: reader.integer(10)? != 0,
+            new_tab: reader.optional_text(11, "view new tab command must be text or null")?,
         })
     }
 }

@@ -22,33 +22,52 @@ pub(crate) async fn new(context: CommandContext, (): ()) -> Result<(), CommandOu
         .await
 }
 
+/// The terminal commands `@knot/chrome` registers, named here for the menus
+/// and keymaps that bind them.
+#[cfg(not(test))]
+pub(crate) const NEW_TERMINAL_COMMAND: &str = "terminal.new";
+#[cfg(not(test))]
+pub(crate) const TOGGLE_TERMINAL_COMMAND: &str = "terminal.toggle";
+
+/// Stand-ins for chrome's terminal commands in the tests of this crate, which
+/// load no packages: they open in the test Terminal container, in the
+/// focused terminal's directory.
+#[cfg(test)]
 async fn open_new_terminal(
     context: CommandContext,
     location: operations::TerminalLocation,
 ) -> Result<(), CommandOutcome> {
     context
-        .foreground(move |target, cx| {
-            super::super::commands::dispatch::break_captured_history_group(target, cx);
-            Ok(())
-        })
-        .await?;
-    context
         .window(move |window, target, cx| {
-            let directory = window.terminal_directory(cx);
+            let focused = window
+                .workbench
+                .read(cx)
+                .focused_pane()
+                .map(|pane| pane.active_tab().surface_id());
+            let directory = match focused {
+                Some(TabSurfaceId::Terminal(id)) => KnotWindow::terminal_session_directory(id, cx),
+                _ => None,
+            };
             window
-                .new_terminal_in_pane(target.tab.map(|tab| tab.pane), location, directory, cx)
+                .new_terminal_in_pane(target.tab.map(|tab| tab.pane), &location, directory, cx)
                 .map(|_| ())
                 .ok_or(CommandOutcome::InvalidTarget)
         })
         .await
 }
 
-#[command("terminal.new", title = "New Terminal", description = "Open a terminal beside the focused or last used dock terminal, else in the terminal dock.", id = NEW_TERMINAL_COMMAND, participant = Workbench)]
+#[cfg(test)]
+#[command("terminal.new", title = "New Terminal", description = "Open a terminal.", id = NEW_TERMINAL_COMMAND, participant = Workbench)]
 pub(crate) async fn new_terminal(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
-    open_new_terminal(context, operations::TerminalLocation::Dock).await
+    open_new_terminal(
+        context,
+        operations::TerminalLocation::Container(crate::app::terminal::TERMINAL_TOOL_ID.into()),
+    )
+    .await
 }
 
-#[command("terminal.new-in-center", title = "New Terminal in Center", description = "Open a terminal in the last focused center pane.", id = NEW_TERMINAL_IN_CENTER_COMMAND, participant = Workbench)]
+#[cfg(test)]
+#[command("terminal.new-in-center", title = "New Terminal in Editor", description = "Open a terminal in the editor.", id = NEW_TERMINAL_IN_CENTER_COMMAND, participant = Workbench)]
 pub(crate) async fn new_terminal_in_center(
     context: CommandContext,
     (): (),
@@ -56,10 +75,14 @@ pub(crate) async fn new_terminal_in_center(
     open_new_terminal(context, operations::TerminalLocation::Center).await
 }
 
-#[command("terminal.toggle", title = "Toggle Terminal", description = "Show and focus the dock terminals, or hide their dock when one is focused.", id = TOGGLE_TERMINAL_COMMAND, participant = Workbench)]
+#[cfg(test)]
+#[command("terminal.toggle", title = "Toggle Terminal", description = "Toggle the Terminal window.", id = TOGGLE_TERMINAL_COMMAND, participant = Workbench)]
 pub(crate) async fn toggle_terminal(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
     context
-        .window(|window, _, cx| window.toggle_terminal(cx))
+        .window(|window, _, cx| {
+            window.toggle_tool(crate::app::terminal::TERMINAL_TOOL_ID, cx);
+            Ok(())
+        })
         .await
 }
 

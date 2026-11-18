@@ -2846,6 +2846,7 @@ impl ProductExtensionHost {
                 document: Some(info.id.clone()),
                 buffer: Some(buffer),
                 tool: None,
+                directory: None,
             },
             document: info,
         })

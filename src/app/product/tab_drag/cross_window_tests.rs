@@ -528,7 +528,7 @@ fn live_terminal_cross_window_and_desktop_drops_keep_session_and_sole_attachment
                 window
                     .new_terminal_in_pane(
                         Some(pane),
-                        crate::app::product::operations::TerminalLocation::Center,
+                        &crate::app::product::operations::TerminalLocation::Center,
                         None,
                         cx
                     )

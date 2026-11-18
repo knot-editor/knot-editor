@@ -727,14 +727,11 @@ impl KnotWindow {
             .hover(move |style| style.bg(hover))
             .child("+")
             .on_click(cx.listener(move |this, _, _, cx| {
-                if tool.is_some() {
-                    let directory = this.terminal_directory(cx);
-                    this.new_terminal_in_pane(
-                        Some(pane_id),
-                        super::operations::TerminalLocation::Dock,
-                        directory,
-                        cx,
-                    );
+                if let Some(tool) = tool {
+                    this.workbench
+                        .update(cx, |workbench, _| workbench.focus_pane(pane_id));
+                    this.focus_active_surface(cx);
+                    this.run_new_tab(tool, cx);
                 }
             }))
     }

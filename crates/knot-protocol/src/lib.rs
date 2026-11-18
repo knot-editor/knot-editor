@@ -456,6 +456,8 @@ pub struct TreeItem {
 pub enum ViewContentKind {
     Tree,
     Text,
+    /// No content of its own: a tool window that holds the tabs opened into it.
+    Container,
 }
 
 /// One scope tab of an extension picker.
@@ -809,6 +811,8 @@ pub struct PresentationInfo {
     pub buffer: Option<BufferHandle>,
     /// Stable contribution ID for a contributed tool surface.
     pub tool: Option<String>,
+    /// A terminal's current directory as a file URI.
+    pub directory: Option<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize)]
@@ -844,6 +848,8 @@ pub struct WindowInfo {
     /// last focused editor while its tab is shown, and none while a terminal
     /// has focus.
     pub status_target: Option<PresentationTarget>,
+    /// The identity of the document whose tab most recently had focus.
+    pub last_focused_document: Option<String>,
     pub workspace: WorkspaceInfo,
 }
 

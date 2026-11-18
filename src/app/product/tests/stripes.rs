@@ -7,7 +7,7 @@ use crate::app::workbench::{DockLocation, Slot};
 use gpui::{Modifiers, MouseButton, VisualTestContext, point, px};
 
 const EXPLORER_BUTTON: &str = "stripe-button-test.tool";
-const TERMINAL_BUTTON: &str = "stripe-button-knot.terminal";
+const TERMINAL_BUTTON: &str = "stripe-button-builtin.terminal";
 
 fn explorer_shown(window: &Entity<KnotWindow>, cx: &TestAppContext) -> bool {
     cx.read(|cx| {

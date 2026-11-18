@@ -22,6 +22,7 @@ export const {
   recovery,
   settings,
   storage,
+  terminals,
   themes,
   windows,
   workbench,

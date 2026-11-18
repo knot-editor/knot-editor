@@ -43,7 +43,6 @@ pub mod state_database;
 pub mod status_bar;
 pub mod style;
 pub mod syntax;
-pub mod terminal_directory;
 pub mod theme;
 pub mod themes;
 pub mod typography;

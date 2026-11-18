@@ -122,6 +122,8 @@ declare module "knot" {
     readonly buffer: Buffer | null;
     /** Stable contribution ID for a tool presentation, otherwise null. */
     readonly tool: string | null;
+    /** A terminal's current directory as a file URI, otherwise null. */
+    readonly directory: string | null;
   }
   export interface PaneInfo {
     readonly target: PaneTarget;
@@ -190,21 +192,19 @@ declare module "knot" {
   }>;
 
   export interface TerminalOptions extends DocumentDestinationOptions {
-    /** Existing local directory URI the shell starts in. Omission uses the
-     * window's default: the focused terminal's current directory, else the
-     * root containing its most recently focused document, else its first
-     * root, else the home directory. */
+    /** Existing local directory URI the shell starts in. Omission starts it in
+     * the home directory; choosing a better one is the caller's policy. */
     readonly cwd?: string;
-    /** Where the terminal opens. "dock" (the default) follows New Terminal:
-     * beside the captured terminal, else beside the most recently used dock
-     * terminal, else in the terminal home dock, which it shows. "center" opens
-     * it in the last focused center pane. */
-    readonly location?: "dock" | "center";
+    /** Where the terminal opens. "editor" (the default) opens it in the last
+     * focused center pane. A container view's ID opens it beside the captured
+     * terminal when that is in the container, else in the container's last
+     * focused pane, which it shows. */
+    readonly location?: "editor" | (string & {});
   }
   export const terminals: Readonly<{
     /** Opens and focuses a terminal tab where `location` says. Resolves after
      * commit.
-     * @throws TypeError for a non-text cwd or an unknown location; HostError with InvalidUri for a
+     * @throws TypeError for a non-text cwd or location; HostError with InvalidUri for a
      * malformed or non-file URI, ResourceNotFound, ResourceWrongKind,
      * ProviderFailure, InvalidTarget, ContextUnavailable, or Cancelled. */
     open(options?: TerminalOptions): Promise<PresentationInfo>;
@@ -2081,7 +2081,12 @@ declare module "knot" {
     /** Stable, unique, namespaced identity; `knot.` is reserved. */
     readonly id: string;
     readonly title: string;
-    readonly content: ViewContent;
+    /** Omitted for a container tool window, which holds the tabs opened into
+     * it, such as terminals; see `terminals.open`. */
+    readonly content?: ViewContent;
+    /** A container's command that opens a tab in it: the `+` button runs it,
+     * and so does showing the container while it has no tabs. */
+    readonly newTab?: string;
     /** Actions shown in the frame toolbar; only meaningful for tree frames. */
     readonly actions?: readonly TreeAction[];
     readonly placement?: ViewPlacement;
@@ -2793,6 +2798,10 @@ declare module "knot" {
      * for invalid fields or a missing getChildren method.
      */
     registerView(contribution: ViewContribution): Promise<ViewRegistration>;
+    /** The document whose tab in `window` most recently had focus, or null
+     * when none did. A focused terminal leaves the last editor's document
+     * here. */
+    lastFocusedDocument(window: WindowTarget): Promise<DocumentInfo | null>;
     /**
      * Present a searchable single-selection picker with a native text field and
      * local fuzzy matching. Resolution is a typed selection or dismissal.

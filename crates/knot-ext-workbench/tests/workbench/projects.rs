@@ -309,10 +309,6 @@ fn command_invoked_project_tool_changes_publish_the_window_default(cx: &mut Test
         Some(TREE)
     );
 
-    // A late native explorer registration must not steal the stored selection.
-    projects.window.restore_fresh_layout(cx);
-    wait_until(cx, |cx| tree.is_focused(cx));
-
     // Hiding from a document is an explicit arrangement too.
     projects.window.new_document(cx);
     assert_eq!(

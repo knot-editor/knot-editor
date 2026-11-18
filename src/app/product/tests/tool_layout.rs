@@ -210,24 +210,10 @@ fn reset_layout_restores_product_defaults(cx: &mut TestAppContext) {
 
     let reset = dispatch_product_command(&window, native_window, "workbench.reset-layout", cx);
     assert_eq!(wait_for_command(reset, cx), CommandOutcome::Completed);
-    // The Terminal window returns to its defaults, and the reset is published
-    // as the confirmed customization. The test tool is not a contributed
-    // view, so it keeps its place.
-    let snapshot = stored(cx);
-    assert!(snapshot.customized);
-    assert_eq!(
-        snapshot
-            .tool(crate::app::terminal::TERMINAL_TOOL_ID)
-            .cloned(),
-        Some(StoredTool {
-            id: crate::app::terminal::TERMINAL_TOOL_ID.into(),
-            slot: crate::app::terminal::TERMINAL_SLOT,
-            shown: false,
-            sidebar: true,
-            size: crate::app::terminal::TERMINAL_SLOT.side().default_size(),
-            share: 0.5,
-        })
-    );
+    // The reset is published as the confirmed customization. The test tool
+    // and the test Terminal window are not contributed views, so they keep
+    // their places.
+    assert!(stored(cx).customized);
     assert_eq!(explorer_stored(cx).unwrap().slot, Slot::BottomLeft);
 }
 
@@ -276,7 +262,6 @@ fn fresh_window_restores_shown_tools_without_folder(cx: &mut TestAppContext) {
     // A fresh window with no folder inherits the shown right window.
     let (fresh, _) = empty_headless_window(&documents, cx);
     fresh.update(cx, |fresh, cx| {
-        fresh.restore_fresh_window_layout(cx);
         fresh.ensure_test_tool(false, cx);
     });
     assert!(explorer_state(&fresh, cx).0);
@@ -292,7 +277,6 @@ fn fresh_window_with_hidden_tool_restores_nothing(cx: &mut TestAppContext) {
     click_explorer(&window, cx);
     let (fresh, _) = empty_headless_window(&documents, cx);
     fresh.update(cx, |fresh, cx| {
-        fresh.restore_fresh_window_layout(cx);
         fresh.ensure_test_tool(false, cx);
     });
     assert!(!explorer_state(&fresh, cx).0);

@@ -328,7 +328,7 @@ fn terminal_moves_within_window_then_hands_off_into_existing_window(cx: &mut Tes
                 window
                     .new_terminal_in_pane(
                         Some(pane),
-                        crate::app::product::operations::TerminalLocation::Center,
+                        &crate::app::product::operations::TerminalLocation::Center,
                         None,
                         cx
                     )

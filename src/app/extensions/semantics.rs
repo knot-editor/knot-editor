@@ -77,6 +77,8 @@ pub(crate) struct ViewDefinition {
     pub(crate) location: Slot,
     pub(crate) order: usize,
     pub(crate) visible: bool,
+    /// A container's command that opens a tab in it.
+    pub(crate) new_tab: Option<String>,
 }
 
 struct TreeRegistration {
@@ -226,6 +228,7 @@ impl ExtensionSemanticBridge {
             visible,
             language,
             gutter,
+            new_tab,
         } = arguments;
 
         if id.is_empty() || id.starts_with("knot.") {
@@ -260,6 +263,7 @@ impl ExtensionSemanticBridge {
             location,
             order: order.try_into().expect("view order fits usize"),
             visible,
+            new_tab,
         };
         if content == ViewContentKind::Tree {
             for view in self.live_tree_views(&id, None) {
@@ -581,6 +585,7 @@ mod tests {
             visible: true,
             language: None,
             gutter: false,
+            new_tab: None,
         }
     }
 
@@ -595,6 +600,7 @@ mod tests {
             visible: true,
             language: None,
             gutter: false,
+            new_tab: None,
         }
     }
 

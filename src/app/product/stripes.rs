@@ -253,7 +253,7 @@ impl KnotWindow {
             .update(cx, |workbench, _| workbench.stripe_click(id));
         match click {
             StripeClick::Shown(..) => self.refresh_tool_tree(id, cx),
-            StripeClick::Empty => self.open_first_tab(id, cx),
+            StripeClick::Empty => self.run_new_tab(id, cx),
             StripeClick::Hidden => {}
         }
         self.publish_tool_layout(cx);
@@ -261,22 +261,37 @@ impl KnotWindow {
         cx.notify();
     }
 
-    /// Open the first tab of a container tool window that shows empty.
-    fn open_first_tab(&mut self, id: ToolFrameId, cx: &mut Context<Self>) {
-        let is_terminal = self
+    /// Run the new-tab command of a container tool window, which opens a tab
+    /// in it.
+    pub(super) fn run_new_tab(&mut self, id: ToolFrameId, cx: &mut Context<Self>) {
+        let Some(stable_id) = self
             .workbench
             .read(cx)
             .tool(id)
-            .is_some_and(|tool| tool.stable_id == crate::app::terminal::TERMINAL_TOOL_ID);
-        if is_terminal {
-            let directory = self.terminal_directory(cx);
-            self.new_terminal_in_pane(
-                None,
-                super::operations::TerminalLocation::Dock,
-                directory,
-                cx,
-            );
-        }
+            .map(|tool| tool.stable_id.clone())
+        else {
+            return;
+        };
+        #[cfg(test)]
+        let fallback = (stable_id == crate::app::terminal::TERMINAL_TOOL_ID)
+            .then(|| Some("terminal.new".to_owned()));
+        #[cfg(not(test))]
+        let fallback = None;
+        let Some(Some(command)) = self
+            .contributed_containers
+            .get(&stable_id)
+            .cloned()
+            .or(fallback)
+        else {
+            return;
+        };
+        self.dispatch_source(
+            knot_protocol::Command {
+                name: command.into(),
+                arguments: knot_protocol::CommandArgumentValue::Null,
+            },
+            cx,
+        );
     }
 
     /// Refresh the tree of a contributed tool window that just showed.

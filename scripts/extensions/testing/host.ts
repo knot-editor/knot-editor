@@ -936,6 +936,7 @@ function windowInfo(window: FakeWindow): Knot.WindowInfo {
       document: tab.document,
       buffer: document === undefined ? null : buffer(document),
       tool: null,
+      directory: null,
     };
   });
   const selected = window.tabs[window.selected]?.target ?? null;
@@ -1298,7 +1299,7 @@ export async function treeItems(
   parentId: string | null = null,
 ): Promise<Knot.TreeItem[]> {
   const content = view(id).contribution.content;
-  if (content.kind !== "tree") throw new Error(`${id} is not a tree`);
+  if (content?.kind !== "tree") throw new Error(`${id} is not a tree`);
   const instance = `${id}@window` as Knot.ViewId;
   return [...(await content.provider.getChildren(parentId, { window, instance }))];
 }
@@ -2529,6 +2530,7 @@ export const api: KnotApi = {
       fakeWindow(target);
       return LAYOUT;
     },
+    lastFocusedDocument: async () => null,
     registerView: async (contribution) => {
       if (state.views.has(contribution.id)) throw hostError("ViewIdInUse");
       const registered: FakeView = {

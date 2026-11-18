@@ -230,7 +230,7 @@ fn terminal_drag_preserves_live_view_session_and_attachment(cx: &mut TestAppCont
                 window
                     .new_terminal_in_pane(
                         Some(pane),
-                        crate::app::product::operations::TerminalLocation::Center,
+                        &crate::app::product::operations::TerminalLocation::Center,
                         None,
                         cx
                     )
@@ -318,13 +318,15 @@ fn a_terminal_drags_between_the_center_and_its_window_and_a_tool_has_no_tab_to_d
             let center = window.workbench.read(cx).center_pane().unwrap();
             window.new_terminal_in_pane(
                 Some(center),
-                crate::app::product::operations::TerminalLocation::Center,
+                &crate::app::product::operations::TerminalLocation::Center,
                 None,
                 cx,
             );
             window.new_terminal_in_pane(
                 None,
-                crate::app::product::operations::TerminalLocation::Dock,
+                &crate::app::product::operations::TerminalLocation::Container(
+                    crate::app::terminal::TERMINAL_TOOL_ID.into(),
+                ),
                 None,
                 cx,
             );

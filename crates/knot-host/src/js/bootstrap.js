@@ -1352,15 +1352,26 @@ export async function registerView(contribution) {
     throw new TypeError("view id must be a unique, non-reserved namespaced string");
   }
   const title = string(value.title, "view title must be text");
-  const content = record(value.content, "view content must be an object");
+  // A view without content is a container: a tool window for tabs opened
+  // into it.
+  const content = value.content === undefined
+    ? { kind: "container" }
+    : record(value.content, "view content must be an object");
   let provider = null;
+  if (content.kind === "container" && value.content !== undefined) {
+    throw new TypeError("view content kind must be \"tree\" or \"text\"");
+  }
   if (content.kind === "tree") {
     provider = record(content.provider, "tree content requires a provider object");
     if (typeof provider.getChildren !== "function") {
       throw new TypeError("tree provider requires a getChildren method");
     }
-  } else if (content.kind !== "text") {
+  } else if (content.kind !== "text" && content.kind !== "container") {
     throw new TypeError("view content kind must be \"tree\" or \"text\"");
+  }
+  const newTab = optionalText(value.newTab);
+  if (newTab !== null && content.kind !== "container") {
+    throw new TypeError("view newTab applies only to a container");
   }
   const actions = treeActions(value.actions);
   const language = optionalText(value.language);
@@ -1413,6 +1424,7 @@ export async function registerView(contribution) {
     actions,
     language,
     gutter ? 1 : 0,
+    newTab,
   );
   if (provider !== null) treeProviders.set(registration, provider);
   const owned = ownership(() => treeProviders.delete(registration),
@@ -1653,6 +1665,7 @@ function presentationFromNative(tab) {
   return Object.freeze({
     target: presentationTarget(tab.target), kind: tab.kind, document: tab.document,
     buffer: tab.buffer === null ? null : bufferFor(tab.buffer), tool: tab.tool,
+    directory: tab.directory,
   });
 }
 function destinationAuthority(options) {
@@ -1699,8 +1712,8 @@ export async function openDocument(uri, options) {
 export async function openTerminal(options) {
   const fields = options === undefined ? {} : record(options, "terminal options must be an object");
   const { cwd, location } = fields;
-  if (location !== undefined && location !== "dock" && location !== "center") {
-    throw new TypeError("terminal location must be \"dock\" or \"center\"");
+  if (location !== undefined && (typeof location !== "string" || location.length === 0)) {
+    throw new TypeError("terminal location must be \"editor\" or a container view ID");
   }
   const tab = await request("openTerminal", cwd === undefined ? null : string(cwd, "terminal directory must be text"),
     destinationAuthority(options), location ?? null);
@@ -2072,6 +2085,11 @@ export async function getDocument(id) {
 }
 export async function listWindows() {
   return Object.freeze((await request("listWindows")).map(windowFromNative));
+}
+export async function lastFocusedDocument(target) {
+  const value = await request("getWindow", windowAuthority(target));
+  if (value === null || value.lastFocusedDocument === null) return null;
+  return getDocument(value.lastFocusedDocument);
 }
 export async function getWindow(target) {
   const value = await request("getWindow", windowAuthority(target));

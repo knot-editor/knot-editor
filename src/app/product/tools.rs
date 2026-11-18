@@ -20,6 +20,7 @@ impl KnotWindow {
         let stale = self
             .contributed_views
             .keys()
+            .chain(self.contributed_containers.keys())
             .filter(|id| !live.contains(id.as_str()))
             .cloned()
             .collect::<Vec<_>>();
@@ -27,7 +28,9 @@ impl KnotWindow {
             self.detach_contributed_view(&id, cx);
         }
         for definition in definitions {
-            if !self.contributed_views.contains_key(&definition.id) {
+            if !self.contributed_views.contains_key(&definition.id)
+                && !self.contributed_containers.contains_key(&definition.id)
+            {
                 self.attach_contributed_view(definition, cx);
             }
         }
@@ -40,6 +43,25 @@ impl KnotWindow {
     ) {
         let window = window_id(cx.entity_id());
         let (content, event, observer) = match definition.content {
+            knot_protocol::ViewContentKind::Container => {
+                let stored = Self::stored_tool_layout(cx);
+                self.workbench.update(cx, |workbench, _| {
+                    let previous = workbench.focused_pane_id();
+                    let id = workbench.register_container(
+                        &definition.id,
+                        definition.title.clone(),
+                        definition.location,
+                    );
+                    workbench.set_tool_order(id, definition.order);
+                    workbench.place_registered_tool(id, stored.as_ref(), definition.visible);
+                    if let Some(pane) = previous {
+                        workbench.focus_pane(pane);
+                    }
+                });
+                self.contributed_containers
+                    .insert(definition.id, definition.new_tab);
+                return;
+            }
             knot_protocol::ViewContentKind::Tree => {
                 let view = cx.new(|cx| {
                     crate::app::tree_view::TreeView::new(definition.id.clone(), window.clone(), cx)
@@ -114,16 +136,19 @@ impl KnotWindow {
     }
 
     pub(super) fn detach_contributed_view(&mut self, stable_id: &str, cx: &mut Context<Self>) {
-        let Some(instance) = self.contributed_views.remove(stable_id) else {
+        let instance = self.contributed_views.remove(stable_id);
+        if instance.is_none() && self.contributed_containers.remove(stable_id).is_none() {
             return;
-        };
-        let view_id = instance.instance_id(cx);
+        }
+        let view_id = instance.map(|instance| instance.instance_id(cx));
         self.workbench.update(cx, |workbench, _| {
             if let Some(frame) = workbench.tool_by_stable_id(stable_id) {
                 workbench.unregister_tool(frame);
             }
         });
-        crate::app::extensions::host::detach_view_instance(view_id, cx);
+        if let Some(view_id) = view_id {
+            crate::app::extensions::host::detach_view_instance(view_id, cx);
+        }
     }
 
     /// Show or hide a contributed frame without publishing a fresh-window
@@ -134,13 +159,13 @@ impl KnotWindow {
         visible: bool,
         cx: &mut Context<Self>,
     ) -> bool {
-        let Some(content) = self
+        let content = self
             .contributed_views
             .get(stable_id)
-            .map(|instance| instance.content.clone())
-        else {
+            .map(|instance| instance.content.clone());
+        if content.is_none() && !self.contributed_containers.contains_key(stable_id) {
             return false;
-        };
+        }
         let Some(frame) = self.workbench.read(cx).tool_by_stable_id(stable_id) else {
             return false;
         };
@@ -149,11 +174,14 @@ impl KnotWindow {
             return true;
         }
         if visible {
-            self.workbench.update(cx, |workbench, _| {
-                workbench.show_tool(frame);
-            });
-            if let crate::app::workbench::ExtensionView::Tree(tree) = content {
+            let shown = self
+                .workbench
+                .update(cx, |workbench, _| workbench.show_tool(frame).is_some());
+            if let Some(crate::app::workbench::ExtensionView::Tree(tree)) = content {
                 tree.update(cx, |tree, cx| tree.refresh_root(cx));
+            }
+            if !shown {
+                self.run_new_tab(frame, cx);
             }
         } else {
             self.workbench.update(cx, |workbench, _| {
@@ -179,14 +207,14 @@ impl KnotWindow {
         self.workbench.update(cx, |workbench, _| {
             workbench.show_tool(frame);
         });
-        let Some(view) = self
+        match self
             .contributed_views
             .get(stable_id)
             .map(|instance| instance.content.clone())
-        else {
-            return false;
-        };
-        self.focus_view(&view.focus_handle(cx), cx);
+        {
+            Some(view) => self.focus_view(&view.focus_handle(cx), cx),
+            None => self.focus_active_surface(cx),
+        }
         cx.notify();
         true
     }
@@ -253,6 +281,9 @@ impl KnotWindow {
                 .map(|instance| instance.content.clone())
         {
             tree.update(cx, |tree, cx| tree.refresh_root(cx));
+        }
+        if !shown && self.workbench.read(cx).tool_is_empty(id) {
+            self.run_new_tab(id, cx);
         }
         self.publish_tool_layout(cx);
         self.focus_active_surface(cx);
@@ -339,28 +370,10 @@ impl KnotWindow {
                     definition.visible,
                 );
             }
-            if let Some(id) = workbench.tool_by_stable_id(crate::app::terminal::TERMINAL_TOOL_ID) {
-                workbench.reset_tool(id, crate::app::terminal::TERMINAL_SLOT, 0, false);
-            }
         });
         self.publish_tool_layout(cx);
         self.focus_active_surface(cx);
         cx.notify();
-    }
-
-    /// Inherit the last customized arrangement on a fresh window. Only runs
-    /// at window creation: already-open windows never re-read the default.
-    /// Hidden tools stay hidden and contributed tools take their stored
-    /// places as they attach. Never publishes.
-    pub(super) fn restore_fresh_window_layout(&mut self, cx: &mut Context<Self>) {
-        let Some(snapshot) = Self::stored_tool_layout(cx) else {
-            return;
-        };
-        self.workbench.update(cx, |workbench, _| {
-            if let Some(id) = workbench.tool_by_stable_id(crate::app::terminal::TERMINAL_TOOL_ID) {
-                workbench.place_registered_tool(id, Some(&snapshot), false);
-            }
-        });
     }
 
     /// Register a left dock tool for tests of the workbench, standing in for

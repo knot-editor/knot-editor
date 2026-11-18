@@ -1228,14 +1228,14 @@ fn restored_terminals_start_in_their_recorded_directory(cx: &mut TestAppContext)
         Some(directory.clone())
     );
 
-    // A directory that no longer exists falls back to the window's default.
+    // A directory that no longer exists falls back to the home directory.
     let gone = url::Url::from_directory_path(directory.join("gone"))
         .unwrap()
         .to_string();
     let (fallback, _) = restore(&layout.replace(&recorded, &gone), restored_window, cx);
     assert_eq!(
         terminal_start_directory(&fallback, cx),
-        cx.read(|cx| fallback.read(cx).terminal_directory(cx))
+        directories::BaseDirs::new().map(|base| base.home_dir().to_owned())
     );
 }
 

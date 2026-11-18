@@ -2740,6 +2740,7 @@ fn install_semantic_providers(
             visible: true,
             language: None,
             gutter: false,
+            new_tab: None,
         })
     );
     pool.respond(HostResponse {
