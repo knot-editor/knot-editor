@@ -11,6 +11,7 @@ export const NEW_FILE = "explorer.new-file";
 export const NEW_FOLDER = "explorer.new-folder";
 export const RENAME = "explorer.rename";
 export const DELETE = "explorer.delete";
+export const DELETE_NOW = "explorer.deleteNow";
 export const CUT = "explorer.cut";
 export const COPY = "explorer.copy";
 export const PASTE = "explorer.paste";

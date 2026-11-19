@@ -5,7 +5,7 @@ import type { CommandContext, JsonValue, WindowTarget } from "knot";
 import { childUri, pathSegments, renameSelection } from "./names.js";
 import { activeFile, capturedUri, revealFile } from "./reveal.js";
 import {
-  DELETE, idPath, NEW_FILE, NEW_FOLDER, nameOf, parentOf, parseRowId, RENAME, rootOf, rowId, trimmed, VIEW_ID,
+  DELETE, DELETE_NOW, idPath, NEW_FILE, NEW_FOLDER, nameOf, parentOf, parseRowId, RENAME, rootOf, rowId, trimmed, VIEW_ID,
 } from "./rows.js";
 import type { ExplorerState } from "./state.js";
 
@@ -157,7 +157,7 @@ async function rename(state: ExplorerState, ctx: CommandContext, selected: boole
   await showCreated(state, window, rowId(root, directory), target);
 }
 
-async function remove(state: ExplorerState, ctx: CommandContext, selected: boolean) {
+async function remove(state: ExplorerState, ctx: CommandContext, selected: boolean, confirm: boolean) {
   const window = ctx.target.windowTarget;
   const id = await rowFor(ctx, selected);
   if (id === null || (await isRoot(window, id))) return commands.unavailable();
@@ -165,15 +165,17 @@ async function remove(state: ExplorerState, ctx: CommandContext, selected: boole
   const name = nameOf(uri);
   const stat = await files.stat(uri);
   if (stat === null) return report(`${name} no longer exists`);
-  const answer = await workbench.showConfirmation({
-    title: `Delete ${name}?`,
-    message:
-      stat.kind === "directory"
-        ? `${name} and everything in it will move to the Trash.`
-        : `${name} will move to the Trash.`,
-    confirmLabel: "Move to Trash",
-  });
-  if (answer.kind !== "confirmed") return;
+  if (confirm) {
+    const answer = await workbench.showConfirmation({
+      title: `Delete ${name}?`,
+      message:
+        stat.kind === "directory"
+          ? `${name} and everything in it will move to the Trash.`
+          : `${name} will move to the Trash.`,
+      confirmLabel: "Move to Trash",
+    });
+    if (answer.kind !== "confirmed") return;
+  }
   try {
     await files.delete(uri);
   } catch (error) {
@@ -187,7 +189,8 @@ export async function registerActions(state: ExplorerState) {
     [NEW_FILE, "New File…", "Create a file in the selected folder of the explorer.", (ctx, selected) => create(state, ctx, false, selected)],
     [NEW_FOLDER, "New Folder…", "Create a folder in the selected folder of the explorer.", (ctx, selected) => create(state, ctx, true, selected)],
     [RENAME, "Rename…", "Rename the selected file or folder of the explorer.", (ctx, selected) => rename(state, ctx, selected)],
-    [DELETE, "Delete…", "Move the selected file or folder of the explorer to the Trash.", (ctx, selected) => remove(state, ctx, selected)],
+    [DELETE, "Delete…", "Move the selected file or folder of the explorer to the Trash.", (ctx, selected) => remove(state, ctx, selected, true)],
+    [DELETE_NOW, "Delete Without Confirmation", "Move the selected file or folder of the explorer to the Trash without asking first.", (ctx, selected) => remove(state, ctx, selected, false)],
   ];
   for (const [name, title, description, run] of definitions) {
     // The global handler serves the palette, acting on the active file; the
@@ -197,5 +200,9 @@ export async function registerActions(state: ExplorerState) {
   }
   keymaps.bind("f2", RENAME, { view: VIEW_ID });
   keymaps.bind("delete", DELETE, { view: VIEW_ID });
-  if (platform === "macos") keymaps.bind("cmd-backspace", DELETE, { view: VIEW_ID });
+  keymaps.bind("shift-delete", DELETE_NOW, { view: VIEW_ID });
+  if (platform === "macos") {
+    keymaps.bind("cmd-backspace", DELETE, { view: VIEW_ID });
+    keymaps.bind("cmd-shift-backspace", DELETE_NOW, { view: VIEW_ID });
+  }
 }

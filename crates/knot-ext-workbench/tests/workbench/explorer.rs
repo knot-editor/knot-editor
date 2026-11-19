@@ -454,6 +454,21 @@ fn delete_asks_first_then_moves_the_entry_to_the_trash(cx: &mut TestAppContext) 
 }
 
 #[gpui::test]
+fn delete_without_confirmation_trashes_the_entry_without_asking(cx: &mut TestAppContext) {
+    let directory = fixture();
+    let explorer = Explorer::start_windowed(&[&directory.path().join("app")], cx);
+    explorer.wait_for_labels(&["app", "docs", "src", "README.md"], cx);
+    let (window, tree) = (&explorer.window, &explorer.tree);
+    tree.gesture("README.md", "rightClick", cx);
+    tree.focus(cx);
+
+    window.press("shift-delete", cx);
+    wait_until(cx, |_| !directory.path().join("app/README.md").exists());
+    assert!(!cx.has_pending_prompt());
+    explorer.wait_for_labels(&["app", "docs", "src"], cx);
+}
+
+#[gpui::test]
 fn the_tab_menu_offers_file_actions_on_editor_tabs(cx: &mut TestAppContext) {
     let directory = fixture();
     let explorer = Explorer::start(&[&directory.path().join("app")], cx);
@@ -552,7 +567,7 @@ fn roots_cannot_be_renamed_or_deleted(cx: &mut TestAppContext) {
     explorer.wait_for_labels(&["app", "docs", "src", "README.md"], cx);
     explorer.tree.gesture("app", "rightClick", cx);
     explorer.tree.focus(cx);
-    for command in ["explorer.rename", "explorer.delete"] {
+    for command in ["explorer.rename", "explorer.delete", "explorer.deleteNow"] {
         assert_eq!(
             explorer.window.run_command(command, cx),
             CommandOutcome::Unavailable,
