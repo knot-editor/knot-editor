@@ -548,7 +548,7 @@ Kakoune mode could use them too. The
 
 ### Terminal
 
-- **D041 — Terminal titles, bells, and notifications**
+- **D041 — Terminal titles, bells, and notifications** 🚧
   - Depends on: none
   - Description: Keyboard and mouse protocols, HTTP(S) links, and the
     reported working directory are covered. libghostty also parses window
@@ -556,7 +556,8 @@ Kakoune mode could use them too. The
     them. Do it when daily use misses a program's title or a notification from
     a long-running command: show the title on the terminal tab, mark a tab
     whose terminal rang its bell while hidden, and deliver notifications
-    through notices.
+    through notices. Plan:
+    [d041-terminal-titles-bells-notifications](plans/d041-terminal-titles-bells-notifications.md).
 
 - **D191 — Faster libghostty-vt builds**
   - Depends on: none
