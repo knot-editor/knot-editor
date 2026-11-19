@@ -1,6 +1,6 @@
 # D176: Drag and drop in trees
 
-Status: 🚧 approved, not started. Roadmap item [D176](../roadmap.md).
+Status: 🚧 approved, checkpoint 1 done. Roadmap item [D176](../roadmap.md).
 References: [extension trees](../architecture/semantic-ui.md#extension-trees),
 [tree content and actions](../decisions/semantic-ui.md#extension-tree-content-and-actions),
 [workbench and lifecycle](../architecture/workbench-and-lifecycle.md).
@@ -60,7 +60,7 @@ user.
 
 ## Checkpoints
 
-### 1. Drag and drop inside a tree ✅ (awaiting review gate)
+### 1. Drag and drop inside a tree ✅
 
 Deliverables: the `draggable`, `dropTarget`, and `drop` contract, the native
 drag interaction in `TreeView`, and the drop command event.
@@ -88,12 +88,9 @@ Review gate: in a `Try:` tree registered by `post-init.js`, drag rows between
 targets and check the reported arguments, highlighting, expansion, and
 scrolling.
 
-Done: `draggable`, `dropTarget` and the view's `drop` command (`TreeItem` in
-the protocol, bootstrap, marshal, `knot.d.ts`), `src/app/tree_view/drag.rs`
-(the drag payload, highlight, hover expansion after 700 ms, edge scroll in a
-28 px zone, Escape), and the drop reaching the command as `InvokeCommand`.
-`TreeItem.resource` lands with checkpoint 3. Run `Try: Drag rows between
-targets`; a drop raises a notice with the move or copy and both row IDs.
+Done: the contract and native drag live in `src/app/tree_view/drag.rs`, with
+the 700 ms hover expansion and 28 px edge scroll zone kept after review.
+`TreeItem.resource` lands with checkpoint 3.
 
 ### 2. Explorer moves and copies by drag
 
