@@ -13,7 +13,7 @@ Every item has the same shape:
 - **Description** says what is missing today and when it becomes worth doing,
   then what to build.
 
-The next unused ID is **D205**; take it for a new item and bump this line.
+The next unused ID is **D206**; take it for a new item and bump this line.
 
 Each section is ordered so that an item comes after the items it depends on,
 wherever the sections allow it. Items with no dependencies are ordered by
@@ -222,13 +222,21 @@ hold the analyses that support some items.
     keeping its focus and drop behavior. It lists the recent files and the
     projects of D084.
 
-- **D176 — Drag and drop in trees**
+- **D176 — Drag and drop in trees** 🚧
   - Depends on: none
   - Description: The explorer moves files through Cut and Paste or Rename;
     contributed trees take no drags or drops. Do it when daily use wants files
     moved by pointer: add native drag sources and drop targets to contributed
     trees, reported to the extension as semantic row IDs, and use them in the
-    explorer.
+    explorer. Plan: [d176-tree-drag-and-drop](plans/d176-tree-drag-and-drop.md).
+
+- **D205 — Drag tree rows to other apps**
+  - Depends on: D176
+  - Description: Tree rows drag only within Knot. Finder, mail clients, and
+    other apps take nothing from them. Do it when daily use wants to hand an
+    explorer file to another app: start a native OS drag carrying the row's
+    `resource` as a file when the pointer leaves the window, and decide
+    whether that drag copies or moves.
 
 - **D177 — Multi-select in trees**
   - Depends on: none
