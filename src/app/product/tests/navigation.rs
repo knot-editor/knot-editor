@@ -286,6 +286,64 @@ fn moving_tabs_by_direction_splits_at_edges_skips_docks_and_collapses_emptied_pa
 }
 
 #[gpui::test]
+fn counted_directional_focus_steps_from_each_landing_and_stops_at_the_edge(
+    cx: &mut TestAppContext,
+) {
+    use crate::app::commands::dispatch::{
+        FOCUS_PANE_LEFT_COMMAND, FOCUS_PANE_RIGHT_COMMAND, SPLIT_HORIZONTAL_COMMAND,
+    };
+    use crate::app::product::tests::dispatch_product_command_with;
+    use knot_protocol::CommandArgumentValue as Value;
+    let (window, native_window) = docked_window(cx);
+    let (dock, main) = dock_and_main(&window, cx);
+    focus(&window, native_window, main, cx);
+    run(&window, native_window, SPLIT_HORIZONTAL_COMMAND, cx);
+    let middle = focused(&window, cx);
+    run(&window, native_window, SPLIT_HORIZONTAL_COMMAND, cx);
+    let last = focused(&window, cx);
+    focus(&window, native_window, main, cx);
+    let step = |name: &'static str, count: f64, within_area: bool, cx: &mut TestAppContext| {
+        let arguments = Value::Object(
+            [
+                ("count".to_owned(), Value::Number(count)),
+                ("withinArea".to_owned(), Value::Boolean(within_area)),
+            ]
+            .into(),
+        );
+        let execution = dispatch_product_command_with(&window, native_window, name, arguments, cx);
+        wait_for_command(execution, cx)
+    };
+
+    assert_eq!(
+        step(FOCUS_PANE_RIGHT_COMMAND, 1., true, cx),
+        CommandOutcome::Completed
+    );
+    assert_eq!(focused(&window, cx), middle);
+    focus(&window, native_window, main, cx);
+    step(FOCUS_PANE_RIGHT_COMMAND, 2., true, cx);
+    assert_eq!(focused(&window, cx), last);
+    // A count past the edge stops at the last pane; at the edge nothing moves.
+    focus(&window, native_window, main, cx);
+    step(FOCUS_PANE_RIGHT_COMMAND, 9., true, cx);
+    assert_eq!(focused(&window, cx), last);
+    assert_eq!(
+        step(FOCUS_PANE_RIGHT_COMMAND, 2., true, cx),
+        CommandOutcome::Unavailable
+    );
+    // `withinArea` keeps the walk out of the dock, which it otherwise enters.
+    step(FOCUS_PANE_LEFT_COMMAND, 9., true, cx);
+    assert_eq!(focused(&window, cx), main);
+    step(FOCUS_PANE_LEFT_COMMAND, 9., false, cx);
+    assert_eq!(focused(&window, cx), dock);
+    for bad in [0., 1.5, -1.] {
+        assert!(matches!(
+            step(FOCUS_PANE_LEFT_COMMAND, bad, false, cx),
+            CommandOutcome::InvalidArgument { .. }
+        ));
+    }
+}
+
+#[gpui::test]
 fn maximize_ends_on_toggle_split_close_and_directional_focus(cx: &mut TestAppContext) {
     use crate::app::commands::dispatch::{
         CLOSE_TAB_COMMAND, FOCUS_PANE_LEFT_COMMAND, SPLIT_HORIZONTAL_COMMAND,

@@ -467,29 +467,51 @@ async fn focus_chosen(
         .await
 }
 
-/// Where directional focus may land: any painted pane, or, with
-/// `{ "withinArea": true }`, only panes of the focused pane's area, as Vim's
-/// `ctrl-w` keys keep to the center.
-#[derive(Clone, Copy, Default)]
+/// Where directional focus may land and how far it goes: any painted pane,
+/// or, with `{ "withinArea": true }`, only panes of the focused pane's area,
+/// as Vim's `ctrl-w` keys keep to the center; `{ "count": n }` steps `n`
+/// panes, each from the pane the last step landed on, and stops at the edge.
+#[derive(Clone, Copy)]
 pub(crate) struct FocusScope {
     within_area: bool,
+    count: u32,
+}
+
+impl Default for FocusScope {
+    fn default() -> Self {
+        Self {
+            within_area: false,
+            count: 1,
+        }
+    }
 }
 
 impl crate::app::commands::declarations::CommandArguments for FocusScope {
     fn decode(value: &CommandArgumentValue) -> Result<Self, CommandOutcome> {
         let invalid = || CommandOutcome::InvalidArgument {
-            message: "expected null or { withinArea: boolean }".into(),
+            message: "expected null or { withinArea?: boolean, count?: positive integer }".into(),
         };
-        match value {
-            CommandArgumentValue::Null => Ok(Self::default()),
-            CommandArgumentValue::Object(fields) => match fields.get("withinArea") {
-                Some(CommandArgumentValue::Boolean(within_area)) if fields.len() == 1 => Ok(Self {
-                    within_area: *within_area,
-                }),
+        let CommandArgumentValue::Object(fields) = value else {
+            return match value {
+                CommandArgumentValue::Null => Ok(Self::default()),
                 _ => Err(invalid()),
-            },
-            _ => Err(invalid()),
+            };
+        };
+        let mut scope = Self::default();
+        for (name, field) in fields.iter() {
+            match (name.as_str(), field) {
+                ("withinArea", CommandArgumentValue::Boolean(within_area)) => {
+                    scope.within_area = *within_area;
+                }
+                ("count", CommandArgumentValue::Number(count))
+                    if count.fract() == 0.0 && (1.0..=f64::from(u32::MAX)).contains(count) =>
+                {
+                    scope.count = *count as u32;
+                }
+                _ => return Err(invalid()),
+            }
         }
+        Ok(scope)
     }
 }
 
@@ -500,7 +522,7 @@ async fn focus_toward(
 ) -> Result<(), CommandOutcome> {
     context
         .window(move |window, target, cx| {
-            window.focus_pane_toward(target.tab()?.pane, edge, scope.within_area, cx)
+            window.focus_pane_toward(target.tab()?.pane, edge, scope.within_area, scope.count, cx)
         })
         .await
 }

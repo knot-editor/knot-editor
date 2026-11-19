@@ -158,23 +158,32 @@ impl KnotWindow {
         crate::app::workbench::neighbor(&rects, pane, edge)
     }
 
-    /// Focus the pane beside `pane` toward `edge`, in its area when
-    /// `within_area`, restoring the layout.
+    /// Focus the pane `count` steps beside `pane` toward `edge`, in its area
+    /// when `within_area`, stopping at the last pane there is and restoring
+    /// the layout. Unavailable only when not even the first step has a pane.
     pub(super) fn focus_pane_toward(
         &mut self,
         pane: PaneId,
         edge: SplitEdge,
         within_area: bool,
+        count: u32,
         cx: &mut Context<Self>,
     ) -> Result<(), CommandOutcome> {
         self.maximized = None;
         cx.notify();
         let own = self.workbench.read(cx).pane_area(pane);
-        let neighbor = self
-            .neighbor(pane, edge, |area| !within_area || Some(area) == own, cx)
-            .ok_or(CommandOutcome::Unavailable)?;
+        let mut landed = pane;
+        for _ in 0..count {
+            match self.neighbor(landed, edge, |area| !within_area || Some(area) == own, cx) {
+                Some(neighbor) => landed = neighbor,
+                None => break,
+            }
+        }
+        if landed == pane {
+            return Err(CommandOutcome::Unavailable);
+        }
         self.workbench
-            .update(cx, |workbench, _| workbench.focus_pane(neighbor));
+            .update(cx, |workbench, _| workbench.focus_pane(landed));
         self.focus_active_surface(cx);
         Ok(())
     }

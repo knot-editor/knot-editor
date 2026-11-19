@@ -557,8 +557,9 @@ const WINDOW_COMMANDS: Readonly<Record<WindowAction, string>> = {
 /** The most a count repeats a window command, as panes are few. */
 const WINDOW_REPEAT_LIMIT = 20;
 
-/** Actions a count repeats; the others ignore it. A count cannot repeat
- * moving focus: every child command keeps the pane the command started in. */
+/** Actions a count repeats; the others ignore it. Moving focus takes the
+ * count itself, as repeating it would restart from the pane the command
+ * began in. */
 const REPEATED = new Set<WindowAction>(["taller", "shorter", "wider", "narrower"]);
 
 /** Moving focus by direction stays among the center's editors, never
@@ -567,7 +568,9 @@ const IN_AREA = new Set<WindowAction>(["focus-left", "focus-down", "focus-up", "
 
 async function windowCommand(action: WindowAction, count: number | null) {
   const times = REPEATED.has(action) ? Math.min(count ?? 1, WINDOW_REPEAT_LIMIT) : 1;
-  const args = IN_AREA.has(action) ? { withinArea: true } : undefined;
+  const args = IN_AREA.has(action)
+    ? { withinArea: true, count: Math.min(count ?? 1, WINDOW_REPEAT_LIMIT) }
+    : undefined;
   for (let n = 0; n < times; n++) await commands.invoke(WINDOW_COMMANDS[action], args);
 }
 

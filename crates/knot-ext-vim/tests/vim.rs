@@ -1188,6 +1188,29 @@ fn ctrl_w_capital_moves_the_tab_between_panes(cx: &mut TestAppContext) {
     assert_eq!(test_editor.pane_count(cx), 1, "the emptied pane collapses");
 }
 
+/// A count before `ctrl-w` and a direction walks that many panes, stopping at
+/// the edge.
+#[gpui::test]
+fn ctrl_w_counts_walk_panes(cx: &mut TestAppContext) {
+    let product = start(cx);
+    let test_editor = open(&product, "one\ntwo", 0, cx);
+    test_editor.press("<c-w>v", cx);
+    test_editor.press("<c-w>v", cx);
+    assert_eq!(test_editor.pane_count(cx), 3);
+    test_editor.press("<c-w>t", cx);
+    assert_eq!(test_editor.focused_pane(cx), 0);
+    test_editor.press("2<c-w>l", cx);
+    assert_eq!(test_editor.focused_pane(cx), 2);
+    test_editor.press("9<c-w>h", cx);
+    assert_eq!(
+        test_editor.focused_pane(cx),
+        0,
+        "the walk stops at the edge"
+    );
+    test_editor.press("<c-w>3l", cx);
+    assert_eq!(test_editor.focused_pane(cx), 2);
+}
+
 /// A count before or after `ctrl-w` repeats resizing by a step.
 #[gpui::test]
 fn ctrl_w_counts_repeat_resizing(cx: &mut TestAppContext) {

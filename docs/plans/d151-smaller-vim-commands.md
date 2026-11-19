@@ -1,6 +1,6 @@
 # D151 — Smaller Vim commands
 
-Status: 🚧 approved, not started. Roadmap item [D151](../roadmap.md#vim-mode).
+Status: 🚧 in progress; checkpoint 1 awaits review. Roadmap item [D151](../roadmap.md#vim-mode).
 
 ## Goal
 
@@ -35,12 +35,12 @@ visual mode, and sentence motions and objects.
 
 ## Checkpoints
 
-### 1. Counted `ctrl-w` focus
+### 1. Counted `ctrl-w` focus ✅
 
-- Add `count` to `FocusScope` and loop in `focus_toward`; pass the count from
-  `windowCommand` for the four focus actions; update the command argument
-  docs.
-- Validation: a Rust workbench test (several panes, stopping at the edge,
+- ✅ Add `count` to `FocusScope` and loop in `focus_pane_toward`; pass the
+  count from `windowCommand` for the four focus actions; update the command
+  argument docs.
+- ✅ Validation: a Rust workbench test (several panes, stopping at the edge,
   `withinArea`), and a Vim test through the real editor.
 - Review gate: `3<c-w>l` and `2<c-w>j` land where Vim would.
 - **Implementation context:** `src/app/product/commands.rs` (`FocusScope`,

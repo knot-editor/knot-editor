@@ -285,7 +285,8 @@ from ratios and tool-window sizes over the painted workbench, so they work while
 pane is maximized; a move goes only to a neighbor whose area allows the tab,
 and with none splits the pane on that side. Focus commands given
 `{ withinArea: true }` stay in the focused pane's area, which keeps Vim's
-`ctrl-w` keys among the center's editors. Cycling and first and last pane
+`ctrl-w` keys among the center's editors; given `{ count: n }` they step `n`
+panes, each from the pane the last step reached, and stop at the edge. Cycling and first and last pane
 commands walk the focused pane's area in layout order, and the workbench
 remembers the previously focused pane. Resizing can be limited to the width or
 the height, which changes the nearest split along that axis, or, along a
