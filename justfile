@@ -4,9 +4,10 @@ set default-list := true
 fmt:
     cargo fmt
 
-# Lint the product build (no test features) and all Rust targets
+# Lint the product build (no test features), the release profile (no debug assertions), and all Rust targets
 lint:
     cargo clippy --locked --workspace -- -D warnings
+    cargo clippy --locked --release --workspace -- -D warnings
     cargo clippy --locked --workspace --all-targets -- -D warnings
 
 # Run all Rust tests, each in its own process, then doc tests
