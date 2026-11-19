@@ -63,12 +63,12 @@ visual mode, and sentence motions and objects.
   ~208, 274, 312), `motions.ts`, `registers.ts` for put text; the
   last-insert position goes where `normal.ts` stores marks (~line 690).
 
-### 3. Growing `i(` and `a(` in visual mode
+### 3. Growing `i(` and `a(` in visual mode 🚧
 
-- A repeated pair object with a non-empty selection selects the enclosing
-  pair, for each bracket and quote object that nests.
-- Validation: cases in `objects.test.ts` and visual-mode editor tests.
-- Review gate: repeated `vi(` and `va(` grow outward as in Vim.
+- ✅ A repeated pair object with a non-empty selection selects the enclosing
+  pair, for each bracket object (quotes do not nest, so they are unchanged).
+- ✅ Validation: visual-mode editor cases in `test/cases/visual.jsonc`.
+- Review gate (`try.grow-pair-objects`): repeated `vi(` and `va(` grow outward as in Vim.
 - **Implementation context:** `objects.ts` (`textObject`), `visual.ts`
   (`select-object` command), `keys.ts` (`select-object`).
 

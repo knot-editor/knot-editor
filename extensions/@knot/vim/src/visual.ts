@@ -271,6 +271,8 @@ async function selectedRegion(
   return { region: { start: from, end, linewise: false }, from };
 }
 
+const PAIR_OBJECTS = new Set<TextObject>(["paren", "brace", "bracket", "angle"]);
+
 /** A text object typed in visual mode selects it, or adds it to a
  * selection of more than one character. A linewise object, as `ip` is,
  * switches to visual-line mode. */
@@ -280,17 +282,34 @@ async function selectObject(state: State, lines: BufferLines, object: TextObject
   // takes the next word.
   const extending = visual.anchor !== visual.caret;
   const at = extending && visual.caret > visual.anchor ? await characterEnd(lines, visual.caret) : visual.caret;
-  const region = await textObject(lines, await lines.position(at), object, around, count);
-  if (region === null) return;
   let start: Position;
   let last: Position;
-  if (region.linewise) {
-    start = { line: region.start.line, col: 0 };
-    last = { line: region.end.line, col: 0 };
-    await setMode(state, "visual-line");
+  if (extending && PAIR_OBJECTS.has(object)) {
+    // A pair object grows to the nearest enclosing pair that selects more.
+    const low = await lines.offset((await lines.position(Math.min(visual.anchor, visual.caret))));
+    const high = Math.max(visual.anchor, visual.caret);
+    let grown: { start: Position; last: Position } | null = null;
+    for (let n = count; grown === null; n++) {
+      const region = await textObject(lines, await lines.position(low), object, around, n);
+      if (region === null) return;
+      const bounds = await inclusive(lines, region);
+      if (!before(bounds.start, bounds.last)) continue;
+      const first = await lines.offset(bounds.start);
+      const end = await lines.offset(bounds.last);
+      if (first <= low && end >= high && (first < low || end > high)) grown = bounds;
+    }
+    ({ start, last } = grown);
   } else {
-    ({ start, last } = await inclusive(lines, region));
-    if (!before(start, last)) return;
+    const region = await textObject(lines, await lines.position(at), object, around, count);
+    if (region === null) return;
+    if (region.linewise) {
+      start = { line: region.start.line, col: 0 };
+      last = { line: region.end.line, col: 0 };
+      await setMode(state, "visual-line");
+    } else {
+      ({ start, last } = await inclusive(lines, region));
+      if (!before(start, last)) return;
+    }
   }
   let anchor = await lines.offset(start);
   let caret = await lines.offset(last);
