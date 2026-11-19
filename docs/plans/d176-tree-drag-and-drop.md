@@ -1,6 +1,6 @@
 # D176: Drag and drop in trees
 
-Status: 🚧 approved, checkpoints 1 and 2 done, 3 awaiting review. Roadmap item [D176](../roadmap.md).
+Status: 🚧 approved, checkpoints 1 to 3 done. Roadmap item [D176](../roadmap.md).
 References: [extension trees](../architecture/semantic-ui.md#extension-trees),
 [tree content and actions](../decisions/semantic-ui.md#extension-tree-content-and-actions),
 [workbench and lifecycle](../architecture/workbench-and-lifecycle.md).
@@ -98,37 +98,12 @@ Done: explorer rows declare the payload, and the `drop` command in
 `extensions/@knot/explorer/src/clipboard.ts` moves or copies through the helper
 Paste shares. A folder dropped into itself or a descendant is refused.
 
-### 3. Dropping a resource on the editor area ✅ (review gate pending)
+### 3. Dropping a resource on the editor area ✅
 
-Done: `TreeItem.resource` reaches the drag value; the window previews and
-opens it from `drop_resource` in `src/app/product/tab_drag.rs`. A split edge
-splits the pane and the open replaces the split's duplicated tab, which stays
-if the open fails. Tests: `src/app/product/tests/resource_drop.rs`. Try
-command: `Try: Drag rows onto the editor area`.
-
-Deliverables: `TreeItem.resource`. Over the center, a resource drag shows the
-tab-drag pane and split previews, and a drop opens the resource pinned in that
-pane or new split. Explorer file rows set `resource`.
-
-Validation: product gpui tests for dropping into a pane, onto a pane edge, and
-into the empty center; for a row without a resource offering no center
-target; and for a failing resource reporting through the open notice.
-Explorer tests confirm rows carry their URI.
-
-Implementation context:
-- `TreeItem.resource` as in checkpoint 1. The resource travels in the drag
-  value.
-- Center targets: `src/app/product/tab_drag.rs`. `TabDragState::target_at`
-  and the pane, split, and empty-center geometry already paint
-  per frame. Look up targets as for a document surface, and keep this drag
-  inside its window, so the cross-window coordinator is not involved.
-- Opening: `src/app/product/open.rs` (`start_open_operation_with`,
-  `present_open_document`) with an `OpenTarget` (`src/app/product.rs`) for
-  the destination pane. A split edge first creates the pane through the
-  workbench split used by tab relocation.
-
-Review gate: drag explorer files into panes, onto split edges, and into an
-empty center.
+Done: `TreeItem.resource` rides in the drag value, and `drop_resource` in
+`src/app/product/tab_drag.rs` previews and opens it. A split edge splits the
+pane and the open replaces the split's duplicated tab, which stays if the open
+fails.
 
 ### Closing
 
