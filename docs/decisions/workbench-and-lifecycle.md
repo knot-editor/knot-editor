@@ -170,7 +170,7 @@ than pushed with every change, so cursor movement costs one capture per settled
 second and listeners write only changed records.
 
 References: [window layouts](../architecture/workbench-and-lifecycle.md#window-layouts)
-and [extension guide](../extension-api.md#project-sessions).
+and [projects](../architecture/workbench-and-lifecycle.md#projects).
 
 ## Session replacement contract
 

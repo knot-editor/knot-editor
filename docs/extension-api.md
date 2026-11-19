@@ -1454,43 +1454,8 @@ fail to load are skipped and reported while the rest commits. When `protected`
 is true, restored dirty text is already covered by automatic recovery and the
 captures you restored from can be released once your new record is durable.
 
-`@knot/projects` keeps one `session:<projectId>` record per project, separate
-from its registry record, with each window's entries and layout. A session is
-`active` while the project has windows; a window belongs to it when its roots
-equal the project's roots, in any order, and the session is active. A window
-showing a folder set no project has creates an unnamed project, named after its
-first root's folder until renamed; the `projects.rememberedLimit` setting bounds
-how many unnamed projects are kept, sparing named and active ones and ones
-holding unsaved text. Opening a suspended project's folder restores the
-project: an otherwise empty window is replaced by its windows, and a window
-with other content stays while the project opens in a new one. Adding or removing a folder
-in a bound window updates the project and its other windows; clearing the
-folders, or choosing another project's folders, takes the window out of the
-project. The Projects tool's New Window action (`projects.new-window`) opens
-another window on the current window's project, while File › New Blank Window
-opens one outside any project. Selecting a project suspends the current one,
-retaining its unsaved and untitled text and layouts in the suspended record,
-and restores the destination's windows with their splits, docks, and view
-state; a project may span several windows. While active, the record follows
-tabs and view state live. At startup Knot itself restores every window from the
-last session and only then reports `launched`; the registry then rebinds the
-restored windows by their roots and suspends active projects whose windows did
-not return. Closing a project's last window suspends it without captures,
-because closure already asked about dirty documents. Removing a suspended
-project says how many unsaved documents its record discards. A session record
-written by a newer version is kept unchanged, marked unreadable in the Projects
-tool, and never switched to; while one exists, no retained capture is released
-as an orphan.
-
-The registry also infers projects from Git checkouts, using `files.stat` and
-`homeUri`. A file opened alone in a window without folders, as `knot <file>`
-does for a file no open folder holds, or saved there to a new file, makes the
-nearest folder holding a `.git` entry that window's project, never the
-filesystem root or the home folder. A new folder becomes the window's folder in
-place; a suspended project is restored and the window's tabs move into it.
-Open Containing Repository as Project (`projects.open-containing-repository`)
-does the same on request; from a window with folders, the repository opens in
-a new window and the current project stays open.
+The bundled `@knot/projects` package builds project switching on these calls;
+its behavior is described under [projects](architecture/workbench-and-lifecycle.md#projects).
 
 If a package stops responding, the palette's Developer: Restart Extension…
 stops and reloads it, re-reading an installed package from disk.

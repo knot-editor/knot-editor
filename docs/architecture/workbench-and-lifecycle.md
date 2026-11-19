@@ -382,7 +382,7 @@ a changed layout or root set re-records the window for
 `workbench.replaceWindows` closes a set of windows and opens their replacements
 in one foreground commit. It knows windows, documents, roots, layouts, and
 retained captures, never projects; the
-[project registry](../extension-api.md#project-sessions) builds its switch on
+[project registry](#projects) builds its switch on
 it, and native startup reuses it with no released windows. Admission claims the
 protected-closure slot, so it never interleaves with closure prompts, quit, or
 another replacement, and captures every released window. Staging validates
@@ -409,6 +409,53 @@ reported and skipped, and a failed entry is skipped with its error code while th
 rest commits. Restored dirty documents are drained to durable automatic recovery
 before the operation resolves, so the caller can release the captures they came
 from.
+
+## Projects
+
+The bundled `@knot/projects` package owns projects; the host knows only
+[session replacement](#session-replacement). The package keeps one registry
+record and one `session:<projectId>` record per project, holding each window's
+entries and layout.
+
+A session is `active` while the project has windows. A window belongs to a
+project when its roots equal the project's roots, in any order, and the session
+is active. A window showing a folder set no project has creates an unnamed
+project, named after its first root's folder until renamed; the
+`projects.rememberedLimit` setting bounds how many unnamed projects are kept,
+sparing named and active ones and ones holding unsaved text. Adding or removing
+a folder in a bound window updates the project and its other windows; clearing
+the folders, or choosing another project's folders, takes the window out of the
+project.
+
+Selecting a project suspends the current one, retaining its unsaved and
+untitled text and layouts in the suspended record, and restores the
+destination's windows with their splits, docks, and view state; a project may
+span several windows. While active, the record follows tabs and view state
+live. Opening a suspended project's folder restores it: an otherwise empty
+window is replaced by its windows, and a window with other content stays while
+the project opens in a new one. Closing a project's last window suspends it
+without captures, because closure already asked about dirty documents. Removing
+a suspended project says how many unsaved documents its record discards. The
+Projects tool's New Window action (`projects.new-window`) opens another window
+on the current window's project, while File › New Blank Window opens one
+outside any project.
+
+At startup the application restores every window from the last session and only
+then reports `launched`; the registry then rebinds the restored windows by
+their roots and suspends active projects whose windows did not return. A
+session record written by a newer version is kept unchanged, marked unreadable
+in the Projects tool, and never switched to; while one exists, no retained
+capture is released as an orphan.
+
+The registry also infers projects from Git checkouts, using `files.stat` and
+`homeUri`. A file opened alone in a window without folders, as `knot <file>`
+does for a file no open folder holds, or saved there to a new file, makes the
+nearest folder holding a `.git` entry that window's project, never the
+filesystem root or the home folder. A new folder becomes the window's folder in
+place; a suspended project is restored and the window's tabs move into it.
+Open Containing Repository as Project (`projects.open-containing-repository`)
+does the same on request; from a window with folders, the repository opens in
+a new window and the current project stays open.
 
 ## Native window hot exit
 

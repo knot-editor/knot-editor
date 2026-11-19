@@ -123,7 +123,7 @@ Projects follow root edits, so a project stays one root set across its windows
 without a separate Add Folder to Project command. Clearing the roots, or choosing
 another project's set, unbinds the window rather than merging projects.
 
-References: [extension guide](../extension-api.md#project-sessions) and
+References: [projects](../architecture/workbench-and-lifecycle.md#projects) and
 [automatic tool-layout memory](../architecture/workbench-and-lifecycle.md#automatic-tool-layout-memory).
 
 ## Project sessions
@@ -153,7 +153,7 @@ write reactivates. A racing edit retries with fresh captures, up to three times.
 A partial restore commits and reports the skipped entries rather than rolling
 back, because the source is already durably suspended.
 
-References: [extension guide](../extension-api.md#project-sessions) and
+References: [projects](../architecture/workbench-and-lifecycle.md#projects) and
 [session replacement](../architecture/workbench-and-lifecycle.md#session-replacement).
 
 ## Project inference
@@ -184,4 +184,4 @@ window. Adding the checkout as a root of a rooted window would silently change
 that project's identity, and a plain switch from it would close its project's
 windows.
 
-References: [extension guide](../extension-api.md#project-sessions).
+References: [projects](../architecture/workbench-and-lifecycle.md#projects).
