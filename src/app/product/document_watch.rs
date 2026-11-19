@@ -14,6 +14,7 @@ use knot_model::{
 };
 
 use super::ApplicationFileSystems;
+use crate::app::extensions::host::handlers::{AccessError, OpenError};
 use crate::app::{
     application_observation,
     documents::{ApplicationDocuments, DocumentDirty as _, DocumentState},
@@ -291,51 +292,75 @@ fn apply(id: DocumentId, snapshot: &Snapshot, text: &str, version: ResourceVersi
 }
 
 /// Replace the document's text with its file's, as a line diff that Undo
-/// takes back. Edits made while the file is read win.
-pub(super) fn reload(id: DocumentId, cx: &mut App) {
+/// takes back. Edits made while the file is read win. `completion` learns
+/// whether the text became the file's.
+pub(crate) fn reload(
+    id: DocumentId,
+    completion: impl FnOnce(Result<(), OpenError>, &mut App) + 'static,
+    cx: &mut App,
+) {
     let Some(snapshot) = snapshot(id, cx) else {
+        completion(Err(OpenError::ResourceNotFound), cx);
         return;
     };
     let Some(providers) = cx
         .try_global::<ApplicationFileSystems>()
         .map(|g| g.0.clone())
     else {
+        completion(Err(OpenError::ProviderFailure), cx);
         return;
     };
     let uri = snapshot.uri.clone();
     cx.spawn(async move |cx| {
         let loaded = load_resource_kind(providers, uri, Some(ResourceKind::File)).await;
-        let Ok(OpenResource::File { text, version, .. }) = loaded else {
-            return;
-        };
         cx.update(|cx| {
-            if !unchanged_since(id, &snapshot, cx)
-                || snapshot.model.read(cx).revision() != snapshot.revision
-            {
-                return;
-            }
-            let documents = cx.global::<ApplicationDocuments>().0.clone();
-            let title = documents
-                .read(cx)
-                .get(id)
-                .map(|document| document.title().to_owned())
-                .unwrap_or_default();
-            documents.update(cx, |documents, cx| {
-                if let Some(capture) = documents.begin_persistence(id, &snapshot.model) {
-                    documents.finish_reload(
-                        id,
-                        &snapshot.model,
-                        &capture,
-                        &text,
-                        (title, snapshot.uri.clone()),
-                        version,
-                        cx,
-                    );
+            let result = match loaded {
+                Ok(OpenResource::File { text, version, .. }) => {
+                    finish_reload(id, &snapshot, &text, version, cx)
                 }
-            });
+                Ok(_) => Err(OpenError::ResourceWrongKind),
+                Err(error) => Err(super::operations::resource_error(error)),
+            };
+            completion(result, cx);
         });
     })
     .detach();
+}
+
+fn finish_reload(
+    id: DocumentId,
+    snapshot: &Snapshot,
+    text: &str,
+    version: ResourceVersion,
+    cx: &mut App,
+) -> Result<(), OpenError> {
+    if !unchanged_since(id, snapshot, cx) || snapshot.model.read(cx).revision() != snapshot.revision
+    {
+        return Err(OpenError::Access(AccessError::Cancelled));
+    }
+    let documents = cx.global::<ApplicationDocuments>().0.clone();
+    let title = documents
+        .read(cx)
+        .get(id)
+        .map(|document| document.title().to_owned())
+        .unwrap_or_default();
+    let reloaded = documents.update(cx, |documents, cx| {
+        let capture = documents.begin_persistence(id, &snapshot.model)?;
+        Some(documents.finish_reload(
+            id,
+            &snapshot.model,
+            &capture,
+            text,
+            (title, snapshot.uri.clone()),
+            version,
+            cx,
+        ))
+    });
+    if reloaded == Some(true) {
+        Ok(())
+    } else {
+        Err(OpenError::Access(AccessError::Cancelled))
+    }
 }
 
 /// Ask each window whose focused document was marked changed on disk.
@@ -393,7 +418,7 @@ impl super::KnotWindow {
         );
         let task = cx.spawn(async move |_, cx| {
             if answer.await.unwrap_or(1) == 0 {
-                cx.update(|cx| reload(id, cx));
+                cx.update(|cx| reload(id, |_, _| {}, cx));
             }
         });
         self.tasks.push(task);

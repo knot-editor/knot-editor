@@ -2474,6 +2474,34 @@ async fn create_file(
     Ok(uri.to_string())
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct WriteFileArguments {
+    uri: String,
+    text: String,
+}
+
+impl HostArguments for WriteFileArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self {
+            uri: reader.text(2, "resource URI must be text")?,
+            text: reader.text(3, "file text must be text")?,
+        })
+    }
+}
+
+#[host_operation("writeFileText")]
+async fn write_file_text(
+    context: HostContext,
+    arguments: WriteFileArguments,
+) -> Result<String, OpenError> {
+    let providers = context.foreground(|_, cx| KnotWindow::filesystems(cx))?;
+    let uri = knot_model::files::write_text(providers, &arguments.uri, &arguments.text)
+        .await
+        .map_err(|error| product::operations::resource_error(error.into()))?;
+    refresh_file_index(&context, std::slice::from_ref(&uri)).await;
+    Ok(uri.to_string())
+}
+
 /// Bring the workspace file indexes up to date with a change the application
 /// made, so a listing right afterwards sees it without waiting for the watch.
 async fn refresh_file_index(context: &HostContext, changed: &[crate::app::resource::ResourceUri]) {
@@ -5083,6 +5111,71 @@ impl HostArguments for DocumentLanguageArguments {
             language: reader.optional_text(3, "language must be text or null")?,
         })
     }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct DocumentIdArguments {
+    id: String,
+}
+
+impl HostArguments for DocumentIdArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self {
+            id: reader.text(2, "document identity must be text")?,
+        })
+    }
+}
+
+#[host_operation("reloadDocument")]
+async fn reload_document(
+    context: HostContext,
+    arguments: DocumentIdArguments,
+) -> Result<(), OpenError> {
+    let (sender, receiver) = tokio::sync::oneshot::channel();
+    context.foreground(move |_, cx| {
+        product::operations::reload_document(
+            &arguments.id,
+            move |result, _| {
+                let _ = sender.send(result);
+            },
+            cx,
+        )
+    })??;
+    receiver.await.map_err(|_| AccessError::Cancelled)?
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct SaveDocumentArguments {
+    id: String,
+    uri: Option<String>,
+}
+
+impl HostArguments for SaveDocumentArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self {
+            id: reader.text(2, "document identity must be text")?,
+            uri: reader.optional_text(3, "resource URI must be text or null")?,
+        })
+    }
+}
+
+#[host_operation("saveDocument")]
+async fn save_document(
+    context: HostContext,
+    arguments: SaveDocumentArguments,
+) -> Result<(), OpenError> {
+    let (sender, receiver) = tokio::sync::oneshot::channel();
+    context.foreground(move |_, cx| {
+        product::operations::save_document(
+            &arguments.id,
+            arguments.uri,
+            move |result, _| {
+                let _ = sender.send(result);
+            },
+            cx,
+        )
+    })??;
+    receiver.await.map_err(|_| AccessError::Cancelled)?
 }
 
 #[host_operation("setDocumentLanguage")]

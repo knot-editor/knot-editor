@@ -191,52 +191,7 @@ impl KnotWindow {
         cx.notify();
         let providers = Self::filesystems(cx);
         let task = cx.spawn(async move |this, cx| {
-            let result: Result<
-                (crate::app::resource::ResourceUri, ResourceVersion),
-                ResourceError,
-            > = async {
-                let uri = providers.normalize(uri).await?;
-                let provider = providers.provider(&uri)?;
-                let version = if explicit_overwrite {
-                    match provider.stat(uri.clone()).await? {
-                        ResourceStat::Missing => {
-                            provider.create(uri.clone(), text.into_bytes()).await?
-                        }
-                        ResourceStat::File => {
-                            let existing = provider.read(uri.clone()).await?;
-                            provider
-                                .replace(uri.clone(), existing.version, text.into_bytes())
-                                .await?
-                        }
-                        ResourceStat::Directory => {
-                            return Err(ResourceError::WrongKind {
-                                uri,
-                                expected: ResourceKind::File,
-                                actual: ResourceKind::Directory,
-                            });
-                        }
-                    }
-                } else {
-                    match state {
-                        DocumentState::Destination { .. } => {
-                            provider.create(uri.clone(), text.into_bytes()).await?
-                        }
-                        DocumentState::Persisted { version, .. } => {
-                            provider
-                                .replace(uri.clone(), version, text.into_bytes())
-                                .await?
-                        }
-                        DocumentState::Untitled { .. } => {
-                            return Err(ResourceError::InvalidUri {
-                                uri: uri.to_string(),
-                                reason: "document has no direct save destination".into(),
-                            });
-                        }
-                    }
-                };
-                Ok((uri, version))
-            }
-            .await;
+            let result = write_document_text(providers, uri, text, state, explicit_overwrite).await;
             let fallback = completion.clone();
             if this
                 .update(cx, |this, cx| match result {
@@ -425,4 +380,55 @@ impl KnotWindow {
 /// The action a Save failure offers: save the document elsewhere.
 fn save_as_action() -> NoticeAction {
     crate::app::notifications::action("Save As…", "file.save-as")
+}
+
+/// Write a document's text to `uri` through its provider. With
+/// `explicit_overwrite` an existing file is replaced; otherwise the document's
+/// own state decides: a destination is created and a persisted file is
+/// replaced only if it still has the recorded version.
+pub(super) async fn write_document_text(
+    providers: Arc<FileSystemProviderRegistry>,
+    uri: crate::app::resource::ResourceUri,
+    text: String,
+    state: DocumentState,
+    explicit_overwrite: bool,
+) -> Result<(crate::app::resource::ResourceUri, ResourceVersion), ResourceError> {
+    let uri = providers.normalize(uri).await?;
+    let provider = providers.provider(&uri)?;
+    let version = if explicit_overwrite {
+        match provider.stat(uri.clone()).await? {
+            ResourceStat::Missing => provider.create(uri.clone(), text.into_bytes()).await?,
+            ResourceStat::File => {
+                let existing = provider.read(uri.clone()).await?;
+                provider
+                    .replace(uri.clone(), existing.version, text.into_bytes())
+                    .await?
+            }
+            ResourceStat::Directory => {
+                return Err(ResourceError::WrongKind {
+                    uri,
+                    expected: ResourceKind::File,
+                    actual: ResourceKind::Directory,
+                });
+            }
+        }
+    } else {
+        match state {
+            DocumentState::Destination { .. } => {
+                provider.create(uri.clone(), text.into_bytes()).await?
+            }
+            DocumentState::Persisted { version, .. } => {
+                provider
+                    .replace(uri.clone(), version, text.into_bytes())
+                    .await?
+            }
+            DocumentState::Untitled { .. } => {
+                return Err(ResourceError::InvalidUri {
+                    uri: uri.to_string(),
+                    reason: "document has no direct save destination".into(),
+                });
+            }
+        }
+    };
+    Ok((uri, version))
 }

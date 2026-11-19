@@ -267,6 +267,11 @@ await documents.open("file:///tmp/document.txt", { target: {} });
 
 const untitled = await documents.createUntitled({ target: opened.presentation.target.pane });
 await documents.present(untitled.document.id, { target: opened.presentation.target.window });
+await documents.reload(untitled.document.id);
+await documents.save(untitled.document.id);
+await documents.save(untitled.document.id, { uri: "file:///tmp/s.txt" });
+// @ts-expect-error the save target is a URI text
+await documents.save(untitled.document.id, { uri: 1 });
 // @ts-expect-error untitled options need live destinations
 await documents.createUntitled({ target: {} as CommandTarget });
 const workspace: import("knot").WorkspaceInfo = await workspaces.openFolder("file:///tmp", { target: opened.presentation.target.window });
@@ -376,8 +381,10 @@ await files.delete("file:///tmp/b.txt", { permanent: "yes" });
 // @ts-expect-error file kinds are file or directory only
 const badKind: import("knot").FileKind = "symlink";
 void badKind;
-// @ts-expect-error files are read-only
-void files.writeText;
+const written: string = await files.writeText("file:///tmp/w.txt", "text");
+void written;
+// @ts-expect-error written text is text
+await files.writeText("file:///tmp/w.txt", 1);
 const pickedFolder: import("knot").FolderPickerResult = await workspaces.pickFolder();
 if (pickedFolder.kind === "selected") {
   const uri: string = pickedFolder.uri;

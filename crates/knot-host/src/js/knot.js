@@ -4,7 +4,7 @@ import {
   historyRecent, historyRecord, historyForget, historyOrder,
   recoveryList, recoveryRetain, recoveryRelease, recoveryRestore,
   observeWorkbench, closePresentation, openEditor, replaceWindows, captureLayout,
-  openDocument, createUntitled, presentDocument, listDocuments, getDocument, setDocumentLanguage, listWindows, getWindow, openWindow, focusWindow, getWorkspace, openFolder, replaceWorkspaceRoots, pickFolder, readFileText, listFiles, searchFiles, isFileIgnored, statFile, createFile, createDirectory, renameFile, copyFile, revealFile, deleteFile, watchFiles, openTerminal,
+  openDocument, createUntitled, presentDocument, reloadDocument, saveDocument, listDocuments, getDocument, setDocumentLanguage, listWindows, getWindow, openWindow, focusWindow, getWorkspace, openFolder, replaceWorkspaceRoots, pickFolder, readFileText, listFiles, searchFiles, isFileIgnored, statFile, writeFileText, createFile, createDirectory, renameFile, copyFile, revealFile, deleteFile, watchFiles, openTerminal,
   invalidCommandArguments,
   unavailableCommand,
   keybinding,
@@ -95,14 +95,14 @@ export const workbench = Object.freeze({
 export const menus = Object.freeze({ add: addMenuItem });
 export const providers = Object.freeze({ register: registerProvider, get: getProvider, all: listProviders });
 export const completion = Object.freeze({ match: matchCandidates });
-export const documents = Object.freeze({ list: listDocuments, get: getDocument, open: openDocument, createUntitled, present: presentDocument, setLanguage: setDocumentLanguage });
+export const documents = Object.freeze({ list: listDocuments, get: getDocument, open: openDocument, createUntitled, present: presentDocument, reload: reloadDocument, save: saveDocument, setLanguage: setDocumentLanguage });
 export const languages = Object.freeze({ register: registerLanguage, associate: associateLanguage, get: getLanguage, list: listLanguages, grammars: listGrammars });
 export const settings = Object.freeze({ define: defineSetting, set: setSettings, get: getSetting, reset: resetSetting, observe: observeSetting });
 export const terminals = Object.freeze({ open: openTerminal });
 export const themes = Object.freeze({ register: registerTheme, get: getTheme, list: listThemes, defineColor });
 export const icons = Object.freeze({ define: defineIcon, override: overrideIcon, associate: associateIcons, registerPack: registerIconPack, listPacks: listIconPacks });
 export const windows = Object.freeze({ list: listWindows, get: getWindow, open: openWindow, focus: focusWindow });
-export const files = Object.freeze({ readText: readFileText, list: listFiles, search: searchFiles, isIgnored: isFileIgnored, stat: statFile, createFile, createDirectory, rename: renameFile, copy: copyFile, reveal: revealFile, delete: deleteFile, watch: watchFiles });
+export const files = Object.freeze({ readText: readFileText, list: listFiles, search: searchFiles, isIgnored: isFileIgnored, stat: statFile, writeText: writeFileText, createFile, createDirectory, rename: renameFile, copy: copyFile, reveal: revealFile, delete: deleteFile, watch: watchFiles });
 export const workspaces = Object.freeze({ get: getWorkspace, openFolder, replaceRoots: replaceWorkspaceRoots, pickFolder });
 
 export const history = Object.freeze({ recent: historyRecent, record: historyRecord, forget: historyForget, order: historyOrder });

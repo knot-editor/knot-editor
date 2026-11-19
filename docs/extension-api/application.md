@@ -15,7 +15,10 @@ a root is rejected.
 
 Use `documents.open` for files, `createUntitled` for new documents, and `present`
 for another presentation of a live document. These return committed document and
-presentation data. Pass `{ preview: true }` to `documents.open` when the user is
+presentation data. `documents.save(id, { uri? })` saves without a dialog, as Save
+and Save As do: with `uri` it replaces whatever file is there and the document
+becomes that file's. `documents.reload(id)` replaces the text of a document with
+its file's as one undoable edit. Pass `{ preview: true }` to `documents.open` when the user is
 browsing, as a file list's single click does: the document replaces the pane's
 current preview tab instead of adding one, until the user edits, pins, or
 double-clicks it. The `workbench.previewTabs` setting turns previews off. Use `workspaces.openFolder` to replace a window's roots with
@@ -116,9 +119,11 @@ for a missing resource instead of rejecting.
 
 ## Change files
 
-`files.createFile(uri)`, `createDirectory(uri)`, `rename(from, to)`,
-`copy(from, to)`, and `delete(uri, { permanent })` change stored resources
-through the same providers. Nothing is overwritten and missing parent
+`files.writeText(uri, text)` creates or replaces a file, and any missing parent
+directories, without touching an open document of it. `files.createFile(uri)`,
+`createDirectory(uri)`, `rename(from, to)`, `copy(from, to)`, and
+`delete(uri, { permanent })` change stored resources through the same
+providers. Apart from `writeText`, nothing is overwritten and missing parent
 directories are created: creating, renaming, or copying onto an existing entry
 rejects `ResourceAlreadyExists`,
 and replacing one is a `delete` followed by a `rename` the caller chooses.

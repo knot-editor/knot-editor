@@ -2059,6 +2059,8 @@ export const api: KnotApi = {
       return presentIn(destinationWindow(options.target), document);
     },
     createUntitled: notFaked("documents.createUntitled"),
+    reload: notFaked("documents.reload"),
+    save: notFaked("documents.save"),
     present: async (id, options = {}) => {
       maybeFail("documents.present");
       const document = state.documents.get(id);
@@ -2342,6 +2344,14 @@ export const api: KnotApi = {
       maybeFail("files.stat");
       const kind = fileKind(checkedFileUri(uri));
       return kind === null ? null : { kind };
+    },
+    writeText: async (uri, text) => {
+      maybeFail("files.writeText");
+      const checked = checkedFileUri(uri);
+      if (fileKind(checked) === "directory") throw hostError("ResourceWrongKind");
+      makeParents(checked);
+      seedFile(checked, text);
+      return checked;
     },
     createFile: async (uri) => {
       maybeFail("files.createFile");

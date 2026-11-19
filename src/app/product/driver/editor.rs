@@ -688,6 +688,36 @@ impl TestEditor {
         cx.read(|cx| editor.read(cx).model().read(cx).text())
     }
 
+    /// The title of the window's active document.
+    pub fn active_title(&self, cx: &mut TestAppContext) -> String {
+        cx.read(|cx| {
+            let documents = cx.global::<ApplicationDocuments>().0.read(cx);
+            let workbench = self.window.read(cx).workbench.read(cx);
+            let id = workbench
+                .focused_pane()
+                .unwrap()
+                .active_tab()
+                .document_id()
+                .unwrap();
+            documents.get(id).unwrap().title().to_owned()
+        })
+    }
+
+    /// Whether the window's active document has unsaved changes.
+    pub fn active_is_dirty(&self, cx: &mut TestAppContext) -> bool {
+        cx.read(|cx| {
+            let documents = cx.global::<ApplicationDocuments>().0.read(cx);
+            let workbench = self.window.read(cx).workbench.read(cx);
+            let id = workbench
+                .focused_pane()
+                .unwrap()
+                .active_tab()
+                .document_id()
+                .unwrap();
+            documents.get(id).unwrap().is_dirty(cx)
+        })
+    }
+
     /// The key contexts of the window's active editor.
     pub fn active_contexts(&self, cx: &mut TestAppContext) -> Vec<String> {
         let editor = active_editor(&self.window, cx);

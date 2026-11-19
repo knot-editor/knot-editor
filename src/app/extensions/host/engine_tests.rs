@@ -4077,7 +4077,7 @@ fn public_facade_is_semantic_and_private_bindings_are_hidden() {
             if (!Object.isFrozen(knot.editor) || !Object.isFrozen(knot.commands) || !Object.isFrozen(knot.workbench) || !Object.isFrozen(knot.storage)) {
                 throw new Error("facade objects are mutable");
             }
-            if (!Object.isFrozen(knot.files) || Object.keys(knot.files).sort().join(",") !== "copy,createDirectory,createFile,delete,isIgnored,list,readText,rename,reveal,search,stat,watch") {
+            if (!Object.isFrozen(knot.files) || Object.keys(knot.files).sort().join(",") !== "copy,createDirectory,createFile,delete,isIgnored,list,readText,rename,reveal,search,stat,watch,writeText") {
                 throw new Error("unexpected files facade");
             }
             if (Object.keys(knot.storage).sort().join(",") !== "delete,list,read,write") {

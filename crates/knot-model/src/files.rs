@@ -281,6 +281,39 @@ pub async fn create_file(
     Ok(uri)
 }
 
+/// Writes `text` to a file, replacing it or creating it and any missing parent
+/// directories. Returns the normalized URI.
+pub async fn write_text(
+    providers: Arc<FileSystemProviderRegistry>,
+    uri: &str,
+    text: &str,
+) -> Result<ResourceUri, ResourceError> {
+    let uri = providers.normalize(parse(uri)?).await?;
+    let provider = providers.provider(&uri)?;
+    match provider.stat(uri.clone()).await? {
+        ResourceStat::Missing => {
+            ensure_parent(provider.as_ref(), &uri).await?;
+            provider
+                .create(uri.clone(), text.as_bytes().to_vec())
+                .await?;
+        }
+        ResourceStat::File => {
+            let existing = provider.read(uri.clone()).await?;
+            provider
+                .replace(uri.clone(), existing.version, text.as_bytes().to_vec())
+                .await?;
+        }
+        ResourceStat::Directory => {
+            return Err(ResourceError::WrongKind {
+                uri,
+                expected: ResourceKind::File,
+                actual: ResourceKind::Directory,
+            });
+        }
+    }
+    Ok(uri)
+}
+
 /// Creates a directory, and any missing parents. Returns the normalized URI.
 pub async fn create_directory(
     providers: Arc<FileSystemProviderRegistry>,

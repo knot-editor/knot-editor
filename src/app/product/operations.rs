@@ -553,3 +553,101 @@ pub(crate) fn close_presentation(
     );
     Ok(())
 }
+
+/// The live document with the given public identity.
+fn document_by_identity(id: &str, cx: &App) -> Result<DocumentId, OpenError> {
+    KnotWindow::documents(cx)
+        .read(cx)
+        .documents()
+        .find(|document| document.identity().to_string() == id)
+        .map(|document| document.id())
+        .ok_or(OpenError::DocumentNotFound)
+}
+
+/// Make the document's text its file's again; see [`document_watch::reload`].
+pub(crate) fn reload_document(
+    id: &str,
+    completion: impl FnOnce(Result<(), OpenError>, &mut App) + 'static,
+    cx: &mut App,
+) -> Result<(), OpenError> {
+    let document = document_by_identity(id, cx)?;
+    super::document_watch::reload(document, completion, cx);
+    Ok(())
+}
+
+/// Save a document without a dialog: in place, or, with `uri`, to that file,
+/// replacing what is there, which the document then names.
+pub(crate) fn save_document(
+    id: &str,
+    uri: Option<String>,
+    completion: impl FnOnce(Result<(), OpenError>, &mut App) + 'static,
+    cx: &mut App,
+) -> Result<(), OpenError> {
+    let documents = KnotWindow::documents(cx);
+    let document = document_by_identity(id, cx)?;
+    let (model, title, state) = {
+        let document = documents
+            .read(cx)
+            .get(document)
+            .ok_or(OpenError::DocumentNotFound)?;
+        (
+            document.model().clone(),
+            document.title().to_owned(),
+            document.state().clone(),
+        )
+    };
+    let explicit = uri.is_some();
+    let target = match uri {
+        Some(uri) => {
+            super::super::resource::ResourceUri::parse(&uri).map_err(|_| OpenError::InvalidUri)?
+        }
+        None => state
+            .resource_uri()
+            .cloned()
+            .ok_or(OpenError::ResourceNotFound)?,
+    };
+    if documents
+        .read(cx)
+        .document_for_resource(&target)
+        .is_some_and(|owner| owner != document)
+    {
+        return Err(OpenError::ResourceAlreadyExists);
+    }
+    let title = if explicit {
+        super::resource_title(&target)
+    } else {
+        title
+    };
+    let (text, revision) = model.read_with(cx, |model, _| (model.text(), model.revision()));
+    let capture = documents
+        .update(cx, |documents, _| {
+            documents.begin_persistence(document, &model)
+        })
+        .ok_or(OpenError::DocumentNotFound)?;
+    let providers = KnotWindow::filesystems(cx);
+    cx.spawn(async move |cx| {
+        let written =
+            super::save::write_document_text(providers, target, text, state, explicit).await;
+        cx.update(|cx| {
+            let result = match written {
+                Ok((uri, version)) => {
+                    let committed = documents.update(cx, |documents, cx| {
+                        documents.finish_persistence(
+                            document,
+                            &model,
+                            &capture,
+                            (title, uri),
+                            (version, revision),
+                            cx,
+                        )
+                    });
+                    committed.then_some(()).ok_or(OpenError::DocumentNotFound)
+                }
+                Err(error) => Err(resource_error(error.into())),
+            };
+            completion(result, cx);
+        });
+    })
+    .detach();
+    Ok(())
+}

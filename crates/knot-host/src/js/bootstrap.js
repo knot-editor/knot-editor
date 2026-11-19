@@ -1745,6 +1745,14 @@ export async function openTerminal(options) {
   return presentationFromNative(tab);
 }
 
+export async function reloadDocument(id) {
+  await request("reloadDocument", string(id, "document identity must be text"));
+}
+export async function saveDocument(id, options) {
+  const uri = options === undefined ? undefined : record(options, "save options must be an object").uri;
+  await request("saveDocument", string(id, "document identity must be text"),
+    uri === undefined ? null : string(uri, "resource URI must be text"));
+}
 export async function setDocumentLanguage(id, language) {
   await request("setDocumentLanguage", string(id, "document identity must be text"),
     optionalText(language));
@@ -2187,6 +2195,10 @@ export async function statFile(uri) {
 }
 export function createFile(uri) {
   return request("createFile", string(uri, "resource URI must be text"));
+}
+export function writeFileText(uri, text) {
+  return request("writeFileText", string(uri, "resource URI must be text"),
+    string(text, "file text must be text"));
 }
 export function createDirectory(uri) {
   return request("createDirectory", string(uri, "resource URI must be text"));

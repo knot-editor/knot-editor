@@ -182,6 +182,22 @@ declare module "knot" {
     /** Presents a shared live document, reusing its tab in the destination window.
      * Rejects DocumentNotFound after final closure. */
     present(id: DocumentId, options?: DocumentDestinationOptions): Promise<DocumentPresentation>;
+    /** Replaces the text of a document that has a file with the file's, as one
+     * line-diff edit that Undo takes back, and marks it clean. Resolves once the
+     * reload commits.
+     * @throws HostError with DocumentNotFound, ResourceNotFound for a document
+     * without a file, ProviderFailure, or Cancelled when the document changed
+     * while the file was read. */
+    reload(id: DocumentId): Promise<void>;
+    /** Saves the document as Save and Save As do, without a dialog. With `uri`
+     * the document is written to that file, replacing what is there, and
+     * becomes that file's document; without it, it is saved to its own file.
+     * Resolves once the text is written. Rejects for a document without a file
+     * when `uri` is omitted.
+     * @throws TypeError for a non-text `uri`; HostError with DocumentNotFound,
+     * InvalidUri, ResourceNotFound, ResourceAlreadyExists when another open
+     * document is that file, ResourceWrongKind, or ProviderFailure. */
+    save(id: DocumentId, options?: { readonly uri?: string }): Promise<void>;
     /** Makes a language ID the document's explicit language, or returns it to
      * detection with null. An unregistered ID is accepted and kept, reporting
      * and painting as "plaintext" until a registration provides it. Open, Save As, and restore re-detect
@@ -1014,6 +1030,12 @@ declare module "knot" {
      * Symlinks report their target's kind.
      * @throws HostError with InvalidUri or ProviderFailure. */
     stat(uri: string): Promise<FileStat | null>;
+    /** Writes `text` to a file, replacing it or creating it and any missing
+     * parent directories, and resolves its normalized URI. No document is
+     * affected.
+     * @throws HostError with InvalidUri, ResourceWrongKind for a directory or a
+     * file parent, or ProviderFailure. */
+    writeText(uri: string, text: string): Promise<string>;
     /** Creates an empty file, and any missing parent directories, and resolves
      * its normalized URI. Nothing is overwritten.
      * @throws HostError with InvalidUri, ResourceAlreadyExists when anything

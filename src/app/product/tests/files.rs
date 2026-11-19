@@ -666,3 +666,113 @@ fn open_log_opens_the_log_file_as_a_document(cx: &mut TestAppContext) {
         "{texts:?}"
     );
 }
+
+const REJECTS: &str = r#"
+async function rejects(action, code) {
+  try { await action(); } catch (error) { if (error.code === code) return; throw error; }
+  throw new Error(`expected ${code}`);
+}
+"#;
+
+fn run_command(
+    window: &Entity<KnotWindow>,
+    native_window: impl WindowHandle,
+    name: &'static str,
+    cx: &mut TestAppContext,
+) {
+    assert_eq!(
+        wait_for_command(
+            dispatch_product_command(window, native_window, name, cx),
+            cx
+        ),
+        CommandOutcome::Completed
+    );
+}
+
+#[gpui::test]
+fn reloading_a_document_reverts_it_as_one_undo_step(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    let (filesystems, _) = memory_filesystems_with_provider();
+    cx.set_global(ApplicationFileSystems(filesystems));
+    let host = cx.update(extensions::host::install);
+    let source = format!(
+        r#"
+import {{ commands, documents, windows }} from "knot";
+{REJECTS}
+await commands.register("docs.reload", async () => {{
+  const [window] = await windows.list();
+  const {{ document }} = await documents.open("mem://product/notes.txt", {{ target: window.target }});
+  await document.buffer.applyEdits([{{ range: {{ startByteOffset: 0, endByteOffset: 0 }}, text: "edited " }}], {{ ifRevision: 0 }});
+  if (!(await documents.get(document.id)).dirty) throw new Error("not dirty");
+  await documents.reload(document.id);
+  const info = await documents.get(document.id);
+  if (info.dirty) throw new Error("still dirty");
+  if ((await info.buffer.snapshot()).text !== "loaded text") throw new Error("not reverted");
+  const blank = await documents.createUntitled();
+  await rejects(() => documents.reload(blank.document.id), "ResourceNotFound");
+  await rejects(() => documents.reload("not a document"), "DocumentNotFound");
+}});
+"#
+    );
+    let key = install_operation_fixture(&host, &source, "docs.reload", cx);
+    let (window, _) = empty_headless_window(&documents, cx);
+    run_command(&window, Headless, "docs.reload", cx);
+    let (id, model) = document_at(&documents, "mem://product/notes.txt", cx).unwrap();
+    model.update(cx, |model, _| model.undo().unwrap());
+    assert_eq!(
+        model.read_with(cx, |model, _| model.text()),
+        "edited loaded text"
+    );
+    assert!(cx.read(|cx| documents.read(cx).get(id).unwrap().is_dirty(cx)));
+    host.update(cx, |host, cx| host.unload(key, cx).unwrap());
+}
+
+#[gpui::test]
+fn saving_a_document_writes_in_place_or_retargets_it(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    let (filesystems, _) = memory_filesystems_with_provider();
+    cx.set_global(ApplicationFileSystems(filesystems));
+    let host = cx.update(extensions::host::install);
+    let source = format!(
+        r#"
+import {{ commands, documents, files, windows }} from "knot";
+{REJECTS}
+const insert = (text) => [{{ range: {{ startByteOffset: 0, endByteOffset: 0 }}, text }}];
+await commands.register("docs.save", async () => {{
+  const [window] = await windows.list();
+  const {{ document }} = await documents.open("mem://product/notes.txt", {{ target: window.target }});
+  await document.buffer.applyEdits(insert("edited "), {{ ifRevision: 0 }});
+  await documents.save(document.id);
+  if ((await documents.get(document.id)).dirty) throw new Error("dirty after save");
+  if (await files.readText("mem://product/notes.txt") !== "edited loaded text") throw new Error("in place");
+
+  const blank = (await documents.createUntitled()).document;
+  await blank.buffer.applyEdits(insert("fresh"), {{ ifRevision: 0 }});
+  await rejects(() => documents.save(blank.id), "ResourceNotFound");
+  await rejects(() => documents.save(blank.id, {{ uri: "mem://product/notes.txt" }}), "ResourceAlreadyExists");
+  await rejects(() => documents.save(blank.id, {{ uri: "mem://product/src" }}), "ResourceWrongKind");
+  const unchanged = await documents.get(blank.id);
+  if (unchanged.kind !== "untitled" || !unchanged.dirty) throw new Error("failed save changed the document");
+
+  await files.writeText("mem://product/taken.txt", "old");
+  await documents.save(blank.id, {{ uri: "mem://product/taken.txt" }});
+  const saved = await documents.get(blank.id);
+  if (saved.resourceUri !== "mem://product/taken.txt" || saved.title !== "taken.txt" || saved.dirty || saved.kind !== "persisted") throw new Error("not retargeted");
+  if (await files.readText("mem://product/taken.txt") !== "fresh") throw new Error("not overwritten");
+  await rejects(() => documents.save("not a document"), "DocumentNotFound");
+}});
+await commands.register("docs.write", async () => {{
+  if (await files.writeText("mem://product/new/deep/w.txt", "one") !== "mem://product/new/deep/w.txt") throw new Error("create");
+  await files.writeText("mem://product/new/deep/w.txt", "two");
+  if (await files.readText("mem://product/new/deep/w.txt") !== "two") throw new Error("overwrite");
+  await rejects(() => files.writeText("mem://product/src", "x"), "ResourceWrongKind");
+  await rejects(() => files.writeText("mem://product/notes.txt/x", "x"), "ResourceWrongKind");
+}});
+"#
+    );
+    let key = install_operation_fixture(&host, &source, "docs.save", cx);
+    let (window, _) = empty_headless_window(&documents, cx);
+    run_command(&window, Headless, "docs.save", cx);
+    run_command(&window, Headless, "docs.write", cx);
+    host.update(cx, |host, cx| host.unload(key, cx).unwrap());
+}
