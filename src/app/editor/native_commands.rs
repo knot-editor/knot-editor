@@ -88,7 +88,7 @@ fn claim_editor(command: &Command, target: &ProductCommandTarget, cx: &App) -> b
 #[command(knot_model::editor::commands::PASTE_COMMAND, title = "Paste", description = "Paste from the clipboard.", participant = Editor)]
 pub(crate) async fn editing(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
     let name = context.name;
-    context
+    let pending = context
         .foreground(move |target, cx| {
             let Some(crate::app::workbench::CommandView::Editor(view)) = target.command_view(cx)
             else {
@@ -109,14 +109,46 @@ pub(crate) async fn editing(context: CommandContext, (): ()) -> Result<(), Comma
                     true
                 });
                 if handled {
-                    return Ok(());
+                    return Ok(None);
                 }
             }
+            if name == PASTE_COMMAND {
+                // A language's paste provider shapes the text, so its answer
+                // is awaited; without one the paste is synchronous.
+                let text = cx.read_from_clipboard().and_then(|item| item.text());
+                let call = text.as_deref().and_then(|text| {
+                    let request = editor.read(cx).paste_request(text, cx)?;
+                    let execution =
+                        crate::app::extensions::host::call_paste_provider(target, &request, cx)?;
+                    Some((request, execution))
+                });
+                return Ok(match call {
+                    Some((request, execution)) => Some((editor, request, execution)),
+                    None => {
+                        editor.update(cx, |editor, cx| editor.execute_editing_command(name, cx));
+                        None
+                    }
+                });
+            }
             if editor.update(cx, |editor, cx| editor.execute_editing_command(name, cx)) {
-                Ok(())
+                Ok(None)
             } else {
                 Err(CommandOutcome::Unavailable)
             }
+        })
+        .await?;
+    let Some((editor, request, execution)) = pending else {
+        return Ok(());
+    };
+    let answer = knot_model::editor::PasteRequest::answer(
+        execution
+            .await
+            .unwrap_or_else(|error| Err(error.to_string())),
+    );
+    context
+        .foreground(move |_, cx| {
+            editor.update(cx, |editor, cx| editor.paste_answered(&request, answer, cx));
+            Ok(())
         })
         .await
 }

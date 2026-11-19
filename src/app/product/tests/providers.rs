@@ -300,3 +300,58 @@ fn every_completion_provider_contributes_not_only_the_latest(cx: &mut TestAppCon
         ]
     );
 }
+
+const PASTE_PROVIDER: &str = r#"
+import { languages, providers } from "knot";
+await languages.register({
+  id: "rust",
+  name: "Rust",
+  grammar: "rust",
+  queries: { highlights: "(string_literal) @string" },
+});
+await providers.register("editor.paste.rust", {
+  providePaste({ text, selectedText }) {
+    if (text === "boom") throw new Error("paste provider broke");
+    return text === "keep" ? null : `<${selectedText}|${text}>`;
+  },
+});
+"#;
+
+/// Paste `clipboard` over the middle two characters of `xaby` in `language`,
+/// returning the text it leaves.
+fn paste_over_selection(
+    fixture: &Fixture,
+    language: Option<&str>,
+    clipboard: &str,
+    cx: &mut TestAppContext,
+) -> String {
+    let editor = fixture.editor(cx);
+    let model = cx.read(|cx| editor.read(cx).model().clone());
+    cx.update(|cx| {
+        model.update(cx, |model, _| model.reset_to_text("xaby"));
+        crate::app::languages::set_document_language(&model, None, language.map(str::to_owned), cx);
+        cx.write_to_clipboard(gpui::ClipboardItem::new_string(clipboard.into()));
+    });
+    cx.run_until_parked();
+    editor.update(cx, |editor, cx| {
+        editor.set_selection(1, 3, crate::app::editor::Reveal::Nearest, cx)
+    });
+    let execution = fixture.command(super::super::PASTE_COMMAND, cx);
+    assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
+    cx.read(|cx| model.read(cx).text())
+}
+
+#[gpui::test]
+fn paste_uses_the_answer_of_the_languages_provider(cx: &mut TestAppContext) {
+    let fixture = start_allowing_failures(&[("@example/paste", &[], PASTE_PROVIDER)], cx);
+    let rust = Some("rust");
+    assert_eq!(
+        paste_over_selection(&fixture, rust, "url", cx),
+        "x<ab|url>y"
+    );
+    // A null answer or a throw pastes the clipboard's text.
+    assert_eq!(paste_over_selection(&fixture, rust, "keep", cx), "xkeepy");
+    assert_eq!(paste_over_selection(&fixture, rust, "boom", cx), "xboomy");
+    // A language without a provider pastes the text as is.
+    assert_eq!(paste_over_selection(&fixture, None, "url", cx), "xurly");
+}

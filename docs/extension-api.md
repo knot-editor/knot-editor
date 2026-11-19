@@ -1006,6 +1006,12 @@ asks every registration and merges their items, so a later one adds to the
 others. A request names its document; a provider that reads the text gets the
 buffer from `documents.get` and keeps it while the document is open.
 
+Register an `editor.paste.<languageId>` provider, a `PasteProvider` in
+`knot.d.ts`, to shape what pasting inserts in a language, as the Markdown
+package turns a URL pasted over selected text into a link. Only the latest
+registration of a language answers, and a language with none pastes without
+calling the host.
+
 ## Identity and lifetime
 
 | Identity | Ownership and validity | Persist? |

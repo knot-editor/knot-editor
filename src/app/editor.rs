@@ -430,6 +430,28 @@ impl Editor {
         })
     }
 
+    /// The request for pasting `text` over the selection; see
+    /// [`EditorState::paste_request`].
+    pub(crate) fn paste_request(
+        &self,
+        text: &str,
+        cx: &App,
+    ) -> Option<knot_model::editor::PasteRequest> {
+        self.state.paste_request(text, None, self.model.read(cx))
+    }
+
+    /// Paste the answer to `request`; see [`EditorState::paste_answered`].
+    pub(crate) fn paste_answered(
+        &mut self,
+        request: &knot_model::editor::PasteRequest,
+        answer: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
+        self.update_state(cx, |editor, buffer| {
+            editor.paste_answered(request, answer, buffer)
+        });
+    }
+
     /// Open a completion at the caret; returns the requests to send its
     /// providers.
     pub(crate) fn start_completion(

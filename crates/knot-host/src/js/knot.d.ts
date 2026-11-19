@@ -2531,6 +2531,33 @@ declare module "knot" {
      */
     provideCompletions(request: CompletionRequest, context: ProviderCallContext): readonly CompletionItem[] | Promise<readonly CompletionItem[]>;
   }
+  /** What native paste asks an `editor.paste.<languageId>` provider for. */
+  export interface PasteRequest {
+    readonly document: DocumentId;
+    readonly revision: number;
+    /** The text being pasted. */
+    readonly text: string;
+    /** The selection the paste replaces, as absolute UTF-8 coordinates at revision. */
+    readonly range: readonly [number, number];
+    /** The text in `range`; empty for a caret. */
+    readonly selectedText: string;
+  }
+  /**
+   * A language's paste provider, registered with
+   * `providers.register("editor.paste.<languageId>", provider)`, where the
+   * language is the one at the start of the selection (inside a Markdown
+   * code fence, the fence's language). The latest registration of the name
+   * answers; a language with none pastes synchronously.
+   */
+  export interface PasteProvider {
+    /**
+     * Return the text to insert instead of `request.text`, or null to insert
+     * it unchanged. A throw or a non-string result inserts `request.text`. The
+     * editor makes the edit, as one undo step; an answer for a revision or
+     * selection the editor has left is discarded.
+     */
+    providePaste(request: PasteRequest, context: ProviderCallContext): string | null | Promise<string | null>;
+  }
   /** Explicit buffers. */
   export const editor: Readonly<{
     /**

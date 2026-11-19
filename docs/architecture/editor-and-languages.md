@@ -14,7 +14,11 @@ completion controller, and it runs the native editing and movement commands
 without a window or runtime. Each operation takes the buffer model it reads
 or edits; the editor follows the settings its owner resolves for it and
 queues clipboard writes and document setting changes as effects, and paste
-receives the clipboard's text. The `Editor` entity wraps the state: before
+receives the clipboard's text. A language can shape that text: when an
+`editor.paste.<languageId>` provider is registered for the language at the
+selection start, the paste command awaits its `providePaste` answer and
+applies it only if the revision and selection are unchanged, else it pastes
+the clipboard text; a language without a provider pastes synchronously. The `Editor` entity wraps the state: before
 each operation it resolves the settings for the editor's scope, then runs the
 effects, notifies the buffer when its text changed, and notifies itself; it
 also follows buffer changes and keeps the in-flight completion requests. The

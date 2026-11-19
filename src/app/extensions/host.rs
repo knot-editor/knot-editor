@@ -250,6 +250,9 @@ pub(crate) fn memory_report(cx: &App) -> String {
     report
 }
 
+/// The provider name prefix paste asks, followed by a language ID.
+const PASTE_PROVIDER_PREFIX: &str = "editor.paste.";
+
 /// The provider name editor completion asks.
 const COMPLETION_PROVIDER: &str = "editor.completion";
 
@@ -348,6 +351,39 @@ pub(crate) fn start_completion(
 ) -> knot_protocol::CommandOutcome {
     let host = cx.global::<ApplicationExtensionHost>()._host.clone();
     host.update(cx, |host, cx| host.start_completion(target, cx))
+}
+
+/// Start the `editor.paste.<language>` provider of `request`, when one is
+/// registered; `None` when the paste needs no provider.
+pub(crate) fn call_paste_provider(
+    target: &ProductCommandTarget,
+    request: &knot_model::editor::PasteRequest,
+    cx: &mut App,
+) -> Option<knot_host::pool::ExtensionProviderExecution<knot_protocol::ProviderCallResponse>> {
+    let document = target.document_id(cx).ok()?;
+    let document = cx
+        .try_global::<crate::app::documents::ApplicationDocuments>()?
+        .0
+        .read(cx)
+        .get(document)?
+        .identity()
+        .to_string();
+    let window = crate::app::product::window_id(target.window.entity_id());
+    let name = format!("{PASTE_PROVIDER_PREFIX}{}", request.language);
+    entity(cx)?.update(cx, |host, _| {
+        let provider = host.semantics.providers().get(&name)?;
+        host.pool
+            .call_provider(
+                ExtensionKey::new(provider.extension, provider.lifecycle),
+                knot_protocol::ProviderCallRequest {
+                    registration: provider.id,
+                    method: "providePaste".into(),
+                    argument: request.argument(&document),
+                    window: Some(window),
+                },
+            )
+            .ok()
+    })
 }
 
 pub(crate) fn view_definitions(cx: &App) -> Vec<crate::app::extensions::semantics::ViewDefinition> {
