@@ -74,8 +74,12 @@ declarations, and tests import its controls from `"knot/testing"`: arrange
 windows, documents, and records; queue prompt answers; run commands and emit
 application events; make the next call to an operation fail with a host error;
 and inspect records, captures, messages, and views. Each test file runs in its
-own process; call `reset()` before each test. The fake implements only what tests
-need, and anything else throws `not faked`. It does not reproduce host
+own process; call `reset()` before each test. For files, tests seed and remove
+them with `seedFile` and `removeFile`, whose changes call watch listeners
+immediately and uncoalesced, and list reveals with `revealed()`; the fake
+matches `files.hidden` and `files.ignored` as plain names, reads no ignore
+files, and applies rename and delete rules to its open documents. The fake
+implements only what tests need, and anything else throws `not faked`. It does not reproduce host
 validation, scheduling, or durability, so behavior crossing the native boundary
 still needs product tests.
 
@@ -219,8 +223,7 @@ when no tab was focused.
 An item is `item` by default. A `group` is a non-activatable header that
 organizes child rows: the native view fetches its children immediately, shows no
 disclosure, and keeps them visible. Items carry optional muted text under the label,
-`detail`, which wraps and grows its row (`detailMaxLines` cuts it off after that many
-lines), an optional `statusText` at the row's top right, and a
+`detail`, an optional `statusText` at the row's top right, and a
 `badge` naming a [color key](#register-a-theme-and-define-colors), such as
 `warning` or `text.muted`, and either kind may declare command-backed `actions`. A
 contribution's own `actions` populate the frame toolbar. An item or action may
@@ -275,11 +278,9 @@ rows toggle on click and Enter instead. A command bound to a key with
 `keymaps.bind(key, command, { view })` learns the selected row from
 `workbench.selectedTreeItem()`. `ViewRegistration.reveal(idPath)` expands each
 ancestor, waiting for its children, then selects and scrolls to the last ID. A
-row may be `muted` or `bold`, an action with `menuOnly` shows in the context menu and
-not as a row button, and an action with `showOnHover` shows its button only while
-the row is pointed at or selected. On a row with `detail`, the other buttons sit
-under the text, as in a notification popup. Every tree has speed search: typing on a focused tree
-highlights and jumps to matching loaded rows.
+row may be `muted` or `bold`, and an action `menuOnly` or `showOnHover`. Every
+tree has speed search: typing on a focused tree highlights and jumps to
+matching loaded rows.
 
 `editLabel(id, { value, selection, validate })` turns a row's label into a text
 field and `editNewItem(parentId, { icon, validate })` shows an empty temporary
@@ -588,16 +589,10 @@ await themes.defineColor({
 A key defined by native code or a live lifecycle rejects `DuplicateColor`;
 teardown removes your definitions.
 
-Editor decorations and gutter markers and tree badges name the color key they
+Editor decorations, gutter markers, and tree badges name the color key they
 paint with, native or defined, so a contribution looks right under every
-theme. A key nobody has defined paints as interface text until its definition
-arrives. A decoration's style is `background` behind its text, `line`
-across its whole lines, as for a diff, or a straight or `wavy` underline;
-backgrounds and lines paint beneath the selection. A range that wants two
-styles is two contributions. Where decorations overlap, `error`, `warning`,
-and `info` paint above other keys, the most severe on top. A gutter marker shows as a dot on the
-range's first line, and a line shows one marker, chosen by the same order and
-then by the latest; clicking it runs that contribution's command:
+theme. A decoration's style is `background`, `line`, or a straight or `wavy`
+underline, and a range that wants two styles is two contributions:
 
 ```js
 await buffer.contributions.replace([
@@ -637,19 +632,13 @@ await icons.override("action.refresh", { svg: "<svg ...>...</svg>", color: "orig
 await icons.registerPack({ name: "Mine", icons: { "file.docs": { lucide: "file-text" } } });
 ```
 
-For one name the first definition wins among overrides (mainly for personal
-config), the pack named by the `icons.pack` setting, defaults, and the
-fallback. `define` adds a default for a name your package introduces and fails
-with `DuplicateIcon` when the name already has one, so a pack or override
-restyles it instead. A file paints the name claimed for its file name, then for
-its extension (the longest wins), then `file.<languageId>`, then `file`; a
-folder paints its claimed name, then `folder`, using the `.open` variant of each
-when expanded. A name that nothing defines is skipped. Associations are global,
-not per pack, and the latest claim of a pattern wins. Everything is
-lifecycle-owned and applies to every window at once. The Select Icon Pack
-command in the `themes` package sets `icons.pack`. Names may use letters,
-digits, `.`, `-`, and `_`; an unknown Lucide glyph, malformed SVG, or invalid
-name is a `TypeError`. The Lucide glyphs are ISC-licensed.
+A name resolves to the first override (mainly for personal config), then the
+pack named by the `icons.pack` setting, then defaults, then the fallback.
+`define` adds a default for a name your package introduces, so a pack or
+override restyles it instead. A file paints the name claimed for its file name,
+then its extension, then `file.<languageId>`, then `file`; a folder paints its
+claimed name, then `folder`. Associations are global, not per pack, and
+everything is lifecycle-owned. The Lucide glyphs are ISC-licensed.
 
 ## Bind keys and modal contexts
 
@@ -738,16 +727,12 @@ if (named.kind === "accepted") await rename(named.value);
 
 const sure = await workbench.showConfirmation({ title: "Remove knot?" });
 if (sure.kind === "confirmed") await remove();
-
 ```
 
-Picker items are matched locally, label first and then description, in the
-user's `completion.styles`, so the complete list is supplied up front. An item
-may add a `detail` line and a right-aligned `hint`. When the rows depend on the
-query or are too many to send, pass `onQuery(query)` instead of `items`: it
-returns the rows for each query, starting with the empty one, and the picker
-shows them in that order with the `labelMatches` and `descriptionMatches` they
-carry highlighted (UTF-16 ranges, as `completion.match` returns them):
+Picker items are matched locally in the user's `completion.styles`, so the
+complete list is supplied up front. When the rows depend on the query or are too
+many to send, pass `onQuery(query)` instead of `items`, which returns the rows
+for each query with the ranges to highlight:
 
 ```js
 const picked = await workbench.showPicker({
@@ -758,17 +743,11 @@ const picked = await workbench.showPicker({
 });
 ```
 
-Pass `tabs: [{ id, label, placeholder? }]` for scope tabs under the field, the first active
-(by convention "All"). With `items`, a row's `tabs: [ids]` limits it to those
-tabs and an untagged row shows in all of them. With `onQuery`, the callback
-is called as `onQuery(query, tab)` with the active tab's ID, and switching tabs
-asks again; the rows it returns apply only while the field and the tab still
-hold what they answer. `initialTab` names the tab that starts active, the first
-by default. A tab's `placeholder` replaces the `title` in the empty field while
-it is active. Tab and Shift+Tab switch tabs, as the commands
-`picker.next-tab` and `picker.previous-tab` bound in the `picker` view, so
-`keymaps.bind(key, command, { view: "picker" })` rebinds them; clicking a tab
-works too:
+Pass `tabs` for scope tabs under the field. With `onQuery`, the callback
+receives the active tab's ID as its second argument and runs again when the user
+switches tabs. Tab and Shift+Tab switch tabs through the `picker.next-tab` and
+`picker.previous-tab` commands, which `keymaps.bind(key, command, { view:
+"picker" })` rebinds.
 
 ```js
 const picked = await workbench.showPicker({
@@ -778,8 +757,9 @@ const picked = await workbench.showPicker({
 });
 ```
 
-Pass `onHighlight` to
-preview the highlighted item as the user moves through the list:
+Pass `onHighlight` to preview the highlighted item as the user moves through
+the list. The callback runs inside the awaiting command, one call at a time, and
+undoing a preview after dismissal is the caller's job:
 
 ```js
 const before = await settings.get("theme.dark");
@@ -791,13 +771,9 @@ const picked = await workbench.showPicker({
 if (picked.kind === "dismissed") await settings.set("theme.dark", before);
 ```
 
-The callback runs inside the awaiting command, one call at a time; changes
-made while it runs collapse into the latest highlight. `onQuery` follows the
-same rules, and its rows apply only while the field still holds the query they
-answer. Undoing a preview after
-dismissal is the caller's job. An input's `onChange` works the same way for
-its text, starting with the initial value; return a string to show it as a
-muted line under the field, or nothing to clear it:
+An input's `onChange` works the same way for its text, starting with the
+initial value. Return a string to show it as a muted line under the field, or
+nothing to clear it:
 
 ```js
 const named = await workbench.showInput({
@@ -806,25 +782,11 @@ const named = await workbench.showInput({
 });
 ```
 
-An `onChange` may instead return `{ message?, items? }`. Each item is
-`{ label, value, description?, hint?, icon?, matches?, descriptionMatches? }`,
-painted like a picker row, and `value` is the **whole new field text**; you
-do the filtering and ordering, and the list shows in your order under the
-field with its first row highlighted. Up, Down, Ctrl-N, and Ctrl-P move the
-highlight, and Tab replaces the field with the row's `value`, which calls
-`onChange` again with the new text. Enter submits the field as shown, and the
-result's `highlighted` is the index of the row highlighted then in the list
-you last returned, or null when there is no list or it answers older text.
-An empty or missing list hides it. Feedback applies only while the field still
-holds the value it answers; otherwise it is dropped, so Tab never accepts a
-completion for older text:
-
-Match with `completion.match` rather than your own filter, so the list follows
-the user's `completion.styles` setting (`prefix`, `substring`, `flex`, or
-`orderless`, in order of preference). It returns the matching candidates best
-first, with the UTF-16 `ranges` that matched; pass them as an item's `matches`
-to highlight them. A call may pass `{ styles }` to override the setting, for a
-list where one style is part of the meaning:
+An `onChange` may instead return `{ message?, items? }` to show a completion
+list under the field; each item's `value` is the whole new field text, and you
+do the filtering and ordering. Match with `completion.match` rather than your
+own filter, so the list follows the user's `completion.styles` setting, and
+pass its `ranges` as an item's `matches` to highlight them:
 
 ```js
 const words = ["alpha", "alps", "beta"];
@@ -841,11 +803,8 @@ await workbench.showInput({
 ```
 
 To list recently chosen items first, keep a history under a name of your
-choice, which is private to the package (see [storage](#durable-storage)).
-`history.order` puts recorded items first, most recent first, and leaves the
-rest in the order given; the picker only keeps the order it receives, so
-recent items lead the empty list and matches that are otherwise equal, and
-never outrank a better match:
+choice, which is private to the package. `history.order` puts recorded items
+first, so recent items lead the empty list without outranking a better match:
 
 ```js
 const items = await history.order("projects", allProjects); // by item.id
@@ -853,27 +812,18 @@ const picked = await workbench.showPicker({ title: "Projects", items });
 if (picked.kind === "selected") await history.record("projects", picked.id);
 ```
 
-`history.recent(name)` returns the recorded IDs, most recent first, for lists
-that are not pickers, and `order` takes a key function for items whose identity
-is not `id`. A list keeps the 50 most recent IDs, and `history.forget(name, id)`
-removes one (without `id`, the whole list).
-
-To recall earlier entries, pass `history`, the package's own list of earlier
-submissions, newest first; keeping, capping, and persisting it is the
-package's job. The entries that match the typed text, through the same matcher
-and in the list's order, head the completion list ahead of what `onChange`
-returns, and an empty field lists the whole history. They are chosen with the
-same keys as other rows, and Enter still submits the field's text. The
-result's `highlighted` counts only the rows `onChange` returned, and is null
-while a history row is highlighted.
+To recall earlier entries in an input, pass `history`, the package's own list
+of earlier submissions, newest first; keeping and persisting it is the
+package's job:
 
 ```js
 const found = await workbench.showInput({ prompt: "/", title: "Search", history: searches });
 if (found.kind === "accepted") searches = [found.value, ...searches.filter((s) => s !== found.value)];
 ```
 
-Inputs are single-line and support the usual editing, clipboard, IME, and selection behavior. A `prompt` such as `":"` shows before the field, outside its value, and makes Backspace on an empty field dismiss the input, as a command line does. A `placeholder` shows muted in the empty field, and Tab on an empty field copies it in as an ordinary edit, so `onChange` runs; while a completion row is highlighted, Tab accepts that row instead. Confirmation
-and message use the native platform prompt.
+A `prompt` such as `":"` shows before the field and makes Backspace on an empty
+field dismiss the input, as a command line does; a `placeholder` shows muted in
+the empty field. Confirmation and message use the native platform prompt.
 
 One extension transient interaction may own a window at a time. A second
 request rejects `OperationInProgress`. The command palette is independent and
@@ -1172,19 +1122,13 @@ await workbench.showNotice({
 });
 ```
 
-`autoDismiss` defaults to true for `info`, so the popup hides after
-`notifications.timeout`, and to false for `warning` and `error`. An action
-dispatches its command in the popup's window, as a status item click does, and
-closes the popup. Closing a popup or running an action marks the notice read; a
-popup that times out leaves it unread. `markNotificationsRead(ids)`,
-`dismissNotification(id)`, and `clearNotifications()` change the history, which
-keeps the last 100 notices and does not persist across restarts.
+An action dispatches its command in the popup's window and closes the popup.
+`markNotificationsRead`, `dismissNotification`, and `clearNotifications` change
+the history, which does not persist across restarts.
 
-`workbench.observe` carries the history: the snapshot's `notifications` and a
-`notificationsChanged` event, sent with the whole history whenever a notice is
-added, read, dismissed, or cleared. A package can mirror the notices in its own
-surface. Setting `notifications.popups` to false records notices without native
-popups, so such a package can replace them with its own presentation.
+`workbench.observe` carries the history, so a package can mirror the notices in
+its own surface; setting `notifications.popups` to false records notices without
+native popups, so such a package can replace them with its own presentation.
 
 ## Read files
 
@@ -1201,37 +1145,22 @@ if ((await files.stat(`${root}/.editorconfig`)) !== null) {
 }
 ```
 
-`list` omits hidden entries (the `files.hidden` setting: `.git`, `.DS_Store`, and
-similar) and marks entries that `.gitignore`, `.ignore`, `.git/info/exclude`, or
-the `files.ignored` setting match with `ignored: true`, so an explorer can dim
-them. `files.search(uri, query, { limit })` matches the query against the paths of the
-visible, non-ignored files below a directory (or a list of directories, ranked as one
-search), without entering ignored
-directories or following symlinked ones, and resolves `{ results, more }`: the
-best `limit` matches (100 by default) with their `uri`, path relative to the
-directory, the searched `directory` it is in, `name`, and matched `ranges`, and whether others matched. A picker
-searches again on every keystroke rather than holding the list of files.
-`files.isIgnored(uri)` applies the same policy to one path. The fake host
-matches `files.hidden` and `files.ignored` as plain names and reads no ignore
-files.
+`list` omits hidden entries and marks entries that the ignore files or the
+`files.ignored` setting match with `ignored: true`, so an explorer can dim them.
+`files.search(uri, query, { limit })` matches the query against the paths of the
+visible, non-ignored files below a directory, so a picker searches again on
+every keystroke rather than holding the list of files.
 
 `files.watch(uri, listener, { recursive })` calls the listener with batches of
-changed URIs, gathered over about 100 ms and naming each URI once. A batch does
-not say whether an entry was created, changed, or removed, so stat or list what
-you need. A directory reports itself and its direct children unless `recursive`;
-entries `files.hidden` names are never reported. When the platform drops
-events the batch names the watched URI itself, so rescan it. The promise
-resolves once the watch runs, so read the current state after awaiting it. The
-returned `Disposable` and the lifecycle end the watch. The fake host calls the listener
-as soon as `seedFile` or `removeFile` from `knot/testing` changes a file under
-the watch, without coalescing.
+changed URIs. A batch does not say whether an entry was created, changed, or
+removed, so stat or list what you need, and read the current state after
+awaiting the watch. The returned `Disposable` and the lifecycle end it.
 
 `readText` decodes UTF-8 and drops a leading byte-order mark. It reads what is
 saved, never an open document's buffer, so unsaved edits are invisible; use
 `documents` and `Buffer.snapshot` for live text. `list` returns one directory in
 no particular order, so sort and filter in JavaScript. `stat` resolves `null`
-for a missing resource instead of rejecting. The fake host seeds files with
-`seedFile` from `knot/testing`.
+for a missing resource instead of rejecting.
 
 ## Change files
 
@@ -1259,8 +1188,7 @@ await files.delete(renamed);
 ```
 
 `files.reveal(uri)` shows a local file or folder in the platform's file
-manager. The fake host applies the same rules to its seeded files and open
-documents, and `revealed()` from `knot/testing` lists the reveals.
+manager.
 
 ## Acknowledge cleanup and handle failures
 

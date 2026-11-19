@@ -1391,8 +1391,11 @@ declare module "knot" {
      * beneath the selection.
      */
     readonly decoration?: Decoration | null;
-    /** Marks the range's first line in the gutter in this key's color. */
+    /** Marks the range's first line in the gutter with a dot in this key's
+     * color. A line shows one marker, chosen like decorations by severity and
+     * then by the latest. */
     readonly gutter?: ColorKey | null;
+    /** Runs when the gutter marker is clicked. */
     readonly command?: string | null;
   }
   /** A decoration one view paints; see `Editor.setDecorations`. */
