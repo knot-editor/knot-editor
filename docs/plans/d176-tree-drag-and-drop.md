@@ -1,6 +1,6 @@
 # D176: Drag and drop in trees
 
-Status: 🚧 approved, checkpoints 1 and 2 done pending review of 2. Roadmap item [D176](../roadmap.md).
+Status: 🚧 approved, checkpoints 1 and 2 done. Roadmap item [D176](../roadmap.md).
 References: [extension trees](../architecture/semantic-ui.md#extension-trees),
 [tree content and actions](../decisions/semantic-ui.md#extension-tree-content-and-actions),
 [workbench and lifecycle](../architecture/workbench-and-lifecycle.md).
@@ -94,24 +94,9 @@ the 700 ms hover expansion and 28 px edge scroll zone kept after review.
 
 ### 2. Explorer moves and copies by drag ✅
 
-Deliverables: explorer rows declare the payload. The explorer's `drop`
-command moves or copies through the logic Paste uses, then invalidates the
-source parent and reveals the result.
-
-Validation: explorer end-to-end tests through the real editor. They cover
-moving a file and a folder, Option-copy with a free name, a conflict, a drop
-into the same folder, a file target resolving to its folder, and a folder
-dropped into its own descendant being refused.
-
-Implementation context:
-- `extensions/@knot/explorer/src/rows.ts` (`entryItem`, `rootItem`).
-- Factor the move and copy out of `paste` in
-  `extensions/@knot/explorer/src/clipboard.ts` into a helper that Paste and
-  drop share.
-- Register the command in `commands.ts` and set `drop` in `tree.ts`.
-- Tests: `extensions/@knot/explorer/test/actions.test.ts`.
-
-Review gate: move and copy real files in the explorer.
+Done: explorer rows declare the payload, and the `drop` command in
+`extensions/@knot/explorer/src/clipboard.ts` moves or copies through the helper
+Paste shares. A folder dropped into itself or a descendant is refused.
 
 ### 3. Dropping a resource on the editor area
 
