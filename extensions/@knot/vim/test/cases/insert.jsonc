@@ -20,6 +20,21 @@
     { "name": "o indents from the language's indent query", "language": "rust", "before": ["fn f() ‸{", "}"], "keys": "ox<esc>", "after": ["fn f() {", "    ‸x", "}"] },
     { "name": "O indents from the language's indent query", "language": "rust", "before": ["fn f() {", "    a();", "‸}"], "keys": "Ob<esc>", "after": ["fn f() {", "    a();", "    ‸b", "}"] },
 
+    // Replace mode.
+    { "name": "R types over the text and Escape steps back", "before": ["a‸bcd"], "keys": "Rxy<esc>", "after": ["ax‸yd"] },
+    { "name": "replace mode stays until Escape", "before": ["a‸b"], "keys": "R", "after": { "text": ["a‸b"], "mode": "replace" } },
+    { "name": "R appends past the line's end", "before": ["a‸b", "c"], "keys": "Rxyz<esc>", "after": ["axy‸z", "c"] },
+    { "name": "Backspace in replace mode restores the replaced text", "before": ["‸abc"], "keys": "Rxyz<bs><bs><esc>", "after": ["‸xbc"] },
+    { "name": "Backspace in replace mode removes appended text", "before": ["‸a"], "keys": "Rxy<bs><esc>", "after": ["‸x"] },
+    { "name": "Backspace before where replace mode began only moves", "before": ["ab‸c"], "keys": "R<bs>x<esc>", "after": ["a‸xc"] },
+    { "name": "Enter in replace mode breaks the line without replacing", "before": ["‸abcd"], "keys": "Rx<cr>y<esc>", "after": ["x", "‸ycd"] },
+    { "name": "R types over a multi-byte character", "before": ["‸é😀z"], "keys": "Rab<esc>", "after": ["a‸bz"] },
+    { "name": "a count repeats the typed text over the text", "before": ["‸abcdefg"], "keys": "3Rxy<esc>", "after": ["xyxyx‸yg"] },
+    { "name": "a replace session undoes as one step", "before": ["a‸bcd"], "keys": "Rxy<cr>z<esc>u", "after": ["a‸bcd"] },
+    { "name": ". repeats a replace session", "before": ["‸abcdef"], "keys": "Rxy<esc>l.", "after": ["xyx‸yef"] },
+    { "name": "the . register holds the replaced-in text", "before": ["‸abc"], "keys": "Rxy<esc>\".p", "after": ["xyx‸yc"] },
+    { "name": "a macro replays a replace session", "before": ["‸abc", "def"], "keys": "qaRxy<esc>jq0@a", "after": ["xyc", "x‸yf"] },
+
     // Undo and redo.
     { "name": "an insert session undoes as one step", "before": ["a‸b"], "keys": "ixyz<esc>u", "after": ["a‸b"] },
     { "name": "A with a line break undoes as one step", "before": ["o‸ne", "two"], "keys": "Ax<cr>y<esc>u", "after": ["o‸ne", "two"] },

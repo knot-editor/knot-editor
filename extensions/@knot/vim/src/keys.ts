@@ -64,7 +64,8 @@ export type WindowAction =
   | "move-left" | "move-down" | "move-up" | "move-right"
   | "split-down" | "split-right" | "close" | "only" | "next" | "previous" | "last-used" | "first" | "last" | "equalize" | "taller" | "shorter" | "wider" | "narrower";
 
-export type InsertAt = "i" | "a" | "I" | "A" | "o" | "O";
+/** Where an insert command starts typing; `R` types over the text instead. */
+export type InsertAt = "i" | "a" | "I" | "A" | "o" | "O" | "R";
 
 export type Command =
   | { readonly kind: "motion"; readonly motion: Motion; readonly count: number | null }
@@ -237,7 +238,7 @@ const VISUAL_SHORTHANDS: Readonly<Record<string, readonly [Operator, boolean]>> 
   u: ["gu", false], U: ["gU", false], "~": ["g~", false],
 };
 
-const INSERTS = new Set<string>(["i", "a", "I", "A", "o", "O"]);
+const INSERTS = new Set<string>(["i", "a", "I", "A", "o", "O", "R"]);
 
 /** Registers a `"` prefix may name: `"` itself is the unnamed register. */
 const REGISTER = /^[a-zA-Z0-9"+*_%:/.-]$/;

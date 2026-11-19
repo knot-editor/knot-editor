@@ -6,7 +6,7 @@
 //! commands, and ordered key delivery. A case starts from `before`, types
 //! `keys` in the key notation, and expects `after`: the text with the caret or
 //! the selection at its markers, or an object with that `text` and the `mode`
-//! the editor is in afterwards, "normal" unless given, or "insert", "visual",
+//! the editor is in afterwards, "normal" unless given, or "insert", "replace", "visual",
 //! or "visual-line", and the `top` line in view. A `view` lays the editor out to
 //! show exactly `lines` lines and scrolls `top` to its first line before the
 //! keys. `language` sets the document's language. Keys are pressed without

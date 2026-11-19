@@ -3,7 +3,8 @@
 // visual modes are the `vim.normal` key context, where typed text and a few
 // named keys feed a parser and its commands run here; insert mode is the
 // `vim.insert` context, where typing is native and Escape returns to normal
-// mode.
+// mode; replace mode is the `vim.replace` context, where typed text and the
+// keys that edit come here to type over the text.
 import { commands, documents, keymaps, settings, storage, windows, workbench } from "knot";
 import type {
   CommandContext, DocumentId, EditorHandle, JsonValue, RecordedCommand, StatusItem, ViewTarget, WindowTarget,
@@ -15,7 +16,8 @@ import { EMPTY, feed, type Pending, pendingText, type WindowAction } from "./key
 import { BufferLines } from "./lines.js";
 import { lineStart } from "./motions.js";
 import {
-  INSERT, isVisual, leaveInsert, type Mode, moveOnto, NORMAL, type Player, run, setMode, type Shared, type State,
+  INSERT, isTyping, isVisual, leaveInsert, type Mode, moveOnto, NORMAL, type Player, REPLACE, replaceKey, run, setMode,
+  type Shared, type State,
 } from "./normal.js";
 import { Registers } from "./registers.js";
 import { defineSearchSettings } from "./search.js";
@@ -33,6 +35,14 @@ export const ENABLED = "vim.enabled";
 export const REGISTERS = "registers";
 const normal = { view: "editor", context: NORMAL } as const;
 const insert = { view: "editor", context: INSERT } as const;
+const replacing = { view: "editor", context: REPLACE } as const;
+
+/** Named keys replace mode handles; other keys act natively. */
+const REPLACE_KEYS: readonly (readonly [string, string])[] = [
+  ["enter", "<cr>"],
+  ["backspace", "<bs>"],
+  ["ctrl-h", "<bs>"],
+];
 
 /** Named keys normal mode handles, as gpui names them and as the parser
  * names them. Keys that would edit natively are bound too, so normal mode
@@ -150,8 +160,14 @@ export async function start() {
   for (const [key, name] of NAMED_KEYS) {
     keymaps.bind(key, { name: "vim.key", arguments: { key: name } }, normal);
   }
-  keymaps.bind("escape", "vim.leave-insert", insert);
-  keymaps.bind("ctrl-[", "vim.leave-insert", insert);
+  keymaps.bindText("vim.type", replacing);
+  for (const [key, name] of REPLACE_KEYS) {
+    keymaps.bind(key, { name: "vim.key", arguments: { key: name } }, replacing);
+  }
+  for (const scope of [insert, replacing]) {
+    keymaps.bind("escape", "vim.leave-insert", scope);
+    keymaps.bind("ctrl-[", "vim.leave-insert", scope);
+  }
 
   const observation = await workbench.observe(async (event) => {
     switch (event.type) {
@@ -257,7 +273,7 @@ class Vim {
     const state: Followed = {
       target, handle, buffer: tab.buffer, document: tab.document, shared: this.shared,
       language: info.language, mode: "normal", pending: EMPTY, operatorShown: false, message: null,
-      want: null, caret: null, group: null, recording: null, change: null, replaying: null,
+      want: null, caret: null, replaced: null, group: null, recording: null, change: null, replaying: null,
       macro: null, player: null, failed: false,
       repeat: { count: 1, open: false }, opened: false, visual: null, selected: null, previous: null,
       jumps: new JumpList(), context: null, scroll: null, foldsOff: null,
@@ -270,7 +286,7 @@ class Vim {
       disposeMarks(state);
     });
     await handle.onDidChangeSelection(async (selection) => {
-      if (this.states.get(target) !== state || state.mode === "insert") return;
+      if (this.states.get(target) !== state || isTyping(state.mode)) return;
       const mode = state.mode;
       await whileOpen(() => followSelection(state, selection));
       if (state.mode !== mode) await this.showStatus(target.window);
@@ -290,6 +306,7 @@ class Vim {
     disposeMarks(state);
     await state.handle.setKeyContext(NORMAL, false);
     await state.handle.setKeyContext(INSERT, false);
+    await state.handle.setKeyContext(REPLACE, false);
     await state.handle.setCursorStyle(null);
     await state.handle.dispose();
   }
@@ -339,6 +356,10 @@ class Vim {
   private async feedKeys(state: Followed, keys: readonly string[]): Promise<boolean> {
     for (const key of keys) {
       if (state.mode === "insert") break;
+      if (state.mode === "replace") {
+        await replaceKey(state, key);
+        continue;
+      }
       if (key === "q" && state.macro !== null && state.pending.typed === "") {
         await this.stopMacro(state);
         continue;
@@ -442,7 +463,7 @@ class Vim {
         const key = keyArgument(args);
         if (key !== null) return await this.feedKeys(state, [key]);
       } else if (command === "vim.leave-insert") {
-        if (state.mode === "insert") await this.finishInsert(state);
+        if (isTyping(state.mode)) await this.finishInsert(state);
       } else {
         await commands.invoke(command, args as never);
       }
@@ -461,7 +482,7 @@ class Vim {
 
   async leaveInsert(context: CommandContext) {
     const state = await this.stateOf(context);
-    if (state === null || state.mode !== "insert") return;
+    if (state === null || !isTyping(state.mode)) return;
     await this.finishInsert(state);
     await this.showStatus(state.target.window);
   }
@@ -551,7 +572,7 @@ async function windowCommand(action: WindowAction, count: number | null) {
 }
 
 const MODE_TEXT: Readonly<Record<Mode, string>> = {
-  normal: "", insert: "-- INSERT --", visual: "-- VISUAL --", "visual-line": "-- VISUAL LINE --",
+  normal: "", insert: "-- INSERT --", replace: "-- REPLACE --", visual: "-- VISUAL --", "visual-line": "-- VISUAL LINE --",
 };
 
 /** What the mode shows while a macro records. */

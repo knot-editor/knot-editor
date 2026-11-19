@@ -8,7 +8,7 @@ import type { Command, TextObject } from "./keys.js";
 import { BufferLines } from "./lines.js";
 import { lineStart, type Position } from "./motions.js";
 import {
-  applyOperator, aroundFolds, clampCaret, grouped, isVisual, join, type Moved, moveOnto, moveTo, readRegister, record, recordJump,
+  applyOperator, aroundFolds, clampCaret, grouped, isTyping, isVisual, join, type Moved, moveOnto, moveTo, readRegister, record, recordJump,
   regionText, rememberChange, rememberSelection, replace, reposition, resolve, scroll, setMode, type State, cellsAt, towardWant,
 } from "./normal.js";
 import { type Region, textObject } from "./objects.js";
@@ -119,9 +119,9 @@ async function land(state: State, lines: BufferLines, moved: Moved) {
 /** Follows the editor's selection after it changed: a selection made
  * outside Vim, as by a mouse drag or Select All, enters visual mode, and
  * clearing it leaves visual mode. In normal mode a bare caret is kept off
- * the line's end. Insert mode is left alone. */
+ * the line's end. Insert and replace modes are left alone. */
 export async function followSelection(state: State, notified?: EditorSelection) {
-  if (state.mode === "insert") return;
+  if (isTyping(state.mode)) return;
   const selection = notified ?? await state.handle.selection({ lines: 0 });
   const bare = selection.anchor === selection.caret;
   if (isVisual(state.mode)) {

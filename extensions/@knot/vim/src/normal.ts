@@ -24,8 +24,15 @@ import {
 
 export const NORMAL = "vim.normal";
 export const INSERT = "vim.insert";
+export const REPLACE = "vim.replace";
 
-export type Mode = "normal" | "insert" | "visual" | "visual-line";
+export type Mode = "normal" | "insert" | "replace" | "visual" | "visual-line";
+
+/** Whether `mode` types text, natively in insert mode and over the text in
+ * replace mode. */
+export function isTyping(mode: Mode): mode is "insert" | "replace" {
+  return mode === "insert" || mode === "replace";
+}
 
 export function isVisual(mode: Mode): mode is "visual" | "visual-line" {
   return mode === "visual" || mode === "visual-line";
@@ -90,6 +97,10 @@ export type State = {
    * where this package last put it; Infinity after `$`. */
   want: number | null;
   caret: number | null;
+  /** In replace mode, the text each typed character replaced, empty where
+   * it was appended at the line's end, and the caret after the last one;
+   * Backspace restores them while the caret stays there. */
+  replaced: { readonly originals: string[]; caret: number } | null;
   /** The undo group of the current insert session. */
   group: Disposable | null;
   /** The input of the current insert session, null outside one and while
@@ -138,16 +149,18 @@ export async function setMode(state: State, mode: Mode) {
     state.visual = null;
     state.selected = null;
   }
+  if (mode !== "replace") state.replaced = null;
   // Visual modes share normal mode's keys, context, and caret.
-  if ((was === "insert") === (mode === "insert") && was !== mode) return;
-  if (mode === "insert" && state.replaying === null) {
+  if (!isTyping(was) && !isTyping(mode) && was !== mode) return;
+  if (isTyping(mode) && state.replaying === null) {
     // A playing macro's input is not recorded; it keeps its own.
     if (state.player === null) state.recording = await state.handle.record();
     else state.player.session = [];
   }
-  await state.handle.setKeyContext(NORMAL, mode !== "insert");
+  await state.handle.setKeyContext(NORMAL, !isTyping(mode));
   await state.handle.setKeyContext(INSERT, mode === "insert");
-  await state.handle.setCursorStyle(mode === "insert" ? null : "block");
+  await state.handle.setKeyContext(REPLACE, mode === "replace");
+  await state.handle.setCursorStyle(mode === "insert" ? null : mode === "replace" ? "underline" : "block");
 }
 
 /** Puts a caret that sits past its line's last character back on it, as
@@ -246,8 +259,8 @@ async function repeatChange(state: State, count: number | null) {
   state.replaying = entries;
   try {
     await run(state, change.command, true);
-    if (state.mode === "insert") {
-      await replay(entries);
+    if (isTyping(state.mode)) {
+      await replay(state, entries);
       await leaveInsert(state);
     }
   } finally {
@@ -269,8 +282,18 @@ function withCount(command: Command, count: number): Command {
   }
 }
 
-async function replay(entries: readonly RecordedCommand[]) {
-  for (const { command, arguments: args } of entries) await commands.invoke(command, args as never);
+/** Runs recorded input again. Replace mode's input is this package's own
+ * key commands, which run here directly. */
+async function replay(state: State, entries: readonly RecordedCommand[]) {
+  for (const { command, arguments: args } of entries) {
+    if (command === "vim.type") {
+      for (const key of (args as { text: string }).text) await replaceKey(state, key);
+    } else if (command === "vim.key") {
+      await replaceKey(state, (args as { key: string }).key);
+    } else {
+      await commands.invoke(command, args as never);
+    }
+  }
 }
 
 /** Runs a command; `repeating` is whether `.` runs it again. */
@@ -1186,12 +1209,13 @@ async function enterInsert(state: State, at: InsertAt, count: number) {
   state.group = await openGroup(state);
   state.opened = at === "o" || at === "O";
   state.repeat = { count, open: state.opened };
-  await setMode(state, "insert");
+  await setMode(state, at === "R" ? "replace" : "insert");
   const lines = new BufferLines(state.buffer);
   const from = await lines.position((await state.handle.selection()).caret);
   const text = await lines.text(from.line);
   switch (at) {
     case "i":
+    case "R":
       break;
     case "a":
       if (text.length > 0) await moveTo(state, lines, { line: from.line, col: nextColumn(text, from.col) });
@@ -1240,11 +1264,47 @@ async function finishSession(state: State): Promise<readonly RecordedCommand[]> 
   if (change !== null) change.insert = entries;
   const text = entries.map(({ command, arguments: args }) => {
     if (command === "editor.insert-newline") return "\n";
-    return command === "editor.type" ? (args as { text: string }).text : "";
+    // Replace mode's typing is `vim.type`.
+    return command === "editor.type" || command === "vim.type" ? (args as { text: string }).text : "";
   }).join("");
   state.shared.registers.set(".", { text, linewise: false });
   state.shared.saveRegisters();
   return entries;
+}
+
+/** A key typed in replace mode: a character replaces the one under the
+ * caret, or is appended at the line's end; Backspace steps back, restoring
+ * what the session replaced there; Enter breaks the line without replacing. */
+export async function replaceKey(state: State, key: string) {
+  const lines = new BufferLines(state.buffer);
+  const { caret } = await state.handle.selection();
+  const replaced = state.replaced ??= { originals: [], caret };
+  // A caret moved elsewhere, as by the mouse, leaves nothing to restore.
+  if (replaced.caret !== caret) replaced.originals.length = 0;
+  const at = await lines.position(caret);
+  const text = await lines.text(at.line);
+  let after: number;
+  if (key === "<cr>") {
+    await commands.invoke("editor.insert-newline");
+    replaced.originals.length = 0;
+    after = (await state.handle.selection()).caret;
+  } else if (key === "<bs>") {
+    if (at.col === 0) return;
+    after = await lines.offset({ line: at.line, col: previousColumn(text, at.col) });
+    const original = replaced.originals.pop();
+    if (original !== undefined) await replace(state, after, caret, original);
+  } else {
+    // A character is at most two UTF-16 units; a named key types nothing.
+    if (key.length > 2) return;
+    const end = at.col < text.length ? nextColumn(text, at.col) : at.col;
+    const original = text.slice(at.col, end);
+    await replace(state, caret, caret + utf8Length(original), key);
+    replaced.originals.push(original);
+    after = caret + utf8Length(key);
+  }
+  replaced.caret = after;
+  state.caret = after;
+  await state.handle.setSelection({ anchor: after, caret: after });
 }
 
 export async function leaveInsert(state: State) {
@@ -1254,7 +1314,7 @@ export async function leaveInsert(state: State) {
   state.repeat = { count: 1, open: false };
   for (let n = 1; n < count; n++) {
     if (open) await commands.invoke("editor.insert-newline");
-    await replay(entries);
+    await replay(state, entries);
   }
   const lines = new BufferLines(state.buffer);
   const { anchor, caret } = await state.handle.selection();
