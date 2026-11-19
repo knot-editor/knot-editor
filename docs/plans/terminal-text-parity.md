@@ -1,6 +1,6 @@
 # Terminal text parity with Ghostty
 
-Status: checkpoints 1 and 2 complete; checkpoint 3 is next. No roadmap item.
+Status: all checkpoints complete. No roadmap item.
 
 ## Goal
 
@@ -51,9 +51,20 @@ glyphs render whole over their cluster's blank cells. See the terminal
 painting in [workbench and lifecycle](../architecture/workbench-and-lifecycle.md).
 Review gate passed: `just check` green, and the side-by-side fixture in
 Ghostty and Knot matches apart from the known weight difference
-checkpoint 3).
+(checkpoint 3).
 
-## Checkpoint 3 — Regular-weight parity with Ghostty
+## Checkpoint 3 — Regular-weight parity with Ghostty ✅
+
+Done: the extra weight was gpui's emulated CoreGraphics font smoothing,
+which thickens glyph strokes by foreground luminance; it is not a
+`font.weight` or bold-mapping issue. Knot sets `AppleFontSmoothing=0` for
+its own preference domain at startup (`disable_font_smoothing` in
+`src/app/typography.rs`), so glyphs rasterize at natural weight like
+Ghostty's. It applies to every gpui text surface, editors included, because
+gpui reads the setting once per process. Review gate passed: `just check`
+green, and the side-by-side `ls` fixture matches Ghostty's weight.
+
+Original brief:
 
 Deliverable: normal (non-bold) terminal glyphs render at the same visual
 weight as Ghostty with the same font, and bold cells stand out by the same

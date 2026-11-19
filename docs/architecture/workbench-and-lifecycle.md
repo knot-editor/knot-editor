@@ -583,7 +583,9 @@ punctuation cells on one line that draw identically are shaped as one run
 clipped to their cells, so ligatures such as `->` form; letter ligatures do
 not. Glyphs paint at physical-pixel-snapped cell origins with fixed cell
 advances; the pieces of one run share the run's clip, so a ligature glyph's
-ink can overflow into its cluster's blank cells. Selection is the terminal's
+ink can overflow into its cluster's blank cells. On macOS the
+application turns off font smoothing at startup, so glyphs rasterize at
+their natural stem weight rather than thickened by luminance. Selection is the terminal's
 own, tracked
 across scrolling; application mouse reports use viewport cells. Geometry is remeasured after resize
 or attachment handoff. Typography and bootstrap metrics live in
