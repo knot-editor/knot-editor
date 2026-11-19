@@ -28,7 +28,6 @@ point.
 
 ## Next up
 
-- D202 — Paste a URL over a selection as a Markdown link.
 - D181 — Native operation failures as notices
 - D041 — Terminal titles, bells, and notifications
 - D146 — Broad Ex command set
@@ -408,16 +407,6 @@ hold the analyses that support some items.
     sets, which also need D089 (D116).
 
 ### Editing and languages
-
-- **D202 — Paste a URL over a selection as a Markdown link** 🚧
-  - Depends on: none
-  - Description: In Zed, GitHub, Teams, and most editors, pasting a URL while
-    text is selected in Markdown turns the selection into a link instead of
-    replacing it. Do it now: when the pasted text is a URL and the selection
-    is not empty in a Markdown document, wrap it as `[selection](url)` in one
-    undo step, keeping bare-URL paste when nothing is selected. Decide whether
-    plain-text documents get it too. Plan:
-    [d202-paste-providers](plans/d202-paste-providers.md).
 
 - **D088 — VS Code, Zed, IntelliJ, and Sublime keymap presets**
   - Depends on: none
