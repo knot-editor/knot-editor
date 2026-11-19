@@ -1,6 +1,6 @@
 # D202: Language paste providers, and URL-over-selection links in Markdown
 
-Status: 🚧 checkpoint 1 implemented, awaiting review. Roadmap item [D202](../roadmap.md).
+Status: 🚧 checkpoint 1 done; checkpoint 2 not started. Roadmap item [D202](../roadmap.md).
 
 ## Outcome
 
@@ -61,57 +61,15 @@ user.
 
 - None. The checkpoint 1 review may rename the method or request fields.
 
-## Checkpoint 1 — Native paste hook and Markdown links ✅ (review gate pending)
+## Checkpoint 1 — Native paste hook and Markdown links ✅
 
-Deliverables:
-- ✅ Native paste asks `editor.paste.<languageId>` when one is registered,
-  revalidates, and applies the answer as one undo step.
-- ✅ `providePaste` request and result types in `knot.d.ts`, documented in the
-  extension guide next to `editor.completion`.
-- ✅ `@knot/language-markdown` registers the provider for both Markdown
-  languages.
-
-Validation:
-- knot-model unit tests: building the request, applying an answer, falling
-  back on null, an invalid result, or a stale revision or selection.
-- Product test (`src/app/product/tests/providers.rs` or `editing.rs`):
-  personal config registers a provider, and paste through the command uses
-  its answer. A paste in a language with no provider stays synchronous.
-- Markdown package test (end to end through the real editor): write the
-  clipboard, select text in a `.md` document, run `editor.paste`, then check
-  the link and that one undo restores the selection text. Cover the cases
-  that insert as is: no selection, selection already a URL, text that is not
-  a URL, inside a code fence, and a `.txt` document.
-
-Review gate: try the commands below. `just check` is clean.
-
-Implementation context:
-- Paste entry: `src/app/editor.rs` `execute_editing_command` (the
-  `PASTE_COMMAND` branch reads the clipboard) and
-  `src/app/editor/native_commands.rs` `editing`. The async provider path
-  needs the command to await, so split paste out of the synchronous branch:
-  resolve the provider on the foreground, await the provider call, then
-  re-enter the editor.
-- Model: `crates/knot-model/src/editor/editing.rs` `EditorState::paste`.
-  Add the request construction and the revalidated apply there, as plain
-  functions with tests.
-- Language id at an offset: `BufferModel::editing_at` and
-  `SyntaxState::language_at` (`crates/knot-model/src/syntax.rs`).
-  `SyntaxLanguage` does not carry its registered id yet, so add it.
-- Provider call: mirror `start_completion` and `completion_providers` in
-  `src/app/extensions/host.rs` (`self.semantics.providers()`,
-  `self.pool.call_provider` with a `ProviderCallRequest`). Here the lookup
-  is `get`, by name, not `all`.
-- Public contract: `crates/knot-host/src/js/knot.d.ts` next to
-  `CompletionProvider`, and the `editor.completion` section of
-  `docs/extension-api.md`. Update
-  `docs/architecture/editor-and-languages.md` (native editing behavior) with
-  the paste flow.
-- Markdown: `extensions/@knot/language-markdown/src/extension.ts`, with
-  tests in `extensions/@knot/language-markdown/test/`. Update the package
-  description in `knot.jsonc`.
-- Commit with `Release-note:` trailer: pasting a URL over selected text in
-  Markdown makes a link.
+Done and approved. Native paste asks `editor.paste.<languageId>` and applies
+the revalidated answer as one undo step; the Markdown package registers the
+link provider. See the [paste flow](../architecture/editor-and-languages.md)
+and [`PasteProvider`](../extension-api.md). `Editor.preparePaste` reuses
+`EditorState::paste_request` (`crates/knot-model/src/editor/paste.rs`) and
+`call_paste_provider` (`src/app/extensions/host.rs`). Known gap: a fence in
+an unregistered language still reaches the Markdown provider.
 
 ## Checkpoint 2 — `Editor.preparePaste` and Vim
 
