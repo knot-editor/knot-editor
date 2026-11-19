@@ -8,6 +8,10 @@ use knot_protocol::ExtensionKey;
 use knot_protocol::{
     CommandInvocationId, DocumentDestination, PaneTarget, PresentationTarget, WindowTarget,
 };
+use std::{
+    cell::{Cell, RefCell},
+    rc::Rc,
+};
 
 #[derive(Clone)]
 pub(crate) struct OperationCaller {
@@ -573,6 +577,52 @@ pub(crate) fn reload_document(
     let document = document_by_identity(id, cx)?;
     super::document_watch::reload(document, completion, cx);
     Ok(())
+}
+
+/// Save every dirty document that has a file, without a dialog or cleanup;
+/// untitled documents are skipped. Completes with the first failure, once
+/// every save has finished.
+pub(crate) fn save_all(
+    completion: impl FnOnce(Result<(), OpenError>, &mut App) + 'static,
+    cx: &mut App,
+) {
+    use crate::app::documents::DocumentDirty;
+    let ids: Vec<String> = KnotWindow::documents(cx)
+        .read(cx)
+        .documents()
+        .filter(|document| document.resource_uri().is_some() && document.is_dirty(cx))
+        .map(|document| document.identity().to_string())
+        .collect();
+    let pending = Rc::new(Cell::new(ids.len()));
+    let failure = Rc::new(RefCell::new(None));
+    let completion = Rc::new(RefCell::new(Some(completion)));
+    let finish = {
+        let (pending, failure, completion) = (pending.clone(), failure.clone(), completion.clone());
+        move |result: Result<(), OpenError>, cx: &mut App| {
+            if let Err(error) = result {
+                failure.borrow_mut().get_or_insert(error);
+            }
+            pending.set(pending.get() - 1);
+            if pending.get() == 0 {
+                let result = failure.borrow_mut().take().map_or(Ok(()), Err);
+                if let Some(completion) = completion.borrow_mut().take() {
+                    completion(result, cx);
+                }
+            }
+        }
+    };
+    if ids.is_empty() {
+        if let Some(completion) = completion.borrow_mut().take() {
+            completion(Ok(()), cx);
+        }
+        return;
+    }
+    for id in ids {
+        let finish = finish.clone();
+        if let Err(error) = save_document(&id, None, finish.clone(), cx) {
+            finish(Err(error), cx);
+        }
+    }
 }
 
 /// Save a document without a dialog: in place, or, with `uri`, to that file,

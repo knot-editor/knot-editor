@@ -569,6 +569,29 @@ pub(crate) async fn save_as(
     save_to_target(&context, true).await
 }
 
+#[command("file.save-all", title = "Save All", description = "Save every modified document that has a file.", id = SAVE_ALL_COMMAND, participant = Application)]
+pub(crate) async fn save_all(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
+    let (sender, receiver) = tokio::sync::oneshot::channel();
+    context
+        .foreground(move |_, cx| {
+            super::operations::save_all(
+                move |result, _| {
+                    let _ = sender.send(result);
+                },
+                cx,
+            );
+            Ok(())
+        })
+        .await?;
+    match receiver.await {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(error)) => Err(CommandOutcome::HandlerFailure {
+            message: format!("save failed: {error:?}"),
+        }),
+        Err(_) => Err(CommandOutcome::InvalidTarget),
+    }
+}
+
 #[command("file.recover", title = "Recover Unsaved Documents…", description = "Restore or discard unsaved text kept from earlier sessions.", id = RECOVER_COMMAND, participant = Workbench)]
 pub(crate) async fn recover(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
     context

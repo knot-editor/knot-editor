@@ -110,6 +110,15 @@ async function runEx(state: State, command: ExCommand): Promise<string | null> {
       await workbench.close(state.target);
       return null;
     }
+    case "write-all":
+      return (await commands.invoke("file.save-all")).kind === "completed" ? null : "E37: Write failed";
+    case "quit-all":
+      await commands.invoke("application.quit");
+      return null;
+    case "write-quit-all":
+      if ((await commands.invoke("file.save-all")).kind !== "completed") return "E37: Write failed";
+      await commands.invoke("application.quit");
+      return null;
     case "edit":
       return edit(state, command.path, command.force);
     case "set":

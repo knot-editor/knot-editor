@@ -69,6 +69,12 @@ test("commands take Vim's abbreviations and a bang", () => {
   for (const line of ["x", "xit", "exi", "exit"]) {
     assert.deepEqual(parseEx(line), { kind: "write-quit", ifChanged: true });
   }
+  assert.deepEqual(parseEx("wa"), { kind: "write-all" });
+  assert.deepEqual(parseEx("wall"), { kind: "write-all" });
+  for (const line of ["qa", "qall", "qa!", "quita"]) {
+    assert.deepEqual(parseEx(line), line === "quita" ? { kind: "error", message: "E492: Not an editor command: quita" } : { kind: "quit-all" });
+  }
+  for (const line of ["wqa", "wqall", "xa", "xall"]) assert.deepEqual(parseEx(line), { kind: "write-quit-all" });
   assert.deepEqual(parseEx("e src/main.ts"), { kind: "edit", path: "src/main.ts", force: false });
   assert.deepEqual(parseEx("edit! a b"), { kind: "edit", path: "a b", force: true });
   assert.deepEqual(parseEx("e!"), { kind: "edit", path: null, force: true });
@@ -152,11 +158,11 @@ beforeEach(() => host.reset());
 const values = async (line: string) => (await completeEx(line)).map((item) => item.value);
 
 test("command names complete, in the order of the matcher", async () => {
-  assert.deepEqual(await values("w"), ["write", "wq"]);
+  assert.deepEqual(await values("w"), ["write", "wq", "wall", "wqall"]);
   assert.deepEqual(await values("se"), ["set", "saveas", "nohlsearch", "substitute"]);
-  assert.deepEqual(await values(":q"), [":quit", ":wq"]);
+  assert.deepEqual(await values(":q"), [":quit", ":qall", ":wq", ":wqall"]);
   assert.deepEqual(await values("zz"), []);
-  assert.equal((await values("")).length, 12);
+  assert.equal((await values("")).length, 16);
 });
 
 test("line numbers and other arguments get no items", async () => {

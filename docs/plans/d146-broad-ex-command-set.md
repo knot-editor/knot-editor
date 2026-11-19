@@ -1,6 +1,6 @@
 # D146: Broad Ex command set
 
-Status: 🚧 in progress; checkpoint 1 complete. Roadmap item [D146](../roadmap.md).
+Status: 🚧 in progress; checkpoint 2 awaiting review. Roadmap item [D146](../roadmap.md).
 Builds on the [bundled Vim mode](../decisions/bundled-packages.md#bundled-vim-mode)
 in [`extensions/@knot/vim/`](../../extensions/@knot/vim/).
 
@@ -90,7 +90,12 @@ operations refresh the file index, and the host publishes `documentMoved` when
 a document's file changes, which the explorer follows. `documents.save` skips
 the save cleanup (trailing whitespace, final newline) that Save applies.
 
-### 2. Save All and quitting
+### 2. Save All and quitting 🔍
+
+Implemented: `file.save-all` is an application command in the File menu and
+palette; it saves without Save's cleanup. Tests cover Save All across
+documents and `:wa`/`:wqa`/`:xa` in Vim; `cx.quit()` is not observable in
+tests, so `:qa` is checked only to run without a prompt.
 
 Deliverables: the native `file.save-all` command in the palette and File
 menu; `:wa`, `:qa`, `:qa!`, `:wqa`, `:xa`.

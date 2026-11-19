@@ -44,6 +44,12 @@ export type ExCommand =
   | { readonly kind: "quit"; readonly force: boolean }
   /** `:wq`, or with `ifChanged` `:x`, which writes only a changed document. */
   | { readonly kind: "write-quit"; readonly ifChanged: boolean }
+  /** `:wa`: save every modified document that has a file. */
+  | { readonly kind: "write-all" }
+  /** `:qa`, and `:qa!`, which does the same: Knot keeps unsaved text. */
+  | { readonly kind: "quit-all" }
+  /** `:wqa` and `:xa`: save every modified document, then quit. */
+  | { readonly kind: "write-quit-all" }
   /** `:e`, or `:e!`, which discards the document's changes: without a path it
    * reverts the document to its file, with one it opens that file instead. */
   | { readonly kind: "edit"; readonly path: string | null; readonly force: boolean }
@@ -71,6 +77,7 @@ export type ExCommand =
 const NAMES: readonly (readonly [string, number])[] = [
   ["write", 1], ["quit", 1], ["wq", 2], ["xit", 1], ["exit", 3], ["edit", 1], ["set", 2], ["saveas", 3],
   ["nohlsearch", 3], ["substitute", 1], ["split", 2], ["vsplit", 2],
+  ["wall", 2], ["qall", 2], ["wqall", 3], ["xall", 2],
 ];
 
 const BOOLEANS: Readonly<Record<string, BooleanOption>> = {
@@ -120,6 +127,10 @@ export function parseEx(text: string): ExCommand {
     case "quit": return { kind: "quit", force };
     case "split": return { kind: "split", direction: "down" };
     case "vsplit": return { kind: "split", direction: "right" };
+    case "wall": return { kind: "write-all" };
+    case "qall": return { kind: "quit-all" };
+    case "wqall":
+    case "xall": return { kind: "write-quit-all" };
     case "wq": return { kind: "write-quit", ifChanged: false };
     default: return { kind: "write-quit", ifChanged: true };
   }

@@ -806,6 +806,7 @@ pub(super) fn product_menus(cx: &App) -> Vec<Menu> {
                     vec![
                         item("Save", SAVE_COMMAND),
                         item("Save As…", SAVE_AS_COMMAND),
+                        item("Save All", commands::SAVE_ALL_COMMAND),
                         item("Recover Unsaved Documents…", commands::RECOVER_COMMAND),
                     ],
                 ),

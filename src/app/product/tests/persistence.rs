@@ -924,3 +924,57 @@ fn open_from_terminal_requests_picker_and_preserves_terminal(cx: &mut TestAppCon
         );
     });
 }
+
+#[gpui::test]
+async fn save_all_writes_dirty_file_documents_and_skips_untitled(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    cx.set_global(save_without_cleanup());
+    let (filesystems, provider) = memory_filesystems_with_provider();
+    cx.set_global(ApplicationFileSystems(filesystems));
+    async fn persisted(
+        documents: &Entity<DocumentCollection>,
+        provider: &Arc<MemoryFileSystemProvider>,
+        name: &str,
+        text: &str,
+        cx: &mut TestAppContext,
+    ) -> (super::super::DocumentId, Entity<Buffer>) {
+        let uri = ResourceUri::parse(&format!("mem://product/{name}")).unwrap();
+        provider.seed_file(uri.clone(), text.as_bytes()).unwrap();
+        let opened = provider.read(uri.clone()).await.unwrap();
+        let model = cx.new(|_| Buffer::new(BufferModel::from_text(text)));
+        let id = documents.update(cx, |documents, cx| {
+            documents.create_persisted(name, model.clone(), uri, 0, opened.version, cx)
+        });
+        (id, model)
+    }
+    let (first, first_model) = persisted(&documents, &provider, "a.txt", "loaded text", cx).await;
+    let (second, second_model) = persisted(&documents, &provider, "lib.txt", "library", cx).await;
+    let (_clean, _) = persisted(&documents, &provider, "README.md", "readme", cx).await;
+    first_model.update(cx, |model, _| model.replace(0..0, "one ").unwrap());
+    second_model.update(cx, |model, _| model.replace(0..0, "two ").unwrap());
+    let untitled = cx.update(|cx| create_untitled_document(&documents, cx));
+    let untitled_model = cx.read(|cx| documents.read(cx).get(untitled).unwrap().model().clone());
+    untitled_model.update(cx, |model, _| model.replace(0..0, "unnamed").unwrap());
+    let (window, native_window) = product_window(first, first_model, cx);
+
+    let execution = dispatch_product_command(
+        &window,
+        native_window,
+        crate::app::product::commands::SAVE_ALL_COMMAND,
+        cx,
+    );
+    assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
+    let read = |name: &str| {
+        let uri = ResourceUri::parse(&format!("mem://product/{name}")).unwrap();
+        String::from_utf8(pollster::block_on(provider.read(uri)).unwrap().bytes).unwrap()
+    };
+    assert_eq!(read("a.txt"), "one loaded text");
+    assert_eq!(read("lib.txt"), "two library");
+    assert_eq!(read("README.md"), "readme");
+    cx.read(|cx| {
+        let documents = documents.read(cx);
+        assert!(!documents.get(first).unwrap().is_dirty(cx));
+        assert!(!documents.get(second).unwrap().is_dirty(cx));
+        assert!(documents.get(untitled).unwrap().is_dirty(cx));
+    });
+}

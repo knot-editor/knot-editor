@@ -913,6 +913,30 @@ fn ex_writes_and_opens_files_beside_the_document(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+fn ex_wa_writes_every_modified_file_and_wqa_saves_before_quitting(cx: &mut TestAppContext) {
+    let product = start(cx);
+    let files = serve_files(&product, cx);
+    let test_editor = product.open_file(&files, "mem://product/dir/a.txt", cx);
+    test_editor.press("x:e b.txt<cr>", cx);
+    test_editor.press("x", cx);
+    assert_eq!(files.read("mem://product/dir/a.txt"), "one");
+    test_editor.press(":wa<cr>", cx);
+    // Save All leaves the whitespace cleanup to Save.
+    assert_eq!(files.read("mem://product/dir/a.txt"), "ne");
+    assert_eq!(files.read("mem://product/dir/b.txt"), "wo");
+    assert!(!test_editor.is_dirty(cx));
+
+    // Quitting keeps unsaved text, so neither quit command prompts, and
+    // `:wqa` and `:xa` save first.
+    test_editor.press("x:wqa<cr>", cx);
+    assert_eq!(files.read("mem://product/dir/b.txt"), "o");
+    test_editor.press("x:xa<cr>", cx);
+    assert_eq!(files.read("mem://product/dir/b.txt"), "");
+    test_editor.press(":qa<cr>:qa!<cr>", cx);
+    assert!(!cx.has_pending_prompt());
+}
+
+#[gpui::test]
 fn ex_edit_from_an_untitled_document_opens_in_the_first_root(cx: &mut TestAppContext) {
     let product = start(cx);
     serve_files(&product, cx);
