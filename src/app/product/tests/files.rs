@@ -735,8 +735,10 @@ fn saving_a_document_writes_in_place_or_retargets_it(cx: &mut TestAppContext) {
     let host = cx.update(extensions::host::install);
     let source = format!(
         r#"
-import {{ commands, documents, files, windows }} from "knot";
+import {{ commands, documents, files, windows, workbench }} from "knot";
 {REJECTS}
+const moves = [];
+await workbench.observe((event) => {{ if (event.type === "documentMoved") moves.push([event.from, event.document.resourceUri]); }});
 const insert = (text) => [{{ range: {{ startByteOffset: 0, endByteOffset: 0 }}, text }}];
 await commands.register("docs.save", async () => {{
   const [window] = await windows.list();
@@ -761,6 +763,9 @@ await commands.register("docs.save", async () => {{
   if (await files.readText("mem://product/taken.txt") !== "fresh") throw new Error("not overwritten");
   await rejects(() => documents.save("not a document"), "DocumentNotFound");
 }});
+await commands.register("docs.moves", async () => {{
+  if (JSON.stringify(moves) !== JSON.stringify([[null, "mem://product/taken.txt"]])) throw new Error(`moves ${{JSON.stringify(moves)}}`);
+}});
 await commands.register("docs.write", async () => {{
   if (await files.writeText("mem://product/new/deep/w.txt", "one") !== "mem://product/new/deep/w.txt") throw new Error("create");
   await files.writeText("mem://product/new/deep/w.txt", "two");
@@ -773,6 +778,7 @@ await commands.register("docs.write", async () => {{
     let key = install_operation_fixture(&host, &source, "docs.save", cx);
     let (window, _) = empty_headless_window(&documents, cx);
     run_command(&window, Headless, "docs.save", cx);
+    run_command(&window, Headless, "docs.moves", cx);
     run_command(&window, Headless, "docs.write", cx);
     host.update(cx, |host, cx| host.unload(key, cx).unwrap());
 }

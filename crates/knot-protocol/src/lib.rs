@@ -1008,6 +1008,12 @@ pub enum ApplicationChange {
     DocumentChanged {
         document: DocumentInfo,
     },
+    /// A document's file changed, as Save As and renames do; `document` is
+    /// as it is now and `from` the URI it had, absent for an untitled one.
+    DocumentMoved {
+        document: DocumentInfo,
+        from: Option<String>,
+    },
     DocumentClosed {
         document: String,
     },

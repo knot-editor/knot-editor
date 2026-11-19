@@ -2318,6 +2318,7 @@ globalThis.__knotDispatchApplicationChange = async (subscription, value) => {
   let payload;
   switch (value.type) {
     case "documentOpened": case "documentChanged": payload = { document: documentFromNative(value.document) }; break;
+    case "documentMoved": payload = { document: documentFromNative(value.document), from: value.from }; break;
     case "documentClosed": payload = { document: value.document }; break;
     case "windowOpened": case "presentationsChanged": payload = { window: windowFromNative(value.window) }; break;
     case "windowClosed": case "viewStateChanged": payload = { window: windowTarget(value.window) }; break;

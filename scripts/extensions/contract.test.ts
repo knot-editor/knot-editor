@@ -429,6 +429,10 @@ await documents.get("file:///tmp/document.txt");
 
 const observation = await workbench.observe(async (event) => {
   const sequence: number = event.sequence;
+  if (event.type === "documentMoved") {
+    const from: string | null = event.from;
+    void from;
+  }
   if (event.type === "documentOpened" || event.type === "documentChanged") {
     const documentId: DocumentId = event.document.id;
     await documents.get(documentId);

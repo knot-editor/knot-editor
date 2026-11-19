@@ -72,7 +72,9 @@ closure can remain committed even if the later close cancels.
 
 For change-driven features, call `workbench.observe` before querying separately:
 it returns an atomic initial snapshot, sequence watermark, and disposer. Later
-events describe committed metadata changes; read text through buffer APIs.
+events describe committed metadata changes; read text through buffer APIs. `documentMoved`, which follows a
+`documentChanged`, reports a document whose file changed, as Save As and
+`files.rename` do, with the URI it had.
 `viewStateChanged` reports a window whose cursor, selection, scroll, focus,
 dock sizes, bounds, or structure settled about a second after a change. Packages
 activate before startup has restored windows: when the snapshot's `launched` is

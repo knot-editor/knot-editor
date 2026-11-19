@@ -1,7 +1,7 @@
 // Revealing a file in the explorer.
 import { documents, settings, windows, workspaces } from "knot";
-import type { CommandContext, ViewTarget, WindowTarget } from "knot";
-import { idPath, rootOf } from "./rows.js";
+import type { CommandContext, DocumentInfo, ViewTarget, WindowTarget } from "knot";
+import { idPath, parentOf, rootOf, rowId } from "./rows.js";
 import { AUTO_REVEAL } from "./settings.js";
 import type { ExplorerState } from "./state.js";
 
@@ -51,4 +51,21 @@ export async function followActive(state: ExplorerState, target: ViewTarget) {
   if (!(await settings.get(AUTO_REVEAL))) return;
   const uri = await fileOf(target);
   if (uri !== null) await revealFile(state, target.window, uri);
+}
+
+/** Follow a document that moved to another file, as Save As does, in the
+ * windows whose active editor shows it, as `explorer.autoReveal` follows a new
+ * active tab. */
+export async function followMoved(state: ExplorerState, document: DocumentInfo) {
+  if (document.resourceUri === null || !(await settings.get(AUTO_REVEAL))) return;
+  for (const window of await windows.list()) {
+    if (window.statusTarget !== null && (await fileOf(window.statusTarget)) === document.resourceUri) {
+      // The file is new to the tree, so its folder reloads first.
+      const root = rootOf((await workspaces.get(window.target))?.roots ?? [], document.resourceUri);
+      if (root !== null) {
+        await state.view?.invalidate(rowId(root.id, parentOf(document.resourceUri)), window.target).catch(() => {});
+      }
+      await revealFile(state, window.target, document.resourceUri);
+    }
+  }
 }

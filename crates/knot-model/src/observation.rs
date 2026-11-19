@@ -31,9 +31,17 @@ impl ApplicationObservation {
                 None => changes.push(ApplicationChange::DocumentOpened {
                     document: document.clone(),
                 }),
-                Some(old) if old != document => changes.push(ApplicationChange::DocumentChanged {
-                    document: document.clone(),
-                }),
+                Some(old) if old != document => {
+                    changes.push(ApplicationChange::DocumentChanged {
+                        document: document.clone(),
+                    });
+                    if old.resource_uri != document.resource_uri {
+                        changes.push(ApplicationChange::DocumentMoved {
+                            document: document.clone(),
+                            from: old.resource_uri.clone(),
+                        });
+                    }
+                }
                 _ => {}
             }
         }
@@ -210,11 +218,24 @@ mod tests {
         assert!(
             matches!(&clean[0].change, ApplicationChange::DocumentChanged { document } if !document.dirty && document.revision == 2)
         );
+        let mut moved = document(2, false);
+        moved.resource_uri = Some("file:///a.txt".into());
+        let moves = owner.commit(ApplicationSnapshot {
+            documents: vec![moved],
+            ..Default::default()
+        });
+        assert!(matches!(
+            &moves[0].change,
+            ApplicationChange::DocumentChanged { .. }
+        ));
+        assert!(
+            matches!(&moves[1].change, ApplicationChange::DocumentMoved { document, from: None } if document.resource_uri.as_deref() == Some("file:///a.txt"))
+        );
         let closed = owner.commit(ApplicationSnapshot::default());
         assert!(
             matches!(&closed[0].change, ApplicationChange::DocumentClosed { document } if document == "document")
         );
-        assert_eq!(closed[0].sequence, changed[0].sequence + 2);
+        assert_eq!(closed[0].sequence, changed[0].sequence + 4);
     }
 
     #[test]

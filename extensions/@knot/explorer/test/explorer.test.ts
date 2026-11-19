@@ -163,6 +163,30 @@ test("the active editor file is revealed when it changes, unless autoReveal is o
   assert.equal(view.reveals.length, before);
 });
 
+test("a document that moves to another file is revealed at its new file", async () => {
+  const id = host.addDocument({ uri: `${ROOT}/src/main.ts`, text: "main" });
+  host.present(window, id);
+  const info = async () => (await (await import("knot")).documents.get(id))!;
+  const view = host.view(VIEW_ID);
+  const before = view.reveals.length;
+  await host.emit({ type: "documentChanged", document: await info() });
+  assert.equal(view.reveals.length, before);
+
+  host.document(id).resourceUri = `${ROOT}/src/renamed.ts`;
+  const [app0] = await children();
+  view.invalidated.length = 0;
+  await host.emit({ type: "documentMoved", document: await info(), from: `${ROOT}/src/main.ts` });
+  const [app] = await children();
+  assert.equal(app!.id, app0!.id);
+  // The folder reloads so the tree has the new file to select.
+  assert.deepEqual(view.invalidated.map((call) => call.parent), [rowId(parseRowId(app!.id).root, `${ROOT}/src`)]);
+  assert.deepEqual(view.reveals.at(-1), [
+    app!.id,
+    rowId(parseRowId(app!.id).root, `${ROOT}/src`),
+    rowId(parseRowId(app!.id).root, `${ROOT}/src/renamed.ts`),
+  ]);
+});
+
 test("Reveal Active File reveals the focused editor's file and focuses the explorer", async () => {
   const id = host.addDocument({ uri: `${OTHER}/lib.ts`, text: "lib" });
   host.present(window, id);

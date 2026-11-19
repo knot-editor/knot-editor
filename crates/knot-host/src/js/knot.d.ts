@@ -1143,6 +1143,9 @@ declare module "knot" {
   }
   export type ApplicationChange =
     | { readonly type: "documentOpened" | "documentChanged"; readonly document: DocumentInfo }
+    /** The document's file changed, as Save As and a rename do; `from` is the
+     * URI it had, null for an untitled document. Follows a `documentChanged`. */
+    | { readonly type: "documentMoved"; readonly document: DocumentInfo; readonly from: string | null }
     | { readonly type: "documentClosed"; readonly document: DocumentId }
     | { readonly type: "windowOpened" | "presentationsChanged"; readonly window: WindowInfo }
     | { readonly type: "windowClosed"; readonly window: WindowTarget }

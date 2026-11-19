@@ -1235,7 +1235,8 @@ pub(super) fn application_event_to_v8<'s>(
     let exact = event.sequence <= MAX_JS_INTEGER
         && match &event.change {
             ApplicationChange::DocumentOpened { document }
-            | ApplicationChange::DocumentChanged { document } => {
+            | ApplicationChange::DocumentChanged { document }
+            | ApplicationChange::DocumentMoved { document, .. } => {
                 application_document_is_exact(document)
             }
             ApplicationChange::WindowOpened { window }

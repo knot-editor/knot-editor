@@ -6,7 +6,7 @@ import { registerActions } from "./actions.js";
 import { registerClipboard } from "./clipboard.js";
 import { registerCommands } from "./commands.js";
 import { registerMenus } from "./menus.js";
-import { followActive } from "./reveal.js";
+import { followActive, followMoved } from "./reveal.js";
 import { defineSettings, SHOW_IGNORED } from "./settings.js";
 import { createState } from "./state.js";
 import { registerTree } from "./tree.js";
@@ -26,6 +26,9 @@ export async function start() {
     switch (event.type) {
       case "activeTargetChanged":
         if (event.activeTarget !== null) await followActive(state, event.activeTarget);
+        break;
+      case "documentMoved":
+        await followMoved(state, event.document);
         break;
       case "windowClosed":
         state.loaded.delete(event.window);
