@@ -538,7 +538,11 @@ export async function scroll(
       const here = await state.handle.rowAt(caretRow);
       const there = await state.handle.rowAt(target);
       if (here.line === there.line && here.column === there.column) return null;
-      await state.handle.scrollBy(step);
+      // The view stops with the last row at the bottom edge, even where the
+      // editor scrolls further; only the caret moves on.
+      const lastText = await lines.text(total - 1);
+      const room = Math.max(0, (await rowOfPosition(state, lines, { line: total - 1, col: lastText.length })) - lastRow(before));
+      await state.handle.scrollBy(step > 0 ? Math.min(step, room) : step);
       return toRow(state, lines, from, target, false);
     }
     case "page-down":

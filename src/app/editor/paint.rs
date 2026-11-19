@@ -253,7 +253,7 @@ impl Element for EditorElement {
             let editor = view.editor.read(cx);
             let model = view.model.read(cx);
             let theme = theme(cx);
-            let max = (editor.wrap().row_count() as f32) * metrics.line_height;
+            let max = editor.max_scroll_rows() * metrics.line_height;
             let rows = editor.visible_rows();
             let lines = editor.visible_lines();
             view.cache_syntax(model, lines.clone());
@@ -737,7 +737,7 @@ impl Element for EditorElement {
                 bounds,
                 crate::app::scrollbar::Scroll {
                     offset: scroll.max(0.),
-                    total: scroll_max,
+                    total: scroll_max + viewport_h,
                     visible: viewport_h,
                 },
                 colors.scrollbar,

@@ -72,6 +72,8 @@ pub struct EditorSettings {
     pub auto_surround: bool,
     /// Whether long lines wrap.
     pub soft_wrap: bool,
+    /// Whether scrolling may continue until the last row is the first visible one.
+    pub scroll_beyond_last_line: bool,
     /// Whether a save trims trailing whitespace.
     pub trim_trailing_whitespace: bool,
     /// Whether a save ends a text with a line terminator.
@@ -86,6 +88,7 @@ impl Default for EditorSettings {
             auto_closing_brackets: true,
             auto_surround: true,
             soft_wrap: false,
+            scroll_beyond_last_line: true,
             trim_trailing_whitespace: true,
             insert_final_newline: true,
         }
@@ -395,6 +398,7 @@ impl EditorState {
     /// Follow `settings` from now on.
     pub fn set_settings(&mut self, settings: EditorSettings) {
         self.settings = settings;
+        self.clamp_scroll();
     }
 
     /// The work queued for the owner since the last call, in order.
@@ -980,8 +984,19 @@ impl EditorState {
     }
 
     fn clamp_scroll(&mut self) {
-        let max = (self.wrap.row_count() as f32 - self.viewport_rows).max(0.);
-        self.scroll_top = self.scroll_top.clamp(0., max);
+        self.scroll_top = self.scroll_top.clamp(0., self.max_scroll_rows());
+    }
+
+    /// The furthest the view scrolls, in rows: with
+    /// `editor.scrollBeyondLastLine` the last row reaches the top, otherwise
+    /// it stops at the bottom edge.
+    pub fn max_scroll_rows(&self) -> f32 {
+        let rows = self.wrap.row_count() as f32;
+        if self.settings.scroll_beyond_last_line {
+            (rows - 1.).max(0.)
+        } else {
+            (rows - self.viewport_rows).max(0.)
+        }
     }
 
     /// After any cursor move, scroll just enough to keep the caret inside

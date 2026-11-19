@@ -728,6 +728,7 @@ fn editor_settings(kind: &str, model: &BufferModel, cx: &App) -> EditorSettings 
         auto_closing_brackets: settings::editor_auto_closing_brackets(&scope, cx),
         auto_surround: settings::editor_auto_surround(&scope, cx),
         soft_wrap: settings::editor_soft_wrap(&scope, cx),
+        scroll_beyond_last_line: settings::editor_scroll_beyond_last_line(&scope, cx),
         trim_trailing_whitespace: settings::files_trim_trailing_whitespace(&scope, cx),
         insert_final_newline: settings::files_insert_final_newline(&scope, cx),
     }

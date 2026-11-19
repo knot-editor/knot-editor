@@ -381,6 +381,10 @@ declare module "knot" {
      * Soft Wrap writes it scoped to one document, and the bundled Markdown
      * package sets it for { language: "markdown" }. Native default false. */
     "editor.softWrap": boolean;
+    /** Whether editor views scroll until the last row is the first visible
+     * one, rather than stopping with it at the bottom edge. Native default
+     * true. */
+    "editor.scrollBeyondLastLine": boolean;
     /** Line numbers in the editor gutter: "on", "off", or "relative", which
      * numbers other lines by their distance from the cursor's line. Native
      * default "on"; other text means "on". */

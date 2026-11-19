@@ -5,14 +5,29 @@ use gpui::{
 use super::super::{
     Buffer, BufferModel, Editor, EditorView, EditorViewState, Row, line_end, to_flat_byte,
 };
-use crate::app::settings::{self, ApplicationSettings, EDITOR_SOFT_WRAP, SettingsScope};
+use crate::app::settings::{
+    self, ApplicationSettings, EDITOR_SCROLL_BEYOND_LAST_LINE, EDITOR_SOFT_WRAP, SettingsScope,
+};
 
 fn wrap_everything(cx: &mut TestAppContext) {
+    wrap_everything_scrolling(cx, true);
+}
+
+/// Wrap every editor, with `editor.scrollBeyondLastLine` set to `beyond`.
+fn wrap_everything_scrolling(cx: &mut TestAppContext, beyond: bool) {
     cx.update(|cx| {
         let mut settings = ApplicationSettings::default();
         settings
             .0
             .set(EDITOR_SOFT_WRAP, true.into(), SettingsScope::default())
+            .unwrap();
+        settings
+            .0
+            .set(
+                EDITOR_SCROLL_BEYOND_LAST_LINE,
+                beyond.into(),
+                SettingsScope::default(),
+            )
             .unwrap();
         cx.set_global(settings);
     });
@@ -136,7 +151,8 @@ fn scrolling_counts_rows_and_keeps_the_top_row_across_resizes(cx: &mut TestAppCo
         view.scroll_to_for_test(1e9);
         assert_eq!(
             view.scroll_top(),
-            view.wrap().row_count() as f32 - view.viewport_rows()
+            view.wrap().row_count() as f32 - 1.,
+            "the last row reaches the top"
         );
         assert_eq!(view.visible_rows().end, view.wrap().row_count());
 
@@ -435,7 +451,7 @@ fn without_wrapping_each_movement_and_its_twin_agree(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn row_queries_and_scrolling_follow_wrapped_rows(cx: &mut TestAppContext) {
-    wrap_everything(cx);
+    wrap_everything_scrolling(cx, false);
     let text = ["short", &words(60), "tail", &words(60), "end"].join("\n");
     let model = cx.new(|_| Buffer::new(BufferModel::from_text(text)));
     let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));

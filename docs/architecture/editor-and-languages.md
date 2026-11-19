@@ -54,7 +54,9 @@ selection, caret, hit testing, and IME bounds share one shaping projection and
 horizontal offset. The caret never sits inside a `\r\n` terminator, and
 inserted newlines from typing, paste, and IME take the buffer's line ending.
 Editing/navigation reveal the caret; wheel scrolling may move away from it, up
-to the widest line shaped since the text last changed. Clipboard operations use
+to the widest line shaped since the text last changed. Vertically it scrolls
+until the last row is the first visible one, or only to the bottom edge when
+`editor.scrollBeyondLastLine` resolves false. Clipboard operations use
 source text; expanded tabs are only a rendering projection. Tab stops follow
 `editor.tabSize`, which the view resolves while laying out for its scope: its
 document's effective language and the `editor` view kind, or a contributed

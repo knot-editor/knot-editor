@@ -46,6 +46,8 @@ pub const EDITOR_AUTO_CLOSING_BRACKETS: &str = "editor.autoClosingBrackets";
 pub const EDITOR_AUTO_SURROUND: &str = "editor.autoSurround";
 /// Whether editor views wrap long lines at the viewport width.
 pub const EDITOR_SOFT_WRAP: &str = "editor.softWrap";
+/// Whether editor views scroll until the last row is the first visible one.
+pub const EDITOR_SCROLL_BEYOND_LAST_LINE: &str = "editor.scrollBeyondLastLine";
 /// Line numbers in the editor gutter: `on`, `off`, or `relative`.
 pub const EDITOR_LINE_NUMBERS: &str = "editor.lineNumbers";
 /// Whether the editor gutter has a fold lane.
@@ -341,6 +343,12 @@ fn native_definitions() -> Vec<SettingDefinition> {
             value_type: SettingType::Boolean,
             default: false.into(),
             description: "Wrap long lines at the viewport width; Toggle Soft Wrap sets it for one document".into(),
+        },
+        SettingDefinition {
+            key: EDITOR_SCROLL_BEYOND_LAST_LINE.into(),
+            value_type: SettingType::Boolean,
+            default: true.into(),
+            description: "Let editors scroll until the last line is the first one visible".into(),
         },
         text(
             EDITOR_LINE_NUMBERS,

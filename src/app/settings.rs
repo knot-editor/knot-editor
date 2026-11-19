@@ -134,6 +134,12 @@ pub(crate) fn editor_soft_wrap(context: &SettingsScope, cx: &App) -> bool {
         .expect("editor.softWrap is a native boolean setting")
 }
 
+/// Whether an editor in `context` scrolls past its last line.
+pub(crate) fn editor_scroll_beyond_last_line(context: &SettingsScope, cx: &App) -> bool {
+    resolve(EDITOR_SCROLL_BEYOND_LAST_LINE, context, cx, Value::as_bool)
+        .expect("editor.scrollBeyondLastLine is a native boolean setting")
+}
+
 /// How an editor in `context` numbers its lines.
 pub(crate) fn editor_line_numbers(context: &SettingsScope, cx: &App) -> LineNumbers {
     match resolve(EDITOR_LINE_NUMBERS, context, cx, |value| {

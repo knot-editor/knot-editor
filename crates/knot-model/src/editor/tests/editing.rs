@@ -432,6 +432,10 @@ fn top_and_bottom_reveals_scroll_and_scrolling_leaves_the_caret() {
     let line_start = |f: &Fixture, line: usize| f.buffer.line_range(line).start;
     let (line_5, line_50, line_100) = (line_start(&f, 5), line_start(&f, 50), line_start(&f, 100));
     let (editor, buffer) = (&mut f.editor, &mut f.buffer);
+    editor.set_settings(EditorSettings {
+        scroll_beyond_last_line: false,
+        ..EditorSettings::default()
+    });
     // Before layout there is a single visible line.
     assert_eq!(editor.viewport(), (0, 1));
     editor.viewport_rows = 10.;
@@ -470,6 +474,32 @@ fn top_and_bottom_reveals_scroll_and_scrolling_leaves_the_caret() {
     editor.scroll_by_rows(-1000);
     assert_eq!(editor.scroll_top, 0.);
     editor.scroll_by_rows(1000);
+    assert_eq!(editor.scroll_top, 91.);
+}
+
+#[test]
+fn scrolling_beyond_the_last_line_stops_with_the_last_row_at_the_top() {
+    let mut f = hundred_lines();
+    let end = f.buffer.len();
+    let (editor, buffer) = (&mut f.editor, &mut f.buffer);
+    editor.viewport_rows = 10.;
+    // The text has 101 rows: the 100 lines and the empty one after the last
+    // newline.
+    assert_eq!(editor.max_scroll_rows(), 100.);
+    editor.scroll_by_rows(1000);
+    assert_eq!(editor.scroll_top, 100.);
+    assert_eq!(editor.viewport(), (100, 1));
+
+    // Typing at the end of the text reveals the caret without scrolling away.
+    editor.set_selection(end, end, Reveal::Nearest, buffer);
+    assert_eq!(editor.scroll_top, 100.);
+
+    // Turning the setting off brings the view back to the last full page.
+    editor.set_settings(EditorSettings {
+        scroll_beyond_last_line: false,
+        ..EditorSettings::default()
+    });
+    assert_eq!(editor.max_scroll_rows(), 91.);
     assert_eq!(editor.scroll_top, 91.);
 }
 
