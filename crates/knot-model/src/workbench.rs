@@ -412,6 +412,8 @@ pub struct Workbench {
     focused_pane: Option<PaneId>,
     /// The pane that had focus before the focused one, for going back.
     previous_pane: Option<PaneId>,
+    /// Terminals that rang the bell while their tab was not shown.
+    bell_marks: HashSet<TerminalSessionId>,
 }
 
 impl Workbench {
@@ -428,6 +430,7 @@ impl Workbench {
             panes: Vec::new(),
             focused_pane: None,
             previous_pane: None,
+            bell_marks: HashSet::new(),
         }
     }
 
@@ -595,6 +598,7 @@ impl Workbench {
             let clock = self.reveal_clock;
             self.tool_mut(id).active_at = clock;
         }
+        self.prune_bell_marks();
     }
 
     /// The pane an area would focus: the one it last focused, else its first.
@@ -1093,6 +1097,7 @@ impl Workbench {
                 tab,
                 removed_pane: Some(pane_id),
             };
+            self.prune_bell_marks();
             self.debug_assert_invariants();
             Some(removed)
         } else {
@@ -1105,6 +1110,7 @@ impl Workbench {
                 tab,
                 removed_pane: None,
             };
+            self.prune_bell_marks();
             self.debug_assert_invariants();
             Some(removed)
         }
