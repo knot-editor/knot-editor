@@ -1,6 +1,6 @@
 # D146: Broad Ex command set
 
-Status: 🚧 in progress; checkpoint 2 awaiting review. Roadmap item [D146](../roadmap.md).
+Status: 🚧 in progress; checkpoints 1 and 2 complete. Roadmap item [D146](../roadmap.md).
 Builds on the [bundled Vim mode](../decisions/bundled-packages.md#bundled-vim-mode)
 in [`extensions/@knot/vim/`](../../extensions/@knot/vim/).
 
@@ -90,28 +90,11 @@ operations refresh the file index, and the host publishes `documentMoved` when
 a document's file changes, which the explorer follows. `documents.save` skips
 the save cleanup (trailing whitespace, final newline) that Save applies.
 
-### 2. Save All and quitting 🔍
+### 2. Save All and quitting ✅
 
-Implemented: `file.save-all` is an application command in the File menu and
-palette; it saves without Save's cleanup. Tests cover Save All across
-documents and `:wa`/`:wqa`/`:xa` in Vim; `cx.quit()` is not observable in
-tests, so `:qa` is checked only to run without a prompt.
-
-Deliverables: the native `file.save-all` command in the palette and File
-menu; `:wa`, `:qa`, `:qa!`, `:wqa`, `:xa`.
-
-Validation: product test that Save All saves every dirty file-backed
-document across windows and leaves untitled ones dirty; Vim tests that `:wa`
-saves and the quit commands dispatch quitting.
-
-Review gate (manual): File › Save All and `:wa` with several dirty
-documents.
-
-**Implementation context**: declare the command beside `file.save` in
-`src/app/product/commands.rs`; the document collection is
-`ApplicationDocuments` (`src/app/documents.rs`). The File menu is built in
-`src/app/product/` (see `tests/menu_bar.rs`). Name parsing goes in `NAMES`
-and `parseEx` in `ex.ts`.
+Complete and reviewed. `file.save-all` skips the save cleanup that Save
+applies. `cx.quit()` is not observable in tests, so `:qa` is only checked to
+run without a prompt.
 
 ### 3. Buffer, window, and directory commands
 
