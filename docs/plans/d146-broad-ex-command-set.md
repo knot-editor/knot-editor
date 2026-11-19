@@ -1,6 +1,6 @@
 # D146: Broad Ex command set
 
-Status: 🚧 in progress; checkpoint 1 implemented, awaiting its review gate. Roadmap item [D146](../roadmap.md).
+Status: 🚧 in progress; checkpoint 1 complete. Roadmap item [D146](../roadmap.md).
 Builds on the [bundled Vim mode](../decisions/bundled-packages.md#bundled-vim-mode)
 in [`extensions/@knot/vim/`](../../extensions/@knot/vim/).
 
@@ -83,42 +83,12 @@ Only the checkpoints that touch real files or native menus have a manual
 gate; the others are validated by automated tests alone, and their gate is a
 passing `just check`, so they can run back to back.
 
-### 1. File commands: `:e!`, `:w <file>`, `:sav` ✅ (review gate pending)
+### 1. File commands: `:e!`, `:w <file>`, `:sav` ✅
 
-Deliverables: the `documents.reload`, `documents.save(id, { uri? })`, and
-`files.writeText` host operations and their `knot.d.ts` contracts; `:e!`,
-`:e! <file>`, `:w` with a path (copy, or naming an untitled document),
-`:w!`, `:sav[!]`, and `E13` on existing targets.
-
-Validation: product tests of `documents.reload` (reverts a dirty document as
-one undo step, rejects an untitled one), `documents.save` (saves in place,
-retargets with `uri`, a failure keeps identity), and `files.writeText`
-(creates, overwrites, refreshes the file index); Vim product tests for each
-command's resulting text, document identity, dirty state, and file contents.
-
-Review gate (manual, ⏳): `Try: Ex files, set up a dirty original.txt` opens a
-dirty file in `/tmp/knot-try-ex`; run `:e!`, `:w copy.txt`, `:w other.txt`
-(E13), `:w! other.txt`, and `:sav saved.txt`, checking the tab title and the
-files on disk (`Try: Ex files, open the files on disk`).
-
-Done: the host operations (`documents.save` writes at the application level
-without the window's save-cleanup), `E13` check, and the Ex commands, with
-product tests.
-
-**Implementation context**: `reload` in `src/app/product/document_watch.rs`
-is fire-and-forget; give it a completion the host operation awaits.
-`save_to_target` and `dispatch_save_to_captured_target` in
-`src/app/product/commands.rs` and `src/app/product/save.rs` hold Save and
-Save As; Save As's chosen-file branch is the path to reuse with a given URI.
-Register the operations in `src/app/extensions/host/handlers.rs`, mirroring
-`create_file` (error mapping, `refresh_file_index`) over
-`knot_model::files` (`crates/knot-model/src/files.rs`); add the contracts to
-`crates/knot-host/src/js/knot.d.ts` and update the frozen `knot.documents`
-and `knot.files` key lists in `src/app/extensions/host/engine_tests.rs`.
-Product tests mirror `src/app/product/tests/{document_watch,persistence,files}.rs`.
-In the package, `parseEx` in `ex.ts` reads `force` but drops it for `edit`;
-`runEx` and `edit` live in `command-line.ts`. Vim product tests with files
-live in `crates/knot-ext-vim/tests/edit.rs`.
+Complete and reviewed. Beyond the plan, `documents.save` and the file
+operations refresh the file index, and the host publishes `documentMoved` when
+a document's file changes, which the explorer follows. `documents.save` skips
+the save cleanup (trailing whitespace, final newline) that Save applies.
 
 ### 2. Save All and quitting
 
