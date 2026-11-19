@@ -41,6 +41,8 @@ export type ExCommand =
   | { readonly kind: "write"; readonly path: string | null; readonly force: boolean }
   /** `:sav <file>`: the document becomes that file's, written now. */
   | { readonly kind: "save-as"; readonly path: string; readonly force: boolean }
+  /** `:q`, and `:bd` and `:close`, which close the tab as `ctrl-w c` does;
+   * `force` discards its changes. */
   | { readonly kind: "quit"; readonly force: boolean }
   /** `:wq`, or with `ifChanged` `:x`, which writes only a changed document. */
   | { readonly kind: "write-quit"; readonly ifChanged: boolean }
@@ -65,8 +67,22 @@ export type ExCommand =
     readonly replacement: string;
     readonly flags: SubstituteFlags;
   }
-  /** `:split` and `:vsplit`: a new pane below, or to the right. */
-  | { readonly kind: "split"; readonly direction: "down" | "right" }
+  /** `:split`, `:vsplit`, `:new` and `:vnew`: a new pane below, or to the
+   * right, showing `path`, or with none the same document, or for `:new` and
+   * `:vnew` an untitled one. */
+  | { readonly kind: "split"; readonly direction: "down" | "right"; readonly path: string | null; readonly blank: boolean }
+  /** `:enew`: an untitled document in this pane. */
+  | { readonly kind: "enew" }
+  /** `:bn` and `:bp`: the pane's next or previous tab. */
+  | { readonly kind: "cycle-buffer"; readonly forward: boolean }
+  /** `:b <name>`: the open document that `name` matches. */
+  | { readonly kind: "buffer"; readonly name: string }
+  /** `:only`: close the other panes. */
+  | { readonly kind: "only" }
+  /** `:u` and `:red`. */
+  | { readonly kind: "undo" | "redo" }
+  /** `:pwd`. */
+  | { readonly kind: "pwd" }
   /** `:noh`, which hides the search highlights until the next search. */
   | { readonly kind: "nohlsearch" }
   /** An empty line, which does nothing. */
@@ -78,6 +94,8 @@ const NAMES: readonly (readonly [string, number])[] = [
   ["write", 1], ["quit", 1], ["wq", 2], ["xit", 1], ["exit", 3], ["edit", 1], ["set", 2], ["saveas", 3],
   ["nohlsearch", 3], ["substitute", 1], ["split", 2], ["vsplit", 2],
   ["wall", 2], ["qall", 2], ["wqall", 3], ["xall", 2],
+  ["bnext", 2], ["bprevious", 2], ["bdelete", 2], ["buffer", 1], ["enew", 3], ["new", 3], ["vnew", 3],
+  ["only", 2], ["close", 3], ["undo", 1], ["redo", 3], ["pwd", 2],
 ];
 
 const BOOLEANS: Readonly<Record<string, BooleanOption>> = {
@@ -118,15 +136,27 @@ export function parseEx(text: string): ExCommand {
     return { kind: "edit", path: argument === "" ? null : argument, force };
   }
   if (name === "write") return { kind: "write", path: argument === "" ? null : argument, force };
+  if (name === "split" || name === "vsplit" || name === "new" || name === "vnew") {
+    const direction = name === "split" || name === "new" ? "down" : "right";
+    return { kind: "split", direction, path: argument === "" ? null : argument, blank: name.endsWith("new") };
+  }
+  if (name === "buffer") return argument === "" ? { kind: "none" } : { kind: "buffer", name: argument };
   if (name === "saveas") {
     return argument === "" ? error("E471: Argument required") : { kind: "save-as", path: argument, force };
   }
   if (argument !== "") return error(`E488: Trailing characters: ${argument}`);
   switch (name) {
     case "nohlsearch": return { kind: "nohlsearch" };
-    case "quit": return { kind: "quit", force };
-    case "split": return { kind: "split", direction: "down" };
-    case "vsplit": return { kind: "split", direction: "right" };
+    case "quit":
+    case "bdelete":
+    case "close": return { kind: "quit", force };
+    case "enew": return { kind: "enew" };
+    case "bnext": return { kind: "cycle-buffer", forward: true };
+    case "bprevious": return { kind: "cycle-buffer", forward: false };
+    case "only": return { kind: "only" };
+    case "undo": return { kind: "undo" };
+    case "redo": return { kind: "redo" };
+    case "pwd": return { kind: "pwd" };
     case "wall": return { kind: "write-all" };
     case "qall": return { kind: "quit-all" };
     case "wqall":
@@ -308,6 +338,13 @@ export async function completeEx(text: string): Promise<InputCompletion[]> {
 export function fileCompletionTarget(text: string): { readonly head: string; readonly query: string } | null {
   const match = /^(\s*:?\s*(?:e|ed|edi|edit)!?)(?:\s+(.*))?$/.exec(text);
   return match === null ? null : { head: match[1]!, query: match[2] ?? "" };
+}
+
+/** The `:b` line `text` lists open documents for: the line up to the name,
+ * and the name typed so far; null for any other line. */
+export function bufferCompletionTarget(text: string): { readonly head: string; readonly query: string } | null {
+  const match = /^(\s*:?\s*(?:b|bu|buf|buff|buffe|buffer)!?)\s+(.*)$/.exec(text);
+  return match === null ? null : { head: match[1]!, query: match[2]! };
 }
 
 /** The text `:e` takes for the resource `uri`: a file's path, or the URI. */

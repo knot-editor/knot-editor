@@ -947,6 +947,85 @@ fn ex_edit_from_an_untitled_document_opens_in_the_first_root(cx: &mut TestAppCon
 }
 
 #[gpui::test]
+fn ex_buffer_commands_cycle_close_and_pick_tabs(cx: &mut TestAppContext) {
+    let product = start(cx);
+    let files = serve_files(&product, cx);
+    let test_editor = product.open_file(&files, "mem://product/dir/a.txt", cx);
+    test_editor.press(":e b.txt<cr>", cx);
+    assert_eq!(test_editor.active_title(cx), "b.txt");
+
+    test_editor.press(":bn<cr>", cx);
+    assert_eq!(test_editor.active_title(cx), "a.txt");
+    test_editor.press(":bp<cr>", cx);
+    assert_eq!(test_editor.active_title(cx), "b.txt");
+    test_editor.press(":b a.t<cr>", cx);
+    assert_eq!(test_editor.active_title(cx), "a.txt");
+    test_editor.press(":b zzz<cr>", cx);
+    assert!(shows(&test_editor, "E94: No matching buffer for zzz", cx));
+    assert_eq!(test_editor.active_title(cx), "a.txt");
+    test_editor.press(":b .txt<cr>", cx);
+    assert!(shows(&test_editor, "E93: More than one match for .txt", cx));
+
+    // Tab completes a title, which a name matching two documents cannot.
+    test_editor.press("l:b txt<tab><cr>", cx);
+    assert!(!shows(&test_editor, "E93: More than one match for txt", cx));
+
+    test_editor.press(":enew<cr>", cx);
+    assert_eq!(test_editor.tab_titles(cx).len(), 3);
+}
+
+#[gpui::test]
+fn ex_bd_closes_the_tab_and_bang_discards_its_changes(cx: &mut TestAppContext) {
+    let product = start(cx);
+    let test_editor = product.windowed_editor("one", cx);
+    test_editor.press(":enew<cr>ix<esc>", cx);
+    assert_eq!(test_editor.tab_titles(cx).len(), 2);
+    test_editor.press_unsettled(":bd<cr>", cx);
+    wait_until(cx, |cx| cx.has_pending_prompt());
+    cx.simulate_prompt_answer("Cancel");
+    test_editor.settle(cx);
+    assert_eq!(test_editor.tab_titles(cx).len(), 2);
+
+    test_editor.press(":bd!<cr>", cx);
+    assert!(!cx.has_pending_prompt());
+    assert_eq!(test_editor.tab_titles(cx).len(), 1);
+}
+
+#[gpui::test]
+fn ex_splits_open_the_file_or_a_new_document_in_the_new_pane(cx: &mut TestAppContext) {
+    let product = start(cx);
+    let files = serve_files(&product, cx);
+    let test_editor = product.open_file(&files, "mem://product/dir/a.txt", cx);
+
+    test_editor.press(":sp b.txt<cr>", cx);
+    assert_eq!(test_editor.pane_count(cx), 2);
+    assert_eq!(test_editor.focused_pane(cx), 1);
+    assert_eq!(test_editor.tab_titles(cx), ["b.txt"]);
+
+    test_editor.press(":vnew<cr>", cx);
+    assert_eq!(test_editor.pane_count(cx), 3);
+    assert_eq!(test_editor.tab_titles(cx).len(), 1);
+    assert_eq!(test_editor.active_text(cx), "");
+
+    test_editor.press(":only<cr>", cx);
+    assert_eq!(test_editor.pane_count(cx), 1);
+}
+
+#[gpui::test]
+fn ex_u_and_red_undo_and_redo_and_pwd_shows_the_directory(cx: &mut TestAppContext) {
+    let product = start(cx);
+    let files = serve_files(&product, cx);
+    let test_editor = product.open_file(&files, "mem://product/dir/a.txt", cx);
+    test_editor.press("x:u<cr>", cx);
+    assert_eq!(test_editor.active_text(cx), "one");
+    test_editor.press(":red<cr>", cx);
+    assert_eq!(test_editor.active_text(cx), "ne");
+
+    test_editor.press(":pwd<cr>", cx);
+    assert!(shows(&test_editor, "mem://product/dir", cx));
+}
+
+#[gpui::test]
 fn ex_quit_asks_before_losing_changes_and_quit_bang_does_not(cx: &mut TestAppContext) {
     let product = start(cx);
     let test_editor = product.windowed_editor("one", cx);

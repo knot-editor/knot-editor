@@ -1,9 +1,9 @@
 // Runs the Ex line `:` opens in one followed editor, over native commands
 // and document-scoped settings, and returns the message it leaves.
-import { commands, documents, files, providers, settings, workbench, workspaces } from "knot";
-import type { IconRef, InputCompletion } from "knot";
+import { commands, completion, documents, files, providers, settings, windows, workbench, workspaces } from "knot";
+import type { IconRef, InputCompletion, ViewTarget } from "knot";
 import {
-  type Address, type BooleanOption, completeEx, directoryOf, type ExCommand, fileCompletionTarget, parseEx, pathOfUri, resolvePath,
+  type Address, type BooleanOption, bufferCompletionTarget, completeEx, directoryOf, type ExCommand, fileCompletionTarget, parseEx, pathOfUri, resolvePath,
   type ExRange, type SetArgument,
 } from "./ex.js";
 import { BufferLines } from "./lines.js";
@@ -48,6 +48,18 @@ function fileCompletion(head: string, row: FileRow): InputCompletion {
   };
 }
 
+/** The open documents `query` matches, each completing the `:b` line that
+ * began with `head`. */
+async function bufferCompletions(head: string, query: string): Promise<InputCompletion[]> {
+  const titles = (await documents.list()).map((document) => document.title);
+  const unique = [...new Set(titles)];
+  return (await completion.match(query, unique)).map(({ index, ranges }) => ({
+    label: unique[index]!,
+    value: `${head} ${unique[index]}`,
+    matches: ranges,
+  }));
+}
+
 /** Asks for a command line and runs it; returns a message to show, or null.
  * Under `:e`, the list is the files provider's, and Enter on a row opens it. */
 export async function commandLine(state: State, initial: string): Promise<string | null> {
@@ -60,6 +72,11 @@ export async function commandLine(state: State, initial: string): Promise<string
       value: initial,
       history: state.shared.registers.entries("command"),
       onChange: async (line) => {
+        const buffers = bufferCompletionTarget(line);
+        if (buffers !== null) {
+          files = [];
+          return { items: await bufferCompletions(buffers.head, buffers.query) };
+        }
         const target = fileCompletionTarget(line);
         if (target === null) {
           files = [];
@@ -126,8 +143,26 @@ async function runEx(state: State, command: ExCommand): Promise<string | null> {
     case "substitute":
       return substitute(state, command);
     case "split":
-      await commands.invoke(command.direction === "down" ? "workbench.split-vertical" : "workbench.split-horizontal");
+      return split(state, command);
+    case "enew":
+      await documents.createUntitled({ target: state.target });
       return null;
+    case "cycle-buffer":
+      await commands.invoke(command.forward ? "workbench.next-tab" : "workbench.previous-tab");
+      return null;
+    case "buffer":
+      return switchTo(state, command.name);
+    case "only":
+      await commands.invoke("workbench.close-other-panes");
+      return null;
+    case "undo":
+    case "redo":
+      await run(state, { kind: command.kind, count: 1 });
+      return null;
+    case "pwd": {
+      const directory = await baseDirectory(state);
+      return directory === null ? "No directory" : pathOfUri(directory);
+    }
     case "nohlsearch":
       await state.shared.highlights.hide();
       return null;
@@ -325,10 +360,40 @@ async function revert(state: State): Promise<string | null> {
   return null;
 }
 
-/** Opens the resource `uri`, named `name` in a failure message. */
-async function open(uri: string, name: string): Promise<string | null> {
+/** `:sp`, `:vs`, `:new` and `:vnew`: splits the pane, then replaces the tab the
+ * split copies with the file, or an untitled document, when there is one. */
+async function split(state: State, command: Extract<ExCommand, { kind: "split" }>): Promise<string | null> {
+  const resolved = command.path === null ? null : resolvePath(command.path, await baseDirectory(state));
+  if (command.path !== null && resolved === null) return `No directory to open ${command.path} in`;
+  await commands.invoke(command.direction === "down" ? "workbench.split-vertical" : "workbench.split-horizontal");
+  if (resolved === null && !command.blank) return null;
+  const copy: ViewTarget | null = (await windows.get(state.target.window))?.currentTarget ?? null;
+  if (copy === null) return null;
+  let message: string | null = null;
+  if (resolved !== null) message = await open(resolved, command.path!, copy);
+  else await documents.createUntitled({ target: copy });
+  if (message === null) await workbench.close(copy);
+  return message;
+}
+
+/** `:b <name>`: shows the open document titled `name`, else the only one
+ * whose title or path contains it. */
+async function switchTo(state: State, name: string): Promise<string | null> {
+  const all = await documents.list();
+  const exact = all.filter((document) => document.title === name);
+  const found = exact.length > 0 ? exact : all.filter((document) =>
+    document.title.includes(name) || (document.resourceUri !== null && pathOfUri(document.resourceUri).includes(name)));
+  if (found.length === 0) return `E94: No matching buffer for ${name}`;
+  if (found.length > 1) return `E93: More than one match for ${name}`;
+  await documents.present(found[0]!.id, { target: state.target });
+  return null;
+}
+
+/** Opens the resource `uri`, in the pane of `target` if given, named `name` in a
+ * failure message. */
+async function open(uri: string, name: string, target?: ViewTarget): Promise<string | null> {
   try {
-    await documents.open(uri);
+    await documents.open(uri, target === undefined ? undefined : { target });
   } catch (error) {
     return `Cannot open ${name}: ${failure(error)}`;
   }

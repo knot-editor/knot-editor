@@ -1,16 +1,49 @@
 import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
 import * as host from "knot/testing";
-import { completeEx, directoryOf, fileCompletionTarget, parseEx, pathOfUri, resolvePath } from "../src/ex.js";
+import { bufferCompletionTarget, completeEx, directoryOf, fileCompletionTarget, parseEx, pathOfUri, resolvePath } from "../src/ex.js";
 
 test("noh hides the search highlights", () => {
   for (const line of ["noh", "nohl", "nohlsearch", ":noh"]) assert.deepEqual(parseEx(line), { kind: "nohlsearch" });
   assert.equal(parseEx("no").kind, "error");
 });
 
-test("split and vsplit open a pane below or to the right", () => {
-  for (const line of ["sp", "split", ":split"]) assert.deepEqual(parseEx(line), { kind: "split", direction: "down" });
-  for (const line of ["vs", "vsp", "vsplit"]) assert.deepEqual(parseEx(line), { kind: "split", direction: "right" });
+test("split and vsplit open a pane below or to the right, with a file if given", () => {
+  const split = (direction: string, path: string | null, blank = false) => ({ kind: "split", direction, path, blank });
+  for (const line of ["sp", "split", ":split"]) assert.deepEqual(parseEx(line), split("down", null));
+  for (const line of ["vs", "vsp", "vsplit"]) assert.deepEqual(parseEx(line), split("right", null));
+  assert.deepEqual(parseEx("sp b.txt"), split("down", "b.txt"));
+  assert.deepEqual(parseEx("vs dir/b.txt"), split("right", "dir/b.txt"));
+  assert.deepEqual(parseEx("new"), split("down", null, true));
+  assert.deepEqual(parseEx("vne"), split("right", null, true));
+  assert.deepEqual(parseEx("new b.txt"), split("down", "b.txt", true));
+});
+
+test("buffer, window, history and directory commands", () => {
+  assert.deepEqual(parseEx("bn"), { kind: "cycle-buffer", forward: true });
+  assert.deepEqual(parseEx("bnext"), { kind: "cycle-buffer", forward: true });
+  assert.deepEqual(parseEx("bp"), { kind: "cycle-buffer", forward: false });
+  assert.deepEqual(parseEx("bd"), { kind: "quit", force: false });
+  assert.deepEqual(parseEx("bd!"), { kind: "quit", force: true });
+  assert.deepEqual(parseEx("clo"), { kind: "quit", force: false });
+  assert.deepEqual(parseEx("b a.txt"), { kind: "buffer", name: "a.txt" });
+  assert.deepEqual(parseEx("buffer a b"), { kind: "buffer", name: "a b" });
+  assert.deepEqual(parseEx("b"), { kind: "none" });
+  assert.deepEqual(parseEx("ene"), { kind: "enew" });
+  assert.deepEqual(parseEx("on"), { kind: "only" });
+  assert.deepEqual(parseEx("u"), { kind: "undo" });
+  assert.deepEqual(parseEx("red"), { kind: "redo" });
+  assert.deepEqual(parseEx("pw"), { kind: "pwd" });
+  assert.equal(parseEx("en").kind, "error");
+  assert.equal(parseEx("bn 2").kind, "error");
+  assert.equal(parseEx("2pwd").kind, "error");
+});
+
+test(":b completes from the name typed after it", () => {
+  assert.deepEqual(bufferCompletionTarget(":b a"), { head: ":b", query: "a" });
+  assert.deepEqual(bufferCompletionTarget("buffer! "), { head: "buffer!", query: "" });
+  assert.equal(bufferCompletionTarget("b"), null);
+  assert.equal(bufferCompletionTarget("bn a"), null);
 });
 
 const flags = { global: false, ignoreCase: null, count: false, quiet: false };
@@ -158,11 +191,11 @@ beforeEach(() => host.reset());
 const values = async (line: string) => (await completeEx(line)).map((item) => item.value);
 
 test("command names complete, in the order of the matcher", async () => {
-  assert.deepEqual(await values("w"), ["write", "wq", "wall", "wqall"]);
-  assert.deepEqual(await values("se"), ["set", "saveas", "nohlsearch", "substitute"]);
+  assert.deepEqual(await values("w"), ["write", "wq", "wall", "wqall", "enew", "new", "vnew", "pwd"]);
+  assert.deepEqual(await values("se"), ["set", "saveas", "nohlsearch", "substitute", "close"]);
   assert.deepEqual(await values(":q"), [":quit", ":qall", ":wq", ":wqall"]);
   assert.deepEqual(await values("zz"), []);
-  assert.equal((await values("")).length, 16);
+  assert.equal((await values("")).length, 28);
 });
 
 test("line numbers and other arguments get no items", async () => {

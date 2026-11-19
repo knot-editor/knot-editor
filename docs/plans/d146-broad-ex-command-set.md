@@ -1,6 +1,6 @@
 # D146: Broad Ex command set
 
-Status: 🚧 in progress; checkpoints 1 and 2 complete. Roadmap item [D146](../roadmap.md).
+Status: 🚧 in progress; checkpoints 1 to 3 complete. Roadmap item [D146](../roadmap.md).
 Builds on the [bundled Vim mode](../decisions/bundled-packages.md#bundled-vim-mode)
 in [`extensions/@knot/vim/`](../../extensions/@knot/vim/).
 
@@ -96,7 +96,13 @@ Complete and reviewed. `file.save-all` skips the save cleanup that Save
 applies. `cx.quit()` is not observable in tests, so `:qa` is only checked to
 run without a prompt.
 
-### 3. Buffer, window, and directory commands
+### 3. Buffer, window, and directory commands ✅
+
+Implemented; automated gate passed. `:bd` and `:close` close the tab as `:q`
+does, and `:u`/`:red` run the native undo and redo. `:sp`, `:vs`, `:new`, and
+`:vnew` split, then replace the copied tab with the file or an untitled
+document. `:b` matches a title exactly, else the one title or path containing
+the name (`E93`/`E94` otherwise).
 
 Deliverables: `:bn`, `:bp`, `:bd[!]`, `:b <name>` with completion, `:enew`,
 `:new`, `:vnew`, `:sp <file>`, `:vs <file>`, `:only`, `:close`, `:u`,
