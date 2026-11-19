@@ -1,6 +1,6 @@
 # D151 — Smaller Vim commands
 
-Status: 🚧 in progress; checkpoints 1 and 2 approved. Roadmap item [D151](../roadmap.md#vim-mode).
+Status: 🚧 in progress; checkpoints 1 to 3 approved. Roadmap item [D151](../roadmap.md#vim-mode).
 
 ## Goal
 
@@ -63,14 +63,11 @@ visual mode, and sentence motions and objects.
   ~208, 274, 312), `motions.ts`, `registers.ts` for put text; the
   last-insert position goes where `normal.ts` stores marks (~line 690).
 
-### 3. Growing `i(` and `a(` in visual mode 🚧
+### 3. Growing `i(` and `a(` in visual mode ✅
 
-- ✅ A repeated pair object with a non-empty selection selects the enclosing
-  pair, for each bracket object (quotes do not nest, so they are unchanged).
-- ✅ Validation: visual-mode editor cases in `test/cases/visual.jsonc`.
-- Review gate (`try.grow-pair-objects`): repeated `vi(` and `va(` grow outward as in Vim.
-- **Implementation context:** `objects.ts` (`textObject`), `visual.ts`
-  (`select-object` command), `keys.ts` (`select-object`).
+- ✅ A repeated bracket object with a selection selects the enclosing pair;
+  quotes do not nest and are unchanged. Cases are in `test/cases/visual.jsonc`;
+  the review gate (`try.grow-pair-objects`) is approved.
 
 ### 4. Sentence motions and objects
 
