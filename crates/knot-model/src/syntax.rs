@@ -100,6 +100,8 @@ pub struct SyntaxLanguage {
     injection_patterns: Vec<InjectionPattern>,
     /// The editing data of the registration this language compiled from.
     editing: Arc<EditingConfiguration>,
+    /// The registered language ID; empty for a language built without one.
+    id: Box<str>,
     /// `None` when the language registers no indent query.
     indents: Option<indent::IndentQuery>,
     /// `None` when the language registers no folds query.
@@ -203,6 +205,7 @@ impl SyntaxLanguage {
             injections,
             injection_patterns,
             editing: Default::default(),
+            id: Box::default(),
             indents: None,
             folds: None,
         })
@@ -232,6 +235,19 @@ impl SyntaxLanguage {
             editing: Arc::new(editing),
             ..self
         }
+    }
+
+    /// This language under the registered language ID `id`.
+    pub fn with_id(self, id: &str) -> Self {
+        Self {
+            id: id.into(),
+            ..self
+        }
+    }
+
+    /// The registered language ID; empty when the language has none.
+    pub fn id(&self) -> &str {
+        &self.id
     }
 
     pub fn editing(&self) -> &Arc<EditingConfiguration> {

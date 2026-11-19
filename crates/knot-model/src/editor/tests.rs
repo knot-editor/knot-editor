@@ -10,6 +10,7 @@ mod editing;
 mod folding;
 mod indentation;
 mod lines;
+mod paste;
 mod save_hygiene;
 
 type Position = (usize, usize);
@@ -133,7 +134,8 @@ impl Language<'_> {
                 .unwrap()
                 .with_folds(self.folds)
                 .unwrap()
-                .with_editing(self.editing.resolve()),
+                .with_editing(self.editing.resolve())
+                .with_id(grammar),
         )
     }
 }

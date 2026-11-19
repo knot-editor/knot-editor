@@ -803,6 +803,14 @@ impl BufferModel {
             .map(|syntax| Arc::clone(syntax.language_at(offset).editing()))
     }
 
+    /// The ID of the language at `offset`: the deepest syntax layer's, so a
+    /// code fence reports its own language. `None` without a syntax state.
+    pub fn language_id_at(&self, offset: usize) -> Option<String> {
+        self.syntax
+            .as_ref()
+            .map(|syntax| syntax.language_at(offset).id().to_owned())
+    }
+
     /// The bracket touching `offset`, the one ending there first, and its
     /// partner. `None` without a syntax state.
     pub fn bracket_at(&self, offset: usize) -> Option<(Range<usize>, Range<usize>)> {

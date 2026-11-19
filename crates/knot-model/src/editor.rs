@@ -21,6 +21,7 @@ mod gutter;
 mod indentation;
 mod input;
 mod lines;
+mod paste;
 mod recording;
 mod rows;
 mod save_hygiene;
@@ -29,6 +30,7 @@ mod wrap;
 
 pub use decorations::ViewDecoration;
 pub use input::unit_range;
+pub use paste::PasteRequest;
 pub use recording::RecordedCommand;
 pub use rows::{DecorationFill, Row, decoration_fills};
 pub use text::*;

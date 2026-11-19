@@ -71,7 +71,8 @@ impl LanguageDefinition {
         )?
         .with_indents(&self.queries.indents)?
         .with_folds(&self.queries.folds)?
-        .with_editing(self.editing.resolve());
+        .with_editing(self.editing.resolve())
+        .with_id(&self.info.id);
         Ok(CompiledLanguage {
             definition: self,
             syntax: Arc::new(syntax),
