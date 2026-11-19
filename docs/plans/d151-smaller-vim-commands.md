@@ -1,6 +1,6 @@
 # D151 — Smaller Vim commands
 
-Status: 🚧 in progress; checkpoint 1 awaits review. Roadmap item [D151](../roadmap.md#vim-mode).
+Status: 🚧 in progress; checkpoint 1 approved. Roadmap item [D151](../roadmap.md#vim-mode).
 
 ## Goal
 
@@ -42,7 +42,7 @@ visual mode, and sentence motions and objects.
   argument docs.
 - ✅ Validation: a Rust workbench test (several panes, stopping at the edge,
   `withinArea`), and a Vim test through the real editor.
-- Review gate: `3<c-w>l` and `2<c-w>j` land where Vim would.
+- ✅ Review gate: `3<c-w>l` and `2<c-w>j` land where Vim would.
 - **Implementation context:** `src/app/product/commands.rs` (`FocusScope`,
   `focus_toward`), `src/app/product/navigation.rs` (`focus_pane_toward`),
   `WINDOW_COMMANDS`, `REPEATED`, and `windowCommand` in
