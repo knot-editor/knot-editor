@@ -369,21 +369,34 @@ pub(crate) fn call_paste_provider(
         .identity()
         .to_string();
     let window = crate::app::product::window_id(target.window.entity_id());
-    let name = format!("{PASTE_PROVIDER_PREFIX}{}", request.language);
     entity(cx)?.update(cx, |host, _| {
-        let provider = host.semantics.providers().get(&name)?;
-        host.pool
+        host.paste_provider_call(&document, Some(window), request)
+    })
+}
+
+impl ProductExtensionHost {
+    /// Start the paste provider registered for `request`'s language.
+    pub(super) fn paste_provider_call(
+        &mut self,
+        document: &str,
+        window: Option<String>,
+        request: &knot_model::editor::PasteRequest,
+    ) -> Option<knot_host::pool::ExtensionProviderExecution<knot_protocol::ProviderCallResponse>>
+    {
+        let name = format!("{PASTE_PROVIDER_PREFIX}{}", request.language);
+        let provider = self.semantics.providers().get(&name)?;
+        self.pool
             .call_provider(
                 ExtensionKey::new(provider.extension, provider.lifecycle),
                 knot_protocol::ProviderCallRequest {
                     registration: provider.id,
                     method: "providePaste".into(),
-                    argument: request.argument(&document),
-                    window: Some(window),
+                    argument: request.argument(document),
+                    window,
                 },
             )
             .ok()
-    })
+    }
 }
 
 pub(crate) fn view_definitions(cx: &App) -> Vec<crate::app::extensions::semantics::ViewDefinition> {

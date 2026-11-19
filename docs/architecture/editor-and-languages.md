@@ -18,7 +18,7 @@ receives the clipboard's text. A language can shape that text: when an
 `editor.paste.<languageId>` provider is registered for the language at the
 selection start, the paste command awaits its `providePaste` answer and
 applies it only if the revision and selection are unchanged, else it pastes
-the clipboard text; a language without a provider pastes synchronously. The `Editor` entity wraps the state: before
+the clipboard text; a language without a provider pastes synchronously. `Editor.preparePaste` runs the same lookup for any range and returns the text without editing, as Vim's visual put uses it. The `Editor` entity wraps the state: before
 each operation it resolves the settings for the editor's scope, then runs the
 effects, notifies the buffer when its text changed, and notifies itself; it
 also follows buffer changes and keeps the in-flight completion requests. The

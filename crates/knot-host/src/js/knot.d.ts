@@ -1695,6 +1695,13 @@ declare module "knot" {
     selection(): Promise<EditorSelection>;
     selection(options: { lines: number }): Promise<EditorSelectionWithLines>;
     /**
+     * The text pasting `text` over `range` (UTF-8 offsets, default the selection) would insert: what the
+     * `editor.paste.<languageId>` provider of the language at the range's start answers, or `text` itself without
+     * one or when it throws. The editor is not changed; the caller applies the text.
+     * @throws HostError with InvalidTarget, InvalidRange, or Cancelled.
+     */
+    preparePaste(text: string, range?: [start: number, end: number]): Promise<string>;
+    /**
      * Move the selection. Not an edit: it ends the current typing undo group,
      * as other caret moves do, and changes no revision.
      * @throws HostError with InvalidTarget, InvalidRange for an offset past the

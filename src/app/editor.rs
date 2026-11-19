@@ -430,14 +430,15 @@ impl Editor {
         })
     }
 
-    /// The request for pasting `text` over the selection; see
-    /// [`EditorState::paste_request`].
+    /// The request for pasting `text` over `range`, default the selection;
+    /// see [`EditorState::paste_request`].
     pub(crate) fn paste_request(
         &self,
         text: &str,
+        range: Option<std::ops::Range<usize>>,
         cx: &App,
     ) -> Option<knot_model::editor::PasteRequest> {
-        self.state.paste_request(text, None, self.model.read(cx))
+        self.state.paste_request(text, range, self.model.read(cx))
     }
 
     /// Paste the answer to `request`; see [`EditorState::paste_answered`].

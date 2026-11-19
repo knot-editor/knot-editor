@@ -622,6 +622,12 @@ function editorFor(authority) {
     async selection(options) {
       return selectionFromNative(await request("editorSelection", authority, linesOption(options)));
     },
+    async preparePaste(text, range) {
+      if (typeof text !== "string") throw new TypeError("text must be a string");
+      if (range === undefined) return await request("editorPreparePaste", authority, text, null, null);
+      if (!Array.isArray(range) || range.length !== 2) throw new TypeError("range must be a [start, end] pair");
+      return await request("editorPreparePaste", authority, text, safeInteger(range[0]), safeInteger(range[1]));
+    },
     async setSelection(selection, options) {
       record(selection, "selection must be an object");
       const anchor = safeInteger(selection.anchor);

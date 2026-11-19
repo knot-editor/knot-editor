@@ -1454,6 +1454,14 @@ function editor(tab: FakeTab): Knot.Editor {
       const tab = live();
       return selectionRead(tab, options?.lines ?? null);
     }) as Knot.Editor["selection"],
+    // The fake host runs no paste providers: the text comes back as is.
+    preparePaste: async (text, range) => {
+      const tab = live();
+      if (range !== undefined && (range[0] > range[1] || range[1] > byteLength(document(tab.document).text))) {
+        throw hostError("InvalidRange");
+      }
+      return text;
+    },
     setSelection: async ({ anchor, caret }, options) => {
       const tab = live();
       const length = byteLength(document(tab.document).text);
@@ -1647,6 +1655,7 @@ function editorHandle(target: Knot.ViewTarget): Knot.EditorHandle {
     };
   return {
     selection: guard(live.selection) as Knot.EditorHandle["selection"],
+    preparePaste: guard(live.preparePaste),
     setSelection: guard(live.setSelection),
     setKeyContext: guard(live.setKeyContext),
     viewport: guard(live.viewport),

@@ -117,7 +117,7 @@ pub(crate) async fn editing(context: CommandContext, (): ()) -> Result<(), Comma
                 // is awaited; without one the paste is synchronous.
                 let text = cx.read_from_clipboard().and_then(|item| item.text());
                 let call = text.as_deref().and_then(|text| {
-                    let request = editor.read(cx).paste_request(text, cx)?;
+                    let request = editor.read(cx).paste_request(text, None, cx)?;
                     let execution =
                         crate::app::extensions::host::call_paste_provider(target, &request, cx)?;
                     Some((request, execution))

@@ -355,3 +355,58 @@ fn paste_uses_the_answer_of_the_languages_provider(cx: &mut TestAppContext) {
     // A language without a provider pastes the text as is.
     assert_eq!(paste_over_selection(&fixture, None, "url", cx), "xurly");
 }
+
+const PREPARE_PASTE: &str = r#"
+import { commands, workbench } from "knot";
+await commands.register("prepare.paste", async ({ editor }) => {
+  const result = {
+    selection: await editor.preparePaste("url"),
+    keep: await editor.preparePaste("keep"),
+    boom: await editor.preparePaste("boom"),
+    range: await editor.preparePaste("url", [0, 1]),
+  };
+  try { await editor.preparePaste("url", [0, 9]); } catch (error) { result.invalid = error.code; }
+  await workbench.writeClipboardText(JSON.stringify(result));
+});
+"#;
+
+#[gpui::test]
+fn prepare_paste_answers_without_editing(cx: &mut TestAppContext) {
+    let fixture = start_allowing_failures(
+        &[
+            ("@example/paste", &[], PASTE_PROVIDER),
+            ("@example/prepare", &[], PREPARE_PASTE),
+        ],
+        cx,
+    );
+    let editor = fixture.editor(cx);
+    let model = cx.read(|cx| editor.read(cx).model().clone());
+    cx.update(|cx| {
+        model.update(cx, |model, _| model.reset_to_text("xaby"));
+        crate::app::languages::set_document_language(&model, None, Some("rust".into()), cx);
+    });
+    cx.run_until_parked();
+    editor.update(cx, |editor, cx| {
+        editor.set_selection(1, 3, crate::app::editor::Reveal::Nearest, cx)
+    });
+    let answer: serde_json::Value =
+        serde_json::from_str(&fixture.clipboard_after("prepare.paste", cx)).unwrap();
+    assert_eq!(
+        answer,
+        serde_json::json!({
+            "selection": "<ab|url>",
+            "keep": "keep",
+            "boom": "boom",
+            "range": "<x|url>",
+            "invalid": "InvalidRange",
+        })
+    );
+    assert_eq!(cx.read(|cx| model.read(cx).text()), "xaby");
+
+    // Without a provider for the language, the text comes back as is.
+    cx.update(|cx| crate::app::languages::set_document_language(&model, None, None, cx));
+    cx.run_until_parked();
+    let answer: serde_json::Value =
+        serde_json::from_str(&fixture.clipboard_after("prepare.paste", cx)).unwrap();
+    assert_eq!(answer["selection"], "url");
+}

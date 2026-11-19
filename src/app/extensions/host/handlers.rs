@@ -3428,6 +3428,81 @@ pub(crate) async fn editor_selection(
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub(crate) struct PreparePasteArguments {
+    pub authority: EditorAuthority,
+    pub text: String,
+    pub range: Option<(u64, u64)>,
+}
+impl HostArguments for PreparePasteArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        let authority = EditorAuthority::decode(reader, 2)?;
+        let text = reader.text(3, "text must be text")?;
+        let range = match (reader.optional_integer(4)?, reader.optional_integer(5)?) {
+            (Some(start), Some(end)) => Some((start, end)),
+            (None, None) => None,
+            _ => return Err(DecodeError::Range("range needs a start and an end")),
+        };
+        Ok(Self {
+            authority,
+            text,
+            range,
+        })
+    }
+}
+
+/// The text pasting `text` over a range of the captured editor inserts: the
+/// language's paste provider's answer, or `text` when there is none. The
+/// editor is not changed.
+#[host_operation("editorPreparePaste")]
+pub(crate) async fn editor_prepare_paste(
+    context: HostContext,
+    arguments: PreparePasteArguments,
+) -> Result<String, EditorError> {
+    let request = context.request;
+    let text = arguments.text.clone();
+    let call = context.foreground(|host, cx| {
+        let editor = host.contextual_editor(&request, arguments.authority, cx)?;
+        let editor = editor.read(cx);
+        let buffer = editor.model();
+        let range = match arguments.range {
+            Some((start, end)) => Some(
+                buffer
+                    .read(cx)
+                    .checked_range(ByteRange {
+                        start_byte_offset: start as usize,
+                        end_byte_offset: end as usize,
+                    })
+                    .map_err(|_| EditorError::InvalidRange)?,
+            ),
+            None => None,
+        };
+        let Some(paste) = editor.paste_request(&arguments.text, range, cx) else {
+            return Ok(None);
+        };
+        let documents = cx.global::<crate::app::documents::ApplicationDocuments>();
+        let Some(document) = documents
+            .0
+            .read(cx)
+            .documents()
+            .find(|document| document.model() == buffer)
+            .map(|document| document.identity().to_string())
+        else {
+            return Ok(None);
+        };
+        Ok::<_, EditorError>(host.paste_provider_call(&document, None, &paste))
+    })??;
+    let Some(execution) = call else {
+        return Ok(text);
+    };
+    let answer = knot_model::editor::PasteRequest::answer(
+        execution
+            .await
+            .unwrap_or_else(|error| Err(error.to_string())),
+    );
+    Ok(answer.unwrap_or(text))
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) struct SetSelectionArguments {
     pub authority: EditorAuthority,
     pub anchor: u64,
