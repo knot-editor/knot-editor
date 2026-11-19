@@ -279,7 +279,7 @@ hold the analyses that support some items.
     that root when it is still active, otherwise as an ordinary queued root, so
     it works with serial roots and needs no D182.
 
-- **D181 — Native operation failures as notices**
+- **D181 — Native operation failures as notices** 🚧
   - Depends on: none
   - Description: A native operation whose failure leaves no other visible
     effect, such as Save, Open, Add Folder, or recovery, reports it through a
@@ -287,6 +287,7 @@ hold the analyses that support some items.
     dismissed. The status bar carries no operation messages. Report
     these failures as notices, which the history keeps reachable, and keep
     prompts only for failures that need a decision.
+    [Plan](plans/d181-native-failure-notices.md).
 
 - **D145 — Virtual text and anchored floating panels**
   - Depends on: none
