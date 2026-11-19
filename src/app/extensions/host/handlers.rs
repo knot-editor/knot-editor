@@ -5165,6 +5165,7 @@ async fn save_document(
     arguments: SaveDocumentArguments,
 ) -> Result<(), OpenError> {
     let (sender, receiver) = tokio::sync::oneshot::channel();
+    let target = arguments.uri.clone();
     context.foreground(move |_, cx| {
         product::operations::save_document(
             &arguments.id,
@@ -5175,7 +5176,15 @@ async fn save_document(
             cx,
         )
     })??;
-    receiver.await.map_err(|_| AccessError::Cancelled)?
+    receiver.await.map_err(|_| AccessError::Cancelled)??;
+    // A file the save created is listed right away, as after `files.writeText`.
+    if let Some(target) = target {
+        let providers = context.foreground(|_, cx| KnotWindow::filesystems(cx))?;
+        if let Ok(uri) = knot_model::files::normalize(&providers, &target).await {
+            refresh_file_index(&context, std::slice::from_ref(&uri)).await;
+        }
+    }
+    Ok(())
 }
 
 #[host_operation("setDocumentLanguage")]

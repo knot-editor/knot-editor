@@ -561,3 +561,45 @@ fn roots_cannot_be_renamed_or_deleted(cx: &mut TestAppContext) {
     }
     assert!(!cx.has_pending_prompt());
 }
+
+/// The explorer and a package whose command saves the first document to
+/// `target`, as Save As does.
+fn with_save_to(target: &str) -> &'static [knot_bundled::BundledSource] {
+    let main = format!(
+        r#"import {{ commands, documents }} from "knot";
+await commands.register("test.save-to", async () => {{
+  const [document] = await documents.list();
+  await documents.save(document.id, {{ uri: "{target}" }});
+}}, {{ title: "Test: Save To" }});
+"#
+    );
+    let main: &'static str = Box::leak(main.into_boxed_str());
+    let mut packages = only(&["@knot/explorer"]).to_vec();
+    packages.push(knot_bundled::BundledSource {
+        manifest: r#"{ "name": "@knot/save-to", "apiVersion": 1, "version": "0.1.0", "main": "dist/main.js" }"#,
+        sources: Box::leak(vec![("dist/main.js", main)].into_boxed_slice()),
+    });
+    Box::leak(packages.into_boxed_slice())
+}
+
+#[gpui::test]
+fn a_document_saved_under_a_new_name_is_selected_in_the_explorer(cx: &mut TestAppContext) {
+    let directory = fixture();
+    let target = file_uri(&directory.path().join("app/src/renamed.rs"));
+    let explorer = Explorer::over(
+        TestProduct::launch(with_save_to(&target), cx),
+        &[&directory.path().join("app")],
+        cx,
+    );
+    explorer.wait_for_labels(&["app", "docs", "src", "README.md"], cx);
+    let (window, tree) = (&explorer.window, &explorer.tree);
+    window.open_path(&directory.path().join("app/src/main.rs"), cx);
+    wait_until(cx, |cx| tree.selected(cx).as_deref() == Some("main.rs"));
+
+    window.focus_document(cx);
+    assert_eq!(
+        window.run_command("test.save-to", cx),
+        CommandOutcome::Completed
+    );
+    wait_until(cx, |cx| tree.selected(cx).as_deref() == Some("renamed.rs"));
+}
