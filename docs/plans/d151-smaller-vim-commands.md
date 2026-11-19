@@ -1,6 +1,6 @@
 # D151 — Smaller Vim commands
 
-Status: 🚧 in progress; checkpoints 1 to 3 approved. Roadmap item [D151](../roadmap.md#vim-mode).
+Status: 🚧 in progress; all checkpoints approved. Roadmap item [D151](../roadmap.md#vim-mode).
 
 ## Goal
 
@@ -69,14 +69,14 @@ visual mode, and sentence motions and objects.
   quotes do not nest and are unchanged. Cases are in `test/cases/visual.jsonc`;
   the review gate (`try.grow-pair-objects`) is approved.
 
-### 4. Sentence motions and objects 🚧
+### 4. Sentence motions and objects ✅
 
 - ✅ `(`, `)`, `is`, `as`, with counts and as operator targets.
 - ✅ Validation: cases beside the paragraph and word ones in `motions.test.ts`
   and `objects.test.ts`, covering blank lines, abbreviations Vim treats as
   ends, and closing quotes or brackets after the period; end-to-end cases in
   `test/cases/`.
-- Review gate (`try.sentences`): `das`, `cis`, and `)` behave as in Vim on prose and on code
+- ✅ Review gate (`try.sentences`, approved): `das`, `cis`, and `)` behave as in Vim on prose and on code
   comments.
 - **Implementation context:** `motions.ts`, `objects.ts`, the motion and
   object tables in `keys.ts`.
