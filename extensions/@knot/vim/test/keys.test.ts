@@ -122,6 +122,36 @@ test("shorthands are operators", () => {
   assert.deepEqual(parse("J").command, { kind: "join", count: 1 });
 });
 
+test("r takes Enter as a line break, except in visual mode", () => {
+  assert.deepEqual(parse("2", "r", "<cr>").command, { kind: "replace", char: "\n", count: 2 });
+  assert.equal(visual("r", "<cr>"), null);
+});
+
+test("gJ, gi, ga, gp, gP, and the bracket puts are commands", () => {
+  assert.deepEqual(parse("3", "g", "J").command, { kind: "join", count: 3, spaces: false });
+  assert.deepEqual(visual("g", "J"), { kind: "join", count: 1, spaces: false });
+  assert.deepEqual(parse("2", "g", "i").command, { kind: "insert", at: "gi", count: 2 });
+  assert.deepEqual(parse("g", "a").command, { kind: "show-character" });
+  assert.deepEqual(parse("g", "p").command, {
+    kind: "put", before: false, register: null, count: 1, variant: "caret-after",
+  });
+  assert.deepEqual(parse('"', "a", "g", "P").command, {
+    kind: "put", before: true, register: "a", count: 1, variant: "caret-after",
+  });
+  assert.deepEqual(parse("]", "p").command, { kind: "put", before: false, register: null, count: 1, variant: "indent" });
+  for (const keys of [["[", "p"], ["[", "P"], ["]", "P"]]) {
+    assert.deepEqual(parse(...keys).command, { kind: "put", before: true, register: null, count: 1, variant: "indent" });
+  }
+  assert.equal(parse("d", "g", "J").command, null);
+});
+
+test("_ and | are motions", () => {
+  assert.deepEqual(parse("2", "_").command, { kind: "motion", motion: "line-down-first-non-blank", count: 2 });
+  assert.deepEqual(parse("d", "3", "|").command, {
+    kind: "operator", operator: "d", register: null, count: 3, target: { kind: "motion", motion: "column" },
+  });
+});
+
 test("v, V, and gv start visual modes from normal mode", () => {
   assert.deepEqual(parse("v").command, { kind: "visual", linewise: false });
   assert.deepEqual(parse("V").command, { kind: "visual", linewise: true });

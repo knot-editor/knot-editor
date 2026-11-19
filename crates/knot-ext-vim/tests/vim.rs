@@ -286,6 +286,24 @@ topics!(
 );
 
 #[gpui::test]
+fn ga_shows_the_code_of_the_character_under_the_caret(cx: &mut TestAppContext) {
+    let product = start(cx);
+    let test_editor = open(&product, "aé\n", 0, cx);
+    test_editor.press("ga", cx);
+    assert!(
+        shows(&test_editor, "<a> 97, Hex 61, Oct 141", cx),
+        "{:?}",
+        test_editor.status(cx).0
+    );
+    test_editor.press("lga", cx);
+    assert!(
+        shows(&test_editor, "<é> 233, Hex 00e9, Oct 351", cx),
+        "{:?}",
+        test_editor.status(cx).0
+    );
+}
+
+#[gpui::test]
 fn the_mode_shows_in_the_status_bar_and_the_caret(cx: &mut TestAppContext) {
     let product = start(cx);
     let test_editor = open(&product, "one two", 0, cx);

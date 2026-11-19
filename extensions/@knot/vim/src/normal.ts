@@ -310,7 +310,10 @@ export async function run(state: State, command: Command, repeating = false) {
       await operate(state, command.operator, command.register, command.count, command.target);
       break;
     case "put":
-      await put(state, command.register, command.count, command.before);
+      await put(state, command.register, command.count, command.before, command.variant);
+      break;
+    case "show-character":
+      await showCharacter(state);
       break;
     case "replace":
       await replaceCharacters(state, command.char, command.count);
@@ -319,7 +322,7 @@ export async function run(state: State, command: Command, repeating = false) {
       await toggleCase(state, command.count);
       break;
     case "join":
-      await join(state, command.count);
+      await join(state, command.count, command.spaces !== false);
       break;
     case "insert":
       await enterInsert(state, command.at, command.count);
@@ -447,6 +450,14 @@ export async function resolve(
     case "BACK-END": return { to: await wordEndBackward(lines, from, n, true), type: "inclusive" };
     case "line-start": return { to: { line: from.line, col: 0 }, type: "exclusive" };
     case "first-non-blank": return { to: { line: from.line, col: firstNonBlank(text) }, type: "exclusive" };
+    case "line-down-first-non-blank": {
+      const line = Math.min(total - 1, from.line + n - 1);
+      return { to: await lineStart(lines, line), type: "linewise" };
+    }
+    case "column": {
+      const col = columnAtByte(text, await state.handle.columnAtCells(from.line, n - 1));
+      return { to: { line: from.line, col: Math.min(col, lastColumn(text)) }, type: "exclusive" };
+    }
     case "line-end": {
       const line = Math.min(total - 1, from.line + n - 1);
       return { to: { line, col: lastColumn(await lines.text(line)) }, type: "inclusive", want: Infinity };
@@ -682,7 +693,12 @@ async function markAt(state: State, offset: number): Promise<Mark | null> {
 async function setMark(state: State, name: string) {
   const { caret } = await state.handle.selection();
   if (name === "'" || name === "`") return recordJump(state, caret);
-  const mark = await markAt(state, caret);
+  await setMarkAt(state, name, caret);
+}
+
+/** Sets the buffer or global mark `name` at `offset`. */
+async function setMarkAt(state: State, name: string, offset: number) {
+  const mark = await markAt(state, offset);
   if (mark === null) return;
   const { marks, globalMarks } = state.shared;
   if (name === name.toLowerCase()) {
@@ -1098,14 +1114,22 @@ export function swapCase(text: string): string {
 
 /** `p` and `P`: puts a register's text count times after or before the
  * caret, or below or above its line when the text is linewise. */
-async function put(state: State, register: string | null, count: number, before: boolean) {
+async function put(
+  state: State,
+  register: string | null,
+  count: number,
+  before: boolean,
+  variant?: "caret-after" | "indent",
+) {
   const value = await readRegister(state, register);
   if (value === null || value.text === "") return;
   const lines = new BufferLines(state.buffer);
   const from = await lines.position((await state.handle.selection()).caret);
   state.want = null;
   if (value.linewise) {
-    const block = (value.text.endsWith("\n") ? value.text : `${value.text}\n`).repeat(count);
+    let one = value.text.endsWith("\n") ? value.text : `${value.text}\n`;
+    if (variant === "indent") one = indented(one, /^[ \t]*/.exec(await lines.text(from.line))![0]);
+    const block = one.repeat(count);
     const total = await lines.count();
     // Below a closed fold is after all of it.
     const last = before ? from.line : lastLine(await state.handle.folds(), from.line);
@@ -1120,7 +1144,9 @@ async function put(state: State, register: string | null, count: number, before:
       }
     });
     const fresh = new BufferLines(state.buffer);
-    await moveTo(state, fresh, await lineStart(fresh, line));
+    // `gp` goes to the line after the text, or stays on the last line.
+    const after = line + block.split("\n").length - 1;
+    await moveTo(state, fresh, await lineStart(fresh, variant === "caret-after" ? Math.min(after, (await fresh.count()) - 1) : line));
     return;
   }
   const block = value.text.repeat(count);
@@ -1129,12 +1155,25 @@ async function put(state: State, register: string | null, count: number, before:
   const at = await lines.offset({ line: from.line, col });
   await grouped(state, () => replace(state, at, at, block));
   const fresh = new BufferLines(state.buffer);
-  if (block.includes("\n")) {
+  if (variant === "caret-after") {
+    await moveOnto(state, fresh, await fresh.position(at + utf8Length(block)));
+  } else if (block.includes("\n")) {
     await moveTo(state, fresh, { line: from.line, col });
   } else {
     const end = await fresh.position(at + utf8Length(block));
     await moveOnto(state, fresh, { line: end.line, col: previousColumn(await fresh.text(end.line), end.col) });
   }
+}
+
+/** Lines of text with the first one's indentation replaced by `indent` and
+ * the others shifted the same way; blank lines stay empty. */
+function indented(text: string, indent: string): string {
+  const lines = text.split("\n");
+  const first = /^[ \t]*/.exec(lines[0]!)![0];
+  return lines.map((line) => {
+    if (line.trim() === "") return line === "" ? line : "";
+    return indent + (line.startsWith(first) ? line.slice(first.length) : line.trimStart());
+  }).join("\n");
 }
 
 /** A register's text for a put, or null when it holds none. */
@@ -1164,6 +1203,16 @@ async function replaceCharacters(state: State, char: string, count: number) {
     end = nextColumn(text, end);
   }
   const start = await lines.offset(from);
+  if (char === "\n") {
+    // One line break replaces all the characters.
+    await grouped(state, async () => {
+      await replace(state, start, await lines.offset({ line: from.line, col: end }), "");
+      await commands.invoke("editor.insert-newline");
+    });
+    state.want = null;
+    await clampCaret(state);
+    return;
+  }
   await grouped(state, async () => replace(state, start, await lines.offset({ line: from.line, col: end }), char.repeat(count)));
   const fresh = new BufferLines(state.buffer);
   const last = await fresh.position(start + utf8Length(char.repeat(count - 1)));
@@ -1189,21 +1238,45 @@ async function toggleCase(state: State, count: number) {
   await moveOnto(state, fresh, { line: from.line, col: from.col + swapped.length });
 }
 
-/** `J`: joins count lines, at least two, with the native Join Lines, which
- * leaves the caret where the last two lines met. */
-export async function join(state: State, count: number) {
+/** `J`: joins count lines, at least two, replacing each line break and the
+ * next line's leading white space with one space, except after white space or
+ * before `)` or an empty rest. `gJ` (`spaces` false) keeps the text as it is.
+ * The caret goes where the last two lines met. */
+export async function join(state: State, count: number, spaces = true) {
   const lines = new BufferLines(state.buffer);
   const { caret } = await state.handle.selection();
   const line = (await lines.position(caret)).line;
   const joins = Math.min(Math.max(count, 2) - 1, (await lines.count()) - 1 - line);
   if (joins <= 0) return;
-  await grouped(state, async () => {
-    for (let n = 0; n < joins; n++) await commands.invoke("editor.join-lines");
-  });
+  let joined = await lines.text(line);
+  let col = 0;
+  for (let n = 1; n <= joins; n++) {
+    let next = await lines.text(line + n);
+    if (spaces) next = next.replace(/^[ \t]+/, "");
+    const space = spaces && joined !== "" && next !== "" && !next.startsWith(")") && !/[ \t]$/.test(joined);
+    col = joined.length;
+    joined += (space ? " " : "") + next;
+  }
+  const start = await lines.offset({ line, col: 0 });
+  const end = await lines.offset({ line: line + joins, col: (await lines.text(line + joins)).length });
+  await grouped(state, () => replace(state, start, end, joined));
   state.want = null;
-  await clampCaret(state);
+  await moveOnto(state, new BufferLines(state.buffer), { line, col });
 }
 
+/** `ga`: shows the code of the character under the caret. */
+async function showCharacter(state: State) {
+  const lines = new BufferLines(state.buffer);
+  const at = await lines.position((await state.handle.selection()).caret);
+  const text = await lines.text(at.line);
+  if (at.col >= text.length) {
+    state.message = "NUL";
+    return;
+  }
+  const code = text.codePointAt(at.col)!;
+  const hex = code.toString(16).padStart(code > 0xffff ? 8 : code > 0x7f ? 4 : 2, "0");
+  state.message = `<${String.fromCodePoint(code)}> ${code}, Hex ${hex}, Oct ${code.toString(8).padStart(3, "0")}`;
+}
 
 async function enterInsert(state: State, at: InsertAt, count: number) {
   state.group = await openGroup(state);
@@ -1211,10 +1284,15 @@ async function enterInsert(state: State, at: InsertAt, count: number) {
   state.repeat = { count, open: state.opened };
   await setMode(state, at === "R" ? "replace" : "insert");
   const lines = new BufferLines(state.buffer);
+  if (at === "gi") {
+    const offset = await markOffset(state, "^");
+    if (offset !== null) await moveTo(state, lines, await lines.position(offset));
+  }
   const from = await lines.position((await state.handle.selection()).caret);
   const text = await lines.text(from.line);
   switch (at) {
     case "i":
+    case "gi":
     case "R":
       break;
     case "a":
@@ -1318,6 +1396,7 @@ export async function leaveInsert(state: State) {
   }
   const lines = new BufferLines(state.buffer);
   const { anchor, caret } = await state.handle.selection();
+  await setMarkAt(state, "^", caret);
   const from = await lines.position(caret);
   const text = await lines.text(from.line);
   if (state.opened && text.length > 0 && /^[ \t]*$/.test(text)) {

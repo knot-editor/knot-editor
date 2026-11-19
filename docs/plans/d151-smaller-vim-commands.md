@@ -49,13 +49,14 @@ visual mode, and sentence motions and objects.
   `extensions/@knot/vim/src/extension.ts`, `WindowAction` in `keys.ts`;
   command docs under `docs/extension-api/`.
 
-### 2. Small edits, keys, and paste variants
+### 2. Small edits, keys, and paste variants ✅ (awaiting review)
 
-- `r<cr>`, `J` and `gJ`, `_`, `|`, `gi`, `ga`, `gp`, `gP`, `]p`.
-- Validation: key-parser cases in `keys.test.ts`, motion cases in
-  `motions.test.ts`, and end-to-end cases through the editor for edits and
-  puts.
-- Review gate: try commands for each key, including counts and visual mode
+- ✅ `r<cr>`, `J` and `gJ`, `_`, `|`, `gi`, `ga`, `gp`, `gP`, `]p` (with `[p`,
+  `[P`, and `]P`).
+- ✅ Validation: key-parser cases in `keys.test.ts`, and end-to-end cases
+  through the editor in `test/cases/` (`operators`, `motions`, `insert`) and
+  `ga` in `vim.rs`.
+- Review gate (`try.small-edits`): try commands for each key, including counts and visual mode
   where Vim defines them.
 - **Implementation context:** `keys.ts` (`g`, `[`, `]` prefixes, `r` at line
   296, `join` and `put` commands), `normal.ts` (`put` and `join` handlers at

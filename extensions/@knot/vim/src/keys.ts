@@ -6,7 +6,7 @@ export type SimpleMotion =
   | "left" | "right" | "left-wrap" | "right-wrap" | "up" | "down" | "row-up" | "row-down"
   | "word" | "WORD" | "back" | "BACK" | "end" | "END" | "back-end" | "BACK-END"
   | "line-start" | "first-non-blank" | "line-end" | "next-line-start" | "previous-line-start"
-  | "first-line" | "last-line" | "match-pair" | "paragraph-forward" | "paragraph-back"
+  | "first-line" | "last-line" | "line-down-first-non-blank" | "column" | "match-pair" | "paragraph-forward" | "paragraph-back"
   | "repeat-find" | "repeat-find-reverse" | "window-top" | "window-middle" | "window-bottom"
   | "fold-next" | "fold-previous" | "fold-start" | "fold-end";
 
@@ -65,7 +65,7 @@ export type WindowAction =
   | "split-down" | "split-right" | "close" | "only" | "next" | "previous" | "last-used" | "first" | "last" | "equalize" | "taller" | "shorter" | "wider" | "narrower";
 
 /** Where an insert command starts typing; `R` types over the text instead. */
-export type InsertAt = "i" | "a" | "I" | "A" | "o" | "O" | "R";
+export type InsertAt = "i" | "a" | "I" | "A" | "o" | "O" | "R" | "gi";
 
 export type Command =
   | { readonly kind: "motion"; readonly motion: Motion; readonly count: number | null }
@@ -73,10 +73,18 @@ export type Command =
     readonly kind: "operator"; readonly operator: Operator; readonly register: string | null;
     readonly count: number | null; readonly target: Target;
   }
-  | { readonly kind: "put"; readonly before: boolean; readonly register: string | null; readonly count: number }
+  /** `p` and `P`; `gp` and `gP` leave the caret after the text, and `]p`
+   * and its variants indent linewise text to the caret's line. */
+  | {
+    readonly kind: "put"; readonly before: boolean; readonly register: string | null; readonly count: number;
+    readonly variant?: "caret-after" | "indent";
+  }
   | { readonly kind: "replace"; readonly char: string; readonly count: number }
   | { readonly kind: "toggle-case"; readonly count: number }
-  | { readonly kind: "join"; readonly count: number }
+  /** `J`, or with `spaces` false `gJ`, which keeps white space as it is. */
+  | { readonly kind: "join"; readonly count: number; readonly spaces?: false }
+  /** `ga`: shows the character under the caret's code. */
+  | { readonly kind: "show-character" }
   /** An insert command; the typed text repeats `count` times. */
   | { readonly kind: "insert"; readonly at: InsertAt; readonly count: number }
   /** `.`: repeats the last change, with `count` in place of its own. */
@@ -142,7 +150,7 @@ const MOTIONS: Readonly<Record<string, SimpleMotion>> = {
   "<bs>": "left-wrap", " ": "right-wrap",
   j: "down", k: "up",
   w: "word", W: "WORD", b: "back", B: "BACK", e: "end", E: "END",
-  "0": "line-start", "^": "first-non-blank", $: "line-end",
+  "0": "line-start", "^": "first-non-blank", $: "line-end", _: "line-down-first-non-blank", "|": "column",
   "+": "next-line-start", "<cr>": "next-line-start", "-": "previous-line-start",
   G: "last-line", "%": "match-pair", "}": "paragraph-forward", "{": "paragraph-back",
   ";": "repeat-find", ",": "repeat-find-reverse",
@@ -244,7 +252,7 @@ const INSERTS = new Set<string>(["i", "a", "I", "A", "o", "O", "R"]);
 const REGISTER = /^[a-zA-Z0-9"+*_%:/.-]$/;
 
 /** Marks `'` and `` ` `` may jump to, and `m` may set. */
-const MARK = /^[a-zA-Z'`]$/;
+const MARK = /^[a-zA-Z'`^]$/;
 
 /** The text a status display shows for pending input. */
 export function pendingText(pending: Pending): string {
@@ -294,6 +302,8 @@ export function feed(pending: Pending, key: string, visual = false): Fed {
     case "m":
       return MARK.test(key) ? done({ kind: "set-mark", name: key }) : done(null);
     case "r": {
+      // Enter replaces the characters with one line break.
+      if (key === "<cr>" && !visual) return done({ kind: "replace", char: "\n", count: count ?? 1 });
       const char = characterOf(key);
       return char === null ? done(null) : done({ kind: "replace", char, count: count ?? 1 });
     }
@@ -327,11 +337,22 @@ export function feed(pending: Pending, key: string, visual = false): Fed {
       return done({ kind: "reposition", at: reposition[0], firstNonBlank: reposition[1], count });
     }
     case "[": case "]": {
+      if ((key === "p" || key === "P") && operator === null && !visual) {
+        return done({ kind: "put", before: pending.prefix === "[" || key === "P", register, count: count ?? 1, variant: "indent" });
+      }
       const bracketMotion = key === "z" ? BRACKET_FOLD_MOTIONS[pending.prefix] : undefined;
       return bracketMotion === undefined ? done(null) : motion(bracketMotion);
     }
     case "g": {
       if (operator !== null && DOUBLING[operator] === key) return target({ kind: "line" });
+      if (operator === null && key === "J") return done({ kind: "join", count: count ?? 1, spaces: false });
+      if (operator === null && !visual) {
+        if (key === "i") return done({ kind: "insert", at: "gi", count: count ?? 1 });
+        if (key === "a") return done({ kind: "show-character" });
+        if (key === "p" || key === "P") {
+          return done({ kind: "put", before: key === "P", register, count: count ?? 1, variant: "caret-after" });
+        }
+      }
       if (key === "v") return done({ kind: "reselect" });
       const gOperator = G_OPERATORS[key];
       if (gOperator !== undefined) {

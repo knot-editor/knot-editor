@@ -20,6 +20,12 @@
     { "name": "o indents from the language's indent query", "language": "rust", "before": ["fn f() ‸{", "}"], "keys": "ox<esc>", "after": ["fn f() {", "    ‸x", "}"] },
     { "name": "O indents from the language's indent query", "language": "rust", "before": ["fn f() {", "    a();", "‸}"], "keys": "Ob<esc>", "after": ["fn f() {", "    a();", "    ‸b", "}"] },
 
+    // gi.
+    { "name": "gi inserts where insert mode last ended", "before": ["‸abc", "def"], "keys": "Ax<esc>jgiy<esc>", "after": ["abcx‸y", "def"] },
+    { "name": "gi without an earlier insert is i", "before": ["a‸b"], "keys": "gix<esc>", "after": ["a‸xb"] },
+    { "name": "gi goes back to the last insert from anywhere", "before": ["‸a", "b"], "keys": "ix<esc>jgiy<esc>", "after": ["x‸ya", "b"] },
+    { "name": "gi starts one insert with the count", "before": ["‸ab"], "keys": "lAx<esc>02giy<esc>", "after": ["abxy‸y"] },
+
     // Replace mode.
     { "name": "R types over the text and Escape steps back", "before": ["a‸bcd"], "keys": "Rxy<esc>", "after": ["ax‸yd"] },
     { "name": "replace mode stays until Escape", "before": ["a‸b"], "keys": "R", "after": { "text": ["a‸b"], "mode": "replace" } },

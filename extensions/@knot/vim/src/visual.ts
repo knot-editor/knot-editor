@@ -93,10 +93,11 @@ export async function runVisual(state: State, command: Command) {
     case "join": {
       const { region } = await selectedRegion(state, lines, true);
       const count = Math.max(2, region.end.line - region.start.line + 1);
-      rememberChange(state, { kind: "join", count });
+      const spaces = command.spaces !== false;
+      rememberChange(state, spaces ? { kind: "join", count } : { kind: "join", count, spaces: false });
       await exit(state);
       await moveTo(state, lines, { line: region.start.line, col: 0 });
-      await join(state, count);
+      await join(state, count, spaces);
       return;
     }
   }
