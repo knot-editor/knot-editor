@@ -62,32 +62,9 @@ Three things programs send to a terminal now show up in Knot:
 
 ### 1. Titles on terminal tabs ✅
 
-The session keeps the current title and whether its name is explicit. Tab
-labels, tool-window headers, and anything else that reads the session's label
-use the resolved label.
-
-- **Implementation context:** `src/app/terminal/session.rs`
-  (`apply_events` drops `TerminalEvent::Title` today; add the title, an
-  explicit-name flag set by `set_name` from Rename, and a `label()` that
-  resolves title vs. name; restart clears the title).
-  `src/app/product.rs` (`terminal_session_name`, `set_terminal_name`,
-  `terminal_facts`, and the `free_label` call that dedups default labels,
-  which must keep using default names, not titles).
-  `src/app/window_layout.rs` (`TerminalFacts` records whether the name is
-  explicit). `src/app/product/commands.rs` (`rename_session`). The tab title
-  is built in `src/app/product/render.rs` (`TabSurfaceId::Terminal`). The
-  label's max width and ellipsis apply there too, and the tooltip follows
-  the pattern at `render.rs` around line 920 (`gpui_component::tooltip::Tooltip`).
-- **Validation:** session tests that feed `ESC ]2;…BEL` and an empty title;
-  product tests in `src/app/product/tests/terminal.rs` beside
-  `rename_session_labels_the_tab_and_the_label_persists`: the title labels
-  the tab, Rename beats a later title, and a layout round trip keeps an
-  explicit name while dropping the title. `just check`.
-- **Done:** the layout's `name` now records only a name set with Rename
-  (its presence is the explicit flag); default labels are regenerated on
-  restore. ✅
-- **Review gate:** a `Try:` command opens a terminal that sets a title. The
-  user checks a shell prompt that sets titles and a full-screen program.
+Done and approved. The session resolves its label from an explicit name, then
+the program's title, then the default name; layouts record only explicit
+names. See [workbench and lifecycle](../architecture/workbench-and-lifecycle.md#terminal-sessions-and-views).
 
 ### 2. Bell marks on tabs and stripe buttons
 
