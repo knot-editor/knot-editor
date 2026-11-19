@@ -118,7 +118,7 @@ JavaScript. The walk is native rather than `rg --files` because the policy must
 also serve listings and watching, and one classifier keeps all three
 consistent. A local fast path over `ignore::WalkBuilder::build_parallel` was
 rejected for the same reason: it cannot return ignored entries marked, so it
-could serve neither listings nor the workspace file index (D173), and it would
+could serve neither listings nor the [workspace file index](../architecture/documents-and-persistence.md#workspace-file-index), and it would
 be a second implementation to keep in agreement with the classifier.
 Classifying each directory where it is read, against its resolved rule stack,
 closes most of the gap: on a 97,336-file kernel checkout (release build, Apple
