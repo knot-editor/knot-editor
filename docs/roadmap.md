@@ -489,9 +489,9 @@ The bundled Vim mode is built on generic editor primitives, so a Helix or
 Kakoune mode could use them too. The
 [extensibility report](reports/extensibility.md) maps Vim's needs onto them.
 
-- **D146 — Broad Ex command set**
+- **D146 — Broad Ex command set** 🚧
   - Depends on: none
-  - Description: The first Vim mode implements a core Ex set: `:w`, `:q`,
+  - Description: [Plan](plans/d146-broad-ex-command-set.md). The first Vim mode implements a core Ex set: `:w`, `:q`,
     `:q!`, `:wq`, `:x`, `:e`, `:<line>`, and `:set` for a few options.
     `:g` and `:v`, `:normal`, `:sort`, `:d`,
     `:m`, `:t` and other range commands, `:reg` and `:marks`, `:map` and its
