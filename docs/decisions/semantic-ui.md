@@ -159,6 +159,14 @@ and jumps instead of filtering, as IntelliJ does, because filtering would hide
 the loaded rows the user is navigating among. Inline editing reuses the shared
 text field and validates through the input pull loop, as VS Code does.
 
+Drag and drop in trees is declared per row and decided by the extension. A drop
+runs the contribution's `drop` command over the captured-window route, like a
+row action, rather than a second callback path, so the extension alone decides
+what a drop means and rejects one it cannot do. Drops land on rows only, because
+between-row positions would make every tree an ordered list. A row's `resource`
+makes the editor area a drop target that opens it through the ordinary open
+path, so previews, splits, and failures need no extension involvement.
+
 Reference: [semantic UI](../architecture/semantic-ui.md#extension-trees).
 
 ## Icons

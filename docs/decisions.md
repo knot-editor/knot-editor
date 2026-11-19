@@ -83,7 +83,8 @@ touches.
   defaults; live application; file and folder references resolved natively.
 - [Extension tree content and actions](decisions/semantic-ui.md#extension-tree-content-and-actions):
   one frame registration; text frames reuse the editor surface; general
-  gesture, reveal, speed search, and inline editing rather than explorer-only.
+  gesture, reveal, speed search, and inline editing rather than explorer-only;
+  drops run a command on rows only.
 - [Extension transient interactions](decisions/semantic-ui.md#extension-transient-interactions):
   typed results, complete lists filtered natively or rows supplied per query,
   pulled rather than pushed updates; whole-value completion items with menu accept; one native matcher

@@ -222,17 +222,9 @@ hold the analyses that support some items.
     keeping its focus and drop behavior. It lists the recent files and the
     projects of D084.
 
-- **D176 — Drag and drop in trees** 🚧
-  - Depends on: none
-  - Description: The explorer moves files through Cut and Paste or Rename;
-    contributed trees take no drags or drops. Do it when daily use wants files
-    moved by pointer: add native drag sources and drop targets to contributed
-    trees, reported to the extension as semantic row IDs, and use them in the
-    explorer. Plan: [d176-tree-drag-and-drop](plans/d176-tree-drag-and-drop.md).
-
 - **D205 — Drag tree rows to other apps**
-  - Depends on: D176
-  - Description: Tree rows drag only within Knot. Finder, mail clients, and
+  - Depends on: none
+  - Description: Tree rows drag only within Knot and the editor. Finder, mail clients, and
     other apps take nothing from them. Do it when daily use wants to hand an
     explorer file to another app: start a native OS drag carrying the row's
     `resource` as a file when the pointer leaves the window, and decide

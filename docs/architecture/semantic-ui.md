@@ -299,6 +299,17 @@ that matches the loaded rows ignoring case, highlights the matched text, and
 jumps to the best match without filtering rows out. Up and Down move between
 matches, Enter activates, and Escape clears.
 
+A `draggable` row drags after the usual pointer threshold. Within its tree, a
+`dropTarget` row other than the source highlights, expands after a hover while
+collapsed, and the list scrolls near its top or bottom edge. A drop emits the
+captured-window command event for the contribution's `drop` command with the
+source and target row IDs and arguments and whether Option was held; Escape or
+a drop elsewhere cancels. A draggable row with a `resource` also targets the
+editor area: the window previews the same pane, tab bar, and split-edge targets
+as [tab dragging](workbench-and-lifecycle.md) and opens the resource pinned
+through the ordinary open path. A split edge splits the pane and replaces the
+duplicated tab with the opened document.
+
 `editLabel` turns a row's label into the shared `TextInput`, and `editNewItem`
 shows a temporary row at the top of a parent's children. Enter or focus loss
 commits, Escape dismisses, and a `validate` message shows under the field and

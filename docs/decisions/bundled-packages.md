@@ -96,8 +96,8 @@ reveal, speed search, inline editing, `files.copy`, `files.reveal`) was closed i
 the API for all extensions, so the package proves the surface and the native
 workspace tree and its private path are gone. Cut and Copy keep the taken item in
 the extension rather than the system clipboard, so pasting text elsewhere never
-meets a file and the clipboard holds only text. Multi-select, drag and drop,
-compact folders, and Git decorations are roadmap items (D177, D176, D178, D126).
+meets a file and the clipboard holds only text. Multi-select,
+compact folders, and Git decorations are roadmap items (D177, D178, D126).
 
 References: [extension guide](../extension-api/ui.md#activation-selection-and-editing-in-trees)
 and [semantic UI](../architecture/semantic-ui.md#extension-trees).

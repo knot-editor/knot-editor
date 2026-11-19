@@ -117,6 +117,17 @@ The bundled `@knot/explorer` package is the reference use of all of this: it
 browses every root, follows the active file, and creates, renames, deletes,
 copies, and moves files with only the public API.
 
+### Dragging rows
+
+A `draggable` row can be dragged onto a `dropTarget` row of its tree, which
+runs the view's `drop` command with a `TreeDrop`:
+`{ source: { id, arguments }, target: { id, arguments }, copy }`, where `copy`
+is true when Option was held. The command decides what the drop means and
+throws to reject one it cannot do. A draggable row with a `resource` URI can
+also be dropped onto the editor area, which opens it as a tab in the pane or
+new split under the pointer. The explorer moves files by dropping them on
+folders and copies them with Option.
+
 ### Read-only text frames
 
 A text frame owns a private read-only buffer rendered by the native editor; it is
