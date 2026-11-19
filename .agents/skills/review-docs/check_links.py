@@ -25,7 +25,8 @@ def main():
     files = sorted(pathlib.Path("docs").rglob("*.md")) + [pathlib.Path("AGENTS.md")]
     broken = 0
     for source in files:
-        for match in LINK.finditer(source.read_text()):
+        text = re.sub(r"`[^`\n]*`", "", source.read_text())
+        for match in LINK.finditer(text):
             url = match.group(1)
             if url.startswith(("http:", "https:", "mailto:")):
                 continue
