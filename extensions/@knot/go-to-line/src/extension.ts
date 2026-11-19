@@ -38,7 +38,7 @@ async function goToLine(editor: Editor, buffer: Buffer) {
   const original = await editor.viewState();
   const lineCount = await buffer.lineCount();
   const current = await caretPosition(buffer, original.caret);
-  const usage = `Current Line: ${current.line} of ${lineCount} (column ${current.column})`;
+  const usage = `${current.line} of ${lineCount} lines`;
 
   // Moves the caret to a typed location, or restores the view for anything
   // else, and returns the message to show.
@@ -53,7 +53,11 @@ async function goToLine(editor: Editor, buffer: Buffer) {
     return describe(target, location);
   };
 
-  const result = await workbench.showInput({ title: "Go to Line", onChange: preview });
+  const result = await workbench.showInput({
+    title: "Go to Line",
+    placeholder: `${current.line}:${current.column}`,
+    onChange: preview,
+  });
   if (result.kind === "dismissed") {
     await editor.restoreViewState(original);
     return;

@@ -1416,6 +1416,7 @@ pub(crate) struct InputArguments {
     pub prompt: Option<String>,
     pub target: Option<String>,
     pub history: Vec<String>,
+    pub placeholder: Option<String>,
 }
 impl HostArguments for InputArguments {
     fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
@@ -1425,6 +1426,7 @@ impl HostArguments for InputArguments {
             prompt: reader.optional_text(4, "input prompt must be text or null")?,
             target: reader.optional_text(5, "window target must be text")?,
             history: reader.text_list(6)?,
+            placeholder: reader.optional_text(7, "input placeholder must be text or null")?,
         })
     }
 }
@@ -1814,6 +1816,7 @@ pub(crate) async fn show_input(
         prompt,
         target,
         history,
+        placeholder,
     } = arguments;
     let (receiver, _) = context.foreground(|host, cx| {
         host.with_transient_window(
@@ -1827,6 +1830,7 @@ pub(crate) async fn show_input(
                         initial: value.unwrap_or_default(),
                         prompt,
                         history,
+                        placeholder,
                     },
                     None,
                     cx,
@@ -1858,6 +1862,7 @@ pub(crate) async fn begin_input(
         prompt,
         target,
         history,
+        placeholder,
     } = arguments;
     let (sender, changes) = tokio::sync::watch::channel(None);
     let (completion, input) = context.foreground(|host, cx| {
@@ -1872,6 +1877,7 @@ pub(crate) async fn begin_input(
                         initial: value.unwrap_or_default(),
                         prompt,
                         history,
+                        placeholder,
                     },
                     Some(sender),
                     cx,

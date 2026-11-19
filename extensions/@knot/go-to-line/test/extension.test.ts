@@ -18,7 +18,7 @@ beforeEach(async () => {
 
 function prompt() {
   const [shown] = host.prompts();
-  return shown?.options as { title: string; value?: string };
+  return shown?.options as { title: string; value?: string; placeholder?: string };
 }
 
 test("typing previews each location, centered, and Enter keeps the last", async () => {
@@ -28,7 +28,7 @@ test("typing previews each location, centered, and Enter keeps the last", async 
 
   assert.equal(prompt().title, "Go to Line");
   assert.deepEqual(host.inputMessages(), [
-    "Current Line: 1 of 4 (column 5)",
+    "1 of 4 lines",
     "Go to line 2",
     "Go to line 2, character 9",
     "Go to line 2, character 10",
@@ -64,7 +64,7 @@ test("invalid input restores the view, shows the usage, and Enter only dismisses
 
   assert.deepEqual(host.inputMessages().slice(1), [
     "Go to line 3",
-    "Current Line: 1 of 4 (column 5)",
+    "1 of 4 lines",
   ]);
   assert.deepEqual(host.editorView(), ORIGINAL);
 });
@@ -82,7 +82,19 @@ test("the current position counts columns in scalar values", async () => {
   host.answer("showInput", { kind: "dismissed" });
   await host.run(COMMAND);
 
-  assert.equal(host.inputMessages()[0], "Current Line: 2 of 4 (column 11)");
+  assert.equal(host.inputMessages()[0], "2 of 4 lines");
+});
+
+test("the placeholder is the caret position, and accepting it keeps the caret", async () => {
+  const caret = LINE_2 + offset("\tsecond é😀");
+  host.setEditorView({ anchor: caret, caret });
+  // Tab on the empty field types the placeholder, as the native field does.
+  host.type("2:11");
+  host.answer("showInput", { kind: "accepted", value: "2:11", highlighted: null });
+  await host.run(COMMAND);
+
+  assert.equal(prompt().placeholder, "2:11");
+  assert.deepEqual(host.editorView(), { ...ORIGINAL, anchor: caret, caret });
 });
 
 test("a command without an editor is unavailable", async () => {

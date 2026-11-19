@@ -1,6 +1,6 @@
 # D140: Placeholder text in input fields
 
-Status: 🚧 approved, not started. Roadmap item [D140](../roadmap.md).
+Status: 🚧 checkpoint 1 awaiting review. Roadmap item [D140](../roadmap.md).
 
 ## Goal
 
@@ -37,7 +37,7 @@ it, as Zed's Go to Line does. Go to Line shows the current position as
 
 ## Checkpoints
 
-### 1. Input placeholder and Go to Line
+### 1. Input placeholder and Go to Line ✅ (pending review gate)
 
 Deliverables:
 

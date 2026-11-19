@@ -2,7 +2,7 @@
 use super::operations::{empty_headless_window, empty_product_window};
 use super::*;
 use crate::app::extensions::host::handlers::TransientError;
-use crate::app::transient::{InputSpec, PromptText, TransientOutcome, TransientOwner};
+use crate::app::transient::{InputSpec, InputView, PromptText, TransientOutcome, TransientOwner};
 use knot_protocol::{CommandInvocationId, PickerItem};
 
 fn owner(invocation: Option<u64>) -> TransientOwner {
@@ -1334,4 +1334,52 @@ fn an_input_lists_matching_history_ahead_of_its_own_items(cx: &mut TestAppContex
         settle(&mut receiver, cx),
         TransientOutcome::Input("foox".into(), None)
     );
+}
+
+#[gpui::test]
+fn tab_on_an_empty_input_accepts_its_placeholder_unless_a_row_is_highlighted(
+    cx: &mut TestAppContext,
+) {
+    let documents = install_globals(cx);
+    let (window, native_window) = empty_product_window(&documents, cx);
+    let open = |spec: InputSpec, cx: &mut TestAppContext| {
+        let (receiver, view) = cx
+            .update_window(native_window, |_, _, cx| {
+                window.update(cx, |window, cx| {
+                    window.begin_input(owner(None), spec, None, cx)
+                })
+            })
+            .unwrap()
+            .unwrap();
+        (receiver, view.upgrade().unwrap())
+    };
+    let text =
+        |view: &Entity<InputView>, cx: &mut TestAppContext| cx.read(|cx| view.read(cx).text(cx));
+
+    // The empty field takes the placeholder; Enter then submits it.
+    let (mut receiver, view) = open(InputSpec::new("Go", "").placeholder("12:3"), cx);
+    cx.simulate_keystrokes(native_window, "tab");
+    assert_eq!(text(&view, cx), "12:3");
+    cx.simulate_keystrokes(native_window, "enter");
+    assert_eq!(
+        settle(&mut receiver, cx),
+        TransientOutcome::Input("12:3".into(), None)
+    );
+
+    // A non-empty field ignores Tab.
+    let (mut receiver, view) = open(InputSpec::new("Go", "7").placeholder("12:3"), cx);
+    cx.simulate_keystrokes(native_window, "tab");
+    assert_eq!(text(&view, cx), "7");
+    cx.simulate_keystrokes(native_window, "escape");
+    settle(&mut receiver, cx);
+
+    // A highlighted history row wins over the placeholder.
+    let spec = InputSpec::new("Go", "")
+        .placeholder("12:3")
+        .history(vec!["older".into()]);
+    let (mut receiver, view) = open(spec, cx);
+    cx.simulate_keystrokes(native_window, "tab");
+    assert_eq!(text(&view, cx), "older");
+    cx.simulate_keystrokes(native_window, "escape");
+    settle(&mut receiver, cx);
 }

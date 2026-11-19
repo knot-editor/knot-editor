@@ -79,6 +79,8 @@ pub(crate) struct InputSpec {
     pub(crate) prompt: Option<String>,
     /// Earlier entries, newest first.
     pub(crate) history: Vec<String>,
+    /// Muted text in the empty field; Tab on an empty field accepts it.
+    pub(crate) placeholder: Option<String>,
 }
 
 #[cfg(test)]
@@ -100,6 +102,11 @@ impl InputSpec {
         self.history = history;
         self
     }
+
+    pub(crate) fn placeholder(mut self, placeholder: impl Into<String>) -> Self {
+        self.placeholder = Some(placeholder.into());
+        self
+    }
 }
 
 pub(crate) struct InputView {
@@ -108,6 +115,8 @@ pub(crate) struct InputView {
     /// on an empty field dismisses.
     prompt: Option<SharedString>,
     input: Entity<TextInput>,
+    /// What Tab puts into an empty field when no list is showing.
+    placeholder: Option<String>,
     /// A muted line under the field, set by the interaction's owner.
     message: Option<SharedString>,
     /// Earlier entries, newest first, listed ahead of the caller's items.
@@ -140,8 +149,14 @@ impl InputView {
             initial,
             prompt,
             history,
+            placeholder,
         } = spec;
         let input = cx.new(|cx| TextInput::new(initial.clone(), cx));
+        if let Some(placeholder) = &placeholder {
+            input.update(cx, |input, cx| {
+                input.set_placeholder(placeholder.clone(), cx)
+            });
+        }
         let has_history = !history.is_empty();
         let history_subscription = has_history.then(|| {
             cx.subscribe(&input, |this, _, _: &TextInputEvent, cx| {
@@ -165,6 +180,7 @@ impl InputView {
             title: title.into(),
             prompt: prompt.map(Into::into),
             input,
+            placeholder,
             message: None,
             history,
             caller_items: Vec::new(),
@@ -250,10 +266,14 @@ impl InputView {
     /// Replace the field with the highlighted completion's value. The field
     /// reports the change, so the caller answers with the next list.
     fn accept_completion(&mut self, cx: &mut Context<Self>) {
-        let Some(item) = self.items.get(self.selected) else {
-            return;
+        let value = match self.items.get(self.selected) {
+            Some(item) => item.value.clone(),
+            // With no list, Tab on an empty field takes the placeholder.
+            None => match &self.placeholder {
+                Some(placeholder) if self.input.read(cx).text().is_empty() => placeholder.clone(),
+                _ => return,
+            },
         };
-        let value = item.value.clone();
         self.input.update(cx, |input, cx| input.set_text(value, cx));
     }
 

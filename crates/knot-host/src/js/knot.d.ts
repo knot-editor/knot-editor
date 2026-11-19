@@ -2316,6 +2316,13 @@ declare module "knot" {
      */
     readonly prompt?: string;
     /**
+     * Muted text shown in the empty field. Tab on an empty field copies it
+     * into the field as an ordinary edit, so `onChange` runs. While a
+     * completion row is highlighted (an empty field with `history` lists all
+     * of it), Tab accepts that row instead.
+     */
+    readonly placeholder?: string;
+    /**
      * Earlier entries, newest first. The entries matching the typed text, as
      * `completion.match` matches, head the completion list in that order,
      * before what `onChange` returns; an empty field lists the whole history.

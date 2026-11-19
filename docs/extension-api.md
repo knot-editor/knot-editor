@@ -948,7 +948,7 @@ const found = await workbench.showInput({ prompt: "/", title: "Search", history:
 if (found.kind === "accepted") searches = [found.value, ...searches.filter((s) => s !== found.value)];
 ```
 
-Inputs are single-line and support the usual editing, clipboard, IME, and selection behavior. A `prompt` such as `":"` shows before the field, outside its value, and makes Backspace on an empty field dismiss the input, as a command line does. Confirmation
+Inputs are single-line and support the usual editing, clipboard, IME, and selection behavior. A `prompt` such as `":"` shows before the field, outside its value, and makes Backspace on an empty field dismiss the input, as a command line does. A `placeholder` shows muted in the empty field, and Tab on an empty field copies it in as an ordinary edit, so `onChange` runs; while a completion row is highlighted, Tab accepts that row instead. Confirmation
 and message use the native platform prompt.
 
 One extension transient interaction may own a window at a time. A second
