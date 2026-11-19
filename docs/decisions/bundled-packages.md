@@ -83,10 +83,19 @@ entries of the `/`, `?` and `:` prompts and of Find's fields are a generic
 input `history` option, with a separate list per package, since a Vim pattern
 recalled into Find's literal search would be noise.
 
+The Ex commands that need Knot's help (`:e!`, `:w <file>`, `:sav`, `:wa`) rest
+on generic primitives any extension can use, `documents.reload`,
+`documents.save`, `files.writeText`, and a native Save All, rather than
+Vim-only native code. `:e!` reuses the undoable external-change reload, so Undo
+takes a revert back, which Vim cannot do. `:qa!` quits as `:qa` does, since
+quitting keeps unsaved text. Buffers are tabs, as windows are, so Vim buffer
+numbers are not supported. Range commands compute their text over line
+snapshots and apply it as one edit, so each is one undo step.
+
 References: [extension guide](../extension-api/commands-and-keys.md#bind-keys-and-modal-contexts),
 [text search](../architecture/core-and-buffers.md#text-search),
 [settings](../settings.md#bundled-packages) and
-[roadmap](../roadmap.md) (D142, D151, D182, D201).
+[roadmap](../roadmap.md) (D142, D146, D151, D182, D201).
 
 ## Bundled explorer
 

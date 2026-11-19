@@ -150,7 +150,8 @@ touches.
 - [Bundled Vim mode](decisions/bundled-packages.md#bundled-vim-mode): public
   APIs only, a JavaScript state machine over typed text; `.` and macros replay
   editor recordings; search and `:s` on the native regex find and replace,
-  Vim patterns translated to its syntax.
+  Vim patterns translated to its syntax; Ex commands over generic document and
+  file primitives.
 - [Bundled explorer](decisions/bundled-packages.md#bundled-explorer): public
   API only, every gap closed generally; the taken item stays in the extension.
 - [Bundled project registry](decisions/bundled-packages.md#bundled-project-registry):

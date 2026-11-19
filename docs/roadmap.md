@@ -489,20 +489,18 @@ The bundled Vim mode is built on generic editor primitives, so a Helix or
 Kakoune mode could use them too. The
 [extensibility report](reports/extensibility.md) maps Vim's needs onto them.
 
-- **D146 — Broad Ex command set** 🚧
+- **D146 — Broad Ex command set**
   - Depends on: none
-  - Description: [Plan](plans/d146-broad-ex-command-set.md). The first Vim mode implements a core Ex set: `:w`, `:q`,
-    `:q!`, `:wq`, `:x`, `:e`, `:<line>`, and `:set` for a few options.
-    `:g` and `:v`, `:normal`, `:sort`, `:d`,
-    `:m`, `:t` and other range commands, `:reg` and `:marks`, `:map` and its
-    variants, and user-defined Ex commands are missing. So are `:w <file>` and
-    `:sav <file>`, which need a public save to a given URI without the Save
-    dialog, and `:e!`, which needs a revert of a document to its file's text;
-    neither primitive exists. Do it when daily Vim use reaches for one of them:
-    add it inside the Vim package over existing primitives, or add the missing
-    generic primitive first. `:normal` and `:g` with a normal-mode command also
-    need replaying keys through the mode, as macros do, and
-    `:g` and `:v` can reuse the search patterns of `@knot/vim`.
+  - Description: The Ex line covers files, buffers, windows, line ranges, and
+    `:sort`, but `:g` and `:v`, `:normal`, `/pat/` and `?pat?` addresses and `;`
+    between addresses, `:reg`, `:marks` and `:jumps` (they need a list surface,
+    D054), `:map` and its variants, `:command`, `:!cmd`, `:r`, range filters,
+    `:cd`, `:h`, `:&`, `:pu`, `:sort` with a pattern, and Vim buffer numbers in
+    `:b` and `:bd` are missing. `:normal` and `:g` with a normal-mode command
+    need replaying keys through the mode, as macros do, and `:g` and `:v` can
+    reuse the search patterns of `@knot/vim`. Do it when daily Vim use reaches
+    for one of them: add it inside the Vim package over existing primitives, or
+    add the missing generic primitive first.
 
 - **D201 — Preview replacement results**
   - Depends on: none
