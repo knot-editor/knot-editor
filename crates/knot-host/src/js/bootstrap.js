@@ -933,6 +933,7 @@ function pickerTab(value) {
   return {
     id: string(value.id, "picker tab ID must be text"),
     label: string(value.label, "picker tab label must be text"),
+    placeholder: optionalText(value.placeholder),
   };
 }
 

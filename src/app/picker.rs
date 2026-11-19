@@ -92,6 +92,8 @@ pub(crate) enum PickerEvent {
 pub(crate) struct PickerTab {
     pub(crate) id: String,
     pub(crate) label: String,
+    /// Replaces the picker title in the empty query field while active.
+    pub(crate) placeholder: Option<String>,
 }
 
 /// What supplied rows answer: the query and the active tab's ID.
@@ -189,11 +191,7 @@ impl Picker {
             confirm_pending: false,
             _input_subscription: subscription,
         };
-        if let Some(title) = &this.title {
-            let title = title.clone();
-            this.input
-                .update(cx, |input, cx| input.set_placeholder(title, cx));
-        }
+        this.update_placeholder(cx);
         this.refilter("", cx);
         if let Some(row) = this
             .matches
@@ -221,10 +219,28 @@ impl Picker {
     ) {
         self.active_tab = if initial < tabs.len() { initial } else { 0 };
         self.tabs = tabs;
+        self.update_placeholder(cx);
         let query = self.query(cx);
         self.refilter(&query, cx);
         self.highlighted = self.selected_entry();
         cx.notify();
+    }
+
+    /// Show the active tab's placeholder in the query field, or the title.
+    fn update_placeholder(&mut self, cx: &mut Context<Self>) {
+        let placeholder = self
+            .tabs
+            .get(self.active_tab)
+            .and_then(|tab| tab.placeholder.clone().map(SharedString::from))
+            .or_else(|| self.title.clone())
+            .unwrap_or_default();
+        self.input
+            .update(cx, |input, cx| input.set_placeholder(placeholder, cx));
+    }
+
+    #[cfg(test)]
+    pub(crate) fn placeholder(&self, cx: &App) -> String {
+        self.input.read(cx).placeholder().to_string()
     }
 
     /// Whether the picker shows scope tabs.
@@ -256,6 +272,7 @@ impl Picker {
             return;
         }
         self.active_tab = tab;
+        self.update_placeholder(cx);
         let query = self.query(cx);
         if self.supplied {
             self.selected = 0;
@@ -1134,6 +1151,7 @@ mod tests {
             .map(|id| PickerTab {
                 id: id.into(),
                 label: id.to_uppercase(),
+                placeholder: (id != "actions").then(|| format!("Search {id}")),
             })
             .into()
     }
@@ -1182,6 +1200,21 @@ mod tests {
             picker.set_tabs(tabs(), 9, cx);
             assert_eq!(picker.active_tab_id().as_deref(), Some("all"));
         });
+    }
+
+    #[gpui::test]
+    fn the_active_tab_sets_the_placeholder_and_a_tab_without_one_shows_the_title(
+        cx: &mut TestAppContext,
+    ) {
+        let picker = cx.new(|cx| Picker::new(Some("Pick".into()), Vec::new(), "picker", cx));
+        let placeholder = |cx: &mut TestAppContext| cx.read(|cx| picker.read(cx).placeholder(cx));
+        assert_eq!(placeholder(cx), "Pick");
+        picker.update(cx, |picker, cx| picker.set_tabs(tabs(), 1, cx));
+        assert_eq!(placeholder(cx), "Search files");
+        picker.update(cx, |picker, cx| picker.cycle_tab(1, cx));
+        assert_eq!(placeholder(cx), "Pick");
+        picker.update(cx, |picker, cx| picker.cycle_tab(1, cx));
+        assert_eq!(placeholder(cx), "Search all");
     }
 
     #[gpui::test]

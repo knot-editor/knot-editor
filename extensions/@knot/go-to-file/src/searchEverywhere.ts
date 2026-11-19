@@ -11,10 +11,10 @@ import { ACTION_HISTORY } from "./recent.js";
 const ALL_TAB_ACTIONS = 8;
 
 const TABS = [
-  { id: "all", label: "All" },
-  { id: "buffers", label: "Buffers" },
-  { id: "files", label: "Files" },
-  { id: "actions", label: "Actions" },
+  { id: "all", label: "All", placeholder: "Search everything" },
+  { id: "buffers", label: "Buffers", placeholder: "Search open buffers" },
+  { id: "files", label: "Files", placeholder: "Search files" },
+  { id: "actions", label: "Actions", placeholder: "Search actions" },
 ];
 
 type Kind = "buffer" | "file" | "line" | "command";

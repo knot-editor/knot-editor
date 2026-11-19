@@ -2215,6 +2215,9 @@ declare module "knot" {
   export interface PickerTab {
     readonly id: string;
     readonly label: string;
+    /** Shown in the empty query field while this tab is active; the picker's
+     * `title` shows when absent. Tab switches tabs, so it never accepts this. */
+    readonly placeholder?: string;
   }
   /** Selection or explicit dismissal; dismissal is not an operational failure. */
   export type PickerResult = Readonly<

@@ -1,6 +1,6 @@
 # D140: Placeholder text in input fields
 
-Status: 🚧 checkpoint 1 done, checkpoint 2 not started. Roadmap item [D140](../roadmap.md).
+Status: 🚧 checkpoint 1 done, checkpoint 2 awaiting review. Roadmap item [D140](../roadmap.md).
 
 ## Goal
 
@@ -44,7 +44,7 @@ in the [extension guide](../extension-api.md); Go to Line shows the caret
 position as its placeholder. Extension tests cannot send Tab, so native Tab is
 covered by the `InputView` test only.
 
-### 2. Picker tab placeholders and Search Everywhere
+### 2. Picker tab placeholders and Search Everywhere ✅ (pending review gate)
 
 Deliverables:
 

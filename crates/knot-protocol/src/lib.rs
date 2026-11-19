@@ -465,6 +465,9 @@ pub enum ViewContentKind {
 pub struct PickerTab {
     pub id: String,
     pub label: String,
+    /// Shown in the empty query field while the tab is active.
+    #[serde(default)]
+    pub placeholder: Option<String>,
 }
 
 /// One selectable row offered to an extension picker.

@@ -90,8 +90,14 @@ test("Search Everywhere asks for each tab and lists files and actions", async ()
   await host.run(SEARCH_EVERYWHERE_COMMAND);
 
   const [shown] = host.prompts();
-  const options = shown?.options as { title: string; tabs: { id: string }[] };
+  const options = shown?.options as { title: string; tabs: { id: string; placeholder?: string }[] };
   assert.deepEqual(options.tabs.map((tab) => tab.id), ["all", "buffers", "files", "actions"]);
+  assert.deepEqual(options.tabs.map((tab) => tab.placeholder), [
+    "Search everything",
+    "Search open buffers",
+    "Search files",
+    "Search actions",
+  ]);
   const [all, files, actions] = host.pickerRows();
   assert.equal(all?.length, 3, "an empty All tab lists files only");
   assert.deepEqual(files?.map((row) => row.label), all?.map((row) => row.label));

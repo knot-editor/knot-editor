@@ -1815,6 +1815,7 @@ impl KnotWindow {
                         .map(|tab| PickerTab {
                             id: tab.id,
                             label: tab.label,
+                            placeholder: tab.placeholder,
                         })
                         .collect(),
                     initial_tab,

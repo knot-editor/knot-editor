@@ -99,6 +99,11 @@ impl TextInput {
         cx.emit(TextInputEvent::Changed);
     }
 
+    #[cfg(test)]
+    pub(crate) fn placeholder(&self) -> &str {
+        &self.placeholder
+    }
+
     pub(crate) fn set_placeholder(
         &mut self,
         placeholder: impl Into<SharedString>,
