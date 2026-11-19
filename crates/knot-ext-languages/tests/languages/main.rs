@@ -5,6 +5,7 @@ mod editing;
 mod folds;
 mod highlights;
 mod indents;
+mod paste;
 mod typing;
 
 /// One product runs every topic: starting the language packages compiles
@@ -17,6 +18,7 @@ fn bundled_language_cases_run_on_their_registered_languages(cx: &mut gpui::TestA
     folds::check(&product, cx);
     highlights::check(&product, cx);
     indents::check(&product, cx);
+    paste::check_all(&product, cx);
 }
 
 mod bundled {

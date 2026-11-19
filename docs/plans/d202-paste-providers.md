@@ -1,6 +1,6 @@
 # D202: Language paste providers, and URL-over-selection links in Markdown
 
-Status: 🚧 approved, not started. Roadmap item [D202](../roadmap.md).
+Status: 🚧 checkpoint 1 implemented, awaiting review. Roadmap item [D202](../roadmap.md).
 
 ## Outcome
 
@@ -61,14 +61,14 @@ user.
 
 - None. The checkpoint 1 review may rename the method or request fields.
 
-## Checkpoint 1 — Native paste hook and Markdown links
+## Checkpoint 1 — Native paste hook and Markdown links ✅ (review gate pending)
 
 Deliverables:
-- Native paste asks `editor.paste.<languageId>` when one is registered,
+- ✅ Native paste asks `editor.paste.<languageId>` when one is registered,
   revalidates, and applies the answer as one undo step.
-- `providePaste` request and result types in `knot.d.ts`, documented in the
+- ✅ `providePaste` request and result types in `knot.d.ts`, documented in the
   extension guide next to `editor.completion`.
-- `@knot/language-markdown` registers the provider for both Markdown
+- ✅ `@knot/language-markdown` registers the provider for both Markdown
   languages.
 
 Validation:
