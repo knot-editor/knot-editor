@@ -8,6 +8,30 @@ use knot_model::typography::FontSettings;
 /// The reference text size, which chrome and text inputs scale from.
 pub(crate) const TEXT_SIZE: f32 = 14.;
 
+/// Turns off macOS font smoothing for this application, so glyphs rasterize
+/// at their natural stem weight like Ghostty's, not thickened by the
+/// emulated CoreGraphics dilation. Must run before the first glyph paints.
+#[cfg(target_os = "macos")]
+pub(crate) fn disable_font_smoothing() {
+    use core_foundation::{base::TCFType, number::CFNumber, string::CFString};
+    use core_foundation_sys::preferences::{
+        CFPreferencesSetAppValue, kCFPreferencesCurrentApplication,
+    };
+
+    let key = CFString::new("AppleFontSmoothing");
+    let value = CFNumber::from(0i32);
+    unsafe {
+        CFPreferencesSetAppValue(
+            key.as_concrete_TypeRef(),
+            value.as_CFTypeRef(),
+            kCFPreferencesCurrentApplication,
+        );
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub(crate) fn disable_font_smoothing() {}
+
 /// The regular-style font for `settings`; use [`bold`] and [`italic`] for
 /// its variants.
 pub(crate) fn font(settings: &FontSettings) -> Font {

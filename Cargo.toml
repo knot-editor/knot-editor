@@ -119,6 +119,10 @@ v8 = { workspace = true }
 rusqlite = { workspace = true }
 pollster = { workspace = true, optional = true }
 
+[target.'cfg(target_os = "macos")'.dependencies]
+core-foundation = "0.9.4"
+core-foundation-sys = "0.8"
+
 [target.'cfg(windows)'.dependencies]
 windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
 winreg = { workspace = true }

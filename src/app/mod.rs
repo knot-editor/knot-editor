@@ -180,5 +180,6 @@ pub fn run(
             |error| tracing::warn!(target: "knot::launch", "launch socket unavailable: {error}"),
         )
         .ok();
+    typography::disable_font_smoothing();
     product::run(create_application(), batch, listener, packages);
 }

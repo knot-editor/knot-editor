@@ -3772,6 +3772,8 @@ name = "knot"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "core-foundation 0.9.4",
+ "core-foundation-sys",
  "directories",
  "futures",
  "gpui-component",
