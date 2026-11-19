@@ -238,6 +238,30 @@ mod tests {
     }
 
     #[test]
+    fn closing_a_pane_returns_to_the_previously_focused_one() {
+        let document = DocumentId::new(6);
+        let workbench = &mut Workbench::new_for_document(document);
+        let first = workbench.focused_pane_id().unwrap();
+        let second = workbench
+            .split_focused(SplitDirection::Vertical, SplitPlacement::After)
+            .unwrap();
+        let third = workbench
+            .split_focused(SplitDirection::Horizontal, SplitPlacement::After)
+            .unwrap();
+        let tab = workbench.focused_pane().unwrap().active_tab_id();
+
+        let transition = match workbench
+            .request_close_tab(third, tab, document, false, 3)
+            .unwrap()
+        {
+            CloseRequestOutcome::Closed(transition) => transition,
+            CloseRequestOutcome::Pending(_) => panic!("another view remains"),
+        };
+        assert_eq!(transition.focused_pane, Some(second));
+        assert_ne!(transition.focused_pane, Some(first));
+    }
+
+    #[test]
     fn dirty_final_view_waits_for_confirmation_and_last_tab_can_empty_workbench() {
         let document = DocumentId::new(5);
         let workbench = &mut Workbench::new_for_document(document);

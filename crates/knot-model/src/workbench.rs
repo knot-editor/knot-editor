@@ -610,17 +610,25 @@ impl Workbench {
     }
 
     /// Keep focus on a painted pane: when the focused pane is gone or
-    /// hidden, focus moves to `preferred`'s pane, then the center's, else to
-    /// the empty center. Docks take focus only when asked to.
+    /// hidden, focus returns to the previously focused pane if it is in
+    /// `preferred`'s area, else moves to `preferred`'s pane, then the
+    /// center's, else to the empty center. Docks take focus only when asked
+    /// to.
     fn settle_focus(&mut self, preferred: Option<Area>) {
         if self.focused_pane.is_some_and(|pane| self.pane_shown(pane)) {
             return;
         }
-        let candidate = preferred
-            .into_iter()
-            .chain([Area::Center])
-            .filter(|area| self.area_shown(*area))
-            .find_map(|area| self.area_focus(area));
+        let previous = self.previous_pane_id().filter(|pane| {
+            preferred.is_some_and(|area| self.pane_area(*pane) == Some(area))
+                && self.pane_shown(*pane)
+        });
+        let candidate = previous.or_else(|| {
+            preferred
+                .into_iter()
+                .chain([Area::Center])
+                .filter(|area| self.area_shown(*area))
+                .find_map(|area| self.area_focus(area))
+        });
         self.focused_pane = candidate;
         if let Some(pane) = candidate {
             let area = self.pane_area(pane).unwrap();
