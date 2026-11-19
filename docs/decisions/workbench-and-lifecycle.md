@@ -95,7 +95,7 @@ in the `knot-terminal` crate with a `portable-pty` PTY. It is preferred over
 `alacritty_terminal` since libghostty-vt 1.0 has a stable, semver C ABI: its
 mode-aware key and mouse encoders cover the Kitty keyboard protocol,
 modifyOtherKeys, and every mouse format, which Knot would otherwise encode
-itself, and its callbacks expose OSC 7 and the protocols D041 needs, which
+itself, and its callbacks expose OSC 7, titles, bells, and desktop notifications, which
 Alacritty does not parse. Before 1.0, the pre-1.0 FFI, the Zig toolchain, and
 slow debug-build parsing outweighed that advantage.
 
@@ -114,6 +114,11 @@ is limited to HTTP(S) to bound link policy, and validating on release keeps
 changing output from opening a stale destination. Physical application-keypad
 support stays deferred rather than vendoring gpui to recover its missing key
 identity.
+
+A name set with Rename Session wins over a program's title, because the name
+is a deliberate choice while shells and programs rewrite their title at every
+prompt; a title that replaced it would undo the rename on the next command.
+Titles are not persisted, since a restored session starts a new shell.
 
 A terminal opened from a terminal starts in that terminal's directory, as
 iTerm, Ghostty, and Zed's split do: someone working in a terminal wants the

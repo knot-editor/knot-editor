@@ -585,8 +585,11 @@ opened into. The Terminal container, New Terminal, New Terminal in Editor, and
 `terminal.toggle` (ctrl-`) belong to the bundled `@knot/chrome` package;
 the engine, restore, and sessions stay native. A terminal is labelled after its
 shell with the lowest free ` (N)` suffix from 2 in its window, and reads the
-same in the tool window and the center; Rename Session sets a name, which
-layouts keep. `terminals.open` takes the destination as `location`, `"editor"`
+same in the tool window and the center. While the program has set a non-empty
+title (OSC 0 or 2) the tab shows it instead, without a suffix; Rename Session
+sets a name that wins over any title, and layouts keep only such explicit
+names, since a restored session starts a new shell. Terminal tab labels end
+with an ellipsis at a maximum width, and the tooltip shows the full label. `terminals.open` takes the destination as `location`, `"editor"`
 or a container's view ID. Window layouts restore a container's terminals in
 it, and a layout naming a container that has not registered drops its tabs.
 
@@ -659,8 +662,21 @@ Focus reports require both exact view focus and native window activation. Detach
 reports focus loss before handoff; stopped or detached views cannot write input.
 Keyboard/paste reveals the live grid, while focus reports and emulator replies
 preserve scrollback. Paste uses the PTY channel, normalizing plain input and
-sanitizing bracketed paste. OSC 52, title, and bell events do not access product
-features or the clipboard; additional protocols remain deferred in the roadmap.
+sanitizing bracketed paste. OSC 52 does not access the clipboard; additional
+protocols remain deferred in the roadmap.
+
+A bell rung while the terminal's tab is not shown, because another tab of its
+pane is active or its tool window is hidden, marks the tab with a `bell-ring`
+icon in the `notification.info` color and, unless a contributed badge is set,
+the hidden tool window's stripe button with the info dot. The workbench model
+keeps the marked tabs and clears a mark when its tab is shown. A bell in a
+shown terminal does nothing. A desktop notification (OSC 9 or 777) raises an
+`info` [notice](#notifications) in the window holding the terminal, even while
+it is focused: the title is the program's, or the tab label when it gives none,
+and the message is the body. Its "Show Terminal" action runs `terminal.show`
+with the session number, which reveals the tool window, shows the tab, and
+focuses it. A session turns these engine events into gpui events, and the
+application applies them in the window whose workbench holds the session.
 
 A mouse press chooses application reporting or local selection through release,
 even if modifiers change. Shift forces local interaction. Local selection is

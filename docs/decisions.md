@@ -170,7 +170,8 @@ touches.
 - [Workbench navigation](decisions/workbench-and-lifecycle.md#workbench-navigation):
   a command for every operation; momentary state is never recorded.
 - [Terminal](decisions/workbench-and-lifecycle.md#terminal): libghostty-vt from
-  prebuilt static archives; sessions outlive their single attachment; user
+  prebuilt static archives; sessions outlive their single attachment; an explicit name beats a program's
+  title; user
   preferences as new-session defaults, scrollback deferred for engine support.
 - [Window layouts and restoration by position](decisions/workbench-and-lifecycle.md#window-layouts-and-restoration-by-position):
   one versioned JSON layout for hot exit and project sessions.
