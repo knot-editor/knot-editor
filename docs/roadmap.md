@@ -28,7 +28,7 @@ point.
 
 ## Next up
 
-- D151 — Smaller Vim commands
+- 🚧 D151 — Smaller Vim commands
 - D022 — Editor autocompletion.
 - D182 — Interleave extension roots at awaits: before D067.
 - D087 — Extension entitlements: D085, D126, D067, and D101 need it.
@@ -501,21 +501,20 @@ Kakoune mode could use them too. The
     decide whether the preview needs a native expansion primitive so that it
     matches what `replace` would write.
 
-- **D151 — Smaller Vim commands**
-  - Depends on: D144, D061
-  - Description: The first Vim mode covers the commands of its scope. Commands
-    outside it that daily editing may reach for are missing: `r<cr>` replacing
-    characters with a line break; `J` leaving out the space before a `)`; `gJ`
-    joining without spaces; a repeated `i(` or `a(` in visual mode growing the
-    selection to the enclosing pair; sentence motions and objects (`( )`, `is`,
-    `as`); tag objects (`it`, `at`); `gp`, `gP`, and `]p`; `_` and `|`; `gi`;
-    and `ga`; and the `ctrl-w` keys that need workbench commands: `n` an empty
-    pane (with the empty-pane handling of D061), counts on `ctrl-w h j k l`
-    (they need native counts, as every child command keeps the pane its parent
-    started in), and `x` `r` `R` swapping and rotating panes. Do it when daily
-    Vim use reaches for one of them: add it inside the Vim package over
-    existing primitives, with cases beside the others. Tag objects wait for
-    D144's syntax-tree queries.
+- **D151 — Smaller Vim commands** 🚧
+  - Depends on: none
+  - Description: Counted `ctrl-w` focus keys, `r<cr>`, `J` and `gJ`, `_`, `|`,
+    `gi`, `ga`, `gp`, `gP`, `]p`, growing visual `i(` and `a(`, and sentence
+    motions and objects, inside the Vim package. Planned in
+    [d151-smaller-vim-commands](plans/d151-smaller-vim-commands.md). Tag
+    objects (`it`, `at`) wait for D144, and `ctrl-w n` for D061.
+
+- **D208 — Vim pane swap and rotate**
+  - Depends on: none
+  - Description: `ctrl-w x`, `r`, and `R` swap and rotate panes, which the
+    workbench has no commands for. Do it when daily Vim use reaches for one:
+    add the layout operations to the workbench in `knot-model`, expose them
+    as commands, and bind the keys in the Vim package.
 
 - **D152 — Persistent Vim global marks**
   - Depends on: none
