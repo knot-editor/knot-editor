@@ -62,15 +62,21 @@ test("a range takes numbers, marks, offsets and %", () => {
 });
 
 test("commands take Vim's abbreviations and a bang", () => {
-  for (const line of ["w", "wr", "write", ":w", "  w  "]) assert.deepEqual(parseEx(line), { kind: "write" });
+  for (const line of ["w", "wr", "write", ":w", "  w  "]) assert.deepEqual(parseEx(line), { kind: "write", path: null, force: false });
   assert.deepEqual(parseEx("q"), { kind: "quit", force: false });
   assert.deepEqual(parseEx("quit!"), { kind: "quit", force: true });
   assert.deepEqual(parseEx("wq"), { kind: "write-quit", ifChanged: false });
   for (const line of ["x", "xit", "exi", "exit"]) {
     assert.deepEqual(parseEx(line), { kind: "write-quit", ifChanged: true });
   }
-  assert.deepEqual(parseEx("e src/main.ts"), { kind: "edit", path: "src/main.ts" });
-  assert.deepEqual(parseEx("edit! a b"), { kind: "edit", path: "a b" });
+  assert.deepEqual(parseEx("e src/main.ts"), { kind: "edit", path: "src/main.ts", force: false });
+  assert.deepEqual(parseEx("edit! a b"), { kind: "edit", path: "a b", force: true });
+  assert.deepEqual(parseEx("e!"), { kind: "edit", path: null, force: true });
+  assert.deepEqual(parseEx("w out.txt"), { kind: "write", path: "out.txt", force: false });
+  assert.deepEqual(parseEx("w! out.txt"), { kind: "write", path: "out.txt", force: true });
+  assert.deepEqual(parseEx("sav a.txt"), { kind: "save-as", path: "a.txt", force: false });
+  assert.deepEqual(parseEx("saveas! a.txt"), { kind: "save-as", path: "a.txt", force: true });
+  assert.deepEqual(parseEx("sav"), { kind: "error", message: "E471: Argument required" });
   assert.deepEqual(parseEx(""), { kind: "none" });
   assert.deepEqual(parseEx(":"), { kind: "none" });
 });
@@ -84,8 +90,8 @@ test("lines go to a number or the last line", () => {
 test("unknown commands and arguments are errors", () => {
   assert.deepEqual(parseEx("frob"), { kind: "error", message: "E492: Not an editor command: frob" });
   assert.deepEqual(parseEx("ex"), { kind: "error", message: "E492: Not an editor command: ex" });
-  assert.deepEqual(parseEx("w other.txt"), { kind: "error", message: "E488: Trailing characters: other.txt" });
-  assert.deepEqual(parseEx("e"), { kind: "edit", path: null });
+  assert.deepEqual(parseEx("wq other.txt"), { kind: "error", message: "E488: Trailing characters: other.txt" });
+  assert.deepEqual(parseEx("e"), { kind: "edit", path: null, force: false });
   assert.deepEqual(parseEx("2,3w"), { kind: "error", message: "E481: No range allowed" });
   assert.deepEqual(parseEx("s"), { kind: "error", message: "E492: Not an editor command: s" });
 });
@@ -147,10 +153,10 @@ const values = async (line: string) => (await completeEx(line)).map((item) => it
 
 test("command names complete, in the order of the matcher", async () => {
   assert.deepEqual(await values("w"), ["write", "wq"]);
-  assert.deepEqual(await values("se"), ["set", "nohlsearch", "substitute"]);
+  assert.deepEqual(await values("se"), ["set", "saveas", "nohlsearch", "substitute"]);
   assert.deepEqual(await values(":q"), [":quit", ":wq"]);
   assert.deepEqual(await values("zz"), []);
-  assert.equal((await values("")).length, 11);
+  assert.equal((await values("")).length, 12);
 });
 
 test("line numbers and other arguments get no items", async () => {

@@ -91,3 +91,119 @@ fn without_a_files_provider_the_path_still_opens(cx: &mut TestAppContext) {
     fixture.editor.press_unsettled(&keys, cx);
     opened(&fixture, "fn main() {}", cx);
 }
+
+fn read(fixture: &Fixture, name: &str) -> String {
+    std::fs::read_to_string(fixture.directory.join(name)).unwrap()
+}
+
+/// Opens `name` of the fixture's directory in the active tab.
+fn open_file(fixture: &Fixture, name: &str, text: &str, cx: &mut TestAppContext) {
+    let keys = format!(":e {}/{name}<cr>", fixture.directory.display());
+    fixture.editor.press_unsettled(&keys, cx);
+    opened(fixture, text, cx);
+    // Vim follows the opened editor a moment later.
+    wait_until(cx, |cx| {
+        fixture.editor.active_contexts(cx) == ["vim.normal"]
+    });
+}
+
+#[gpui::test]
+fn e_bang_reverts_the_document_to_its_file_and_undo_takes_it_back(cx: &mut TestAppContext) {
+    let fixture = fixture(false, cx);
+    open_file(&fixture, "README.md", "# readme", cx);
+    fixture.editor.press("A!<esc>", cx);
+    assert_eq!(fixture.editor.active_text(cx), "# readme!");
+    assert!(fixture.editor.active_is_dirty(cx));
+    fixture.editor.press_unsettled(":e!<cr>", cx);
+    opened(&fixture, "# readme", cx);
+    assert!(!fixture.editor.active_is_dirty(cx));
+    wait_until(cx, |cx| {
+        fixture.editor.active_contexts(cx) == ["vim.normal"]
+    });
+    fixture.editor.press("u", cx);
+    assert_eq!(fixture.editor.active_text(cx), "# readme!");
+}
+
+#[gpui::test]
+fn e_bang_with_a_path_discards_the_changes_and_opens_the_file(cx: &mut TestAppContext) {
+    let fixture = fixture(false, cx);
+    open_file(&fixture, "README.md", "# readme", cx);
+    fixture.editor.press("A!<esc>", cx);
+    let keys = format!(":e! {}/src/main.rs<cr>", fixture.directory.display());
+    fixture.editor.press_unsettled(&keys, cx);
+    opened(&fixture, "fn main() {}", cx);
+    assert_eq!(read(&fixture, "README.md"), "# readme");
+    wait_until(cx, |cx| {
+        !fixture
+            .editor
+            .tab_titles(cx)
+            .contains(&"README.md".to_owned())
+    });
+}
+
+#[gpui::test]
+fn w_with_a_path_writes_a_copy_and_keeps_the_document(cx: &mut TestAppContext) {
+    let fixture = fixture(false, cx);
+    open_file(&fixture, "README.md", "# readme", cx);
+    fixture.editor.press("A!<esc>", cx);
+    fixture.editor.press_unsettled(":w copy.md<cr>", cx);
+    wait_until(cx, |_| fixture.directory.join("copy.md").exists());
+    assert_eq!(read(&fixture, "copy.md"), "# readme!");
+    assert_eq!(read(&fixture, "README.md"), "# readme");
+    assert_eq!(fixture.editor.active_title(cx), "README.md");
+    assert!(fixture.editor.active_is_dirty(cx));
+}
+
+#[gpui::test]
+fn an_existing_target_needs_a_bang(cx: &mut TestAppContext) {
+    let fixture = fixture(false, cx);
+    open_file(&fixture, "README.md", "# readme", cx);
+    fixture.editor.press("A!<esc>", cx);
+    fixture.editor.press_unsettled(":w src/main.rs<cr>", cx);
+    wait_until(cx, |cx| {
+        fixture
+            .editor
+            .status(cx)
+            .0
+            .iter()
+            .any(|item| item.starts_with("E13"))
+    });
+    assert_eq!(read(&fixture, "src/main.rs"), "fn main() {}");
+    fixture.editor.press_unsettled(":w! src/main.rs<cr>", cx);
+    wait_until(cx, |_| read(&fixture, "src/main.rs") == "# readme!");
+    fixture
+        .editor
+        .press_unsettled(":sav src/ui/button.rs<cr>", cx);
+    wait_until(cx, |cx| {
+        fixture
+            .editor
+            .status(cx)
+            .0
+            .iter()
+            .any(|item| item.starts_with("E13"))
+    });
+    assert_eq!(read(&fixture, "src/ui/button.rs"), "struct Button;");
+    assert_eq!(fixture.editor.active_title(cx), "README.md");
+}
+
+#[gpui::test]
+fn sav_writes_the_document_and_becomes_the_new_file(cx: &mut TestAppContext) {
+    let fixture = fixture(false, cx);
+    open_file(&fixture, "README.md", "# readme", cx);
+    fixture.editor.press("A!<esc>", cx);
+    fixture.editor.press_unsettled(":sav notes.md<cr>", cx);
+    wait_until(cx, |_| fixture.directory.join("notes.md").exists());
+    wait_until(cx, |cx| fixture.editor.active_title(cx) == "notes.md");
+    assert_eq!(read(&fixture, "notes.md"), "# readme!");
+    assert_eq!(read(&fixture, "README.md"), "# readme");
+    assert!(!fixture.editor.active_is_dirty(cx));
+}
+
+#[gpui::test]
+fn w_with_a_path_names_an_untitled_document(cx: &mut TestAppContext) {
+    let fixture = fixture(false, cx);
+    fixture.editor.press_unsettled(":w fresh.txt<cr>", cx);
+    wait_until(cx, |cx| fixture.editor.active_title(cx) == "fresh.txt");
+    assert_eq!(read(&fixture, "fresh.txt"), "scratch");
+    assert!(!fixture.editor.active_is_dirty(cx));
+}

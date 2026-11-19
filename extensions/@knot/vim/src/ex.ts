@@ -37,11 +37,16 @@ export type SubstituteFlags = {
 };
 
 export type ExCommand =
-  | { readonly kind: "write" }
+  /** `:w`, or `:w <file>`, which writes a copy; `force` replaces an existing file. */
+  | { readonly kind: "write"; readonly path: string | null; readonly force: boolean }
+  /** `:sav <file>`: the document becomes that file's, written now. */
+  | { readonly kind: "save-as"; readonly path: string; readonly force: boolean }
   | { readonly kind: "quit"; readonly force: boolean }
   /** `:wq`, or with `ifChanged` `:x`, which writes only a changed document. */
   | { readonly kind: "write-quit"; readonly ifChanged: boolean }
-  | { readonly kind: "edit"; readonly path: string | null }
+  /** `:e`, or `:e!`, which discards the document's changes: without a path it
+   * reverts the document to its file, with one it opens that file instead. */
+  | { readonly kind: "edit"; readonly path: string | null; readonly force: boolean }
   /** `:<line>`, 1-based, or null for `:$`. */
   | { readonly kind: "line"; readonly line: number | null }
   | { readonly kind: "set"; readonly arguments: readonly SetArgument[] }
@@ -64,7 +69,7 @@ export type ExCommand =
 
 /** Command names, each with the shortest abbreviation Vim accepts. */
 const NAMES: readonly (readonly [string, number])[] = [
-  ["write", 1], ["quit", 1], ["wq", 2], ["xit", 1], ["exit", 3], ["edit", 1], ["set", 2],
+  ["write", 1], ["quit", 1], ["wq", 2], ["xit", 1], ["exit", 3], ["edit", 1], ["set", 2], ["saveas", 3],
   ["nohlsearch", 3], ["substitute", 1], ["split", 2], ["vsplit", 2],
 ];
 
@@ -103,11 +108,14 @@ export function parseEx(text: string): ExCommand {
   if (range !== null) return error("E481: No range allowed");
   if (name === "set") return parseSet(argument);
   if (name === "edit") {
-    return { kind: "edit", path: argument === "" ? null : argument };
+    return { kind: "edit", path: argument === "" ? null : argument, force };
+  }
+  if (name === "write") return { kind: "write", path: argument === "" ? null : argument, force };
+  if (name === "saveas") {
+    return argument === "" ? error("E471: Argument required") : { kind: "save-as", path: argument, force };
   }
   if (argument !== "") return error(`E488: Trailing characters: ${argument}`);
   switch (name) {
-    case "write": return { kind: "write" };
     case "nohlsearch": return { kind: "nohlsearch" };
     case "quit": return { kind: "quit", force };
     case "split": return { kind: "split", direction: "down" };

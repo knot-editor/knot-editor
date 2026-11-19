@@ -1,6 +1,6 @@
 // Runs the Ex line `:` opens in one followed editor, over native commands
 // and document-scoped settings, and returns the message it leaves.
-import { commands, documents, providers, settings, workbench, workspaces } from "knot";
+import { commands, documents, files, providers, settings, workbench, workspaces } from "knot";
 import type { IconRef, InputCompletion } from "knot";
 import {
   type Address, type BooleanOption, completeEx, directoryOf, type ExCommand, fileCompletionTarget, parseEx, pathOfUri, resolvePath,
@@ -96,8 +96,9 @@ async function runEx(state: State, command: ExCommand): Promise<string | null> {
       await run(state, { kind: "motion", motion: "last-line", count: command.line });
       return null;
     case "write":
-      await commands.invoke("file.save");
-      return null;
+      return command.path === null ? save(state) : writeTo(state, command.path, command.force);
+    case "save-as":
+      return saveAs(state, command.path, command.force);
     case "quit":
       await workbench.close(state.target, { discard: command.force });
       return null;
@@ -110,7 +111,7 @@ async function runEx(state: State, command: ExCommand): Promise<string | null> {
       return null;
     }
     case "edit":
-      return edit(state, command.path);
+      return edit(state, command.path, command.force);
     case "set":
       return set(state, command.arguments);
     case "substitute":
@@ -241,12 +242,78 @@ async function baseDirectory(state: State): Promise<string | null> {
   return (await workspaces.get(state.target.window))?.roots[0]?.uri ?? null;
 }
 
-/** `:e`: opens `path` in the base directory; without one it does nothing. */
-async function edit(state: State, path: string | null): Promise<string | null> {
-  if (path === null) return null;
+/** The code of a failed host call, or its text. */
+function failure(error: unknown): string {
+  return (error as { code?: string }).code ?? String(error);
+}
+
+async function save(state: State): Promise<null> {
+  await commands.invoke("file.save");
+  return null;
+}
+
+/** The URI `path` names for a write, or a message when it cannot be resolved
+ * or exists and `force` is off, as Vim's `E13`. */
+async function writeTarget(state: State, path: string, force: boolean): Promise<{ uri: string } | string> {
+  const uri = resolvePath(path, await baseDirectory(state));
+  if (uri === null) return `No directory to write ${path} in`;
+  if (!force && (await files.stat(uri)) !== null && uri !== (await documents.get(state.document))?.resourceUri) {
+    return "E13: File exists (add ! to override)";
+  }
+  return { uri };
+}
+
+/** `:w <file>`: writes a copy and leaves a document that has a file as it is;
+ * an untitled document becomes the file's. */
+async function writeTo(state: State, path: string, force: boolean): Promise<string | null> {
+  const target = await writeTarget(state, path, force);
+  if (typeof target === "string") return target;
+  const document = await documents.get(state.document);
+  if (document === null) return null;
+  try {
+    if (target.uri === document.resourceUri) return save(state);
+    if (document.resourceUri === null) await documents.save(state.document, { uri: target.uri });
+    else await files.writeText(target.uri, (await state.buffer.snapshot()).text);
+  } catch (error) {
+    return `Cannot write ${path}: ${failure(error)}`;
+  }
+  return null;
+}
+
+/** `:sav <file>`: writes the document to the file, which it then is. */
+async function saveAs(state: State, path: string, force: boolean): Promise<string | null> {
+  const target = await writeTarget(state, path, force);
+  if (typeof target === "string") return target;
+  try {
+    await documents.save(state.document, { uri: target.uri });
+  } catch (error) {
+    return `Cannot write ${path}: ${failure(error)}`;
+  }
+  return null;
+}
+
+/** `:e`: opens `path` in the base directory; without one it does nothing. `:e!`
+ * discards the document's changes: it reverts to its file, or is closed once
+ * `path` is open. */
+async function edit(state: State, path: string | null, force: boolean): Promise<string | null> {
+  if (path === null) return force ? revert(state) : null;
   const resolved = resolvePath(path, await baseDirectory(state));
   if (resolved === null) return `No directory to open ${path} in`;
-  return open(resolved, path);
+  if (!force) return open(resolved, path);
+  if (resolved === (await documents.get(state.document))?.resourceUri) return revert(state);
+  const message = await open(resolved, path);
+  if (message === null) await workbench.close(state.target, { discard: true });
+  return message;
+}
+
+/** `:e!` alone: the document's text becomes its file's, undoably. */
+async function revert(state: State): Promise<string | null> {
+  try {
+    await documents.reload(state.document);
+  } catch (error) {
+    return (error as { code?: string }).code === "ResourceNotFound" ? "E32: No file name" : `Cannot reload: ${failure(error)}`;
+  }
+  return null;
 }
 
 /** Opens the resource `uri`, named `name` in a failure message. */
@@ -254,7 +321,7 @@ async function open(uri: string, name: string): Promise<string | null> {
   try {
     await documents.open(uri);
   } catch (error) {
-    return `Cannot open ${name}: ${(error as { code?: string }).code ?? String(error)}`;
+    return `Cannot open ${name}: ${failure(error)}`;
   }
   return null;
 }
