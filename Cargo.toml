@@ -173,3 +173,7 @@ opt-level = 3
 
 [profile.dev.package.knot-protocol]
 opt-level = 3
+
+# Nightly and release app builds keep file and line tables so backtraces are readable.
+[profile.release]
+debug = "line-tables-only"
