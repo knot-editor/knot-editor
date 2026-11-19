@@ -1,6 +1,6 @@
 # D146: Broad Ex command set
 
-Status: 🚧 approved, not started. Roadmap item [D146](../roadmap.md).
+Status: 🚧 in progress; checkpoint 1 implemented, awaiting its review gate. Roadmap item [D146](../roadmap.md).
 Builds on the [bundled Vim mode](../decisions/bundled-packages.md#bundled-vim-mode)
 in [`extensions/@knot/vim/`](../../extensions/@knot/vim/).
 
@@ -83,7 +83,7 @@ Only the checkpoints that touch real files or native menus have a manual
 gate; the others are validated by automated tests alone, and their gate is a
 passing `just check`, so they can run back to back.
 
-### 1. File commands: `:e!`, `:w <file>`, `:sav`
+### 1. File commands: `:e!`, `:w <file>`, `:sav` ✅ (review gate pending)
 
 Deliverables: the `documents.reload`, `documents.save(id, { uri? })`, and
 `files.writeText` host operations and their `knot.d.ts` contracts; `:e!`,
@@ -96,8 +96,14 @@ retargets with `uri`, a failure keeps identity), and `files.writeText`
 (creates, overwrites, refreshes the file index); Vim product tests for each
 command's resulting text, document identity, dirty state, and file contents.
 
-Review gate (manual): `Try:` commands that dirty a real file and revert it,
-write a copy, and save as, checking the tab title and the files on disk.
+Review gate (manual, ⏳): `Try: Ex files, set up a dirty original.txt` opens a
+dirty file in `/tmp/knot-try-ex`; run `:e!`, `:w copy.txt`, `:w other.txt`
+(E13), `:w! other.txt`, and `:sav saved.txt`, checking the tab title and the
+files on disk (`Try: Ex files, open the files on disk`).
+
+Done: the host operations (`documents.save` writes at the application level
+without the window's save-cleanup), `E13` check, and the Ex commands, with
+product tests.
 
 **Implementation context**: `reload` in `src/app/product/document_watch.rs`
 is fire-and-forget; give it a completion the host operation awaits.
