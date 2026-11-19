@@ -797,7 +797,7 @@ fn packages_with_chrome() -> &'static [knot_bundled::BundledSource] {
 
 /// A motion and an edit cost a bounded number of host requests across every
 /// extension that reacts to the key: Vim's reads and writes, the status
-/// bar's position, and word highlight.
+/// bar's position, and word highlight, which clears its highlights on an edit.
 #[gpui::test]
 fn a_key_costs_a_bounded_number_of_requests_across_extensions(cx: &mut TestAppContext) {
     let product = TestProduct::start_with_post_init(packages_with_chrome(), Some(ENABLE), cx);
@@ -807,7 +807,7 @@ fn a_key_costs_a_bounded_number_of_requests_across_extensions(cx: &mut TestAppCo
     test_editor.work_per_key(&["l"], cx);
     let keys = ["j", "w", "x"];
     // At most this many foreground requests per key.
-    let bounds = [10, 8, 13];
+    let bounds = [10, 8, 15];
     let counts = test_editor.work_per_key(&keys, cx);
     let report = keys
         .iter()

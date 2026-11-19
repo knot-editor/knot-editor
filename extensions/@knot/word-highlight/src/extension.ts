@@ -1,7 +1,9 @@
 // Word highlight: after the caret rests for a moment, highlights every
 // whole-word occurrence of the word under it, or the other occurrences of a
 // single-line selection, in the editor each window describes. Highlights are
-// that editor's own, so other views of the buffer never show them.
+// that editor's own, so other views of the buffer never show them. An edit
+// clears them and they stay away until the caret is moved on purpose, so the
+// word being typed is never highlighted.
 import { settings, workbench } from "knot";
 import type { Buffer, ByteRange, Disposable, EditorHandle, EditorSelection, ViewTarget, WindowInfo, WindowTarget } from "knot";
 import { SELECTION_COLOR, WORD_COLOR, decorations, selectionQuery, SELECTION_LIMIT } from "./highlight.js";
@@ -15,6 +17,12 @@ type Follow = {
   disposables: Disposable[];
   /** The selection the last notification carried; read when none has. */
   selection: EditorSelection | null;
+  /** An edit just happened, so the next caret move is probably it moving the
+   * caret, not the user; cleared by that move or after a moment. */
+  edited: boolean;
+  /** An edit cleared the highlights and the caret has not moved on its own
+   * since. */
+  hidden: boolean;
   timer: ReturnType<typeof setTimeout> | null;
   running: boolean;
   /** A change arrived while a run was in flight, joined into one more run. */
@@ -34,7 +42,10 @@ type Wanted = {
   skip: ByteRange | null;
 };
 
-let delay = 75;
+let delay = 250;
+
+/** Milliseconds after an edit in which a caret move is taken to come from it. */
+const EDIT_WINDOW = 50;
 
 function isGone(error: unknown) {
   const code = (error as { code?: string }).code;
@@ -69,7 +80,7 @@ async function wanted(handle: EditorHandle, buffer: Buffer, selection: EditorSel
 async function update(follow: Follow) {
   const { handle, buffer } = follow;
   if (handle === null || buffer === null) return;
-  const want = await wanted(handle, buffer, follow.selection ?? await handle.selection());
+  const want = follow.hidden ? null : await wanted(handle, buffer, follow.selection ?? await handle.selection());
   const key = want === null ? null : `${want.color}\u0000${want.text}`;
   if (key === follow.shown) return;
   let items: ReturnType<typeof decorations> = [];
@@ -120,8 +131,17 @@ function schedule(follow: Follow) {
   }
   follow.timer = setTimeout(() => {
     follow.timer = null;
+    follow.hidden = false;
     return run(follow);
   }, delay);
+}
+
+/** Clears the highlights and cancels the pending update. */
+function hide(follow: Follow) {
+  if (follow.timer !== null) clearTimeout(follow.timer);
+  follow.timer = null;
+  follow.hidden = true;
+  return run(follow);
 }
 
 async function release(follow: Follow) {
@@ -148,14 +168,14 @@ async function release(follow: Follow) {
 
 export async function start() {
   await defineSettings();
-  delay = (await settings.get(DELAY)) ?? 75;
+  delay = (await settings.get(DELAY)) ?? 250;
   const follows = new Map<WindowTarget, Follow>();
 
   // Follows the window's status target, the editor its caret belongs to.
   const follow = async (info: WindowInfo) => {
     const window = info.target;
     const current: Follow = follows.get(window) ?? {
-      target: null, buffer: null, handle: null, disposables: [], selection: null, timer: null, running: false, pending: false, shown: null,
+      target: null, buffer: null, handle: null, disposables: [], selection: null, edited: false, hidden: false, timer: null, running: false, pending: false, shown: null,
     };
     follows.set(window, current);
     if (current.target === info.statusTarget) return;
@@ -170,15 +190,28 @@ export async function start() {
         const handle = await workbench.editor(info.statusTarget);
         current.buffer = buffer;
         current.handle = handle;
-        const changed = (selection: EditorSelection) => {
+        // A caret move right after an edit is typing or another edit moving
+        // the caret, not the user navigating.
+        const changed = async (selection: EditorSelection) => {
           current.selection = selection;
-          schedule(current);
+          if (current.edited) {
+            current.edited = false;
+            await hide(current);
+          } else {
+            schedule(current);
+          }
         };
         current.disposables.push(
           await handle.onDidChangeSelection(changed),
-          await buffer.onDidChange(() => {
+          await buffer.onDidChange(async () => {
             current.shown = undefined;
-            schedule(current);
+            current.edited = true;
+            // An edit that leaves the caret where it was sends no selection
+            // change, so the next move is still the user's.
+            setTimeout(() => {
+              current.edited = false;
+            }, EDIT_WINDOW);
+            await hide(current);
           }),
         );
         schedule(current);
@@ -206,7 +239,7 @@ export async function start() {
   // A setting change repaints at once: the delay applies to timers made after
   // it, and a toggled kind is shown or cleared.
   const changed = async () => {
-    delay = (await settings.get(DELAY)) ?? 75;
+    delay = (await settings.get(DELAY)) ?? 250;
     for (const current of follows.values()) {
       if (current.timer !== null) clearTimeout(current.timer);
       current.timer = null;

@@ -31,7 +31,7 @@ export async function defineSettings() {
   await settings.define({
     key: DELAY,
     type: "integer",
-    default: 75,
+    default: 250,
     description: "Milliseconds the cursor rests before the highlights update.",
   });
 }

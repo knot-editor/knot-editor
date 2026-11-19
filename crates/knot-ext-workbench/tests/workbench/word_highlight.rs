@@ -8,7 +8,7 @@ use knot::test_support::{TestEditor, TestProduct, wait_until};
 
 const WORD: &str = "editor.wordHighlight";
 const SELECTION: &str = "editor.selectionHighlight";
-const DELAY: Duration = Duration::from_millis(75);
+const DELAY: Duration = Duration::from_millis(250);
 
 /// Advance the product's virtual clock and run the tasks it wakes.
 fn advance(cx: &mut TestAppContext, delay: Duration) {
@@ -95,20 +95,50 @@ fn leaving_the_word_clears_the_highlights_after_the_delay(cx: &mut TestAppContex
 }
 
 #[gpui::test]
-fn an_edit_repaints_the_highlights(cx: &mut TestAppContext) {
+fn typing_clears_the_highlights_until_the_caret_moves(cx: &mut TestAppContext) {
     let product = TestProduct::start(only(&["@knot/word-highlight"]), cx);
     let editor = product.windowed_editor("aa bb aa\n", cx);
     rest(cx);
     wait_until(cx, |cx| painted(&editor, cx).len() == 2);
 
-    // The typed 'a' makes the caret's word unique.
+    // Typing clears the highlights and does not bring them back, even though
+    // the caret now rests in a word.
     editor.type_input("a", cx);
     editor.settle(cx);
+    wait_until(cx, |cx| painted(&editor, cx).is_empty());
     rest(cx);
-    wait_until(cx, |cx| painted(&editor, cx) == [(0, 3, WORD.to_owned())]);
+    rest(cx);
+    assert!(painted(&editor, cx).is_empty(), "typing never highlights");
 
-    // Deleting it brings the second occurrence back.
+    // Deleting does not either.
     editor.press("<bs>", cx);
+    editor.settle(cx);
+    rest(cx);
+    assert!(painted(&editor, cx).is_empty());
+
+    // Moving the caret on purpose does.
+    editor.select(4, 4, cx);
+    editor.settle(cx);
+    rest(cx);
+    wait_until(cx, |cx| painted(&editor, cx) == [(3, 5, WORD.to_owned())]);
+}
+
+#[gpui::test]
+fn a_move_after_a_caretless_edit_highlights(cx: &mut TestAppContext) {
+    let product = TestProduct::start(only(&["@knot/word-highlight"]), cx);
+    let editor = product.windowed_editor("aa bb aa\n", cx);
+    editor.select(3, 3, cx);
+    editor.settle(cx);
+    rest(cx);
+    wait_until(cx, |cx| painted(&editor, cx).len() == 1);
+
+    // Deleting forward leaves the caret where it is.
+    editor.press("<del>", cx);
+    editor.settle(cx);
+    wait_until(cx, |cx| painted(&editor, cx).is_empty());
+    advance(cx, Duration::from_millis(100));
+    editor.select(0, 0, cx);
+    editor.settle(cx);
     rest(cx);
     wait_until(cx, |cx| painted(&editor, cx).len() == 2);
 }

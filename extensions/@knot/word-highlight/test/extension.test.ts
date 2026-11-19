@@ -35,14 +35,14 @@ function painted(window: ReturnType<typeof host.openWindow>) {
     .map((item) => [item.range.startByteOffset, item.decoration?.color]);
 }
 
-async function rest(milliseconds = 75) {
+async function rest(milliseconds = 250) {
   mock.timers.tick(milliseconds);
   await settle();
 }
 
 test("the word at the caret is highlighted everywhere as a whole word after the delay", async () => {
   const { window } = await setup();
-  await rest(74);
+  await rest(249);
   assert.deepEqual(painted(window), []);
   await rest(1);
   assert.deepEqual(painted(window), [[0, WORD_COLOR], [8, WORD_COLOR], [19, WORD_COLOR]]);
@@ -81,13 +81,16 @@ test("a caret off any word, a multi-line selection, and a whitespace selection h
   assert.deepEqual(painted(window), [], "whitespace only");
 });
 
-test("an edit refreshes the highlights", async () => {
-  const { window } = await setup();
+test("an edit clears the highlights and a caret move brings them back", async () => {
+  const { window, editor } = await setup();
   await rest();
   const tab = (await windows.get(window))!.panes[0]!.tabs[0]!;
   const buffer = tab.buffer!;
   const { revision } = await buffer.snapshot({ startByteOffset: 0, endByteOffset: 0 });
   await buffer.applyEdits([{ range: { startByteOffset: 8, endByteOffset: 11 }, text: "baz" }], { ifRevision: revision });
+  await rest();
+  assert.deepEqual(painted(window), [], "the caret did not move");
+  await editor.setSelection({ anchor: 1, caret: 1 });
   await rest();
   assert.deepEqual(painted(window), [[0, WORD_COLOR], [19, WORD_COLOR]]);
 });

@@ -108,7 +108,7 @@ and `icons.pack` when the user runs Select Icon Pack.
 | `vim.smartCase` | boolean | `true` | Read with the editor's `document`, `language`, and `view: "editor"`; `:set scs` writes it for the document | `@knot/vim` | Search case-sensitively when the pattern has an uppercase letter, even while ignoring case. |
 | `wordHighlight.enabled` | boolean | `true` | Global | `@knot/word-highlight` | Highlight every whole-word occurrence of the word at the cursor. |
 | `selectionHighlight.enabled` | boolean | `true` | Global | `@knot/word-highlight` | Highlight the other occurrences of the selected text. |
-| `wordHighlight.delay` | integer | `75` | Global | `@knot/word-highlight` | Milliseconds the cursor rests before the highlights update. |
+| `wordHighlight.delay` | integer | `250` | Global | `@knot/word-highlight` | Milliseconds the cursor rests before the highlights update. |
 | `explorer.autoReveal` | boolean | `true` | Global | `@knot/explorer` | Select the active file in the explorer whenever it changes. |
 | `explorer.showIgnored` | boolean | `true` | Global | `@knot/explorer` | Show files and folders that ignore rules match, dimmed; off hides them. |
 | `projects.rememberedLimit` | integer | `30` | Global | `@knot/projects` | How many unnamed projects to remember. The least recently opened are forgotten first; named and active projects, and projects holding unsaved text, are kept. |
