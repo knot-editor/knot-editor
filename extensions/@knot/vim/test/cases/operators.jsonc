@@ -142,6 +142,9 @@
     { "name": "editing keys do not edit in normal mode", "before": ["a‸b"], "keys": "<del><tab><s-tab><c-d><c-k><c-j>", "after": ["a‸b"] },
     { "name": "Escape cancels a pending count", "before": ["‸abc"], "keys": "2<esc>l", "after": ["a‸bc"] },
     { "name": "an unknown key cancels a pending count", "before": ["‸abc"], "keys": "2Ql", "after": ["a‸bc"] },
-    { "name": "an unknown g key cancels it", "before": ["‸abc"], "keys": "gzl", "after": ["a‸bc"] }
+    { "name": "an unknown g key cancels it", "before": ["‸abc"], "keys": "gzl", "after": ["a‸bc"] },
+    { "name": "d) deletes up to the next sentence", "before": ["‸One. Two."], "keys": "d)", "after": ["‸Two."] },
+    { "name": "d( deletes back to the sentence start", "before": ["One. Tw‸o."], "keys": "d(", "after": ["One. ‸o."] },
+    { "name": "d) at the last sentence deletes to the end", "before": ["One. ‸Two."], "keys": "d)", "after": ["One.‸ "] }
   ]
 }

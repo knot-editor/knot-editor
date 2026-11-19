@@ -33,6 +33,12 @@
     { "name": "dip deletes the paragraph", "before": ["a", "‸b", "", "c"], "keys": "dip", "after": ["‸", "c"] },
     { "name": "dap deletes the paragraph and the blank line after", "before": ["a", "‸b", "", "c"], "keys": "dap", "after": ["‸c"] },
     { "name": "dap on the last paragraph takes the blank lines before", "before": ["a", "", "‸b"], "keys": "dap", "after": ["‸a"] },
-    { "name": "yip then P puts the paragraph", "before": ["‸a", "b", "", "c"], "keys": "yipGP", "after": ["a", "b", "", "‸a", "b", "c"] }
+    { "name": "yip then P puts the paragraph", "before": ["‸a", "b", "", "c"], "keys": "yipGP", "after": ["a", "b", "", "‸a", "b", "c"] },
+    { "name": "dis deletes the sentence", "before": ["One. T‸wo here. Three."], "keys": "dis", "after": ["One. ‸ Three."] },
+    { "name": "das deletes the sentence and the white space after", "before": ["One. T‸wo here. Three."], "keys": "das", "after": ["One. ‸Three."] },
+    { "name": "das on the last sentence takes the white space before", "before": ["One. T‸wo."], "keys": "das", "after": ["One‸."] },
+    { "name": "cis changes a sentence across lines", "before": ["A b", "‸c d. E."], "keys": "cisX<esc>", "after": ["‸X E."] },
+    { "name": "d2as deletes two sentences", "before": ["‸A. B. C."], "keys": "d2as", "after": ["‸C."] },
+    { "name": "yis then P puts the sentence", "before": ["‸One. Two."], "keys": "yisP", "after": ["One‸.One. Two."] }
   ]
 }

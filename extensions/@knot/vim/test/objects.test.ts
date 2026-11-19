@@ -78,3 +78,22 @@ test("ip and ap take runs of lines", async () => {
   assert.equal(await covered("a\n\n‸\nb", "paragraph", true), "\n\nb (lines)", "blank lines take the paragraph after");
   assert.equal(await covered("a\n\n‸b", "paragraph", true), "\nb (lines)", "the last paragraph takes the blank lines before");
 });
+
+test("is and as take sentences and the white space around them", async () => {
+  const text = "One. T‸wo here.  Three.";
+  assert.equal(await covered(text, "sentence", false), "Two here.");
+  assert.equal(await covered(text, "sentence", true), "Two here.  ");
+  assert.equal(await covered(text, "sentence", false, 2), "Two here.  ");
+  assert.equal(await covered(text, "sentence", true, 2), " Two here.  Three.", "the last one has no white space after");
+  assert.equal(await covered("One. Two‸.  Three.", "sentence", false), "Two.", "the closing period belongs to its sentence");
+  assert.equal(await covered("One. Two.  ‸ Three.", "sentence", false), "   ", "white space is a unit of its own");
+  assert.equal(await covered("One. Two.  ‸ Three.", "sentence", true), "   Three.", "as on white space takes the next sentence");
+  assert.equal(await covered("One. T‸wo.", "sentence", true), " Two.", "the last sentence takes the white space before");
+  assert.equal(await covered('Say "hi." ‸Then (go.) Go', "sentence", false), "Then (go.)");
+});
+
+test("a sentence spans lines and stops at empty lines", async () => {
+  assert.equal(await covered("A b\n‸c d. E.\n\nF.", "sentence", false), "A b\nc d.");
+  assert.equal(await covered("A.\n\n‸F.", "sentence", true), "F.", "no sentence before in the paragraph");
+  assert.equal(await covered("A.\n‸\nF.", "sentence", false), null);
+});

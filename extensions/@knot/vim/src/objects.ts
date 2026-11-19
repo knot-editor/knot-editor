@@ -1,6 +1,6 @@
 // Vim's text objects over lines of text, without host calls.
 import type { TextObject } from "./keys.js";
-import { classAt, type Lines, type Position, scanBracket } from "./motions.js";
+import { classAt, type Lines, type Position, scanBracket, sentenceBlock } from "./motions.js";
 import { firstNonBlank, nextColumn, previousColumn } from "./text.js";
 
 /** Text an operator applies to. A characterwise region runs from `start` up
@@ -26,6 +26,7 @@ export async function textObject(
     return wordObject(await lines.text(at.line), at, count, object === "WORD", around);
   }
   if (object === "paragraph") return paragraphObject(lines, at.line, count, around);
+  if (object === "sentence") return sentenceObject(lines, at, count, around);
   const pair = PAIRS[object];
   if (pair !== undefined) return bracketObject(lines, at, pair, count, around);
   return quoteObject(await lines.text(at.line), at, QUOTES[object]!, around);
@@ -105,6 +106,40 @@ async function paragraphObject(lines: Lines, line: number, count: number, around
     while (start > 0 && (await blank(start - 1))) start--;
   }
   return { start: { line: start, col: 0 }, end: { line: end, col: 0 }, linewise: true };
+}
+
+/** `is` and `as`, within the caret's paragraph. `is` takes count sentences
+ * or runs of white space between them; `as` takes count sentences with the
+ * white space after each, or before the first when none follows the last. On
+ * white space, `as` takes it with the sentences after it. */
+async function sentenceObject(lines: Lines, at: Position, count: number, around: boolean): Promise<Region | null> {
+  const block = await sentenceBlock(lines, at.line);
+  const sentences = block.sentences;
+  if (sentences.length === 0) return null;
+  const caret = block.offset(at);
+  const region = (start: number, end: number): Region => ({
+    start: block.position(start), end: block.position(end), linewise: false,
+  });
+  const index = Math.max(0, sentences.filter((sentence) => sentence.start <= caret).length - 1);
+  const current = sentences[index]!;
+  const onWhite = caret >= current.end && current.end < current.next;
+  const last = sentences.length - 1;
+  if (!around) {
+    const units = sentences.flatMap((sentence) => sentence.end < sentence.next
+      ? [{ start: sentence.start, stop: sentence.end }, { start: sentence.end, stop: sentence.next }]
+      : [{ start: sentence.start, stop: sentence.end }]);
+    const unit = units.findIndex((candidate) => caret >= candidate.start && caret < candidate.stop);
+    const from = Math.max(0, unit);
+    return region(units[from]!.start, units[Math.min(from + count - 1, units.length - 1)]!.stop);
+  }
+  if (onWhite) {
+    const end = index === last ? current.next : sentences[Math.min(index + count, last)]!.end;
+    return region(current.end, end);
+  }
+  const final = sentences[Math.min(index + count - 1, last)]!;
+  let start = current.start;
+  if (final.end === final.next && index > 0) start = sentences[index - 1]!.end;
+  return region(start, final.next);
 }
 
 /** `i(` and `a(` and the other pairs: the count-th pair around the caret,

@@ -7,6 +7,7 @@ export type SimpleMotion =
   | "word" | "WORD" | "back" | "BACK" | "end" | "END" | "back-end" | "BACK-END"
   | "line-start" | "first-non-blank" | "line-end" | "next-line-start" | "previous-line-start"
   | "first-line" | "last-line" | "line-down-first-non-blank" | "column" | "match-pair" | "paragraph-forward" | "paragraph-back"
+  | "sentence-forward" | "sentence-back"
   | "repeat-find" | "repeat-find-reverse" | "window-top" | "window-middle" | "window-bottom"
   | "fold-next" | "fold-previous" | "fold-start" | "fold-end";
 
@@ -46,7 +47,7 @@ export type FoldAction =
 
 export type TextObject =
   | "word" | "WORD" | "paren" | "brace" | "bracket" | "angle"
-  | "dquote" | "squote" | "backtick" | "paragraph";
+  | "dquote" | "squote" | "backtick" | "paragraph" | "sentence";
 
 /** What an operator applies to: a motion, a text object, whole lines from
  * a doubled operator such as `dd`, or the visual selection, taken as whole
@@ -153,6 +154,7 @@ const MOTIONS: Readonly<Record<string, SimpleMotion>> = {
   "0": "line-start", "^": "first-non-blank", $: "line-end", _: "line-down-first-non-blank", "|": "column",
   "+": "next-line-start", "<cr>": "next-line-start", "-": "previous-line-start",
   G: "last-line", "%": "match-pair", "}": "paragraph-forward", "{": "paragraph-back",
+  ")": "sentence-forward", "(": "sentence-back",
   ";": "repeat-find", ",": "repeat-find-reverse",
   "<left>": "left", "<right>": "right", "<up>": "up", "<down>": "down",
   "<home>": "line-start", "<end>": "line-end",
@@ -218,7 +220,7 @@ const OBJECTS: Readonly<Record<string, TextObject>> = {
   "[": "bracket", "]": "bracket",
   "<": "angle", ">": "angle",
   '"': "dquote", "'": "squote", "`": "backtick",
-  p: "paragraph",
+  p: "paragraph", s: "sentence",
 };
 
 const OPERATORS = new Set<string>(["d", "c", "y", ">", "<", "="]);

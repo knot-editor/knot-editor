@@ -11,7 +11,7 @@ import { closedAt, createFold, foldMotion, intoShownLine, lastLine, linesDown, l
 import type { Command, FindKind, InsertAt, MarkMotion, Motion, Operator, Scroll, Target } from "./keys.js";
 import { BufferLines } from "./lines.js";
 import {
-  bracketFrom, findInLine, left, lineStart, matchBracketText, paragraph, type Position, right,
+  bracketFrom, findInLine, left, lineStart, matchBracketText, paragraph, type Position, right, sentence,
   wordBackward, wordEnd, wordEndBackward, wordForward,
 } from "./motions.js";
 import { type Region, textObject } from "./objects.js";
@@ -493,6 +493,13 @@ export async function resolve(
         ? null
         : { to: found.position, type: found.inclusive ? "inclusive" : "exclusive", jump: true };
     }
+    case "sentence-forward":
+    case "sentence-back": {
+      const found = await sentence(lines, from, n, name === "sentence-forward");
+      return found === null
+        ? null
+        : { to: found.position, type: found.inclusive ? "inclusive" : "exclusive", jump: true };
+    }
     case "repeat-find":
     case "repeat-find-reverse": {
       const last = state.shared.lastFind;
@@ -970,7 +977,8 @@ async function operate(
       const moved = await resolve(state, lines, from, target.motion, count, operator);
       region = moved === null ? null : await motionRegion(lines, from, moved);
       big = target.motion === "match-pair" || target.motion === "paragraph-forward"
-        || target.motion === "paragraph-back" || (typeof target.motion !== "string" && "search" in target.motion)
+        || target.motion === "paragraph-back"
+        || target.motion === "sentence-forward" || target.motion === "sentence-back" || (typeof target.motion !== "string" && "search" in target.motion)
         || (typeof target.motion !== "string" && "mark" in target.motion && target.motion.exact);
       break;
     }

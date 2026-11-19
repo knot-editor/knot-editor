@@ -93,6 +93,7 @@
     { "name": "a motion extends an outside selection", "before": ["‸ab‸c"], "keys": "l", "after": { "text": ["‸abc‸"], "mode": "visual" } },
     { "name": "Escape leaves an outside selection on its last character", "before": ["‸ab‸c"], "keys": "<esc>", "after": ["a‸bc"] },
     { "name": "an outside selection ending with a line break deletes it", "before": ["‸ab", "‸cd"], "keys": "d", "after": ["‸cd"] },
-    { "name": "V on an outside selection takes its lines", "before": ["a‸b", "c‸d"], "keys": "V", "after": { "text": ["‸ab", "cd‸"], "mode": "visual-line" } }
+    { "name": "V on an outside selection takes its lines", "before": ["a‸b", "c‸d"], "keys": "V", "after": { "text": ["‸ab", "cd‸"], "mode": "visual-line" } },
+    { "name": "vas selects a sentence and the white space after", "before": ["One. T‸wo. Three."], "keys": "vasd", "after": ["One. ‸Three."] }
   ]
 }

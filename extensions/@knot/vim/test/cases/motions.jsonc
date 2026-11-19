@@ -94,6 +94,11 @@
     { "name": "} at the last paragraph goes to the last character", "before": ["‸a", "bc"], "keys": "}", "after": ["a", "b‸c"] },
     { "name": "2} skips a paragraph", "before": ["‸a", "", "b", "", "c"], "keys": "2}", "after": ["a", "", "b", "‸", "c"] },
     { "name": "{ goes to the previous empty line", "before": ["a", "", "b", "‸c"], "keys": "{", "after": ["a", "‸", "b", "c"] },
-    { "name": "{ at the first paragraph goes to the first line", "before": ["a", "b‸c"], "keys": "{", "after": ["‸a", "bc"] }
+    { "name": "{ at the first paragraph goes to the first line", "before": ["a", "b‸c"], "keys": "{", "after": ["‸a", "bc"] },
+    { "name": ") goes to the next sentence", "before": ["‸One. Two."], "keys": ")", "after": ["One. ‸Two."] },
+    { "name": "( goes to the sentence start, then the one before", "before": ["One. Tw‸o."], "keys": "(", "after": ["One. ‸Two."] },
+    { "name": "2) crosses a line to an empty line", "before": ["‸One.", "Two.", "", "Three."], "keys": "2)", "after": ["One.", "Two.", "‸", "Three."] },
+    { "name": ") at the last sentence goes to the last character", "before": ["One. ‸Two."], "keys": ")", "after": ["One. Two‸."] },
+    { "name": "( skips a closing quote and a period without white space after", "before": ["Say \"hi.\" a.b. ‸Go."], "keys": "(", "after": ["Say \"hi.\" ‸a.b. Go."] }
   ]
 }

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  bracketFrom, findInLine, linesOf, matchBracketText, paragraph, type Position,
+  bracketFrom, findInLine, linesOf, matchBracketText, paragraph, type Position, sentence,
   wordBackward, wordEnd, wordEndBackward, wordForward,
 } from "../src/motions.js";
 import { columnAtByte, firstNonBlank, lastColumn, utf8Length } from "../src/text.js";
@@ -123,4 +123,40 @@ test("e with stop keeps a word end the caret is on", async () => {
   assert.deepEqual(await wordEnd(lines, { line: 0, col: 2 }, 1, false), { line: 0, col: 6 });
   assert.deepEqual(await wordEnd(lines, { line: 0, col: 2 }, 1, false, true), { line: 0, col: 2 });
   assert.deepEqual(await wordEnd(lines, { line: 0, col: 0 }, 1, false, true), { line: 0, col: 2 });
+});
+
+/** The caret positions `)` visits from the start, as "line:col". */
+async function sentenceStops(text: string, forward: boolean, from: Position): Promise<string[]> {
+  const lines = linesOf(text);
+  const visited: string[] = [];
+  let at = from;
+  for (let n = 0; n < 20; n++) {
+    const found = await sentence(lines, at, 1, forward);
+    if (found === null) break;
+    at = found.position;
+    visited.push(`${at.line}:${at.col}`);
+  }
+  return visited;
+}
+
+test(") and ( stop at sentence starts and empty lines", async () => {
+  const text = "One. Two!  Three?\n  Four.\n\n\nFive e.g. six.";
+  assert.deepEqual(await sentenceStops(text, true, { line: 0, col: 0 }), [
+    "0:5", "0:11", "1:2", "2:0", "4:0", "4:10", "4:13",
+  ]);
+  assert.deepEqual(await sentenceStops(text, false, { line: 4, col: 13 }), [
+    "4:10", "4:0", "2:0", "1:2", "0:11", "0:5", "0:0",
+  ]);
+});
+
+test("closing quotes and brackets stay with their sentence, and a period needs white space after", async () => {
+  assert.deepEqual(await sentenceStops('Say "hi." Then (go.) Next a.b c.', true, { line: 0, col: 0 }), ["0:10", "0:21", "0:31"]);
+});
+
+test(") with a count, and at the document's end", async () => {
+  const lines = linesOf("A. B. C.");
+  assert.deepEqual(await sentence(lines, { line: 0, col: 0 }, 2, true), { position: { line: 0, col: 6 }, inclusive: false });
+  assert.deepEqual(await sentence(lines, { line: 0, col: 6 }, 1, true), { position: { line: 0, col: 7 }, inclusive: true });
+  assert.equal(await sentence(lines, { line: 0, col: 7 }, 1, true), null);
+  assert.equal(await sentence(lines, { line: 0, col: 0 }, 1, false), null);
 });

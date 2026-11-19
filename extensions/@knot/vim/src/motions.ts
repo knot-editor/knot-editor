@@ -289,6 +289,127 @@ export async function paragraph(
   return { position: { line, col: 0 }, inclusive: false };
 }
 
+/** A sentence of a block of lines: its text runs from `start` to `end`, and
+ * the white space after it up to `next`, the next sentence's start. Offsets
+ * index the block's text, whose lines are joined by "\n". */
+export type Sentence = Readonly<{ start: number; end: number; next: number }>;
+
+/** The run of empty lines, or of non-empty ones, around a line. A run of
+ * empty lines is one sentence boundary; a run of non-empty lines splits into
+ * sentences, each ending at `.`, `!`, or `?` with any closing `)`, `]`, `"`,
+ * or `'` after it, followed by white space or the end of the line. */
+export type SentenceBlock = Readonly<{
+  first: number;
+  last: number;
+  blank: boolean;
+  sentences: readonly Sentence[];
+  /** The start of each sentence, or of the empty lines. */
+  starts: readonly Position[];
+  /** The position of an offset into the sentences' text, and the reverse. */
+  position(offset: number): Position;
+  offset(at: Position): number;
+}>;
+
+export async function sentenceBlock(lines: Lines, line: number): Promise<SentenceBlock> {
+  const total = await lines.count();
+  const blank = (await lines.text(line)).length === 0;
+  const same = async (index: number) => ((await lines.text(index)).length === 0) === blank;
+  let first = line;
+  while (first > 0 && (await same(first - 1))) first--;
+  let last = line;
+  while (last + 1 < total && (await same(last + 1))) last++;
+  if (blank) {
+    const start = { line: first, col: 0 };
+    return { first, last, blank, sentences: [], starts: [start], position: () => start, offset: () => 0 };
+  }
+  const rows: string[] = [];
+  const rowStarts: number[] = [];
+  let length = 0;
+  for (let index = first; index <= last; index++) {
+    const row = await lines.text(index);
+    rowStarts.push(length);
+    rows.push(row);
+    length += row.length + 1;
+  }
+  const text = rows.join("\n");
+  const position = (offset: number): Position => {
+    let row = rowStarts.length - 1;
+    while (rowStarts[row]! > offset) row--;
+    return { line: first + row, col: offset - rowStarts[row]! };
+  };
+  const bounds = text.trimEnd().length;
+  const skipWhite = (from: number) => {
+    let index = from;
+    while (index < text.length && /\s/.test(text[index]!)) index++;
+    return index;
+  };
+  const sentences: Sentence[] = [];
+  let start = skipWhite(0);
+  const ends = /[.!?][)\]"']*(?=[ \t\n]|$)/g;
+  while (start < bounds) {
+    ends.lastIndex = start;
+    const found = ends.exec(text);
+    const end = found === null ? bounds : found.index + found[0].length;
+    const next = end >= bounds ? text.length : skipWhite(end);
+    sentences.push({ start, end, next });
+    start = next;
+  }
+  return {
+    first, last, blank, sentences, starts: sentences.map((sentence) => position(sentence.start)), position,
+    offset: (position) => rowStarts[position.line - first]! + position.col,
+  };
+}
+
+function compare(a: Position, b: Position): number {
+  return a.line - b.line || a.col - b.col;
+}
+
+/** The sentence start after or before `from`, or null at the document's end. */
+async function adjacentSentence(lines: Lines, from: Position, forward: boolean): Promise<Position | null> {
+  const block = await sentenceBlock(lines, from.line);
+  const near = forward
+    ? block.starts.find((start) => compare(start, from) > 0)
+    : block.starts.filter((start) => compare(start, from) < 0).pop();
+  if (near !== undefined) return near;
+  const line = forward ? block.last + 1 : block.first - 1;
+  if (line < 0 || line >= (await lines.count())) return null;
+  const starts = (await sentenceBlock(lines, line)).starts;
+  return (forward ? starts[0] : starts[starts.length - 1]) ?? null;
+}
+
+/** `)` and `(`: the count-th next or previous sentence start. An empty line
+ * is a sentence of its own, and the document's end stops a motion short, at
+ * its last character, which an operator includes. Null when nothing moves. */
+export async function sentence(
+  lines: Lines,
+  from: Position,
+  count: number,
+  forward: boolean,
+): Promise<{ position: Position; inclusive: boolean } | null> {
+  let at = from;
+  let inclusive = false;
+  for (let n = 0; n < count; n++) {
+    const next = await adjacentSentence(lines, at, forward);
+    if (next !== null) {
+      at = next;
+      continue;
+    }
+    if (forward) {
+      const line = (await lines.count()) - 1;
+      const text = await lines.text(line);
+      const edge = { line, col: lastColumn(text) };
+      if (compare(edge, at) > 0) {
+        at = edge;
+        inclusive = text.length > 0;
+      }
+    } else if (compare(at, { line: 0, col: 0 }) > 0) {
+      at = { line: 0, col: 0 };
+    }
+    break;
+  }
+  return compare(at, from) === 0 ? null : { position: at, inclusive };
+}
+
 const OPENERS = "([{";
 const CLOSERS = ")]}";
 
