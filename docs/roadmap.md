@@ -30,6 +30,10 @@ point.
 
 - D202 — Paste a URL over a selection as a Markdown link.
 - D140 — Placeholder text in input fields.
+- D181 — Native operation failures as notices
+- D041 — Terminal titles, bells, and notifications
+- D146 — Broad Ex command set
+- D151 — Smaller Vim commands
 - D022 — Editor autocompletion.
 - D182 — Interleave extension roots at awaits: before D067.
 - D087 — Extension entitlements: D085, D126, D067, and D101 need it.
