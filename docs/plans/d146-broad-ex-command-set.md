@@ -98,28 +98,10 @@ run without a prompt.
 
 ### 3. Buffer, window, and directory commands ✅
 
-Implemented; automated gate passed. `:bd` and `:close` close the tab as `:q`
-does, and `:u`/`:red` run the native undo and redo. `:sp`, `:vs`, `:new`, and
-`:vnew` split, then replace the copied tab with the file or an untitled
-document. `:b` matches a title exactly, else the one title or path containing
-the name (`E93`/`E94` otherwise).
-
-Deliverables: `:bn`, `:bp`, `:bd[!]`, `:b <name>` with completion, `:enew`,
-`:new`, `:vnew`, `:sp <file>`, `:vs <file>`, `:only`, `:close`, `:u`,
-`:red`, `:pwd`.
-
-Validation: `ex.test.ts` parser cases; Vim product tests for tab cycling,
-closing, `:b` matching, splits opening the file, and `:pwd`'s message.
-
-Review gate: automated only.
-
-**Implementation context**: native commands `workbench.next-tab`,
-`workbench.previous-tab`, `workbench.close-other-panes`,
-`workbench.close-pane`, and the split commands already back `:split`;
-`documents.createUntitled`, `documents.present`, and `documents.list` cover
-`:enew` and `:b`. `baseDirectory` in `command-line.ts` is the directory
-`:pwd` shows. `completeEx` in `ex.ts` gains document-name completion beside
-`fileCompletionTarget`.
+Complete and reviewed. `:bd` and `:close` close the tab as `:q` does. `:sp`,
+`:vs`, `:new`, and `:vnew` split, then replace the copied tab with the file or
+an untitled document. `:b` matches a title exactly, else the one title or path
+containing the name.
 
 ### 4. Range commands and `:sort`
 
