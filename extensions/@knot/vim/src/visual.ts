@@ -349,6 +349,8 @@ async function put(state: State, lines: BufferLines, register: string | null, co
   } else {
     text = value.linewise ? `\n${block}` : value.text.repeat(count);
   }
+  // A language's paste provider may shape characters put over characters.
+  if (!value.linewise && !region.linewise) text = await state.handle.preparePaste(text, [start, end]);
   await grouped(state, () => replace(state, start, end, text));
   if (!before) await record(state, null, replaced, "delete");
   const fresh = new BufferLines(state.buffer);

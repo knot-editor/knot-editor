@@ -459,6 +459,35 @@ await languages.register({
     assert_eq!(test_editor.contexts(cx), ["vim.normal"]);
 }
 
+/// Vim with the Markdown package, whose paste provider links a URL.
+fn packages_with_markdown() -> &'static [knot_bundled::BundledSource] {
+    let mut packages = knot_ext_vim::PACKAGES.to_vec();
+    packages.extend(knot_ext_languages::PACKAGES.iter().filter(|package| {
+        package
+            .manifest
+            .contains("\"name\": \"@knot/language-markdown\"")
+    }));
+    Box::leak(packages.into_boxed_slice())
+}
+
+#[gpui::test]
+fn a_visual_put_of_a_url_over_selected_markdown_text_makes_a_link(cx: &mut TestAppContext) {
+    const URL: &str = "https://example.com/a";
+    let product = TestProduct::start_with_post_init(packages_with_markdown(), Some(ENABLE), cx);
+    let put = |keys: &str, cx: &mut TestAppContext| {
+        let text = format!("word {URL}");
+        let test_editor = product.editor(&text, Some("markdown"), (0, 0), cx);
+        start_over(&test_editor, cx);
+        test_editor.press(keys, cx);
+        test_editor.marked(cx)
+    };
+    // From the clipboard, then from a named register.
+    assert_eq!(put("wyiW0viwp", cx), format!("[word]({URL}‸) {URL}"));
+    assert_eq!(put("w\"ayiW0viw\"ap", cx), format!("[word]({URL}‸) {URL}"));
+    // The replaced word is what the unnamed register holds now.
+    assert_eq!(put("wyiW0viwp$p", cx), format!("[word]({URL}) {URL}wor‸d"));
+}
+
 /// Restart the Vim package and wait until it follows the editor again.
 fn restart_vim(product: &TestProduct, test_editor: &TestEditor, cx: &mut TestAppContext) {
     product.restart_package("@knot/vim", cx);

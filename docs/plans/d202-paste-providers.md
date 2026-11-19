@@ -1,6 +1,6 @@
 # D202: Language paste providers, and URL-over-selection links in Markdown
 
-Status: 🚧 checkpoint 1 done; checkpoint 2 not started. Roadmap item [D202](../roadmap.md).
+Status: 🚧 checkpoint 1 done; checkpoint 2 awaiting review. Roadmap item [D202](../roadmap.md).
 
 ## Outcome
 
@@ -71,11 +71,11 @@ and [`PasteProvider`](../extension-api/packages.md#provider-names). `Editor.prep
 `call_paste_provider` (`src/app/extensions/host.rs`). Known gap: a fence in
 an unregistered language still reaches the Markdown provider.
 
-## Checkpoint 2 — `Editor.preparePaste` and Vim
+## Checkpoint 2 — `Editor.preparePaste` and Vim ✅ (awaiting review)
 
 Deliverables:
-- `Editor.preparePaste(text, range?)` handler and `knot.d.ts` entry.
-- Vim visual `p`/`P` passes characterwise register text over a
+- ✅ `Editor.preparePaste(text, range?)` handler and `knot.d.ts` entry.
+- ✅ Vim visual `p`/`P` passes characterwise register text over a
   characterwise selection through it.
 
 Validation:
