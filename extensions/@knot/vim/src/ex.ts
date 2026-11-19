@@ -54,6 +54,8 @@ export type ExCommand =
     readonly replacement: string;
     readonly flags: SubstituteFlags;
   }
+  /** `:split` and `:vsplit`: a new pane below, or to the right. */
+  | { readonly kind: "split"; readonly direction: "down" | "right" }
   /** `:noh`, which hides the search highlights until the next search. */
   | { readonly kind: "nohlsearch" }
   /** An empty line, which does nothing. */
@@ -63,7 +65,7 @@ export type ExCommand =
 /** Command names, each with the shortest abbreviation Vim accepts. */
 const NAMES: readonly (readonly [string, number])[] = [
   ["write", 1], ["quit", 1], ["wq", 2], ["xit", 1], ["exit", 3], ["edit", 1], ["set", 2],
-  ["nohlsearch", 3], ["substitute", 1],
+  ["nohlsearch", 3], ["substitute", 1], ["split", 2], ["vsplit", 2],
 ];
 
 const BOOLEANS: Readonly<Record<string, BooleanOption>> = {
@@ -108,6 +110,8 @@ export function parseEx(text: string): ExCommand {
     case "write": return { kind: "write" };
     case "nohlsearch": return { kind: "nohlsearch" };
     case "quit": return { kind: "quit", force };
+    case "split": return { kind: "split", direction: "down" };
+    case "vsplit": return { kind: "split", direction: "right" };
     case "wq": return { kind: "write-quit", ifChanged: false };
     default: return { kind: "write-quit", ifChanged: true };
   }

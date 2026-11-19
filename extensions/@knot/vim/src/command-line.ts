@@ -115,6 +115,9 @@ async function runEx(state: State, command: ExCommand): Promise<string | null> {
       return set(state, command.arguments);
     case "substitute":
       return substitute(state, command);
+    case "split":
+      await commands.invoke(command.direction === "down" ? "workbench.split-vertical" : "workbench.split-horizontal");
+      return null;
     case "nohlsearch":
       await state.shared.highlights.hide();
       return null;

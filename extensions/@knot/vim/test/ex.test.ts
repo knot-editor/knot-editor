@@ -8,6 +8,11 @@ test("noh hides the search highlights", () => {
   assert.equal(parseEx("no").kind, "error");
 });
 
+test("split and vsplit open a pane below or to the right", () => {
+  for (const line of ["sp", "split", ":split"]) assert.deepEqual(parseEx(line), { kind: "split", direction: "down" });
+  for (const line of ["vs", "vsp", "vsplit"]) assert.deepEqual(parseEx(line), { kind: "split", direction: "right" });
+});
+
 const flags = { global: false, ignoreCase: null, count: false, quiet: false };
 const line = (n: number, offset = 0) => ({ base: { kind: "line", line: n }, offset }) as const;
 const current = (offset = 0) => ({ base: { kind: "current" }, offset }) as const;
@@ -145,7 +150,7 @@ test("command names complete, in the order of the matcher", async () => {
   assert.deepEqual(await values("se"), ["set", "nohlsearch", "substitute"]);
   assert.deepEqual(await values(":q"), [":quit", ":wq"]);
   assert.deepEqual(await values("zz"), []);
-  assert.equal((await values("")).length, 9);
+  assert.equal((await values("")).length, 11);
 });
 
 test("line numbers and other arguments get no items", async () => {
