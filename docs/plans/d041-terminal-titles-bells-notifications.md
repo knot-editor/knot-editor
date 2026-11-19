@@ -66,33 +66,11 @@ Done and approved. The session resolves its label from an explicit name, then
 the program's title, then the default name; layouts record only explicit
 names. See [workbench and lifecycle](../architecture/workbench-and-lifecycle.md#terminal-sessions-and-views).
 
-### 2. Bell marks on tabs and stripe buttons ✅ (awaiting review)
+### 2. Bell marks on tabs and stripe buttons ✅
 
-Implemented and checked: model marks and clearing, session bell event routed to
-the holding window, tab `bell-ring` icon and stripe dot. Pending the review gate
-below.
-
-- **Implementation context:** `crates/knot-model/src/workbench.rs` and
-  `workbench/terminals.rs`: a marked-sessions set, `mark_bell(session)`, which
-  marks only when the tab isn't shown, clearing on `show_tab` /
-  `activate_tab` / tool show, and a query for whether a tool holds a marked
-  tab. `src/app/terminal/session.rs` emits a gpui bell event. The
-  application subscribes where sessions are registered
-  (`ApplicationTerminalSessions` in `src/app/terminal/mod.rs`, used from
-  `src/app/product.rs`), finds the window with `find_window` / `window_for`,
-  and calls the model. Painting: the tab bell icon in
-  `src/app/product/render.rs`, beside the `pin` icon
-  (`IconDefinition::lucide("bell-ring")`, `color::NOTIFICATION_INFO`,
-  `bell-{tab}` selector), and the stripe dot in
-  `src/app/product/stripes.rs` (`render_stripe_button`, next to
-  `tool.badge`). Relocating a tab between panes or windows carries its mark.
-- **Validation:** model unit tests for marking, not marking a shown tab,
-  clearing on show, and tool aggregation. Product tests that ring the bell
-  in a background tab and in a hidden Terminal tool window, then assert the
-  tab icon and `stripe-badge-*` selectors appear and clear once the tab is
-  shown. `just check`.
-- **Review gate:** a `Try:` command rings the bell after a delay. The user
-  switches away and checks the tab and stripe marks.
+Done and approved. The workbench model keeps the marked terminal tabs and
+clears a mark when its tab is shown; a session's bell event reaches the window
+holding it. See [workbench and lifecycle](../architecture/workbench-and-lifecycle.md#terminal-sessions-and-views).
 
 ### 3. Desktop notifications as notices
 
