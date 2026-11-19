@@ -95,7 +95,7 @@ snapshots and apply it as one edit, so each is one undo step.
 References: [extension guide](../extension-api/commands-and-keys.md#bind-keys-and-modal-contexts),
 [text search](../architecture/core-and-buffers.md#text-search),
 [settings](../settings.md#bundled-packages) and
-[roadmap](../roadmap.md) (D142, D146, D151, D182, D201).
+[roadmap](../roadmap.md) (D142, D151, D182, D201, D206).
 
 ## Bundled explorer
 

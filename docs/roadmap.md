@@ -13,7 +13,7 @@ Every item has the same shape:
 - **Description** says what is missing today and when it becomes worth doing,
   then what to build.
 
-The next unused ID is **D206**; take it for a new item and bump this line.
+The next unused ID is **D207**; take it for a new item and bump this line.
 
 Each section is ordered so that an item comes after the items it depends on,
 wherever the sections allow it. Items with no dependencies are ordered by
@@ -28,7 +28,6 @@ point.
 
 ## Next up
 
-- D146 — Broad Ex command set
 - D151 — Smaller Vim commands
 - D022 — Editor autocompletion.
 - D182 — Interleave extension roots at awaits: before D067.
@@ -489,19 +488,6 @@ The bundled Vim mode is built on generic editor primitives, so a Helix or
 Kakoune mode could use them too. The
 [extensibility report](reports/extensibility.md) maps Vim's needs onto them.
 
-- **D146 — Broad Ex command set**
-  - Depends on: none
-  - Description: The Ex line covers files, buffers, windows, line ranges, and
-    `:sort`, but `:g` and `:v`, `:normal`, `/pat/` and `?pat?` addresses and `;`
-    between addresses, `:reg`, `:marks` and `:jumps` (they need a list surface,
-    D054), `:map` and its variants, `:command`, `:!cmd`, `:r`, range filters,
-    `:cd`, `:h`, `:&`, `:pu`, `:sort` with a pattern, and Vim buffer numbers in
-    `:b` and `:bd` are missing. `:normal` and `:g` with a normal-mode command
-    need replaying keys through the mode, as macros do, and `:g` and `:v` can
-    reuse the search patterns of `@knot/vim`. Do it when daily Vim use reaches
-    for one of them: add it inside the Vim package over existing primitives, or
-    add the missing generic primitive first.
-
 - **D201 — Preview replacement results**
   - Depends on: none
   - Description: Vim's `:s` and Find's Replace change text without showing the
@@ -634,6 +620,19 @@ Kakoune mode could use them too. The
 
 Items worth having that no current workflow needs. They follow the same shape
 and may move into a section above when daily use asks for them.
+
+- **D206 — Remaining Ex commands**
+  - Depends on: none
+  - Description: The Ex line covers files, buffers, windows, line ranges, and
+    `:sort`, but `:g` and `:v`, `:normal`, `/pat/` and `?pat?` addresses and `;`
+    between addresses, `:reg`, `:marks` and `:jumps` (they need a list surface,
+    D054), `:map` and its variants, `:command`, `:!cmd`, `:r`, range filters,
+    `:cd`, `:h`, `:&`, `:pu`, `:sort` with a pattern, and Vim buffer numbers in
+    `:b` and `:bd` are missing. `:normal` and `:g` with a normal-mode command
+    need replaying keys through the mode, as macros do, and `:g` and `:v` can
+    reuse the search patterns of `@knot/vim`. Do it when daily Vim use reaches
+    for one of them: add it inside the Vim package over existing primitives, or
+    add the missing generic primitive first.
 
 - **D194 — Preserve-case replacement**
   - Depends on: none
