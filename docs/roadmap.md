@@ -29,7 +29,6 @@ point.
 ## Next up
 
 - D202 — Paste a URL over a selection as a Markdown link.
-- D140 — Placeholder text in input fields.
 - D181 — Native operation failures as notices
 - D041 — Terminal titles, bells, and notifications
 - D146 — Broad Ex command set
@@ -362,19 +361,6 @@ hold the analyses that support some items.
     extension creates and refreshes the view, attaches per-range actions, and
     how such views behave in closure, recovery, and restoration. It builds on
     the editor handle's cursor and selection access and the decoration styles.
-
-- **D140 — Placeholder text in input fields** 🚧
-  - Depends on: none
-  - Description: `TextInput` renders placeholder text, which editor bars use,
-    but `workbench.showInput` and the palette query have no way to set one, so
-    those inputs can only explain themselves through their title or message
-    line. Do it before the next bundled input that would benefit from a hint:
-    add a `placeholder` option to `showInput`, and let Tab accept it into an
-    empty field, as Zed's Go to Line does. Update `@knot/go-to-line` to show
-    the current position as `line:column` there. Search Everywhere also needs
-    its own placeholder per tab, so opening it on Files or Actions reads
-    differently from the All tab instead of every tab showing the same hint. The
-    [plan](plans/d140-input-placeholders.md) holds the design and checkpoints.
 
 - **D180 — Modal surface for informational views**
   - Depends on: none
