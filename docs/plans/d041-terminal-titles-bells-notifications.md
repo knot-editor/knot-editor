@@ -72,29 +72,11 @@ Done and approved. The workbench model keeps the marked terminal tabs and
 clears a mark when its tab is shown; a session's bell event reaches the window
 holding it. See [workbench and lifecycle](../architecture/workbench-and-lifecycle.md#terminal-sessions-and-views).
 
-### 3. Desktop notifications as notices ✅ (awaiting review)
+### 3. Desktop notifications as notices ✅
 
-Implemented: `TerminalEvent::Notification`, a session event routed to the window
-holding the terminal, and the `terminal.show` command (argument: session
-number) behind the "Show Terminal" action. Review gate: run the `Try:`
-commands.
-
-- **Implementation context:** `crates/knot-terminal/src/events.rs`:
-  register `GHOSTTY_TERMINAL_OPT_DESKTOP_NOTIFICATION`
-  (`GhosttyTerminalDesktopNotification { title, body }`) as
-  `TerminalEvent::Notification { title, body }`. Session to window routing
-  as in checkpoint 2. Raise with `KnotWindow::raise_notice`
-  (`src/app/product.rs`) or `notifications::raise` with a window target. A
-  native command (in `src/app/product/commands.rs`, mirroring the
-  `save_as_action` pattern in `src/app/product/save.rs`) takes the session
-  and reveals and focuses its tab, and does nothing if the session is gone.
-- **Validation:** a `knot-terminal` test that writes OSC 9 and OSC 777 and
-  receives the event. Product tests in
-  `src/app/product/tests/notifications.rs` or `terminal.rs`: the notice
-  carries the expected title, body, and window, and its action shows a
-  background terminal. `just check`.
-- **Review gate:** a `Try:` command opens a terminal that sends OSC 9 and
-  OSC 777 after a delay. The user checks the popup and the action.
+Done and approved. A terminal's notification raises an `info` notice in the
+window holding it, with a "Show Terminal" action that runs `terminal.show`
+with the session number. The architecture reference is updated in checkpoint 4.
 
 ### 4. Documentation
 
