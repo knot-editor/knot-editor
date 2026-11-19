@@ -1,6 +1,6 @@
 # D151 — Smaller Vim commands
 
-Status: 🚧 in progress; checkpoint 1 approved. Roadmap item [D151](../roadmap.md#vim-mode).
+Status: 🚧 in progress; checkpoints 1 and 2 approved. Roadmap item [D151](../roadmap.md#vim-mode).
 
 ## Goal
 
@@ -49,14 +49,14 @@ visual mode, and sentence motions and objects.
   `extensions/@knot/vim/src/extension.ts`, `WindowAction` in `keys.ts`;
   command docs under `docs/extension-api/`.
 
-### 2. Small edits, keys, and paste variants ✅ (awaiting review)
+### 2. Small edits, keys, and paste variants ✅
 
 - ✅ `r<cr>`, `J` and `gJ`, `_`, `|`, `gi`, `ga`, `gp`, `gP`, `]p` (with `[p`,
   `[P`, and `]P`).
 - ✅ Validation: key-parser cases in `keys.test.ts`, and end-to-end cases
   through the editor in `test/cases/` (`operators`, `motions`, `insert`) and
   `ga` in `vim.rs`.
-- Review gate (`try.small-edits`): try commands for each key, including counts and visual mode
+- ✅ Review gate (`try.small-edits`, approved): try commands for each key, including counts and visual mode
   where Vim defines them.
 - **Implementation context:** `keys.ts` (`g`, `[`, `]` prefixes, `r` at line
   296, `join` and `put` commands), `normal.ts` (`put` and `join` handlers at
