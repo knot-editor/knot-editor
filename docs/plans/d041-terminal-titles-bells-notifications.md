@@ -60,7 +60,7 @@ Three things programs send to a terminal now show up in Knot:
 
 ## Checkpoints
 
-### 1. Titles on terminal tabs
+### 1. Titles on terminal tabs ✅
 
 The session keeps the current title and whether its name is explicit. Tab
 labels, tool-window headers, and anything else that reads the session's label
@@ -83,6 +83,9 @@ use the resolved label.
   `rename_session_labels_the_tab_and_the_label_persists`: the title labels
   the tab, Rename beats a later title, and a layout round trip keeps an
   explicit name while dropping the title. `just check`.
+- **Done:** the layout's `name` now records only a name set with Rename
+  (its presence is the explicit flag); default labels are regenerated on
+  restore. ✅
 - **Review gate:** a `Try:` command opens a terminal that sets a title. The
   user checks a shell prompt that sets titles and a full-screen program.
 

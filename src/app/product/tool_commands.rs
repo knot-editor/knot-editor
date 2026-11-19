@@ -225,7 +225,7 @@ impl KnotWindow {
         else {
             return Err(CommandOutcome::Unavailable);
         };
-        let initial = Self::terminal_session_name(id, cx).unwrap_or_default();
+        let initial = Self::terminal_session_label(id, cx).unwrap_or_default();
         let (receiver, _) = self
             .begin_owned_input(
                 None,

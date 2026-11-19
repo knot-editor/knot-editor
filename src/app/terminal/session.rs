@@ -69,8 +69,12 @@ pub(crate) struct TerminalSession {
     next_attachment: u64,
     focused: bool,
     mouse_reporting_enabled: bool,
-    /// The label its tab shows.
+    /// The label its tab shows when no title overrides it.
     name: String,
+    /// Whether `name` was chosen with Rename Session.
+    name_explicit: bool,
+    /// The title the running program set, if non-empty.
+    title: Option<String>,
 }
 
 pub(crate) struct TerminalAttachment {
@@ -160,6 +164,8 @@ impl TerminalSession {
             focused: false,
             mouse_reporting_enabled: terminal_mouse_reporting(cx),
             name: shell_name(),
+            name_explicit: false,
+            title: None,
         };
         this.start(None, cx);
         this
@@ -170,6 +176,7 @@ impl TerminalSession {
         crate::app::allow_thread_wakeups(cx);
         self.generation += 1;
         self.reported_directory = None;
+        self.title = None;
         let generation = self.generation;
         let mut terminal = Terminal::new(self.size, SCROLLBACK_LINES);
         terminal.set_default_cursor_style(terminal_cursor_style(cx));
@@ -223,20 +230,45 @@ impl TerminalSession {
                 PtyEvent::Terminal(TerminalEvent::WorkingDirectory(reported)) => {
                     self.reported_directory = knot_terminal::local_directory(&reported);
                 }
-                // Titles and bells have no product behavior; the engine
-                // answers queries itself.
+                PtyEvent::Terminal(TerminalEvent::Title(title)) => {
+                    self.title = Some(title).filter(|title| !title.is_empty());
+                }
+                // Bells have no product behavior yet; the engine answers
+                // queries itself.
                 PtyEvent::Terminal(_) | PtyEvent::Output => {}
             }
         }
     }
 
-    /// The label the session's tab shows.
+    /// The name the session carries without a title: its default shell label
+    /// or the one Rename Session set.
     pub(crate) fn name(&self) -> &str {
         &self.name
     }
 
-    pub(crate) fn set_name(&mut self, name: String) {
+    /// The name Rename Session set, if any.
+    pub(crate) fn explicit_name(&self) -> Option<&str> {
+        self.name_explicit.then_some(self.name.as_str())
+    }
+
+    /// The label the session's tab shows: an explicit name, else the
+    /// program's title, else the default name.
+    pub(crate) fn label(&self) -> &str {
+        match &self.title {
+            Some(title) if !self.name_explicit => title,
+            _ => &self.name,
+        }
+    }
+
+    /// Sets the default label, which a program's title overrides.
+    pub(crate) fn set_default_name(&mut self, name: String) {
         self.name = name;
+    }
+
+    /// Sets a name that wins over any title.
+    pub(crate) fn rename(&mut self, name: String) {
+        self.name = name;
+        self.name_explicit = true;
     }
 
     pub(crate) fn mouse_reporting_enabled(&self) -> bool {

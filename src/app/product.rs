@@ -1111,7 +1111,8 @@ impl KnotWindow {
         self.follow_focus(cx);
     }
 
-    /// The label of a terminal session's tab.
+    /// The name a terminal session has without a title, which default labels
+    /// are made unique against.
     fn terminal_session_name(id: TerminalSessionId, cx: &App) -> Option<String> {
         let sessions = cx.global::<ApplicationTerminalSessions>().0.borrow();
         sessions
@@ -1120,7 +1121,16 @@ impl KnotWindow {
             .map(|session| session.read(cx).name().to_owned())
     }
 
-    /// Label a terminal session's tab.
+    /// The label of a terminal session's tab.
+    fn terminal_session_label(id: TerminalSessionId, cx: &App) -> Option<String> {
+        let sessions = cx.global::<ApplicationTerminalSessions>().0.borrow();
+        sessions
+            .sessions
+            .get(&id)
+            .map(|session| session.read(cx).label().to_owned())
+    }
+
+    /// Name a terminal session's tab, winning over its program's title.
     fn set_terminal_name(id: TerminalSessionId, name: String, cx: &mut App) {
         let session = cx
             .global::<ApplicationTerminalSessions>()
@@ -1130,15 +1140,23 @@ impl KnotWindow {
             .get(&id)
             .cloned();
         if let Some(session) = session {
-            session.update(cx, |session, _| session.set_name(name));
+            session.update(cx, |session, _| session.rename(name));
         }
     }
 
     fn terminal_facts(id: TerminalSessionId, cx: &App) -> crate::app::window_layout::TerminalFacts {
         crate::app::window_layout::TerminalFacts {
             directory: Self::terminal_session_directory(id, cx),
-            name: Self::terminal_session_name(id, cx),
+            name: Self::terminal_session_explicit_name(id, cx),
         }
+    }
+
+    fn terminal_session_explicit_name(id: TerminalSessionId, cx: &App) -> Option<String> {
+        let sessions = cx.global::<ApplicationTerminalSessions>().0.borrow();
+        sessions
+            .sessions
+            .get(&id)
+            .and_then(|session| session.read(cx).explicit_name().map(str::to_owned))
     }
 
     fn terminal_session_directory(id: TerminalSessionId, cx: &App) -> Option<std::path::PathBuf> {
@@ -1302,7 +1320,7 @@ impl KnotWindow {
             })
             .collect::<Vec<_>>();
         let name = knot_model::workbench::free_label(session.read(cx).name(), &taken);
-        session.update(cx, |session, _| session.set_name(name));
+        session.update(cx, |session, _| session.set_default_name(name));
         let view = cx.new(|cx| TerminalView::new(session.clone(), cx));
         cx.global::<ApplicationTerminalSessions>()
             .0

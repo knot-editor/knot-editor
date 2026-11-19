@@ -1825,3 +1825,80 @@ fn rename_session_labels_the_tab_and_the_label_persists(cx: &mut TestAppContext)
     let json = serde_json::to_string(&layout).unwrap();
     assert!(json.contains("\"name\":\"build\""), "{json}");
 }
+
+#[gpui::test]
+fn a_program_title_labels_the_tab_and_rename_wins(cx: &mut TestAppContext) {
+    use crate::app::commands::dispatch::RENAME_SESSION_COMMAND;
+    let documents = install_globals(cx);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (window, native_window) = product_window(document, model, cx);
+    open_terminals_in_window(&window, native_window, 1, cx);
+
+    let session_id = |cx: &TestAppContext| {
+        cx.read(|cx| {
+            let workbench = window.read(cx).workbench.read(cx);
+            let pane = workbench.focused_pane().unwrap();
+            let TabSurfaceId::Terminal(id) = pane.active_tab().surface_id() else {
+                panic!("the terminal is focused");
+            };
+            id
+        })
+    };
+    let id = session_id(cx);
+    let label = |cx: &TestAppContext| cx.read(|cx| KnotWindow::terminal_session_label(id, cx));
+    let default = label(cx).unwrap();
+    let send_title = |title: &[u8], cx: &mut TestAppContext| {
+        let session = cx.read(|cx| {
+            cx.global::<ApplicationTerminalSessions>()
+                .0
+                .borrow()
+                .sessions[&id]
+                .clone()
+        });
+        cx.read(|cx| {
+            session.read(cx).with_terminal(|terminal| {
+                terminal.write(&[b"\x1b]2;".as_slice(), title, b"\x07"].concat())
+            })
+        });
+    };
+    let wait_for_label = |expected: &str, cx: &mut TestAppContext| {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while label(cx).as_deref() != Some(expected) {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "label {:?}",
+                label(cx)
+            );
+            cx.run_until_parked();
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    };
+
+    send_title(b"vim: notes", cx);
+    wait_for_label("vim: notes", cx);
+    // A title is not part of the layout; the default label is regenerated.
+    let layout = cx.read(|cx| window.read(cx).capture_layout(None, cx));
+    let json = serde_json::to_string(&layout).unwrap();
+    assert!(
+        !json.contains("vim: notes") && !json.contains("\"name\""),
+        "{json}"
+    );
+
+    send_title(b"", cx);
+    wait_for_label(&default, cx);
+
+    let rename = dispatch_product_command(&window, native_window, RENAME_SESSION_COMMAND, cx);
+    assert_eq!(wait_for_command(rename, cx), CommandOutcome::Completed);
+    press_keys(&window, "ctrl-a ctrl-k", cx);
+    type_text(&window, "build", cx);
+    press_keys(&window, "enter", cx);
+    send_title(b"vim: notes", cx);
+    cx.run_until_parked();
+    std::thread::sleep(std::time::Duration::from_millis(100));
+    cx.run_until_parked();
+    assert_eq!(label(cx).as_deref(), Some("build"));
+    let layout = cx.read(|cx| window.read(cx).capture_layout(None, cx));
+    let json = serde_json::to_string(&layout).unwrap();
+    assert!(json.contains("\"name\":\"build\""), "{json}");
+}

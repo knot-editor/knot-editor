@@ -9,6 +9,9 @@ use crate::app::tokens;
 use crate::app::workbench::{BottomDockLayout, ToolKind};
 use crate::app::zoom;
 
+/// The widest a terminal tab's label gets, in rems, before it ends in an ellipsis.
+const TERMINAL_TAB_MAX_WIDTH: f32 = 200.;
+
 /// What dragging a divider resizes.
 #[derive(Clone, Copy)]
 pub(super) enum Divider {
@@ -401,7 +404,7 @@ impl KnotWindow {
                             }
                         )
                     }
-                    TabSurfaceId::Terminal(session) => Self::terminal_session_name(session, cx)
+                    TabSurfaceId::Terminal(session) => Self::terminal_session_label(session, cx)
                         .unwrap_or_else(|| "Terminal".to_owned()),
                     TabSurfaceId::Tool(id) => workbench.tool(id).unwrap().title.to_owned(),
                 };
@@ -481,7 +484,28 @@ impl KnotWindow {
                             .debug_selector(move || format!("tab-icon-{}", tab_id.value()))
                             .child(crate::app::icons::AppIcon::new(icon))
                     }))
-                    .child(title)
+                    .map(|element| {
+                        if matches!(tab.surface_id(), TabSurfaceId::Terminal(_)) {
+                            // A program's title can be arbitrarily long.
+                            let full = SharedString::from(title.clone());
+                            element
+                                .child(
+                                    div()
+                                        .max_w(zoom::rems(TERMINAL_TAB_MAX_WIDTH))
+                                        .overflow_hidden()
+                                        .whitespace_nowrap()
+                                        .text_ellipsis()
+                                        .child(title.clone()),
+                                )
+                                .tooltip(move |window, cx| {
+                                    gpui_component::tooltip::Tooltip::new(full.clone())
+                                        .text_xs()
+                                        .build(window, cx)
+                                })
+                        } else {
+                            element.child(title.clone())
+                        }
+                    })
                     .when(tab.is_pinned(), |element| {
                         element.child(
                             div()

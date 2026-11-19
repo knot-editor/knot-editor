@@ -893,3 +893,32 @@ fn cursor_style_setting_shapes_new_sessions_but_the_program_still_wins(cx: &mut 
     assert_eq!(cursor_style(&session, cx), CursorStyle::Underline);
     session.update(cx, |session, cx| session.close(cx));
 }
+
+#[gpui::test]
+fn program_titles_label_the_session_until_cleared_or_renamed(cx: &mut TestAppContext) {
+    let session = cx.new(|cx| TerminalSession::new_with_options(shell("exec sleep 30"), cx));
+    let default = session.read_with(cx, |session, _| session.label().to_owned());
+    let set_title = |cx: &mut TestAppContext, bytes: &[u8]| {
+        session.read_with(cx, |session, _| session.with_terminal(|t| t.write(bytes)));
+    };
+
+    set_title(cx, b"\x1b]2;user@host: ~/src\x07");
+    wait_for(cx, &session, |session| {
+        session.label() == "user@host: ~/src"
+    });
+    session.read_with(cx, |session, _| assert_eq!(session.name(), default));
+
+    set_title(cx, b"\x1b]2;\x07");
+    wait_for(cx, &session, |session| session.label() == default);
+
+    set_title(cx, b"\x1b]0;again\x07");
+    wait_for(cx, &session, |session| session.label() == "again");
+    session.update(cx, |session, _| session.rename("build".into()));
+    set_title(cx, b"\x1b]2;later\x07");
+    cx.run_until_parked();
+    session.read_with(cx, |session, _| {
+        assert_eq!(session.label(), "build");
+        assert_eq!(session.explicit_name(), Some("build"));
+    });
+    session.update(cx, |session, cx| session.close(cx));
+}

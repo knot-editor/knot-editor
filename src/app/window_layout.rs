@@ -523,7 +523,7 @@ pub(crate) enum PlannedTab<D> {
     /// A fresh shell, started in `directory` when it still exists.
     Terminal {
         directory: Option<std::path::PathBuf>,
-        /// The label its tab shows, when recorded.
+        /// The name set with Rename Session, when there is one.
         name: Option<String>,
     },
 }
