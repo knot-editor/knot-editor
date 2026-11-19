@@ -104,29 +104,15 @@ its description and binding, and still matches the name as typed. Pass
 The buffer belongs to the command’s captured context. Focus changes during
 `await` do not select another buffer. Offsets are UTF-8 bytes; edits require
 the revision read from a snapshot. Completion and change callbacks receive an
-explicit buffer to use outside commands.
-
-Buffers answer line lookups directly: `lineCount()`,
-`lineRange(line)` without the line's terminator, `lineAt(offset)`, and
-`lines(first, last)`, which returns each line's number, text, and byte start in
-one read. Lines are 0-based like every other coordinate, so a large file never
-crosses the boundary whole.
-
-`editor.selection({ lines: n })` also returns the caret's line and the lines
-from `n` above it to `n` below it, clamped to the buffer, so a motion within
-them needs no further read. Display-cell and fold queries stay editor calls.
-
-`buffer.createMark(offset)` returns a mark that follows edits: it stays with the
-character after it, so text inserted before or at it moves it, and
-`mark.position()` reads its current offset. Once a deletion removes the text it
-sat in, `position()` is `null` for good, and an empty buffer has nothing to
-mark. A mark belongs to the package, ends with it or with `dispose()`, and is
-not persisted, named, or listed: a package that wants Vim's lettered marks or
-bookmarks keeps those in its own storage and creates marks as documents open.
+explicit buffer to use outside commands. Lines are 0-based, and a buffer
+answers line lookups (`lineRange`, `lineAt`, `lines`) directly, so a large file
+never crosses the boundary whole. `buffer.createMark(offset)` returns a mark
+that follows edits.
 
 A command run in a document editor also receives `context.editor`, a handle on
 that editor; it is null for terminals, trees, and text frames. It reads and
-moves the selection and saves and restores the view:
+moves the selection, saves and restores the view, and answers display queries
+for motions: rows and the viewport, display cells, and folds.
 
 ```js
 await commands.register("example.go-to-start", async ({ editor, buffer }) => {
@@ -141,37 +127,17 @@ await commands.register("example.go-to-start", async ({ editor, buffer }) => {
 });
 ```
 
-`reveal: "nearest"`, the default, scrolls as ordinary caret movement does;
-`"center"` centers the caret's row only when it was off screen,
-`"always-center"` centers it even when it is on screen; `"top"` and
-`"bottom"` always put it at that edge of the viewport, as far as the text
-allows. A row is one screen line of a possibly wrapped line.
-`editor.viewport()` returns the `first` row wholly inside the viewport and the
-number of `rows` that are, from the last layout, and `editor.scrollBy(rows)`
-scrolls by rows, negative upward, without moving the caret.
-`editor.rowAt(row)` returns the buffer `line` a row belongs to and the byte
-`column` it starts at, and
-`editor.rowOf(line, column)` the row a byte column shows on, so a motion to a
-screen position needs no caret move. `editor.cellsBefore`
-and `editor.columnAtCells` convert between a line's UTF-8 byte columns and
-display cells, with the editor's tab size and the cell measure soft wrap uses,
-so vertical movement can aim at what the screen shows.
-`editor.fold({ start, end })` collapses a range of buffer lines (0-based, both
-included) into its first line, `editor.unfold(range)` expands the fold over
-exactly that range, `editor.folds()` lists the collapsed folds, outermost
-first, and `editor.foldRegions()` lists the regions the language offers (see
-`queries.folds`). Rows, `viewport`, `rowAt`, `rowOf`, and `scrollBy` count only the lines
-no fold hides, and putting the caret in hidden lines with `setSelection`
-expands the folds hiding it. Folds are per view and follow edits. Setting the
-selection is not an edit, but it ends the typing undo group as any caret move
-does. Like `context.target`, the handle works only while its command runs and
-rejects `InvalidTarget` once the editor's tab closes or moves.
 `commands.unavailable()` ends a handler with the `unavailable` outcome, as
-native commands report a target they do not apply to.
+native commands report a target they do not apply to. Like `context.target`,
+the handle works only while its command runs and rejects `InvalidTarget` once
+the editor's tab closes or moves.
 
 An editor can also outlive the command: `workbench.editor(target)` takes the
 `ViewTarget` of a document tab, from observation, and returns the same editor
-bound to that exact tab, plus `onDidClose` and `dispose`.
+bound to that exact tab. It never follows a replacement, so a mode obtains a
+new handle from the next observation, and `onDidClose` runs once when the tab
+closes or moves. A handle also sets the editor's key context and cursor style,
+as a modal package does, and listens for selection changes.
 
 ```js
 const { snapshot } = await workbench.observe(() => {});
@@ -180,57 +146,18 @@ await editor.setKeyContext("normal", true);
 editor.onDidClose(() => { /* drop per-editor state */ });
 ```
 
-Every call rejects `InvalidTarget` once the tab closes, moves to another pane
-or window, or is replaced; the handle never follows a replacement, so a mode
-obtains a new one from the next observation. `onDidClose` runs once when that
-happens, and not on `dispose()` or unload. A key context set through a handle
-stays until cleared or the package unloads, even after `dispose()`.
-
-`editor.setCursorStyle("block")` draws the caret as a block over the character
-under it, `"underline"` beneath it, and `"bar"` or `null` restores the default.
-Like a key context it belongs to the package and ends with it, so a mode sets
-it on entering and clears it on leaving.
-
-`editor.onDidChangeSelection(listener)` runs after the selection changes for
-any reason, edits that move the caret included. It receives the selection as
-of when its turn starts, so it needs no `editor.selection()` read;
-`onDidChangeSelection(listener, { lines: n })` adds the nearby lines as
-`selection({ lines: n })` does.
-Notifications coalesce, so a burst of changes runs the listener once with the
-final selection, and a listener still busy when more changes arrive gets one
-further call, not a queue.
-
 `editor.beginUndoGroup()` makes everything committed to the editor's buffer
-until the returned group is disposed one undo step: the package's own edit
-batches, native typing, paste, and deletion, and moving the caret between
-them. A mode that changes text and then lets the user type, such as Vim's
-`ciw`, opens the group before the change and disposes it on leaving insert
-mode.
+until the returned group is disposed one undo step, so a mode that changes text
+and then lets the user type, such as Vim's `ciw`, opens the group before the
+change and disposes it on leaving insert mode. `editor.record()` records the
+keyboard input the editor receives as plain data, so a package can replay it.
 
 ```js
 const group = await editor.beginUndoGroup();
 await buffer.applyEdits([{ range, text: "" }], { ifRevision: revision });
 // ...the user types; later, on Escape:
 await group.dispose();
-```
 
-One group is open per buffer: a second `beginUndoGroup` rejects
-`OperationInProgress`. Native undo and redo end an open group first. The group
-also ends when the package unloads or the handle's tab closes or the handle is
-disposed, so it never outlives its owner. A group with no edits leaves no undo
-step.
-
-`editor.record()` records the input the editor receives from the keyboard as
-plain data, so a package can replay it. `recording.stop()` resolves with the
-entries, in order: each command a key or text binding ran with its arguments,
-text typed or committed by an input method as `editor.type` with `{ text }`,
-and an accepted completion as `editor.type` with `{ text, replace }`, where
-`replace` is the number of characters before the caret it replaced. Palette,
-menu, scripted, and nested command invocations and mouse input are not
-recorded, so replaying never records itself. Several recordings can be active
-at once; each keeps only its own editor's input.
-
-```js
 const recording = await editor.record();
 // ...the user types; later:
 const entries = await recording.stop();
@@ -239,14 +166,10 @@ for (const { command, arguments: args } of entries) {
 }
 ```
 
-A recording ends when it is stopped or disposed, when the handle's tab closes
-or the handle is released, or when the package unloads; stopping a recording
-that ended resolves with no entries.
-
-Registering commands/providers/keymaps is valid during activation. Contextual
-lookup and command invocation require a running command. Await disposal and
-view invalidation to observe completion, and use host error `code` values
-when handling failures. See the API reference for precise rules.
+Registering commands, providers, and keymaps is valid during activation;
+contextual lookup and command invocation require a running command. Await
+disposal and view invalidation to observe completion, and use host error `code`
+values when handling failures. The API reference has the precise rules.
 
 ## Contribute a tool window
 
