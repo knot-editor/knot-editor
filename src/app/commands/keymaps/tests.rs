@@ -174,6 +174,7 @@ fn windows_and_linux_terminals_leave_plain_control_keys_to_the_shell() {
             ("ctrl-pagedown", NEXT_TAB_COMMAND),
             ("ctrl-pageup", PREVIOUS_TAB_COMMAND),
             ("ctrl-`", TOGGLE_TERMINAL_COMMAND),
+            ("shift-escape", TOGGLE_TERMINAL_COMMAND),
             ("ctrl-shift-`", NEW_TERMINAL_COMMAND),
             ("ctrl-~", NEW_TERMINAL_COMMAND),
             ("ctrl-alt-b", presets::TOGGLE_NOTIFICATIONS_COMMAND),

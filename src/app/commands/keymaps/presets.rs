@@ -212,6 +212,9 @@ const SHARED_BINDINGS: &[PresetEntry] = &[
     ("shift-f10", SHOW_CONTEXT_MENU_COMMAND, None),
     ("secondary-n", NEW_COMMAND, None),
     ("ctrl-`", TOGGLE_TERMINAL_COMMAND, None),
+    // Hides the focused terminal's dock, as shift-escape hides a tool window
+    // in JetBrains IDEs.
+    ("shift-escape", TOGGLE_TERMINAL_COMMAND, Some("terminal")),
     ("ctrl-shift-`", NEW_TERMINAL_COMMAND, None),
     // Keyboards report the shifted backtick as `~`.
     ("ctrl-~", NEW_TERMINAL_COMMAND, None),
