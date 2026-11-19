@@ -9,7 +9,6 @@
 //! presentations. This module models layout and lifecycle transitions
 //! independently of native windows, views, and confirmation dialogs.
 
-#[cfg(debug_assertions)]
 use std::collections::HashSet;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
