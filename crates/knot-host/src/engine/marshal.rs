@@ -1048,6 +1048,7 @@ pub(super) fn tree_item_from_v8<'s>(
         actions: tree_actions_from_v8(scope, object, "actions")?,
         draggable: optional_flag_property(scope, object, "draggable")?,
         drop_target: optional_flag_property(scope, object, "dropTarget")?,
+        resource: optional_text_property(scope, object, "resource")?,
     })
 }
 

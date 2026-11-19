@@ -98,6 +98,7 @@ export function entryItem(root: string, entry: FileEntry): TreeItem {
     muted: entry.ignored,
     draggable: true,
     dropTarget: true,
+    resource: entry.uri,
     ...(directory ? {} : { command: ACTIVATE, arguments: { uri: entry.uri } }),
   };
 }

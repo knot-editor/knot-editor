@@ -363,6 +363,7 @@ function treeItem(value) {
     actions: treeActions(value.actions),
     draggable: value.draggable == null ? false : flag(value.draggable, "tree item draggable must be a boolean"),
     dropTarget: value.dropTarget == null ? false : flag(value.dropTarget, "tree item dropTarget must be a boolean"),
+    resource: optionalText(value.resource),
   };
 }
 

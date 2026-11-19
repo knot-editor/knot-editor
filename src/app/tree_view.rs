@@ -21,7 +21,8 @@ use knot_protocol::{
 
 mod drag;
 mod edit;
-use drag::{DragState, TreeDrag};
+use drag::DragState;
+pub(crate) use drag::TreeDrag;
 use edit::TreeEdit;
 pub(crate) use edit::{EditSession, EditTarget};
 

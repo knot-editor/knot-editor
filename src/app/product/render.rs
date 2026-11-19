@@ -6,6 +6,7 @@ use crate::app::documents::{DocumentDirty, ExternalChange};
 use crate::app::status_bar::{BarItem, StatusItem};
 use crate::app::theme::{Chrome, Theme, chrome, color, theme};
 use crate::app::tokens;
+use crate::app::tree_view::TreeDrag;
 use crate::app::workbench::{BottomDockLayout, ToolKind};
 use crate::app::zoom;
 
@@ -1056,6 +1057,21 @@ impl Render for KnotWindow {
                                 div()
                                     .size_full()
                                     .relative()
+                                    .on_drag_move::<TreeDrag>(cx.listener(
+                                        |this, event: &DragMoveEvent<TreeDrag>, _, cx| {
+                                            let drag = event.drag(cx).clone();
+                                            this.resource_drag_moved(
+                                                &drag,
+                                                event.event.position,
+                                                cx,
+                                            );
+                                        },
+                                    ))
+                                    .on_drop::<TreeDrag>(cx.listener(
+                                        |this, drag: &TreeDrag, window, cx| {
+                                            this.drop_resource(drag, window.mouse_position(), cx);
+                                        },
+                                    ))
                                     .child(workbench)
                                     .child(self.workbench_drag_geometry()),
                             ),

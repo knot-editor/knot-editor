@@ -65,6 +65,7 @@ fn item(id: &str, label: &str, kind: TreeItemKind, actions: Vec<TreeAction>) -> 
         actions,
         draggable: false,
         drop_target: false,
+        resource: None,
     }
 }
 
@@ -168,6 +169,7 @@ fn stale_and_disposed_tree_responses_are_ignored(cx: &mut TestAppContext) {
                     actions: Vec::new(),
                     draggable: false,
                     drop_target: false,
+                    resource: None,
                 }]),
             },
             cx,

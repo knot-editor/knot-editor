@@ -28,6 +28,7 @@ mod previews;
 mod providers;
 mod recovery;
 mod reopen;
+mod resource_drop;
 mod save_hygiene;
 mod sessions;
 mod settings;

@@ -4,6 +4,7 @@ use super::relocate::{TabRelocationDestination, TabRelocationSource};
 use super::*;
 use crate::app::convert::ThemePaint as _;
 use crate::app::theme::{color, theme};
+use crate::app::tree_view::TreeDrag;
 use crate::app::workbench::{
     DockLocation, SplitEdge, TabMoveCapture, TabMoveDestination, TabMovePlacement, TabSurfaceId,
 };
@@ -19,6 +20,8 @@ pub(super) struct TabDragState {
     /// The painted empty center, which takes center-capable kinds.
     empty_center: Option<Bounds<Pixels>>,
     preview: Option<DropTarget>,
+    /// Where a dragged tree row with a resource would open.
+    pub(super) resource_preview: Option<DropTarget>,
 }
 
 struct PaneGeometry {
@@ -33,7 +36,7 @@ struct PaneGeometry {
 }
 
 #[derive(Clone, Copy)]
-struct DropTarget {
+pub(super) struct DropTarget {
     tab: TabMoveDestination,
     bounds: Bounds<Pixels>,
 }
@@ -44,14 +47,36 @@ impl TabDragState {
     /// tool's tab in its own window, and terminals in the center or a
     /// container.
     fn target_at(&self, position: Point<Pixels>, surface: TabSurfaceId) -> Option<DropTarget> {
+        self.target_where(
+            position,
+            matches!(
+                surface,
+                TabSurfaceId::Document(_) | TabSurfaceId::Terminal(_)
+            ),
+            |pane| match surface {
+                TabSurfaceId::Document(_) => pane.area == Area::Center,
+                TabSurfaceId::Terminal(_) => pane.terminals,
+                TabSurfaceId::Tool(tool) => pane.area == Area::Tool(tool),
+            },
+        )
+    }
+
+    /// The drop target under `position` for a resource that opens as a
+    /// document: the center's panes and its empty area.
+    fn resource_target_at(&self, position: Point<Pixels>) -> Option<DropTarget> {
+        self.target_where(position, true, |pane| pane.area == Area::Center)
+    }
+
+    fn target_where(
+        &self,
+        position: Point<Pixels>,
+        empty_center: bool,
+        allowed: impl Fn(&PaneGeometry) -> bool,
+    ) -> Option<DropTarget> {
         if let Some(center) = self.empty_center
             && center.contains(&position)
         {
-            return matches!(
-                surface,
-                TabSurfaceId::Document(_) | TabSurfaceId::Terminal(_)
-            )
-            .then_some(DropTarget {
+            return empty_center.then_some(DropTarget {
                 tab: TabMoveDestination::Empty,
                 bounds: center,
             });
@@ -60,12 +85,7 @@ impl TabDragState {
             .panes
             .iter()
             .find(|pane| pane.bounds.contains(&position))?;
-        let allowed = match surface {
-            TabSurfaceId::Document(_) => pane.area == Area::Center,
-            TabSurfaceId::Terminal(_) => pane.terminals,
-            TabSurfaceId::Tool(tool) => pane.area == Area::Tool(tool),
-        };
-        if !allowed {
+        if !allowed(pane) {
             return None;
         }
         let &(first, _) = pane.tabs.first()?;
@@ -623,6 +643,101 @@ impl KnotWindow {
         .size_full()
     }
 
+    /// Whether a dragged resource can land on the editor area now.
+    fn takes_resource_drops(&self) -> bool {
+        self.command_palette.is_none() && !self.extension_report_open
+    }
+
+    /// A tree row with a resource moved over the window: preview where it
+    /// would open.
+    pub(super) fn resource_drag_moved(
+        &mut self,
+        drag: &TreeDrag,
+        position: Point<Pixels>,
+        cx: &mut Context<Self>,
+    ) {
+        let target = drag
+            .resource()
+            .filter(|_| self.takes_resource_drops())
+            .and_then(|_| self.tab_drag.borrow().resource_target_at(position));
+        let changed = target.map(|target| target.bounds)
+            != self
+                .tab_drag
+                .borrow()
+                .resource_preview
+                .map(|target| target.bounds);
+        self.tab_drag.borrow_mut().resource_preview = target;
+        if changed {
+            cx.notify();
+        }
+    }
+
+    /// A tree row with a resource dropped at `position`: open it in the pane
+    /// or split the pointer was over.
+    pub(super) fn drop_resource(
+        &mut self,
+        drag: &TreeDrag,
+        position: Point<Pixels>,
+        cx: &mut Context<Self>,
+    ) {
+        self.tab_drag.borrow_mut().resource_preview = None;
+        let Some(uri) = drag
+            .resource()
+            .filter(|_| self.takes_resource_drops())
+            .and_then(|resource| crate::app::resource::ResourceUri::parse(resource).ok())
+        else {
+            return;
+        };
+        let Some(landing) = self.tab_drag.borrow().resource_target_at(position) else {
+            return;
+        };
+        let window = cx.weak_entity();
+        let (target, replace_target) = match landing.tab {
+            TabMoveDestination::At {
+                anchor,
+                placement: TabMovePlacement::Split(edge),
+            } => {
+                // The split shows the anchor's document; opening replaces it.
+                let (direction, placement) = edge.split();
+                let Some(pane) = self.workbench.update(cx, |workbench, cx| {
+                    workbench.split_pane(anchor.tab.pane_id, direction, placement, cx)
+                }) else {
+                    return;
+                };
+                let tab = self.workbench.read(cx).pane(pane).unwrap().active_tab_id();
+                (OpenTarget::at(window, &self.workbench, pane, tab, cx), true)
+            }
+            TabMoveDestination::At { anchor, .. } => (
+                OpenTarget::at(
+                    window,
+                    &self.workbench,
+                    anchor.tab.pane_id,
+                    anchor.tab.tab_id,
+                    cx,
+                ),
+                false,
+            ),
+            TabMoveDestination::Empty | TabMoveDestination::Area(_) => (
+                OpenTarget {
+                    window,
+                    workbench: self.workbench.downgrade(),
+                    tab: None,
+                },
+                false,
+            ),
+        };
+        drop(self.start_open_operation_with(
+            OpenRequest::from_uri_for_product(uri),
+            target,
+            operations::OpenOptions {
+                replace_target,
+                ..Default::default()
+            },
+            cx,
+        ));
+        cx.notify();
+    }
+
     pub(super) fn cancel_tab_drag(
         &mut self,
         event: &KeyDownEvent,
@@ -679,7 +794,7 @@ impl KnotWindow {
         let drop_target = theme(cx).paint_color(color::DROP_TARGET_BACKGROUND);
         canvas(
             |_, _, _| (),
-            move |_, _, native_window, _| {
+            move |_, _, native_window, cx| {
                 let handle = native_window.window_handle();
                 let mut shared = coordinator.borrow_mut();
                 shared.windows.retain(|entry| entry.native_window != handle);
@@ -692,6 +807,11 @@ impl KnotWindow {
                 });
                 drop(shared);
                 if let Some(preview) = state.borrow().preview {
+                    native_window.paint_quad(fill(preview.bounds, drop_target));
+                }
+                if cx.has_active_drag()
+                    && let Some(preview) = state.borrow().resource_preview
+                {
                     native_window.paint_quad(fill(preview.bounds, drop_target));
                 }
                 let moves = coordinator.clone();
@@ -786,6 +906,11 @@ impl KnotWindow {
                         if phase != DispatchPhase::Capture || event.button != MouseButton::Left {
                             return;
                         }
+                        releases
+                            .borrow()
+                            .windows
+                            .iter()
+                            .for_each(|entry| entry.state.borrow_mut().resource_preview = None);
                         if let Some(window) = resize_window.upgrade()
                             && window.read(cx).split_resize.is_some()
                         {

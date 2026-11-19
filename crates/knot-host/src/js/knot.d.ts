@@ -2044,6 +2044,9 @@ declare module "knot" {
     readonly draggable?: boolean;
     /** Whether a dragged row can be dropped onto this row. */
     readonly dropTarget?: boolean;
+    /** The resource URI the row stands for. A `draggable` row with one can
+     * be dropped onto the editor area, which opens it as a tab. */
+    readonly resource?: string;
   }
   /** The argument value of a tree's `drop` command. */
   export interface TreeDrop {

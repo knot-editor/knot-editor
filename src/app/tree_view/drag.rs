@@ -23,11 +23,19 @@ pub(super) const EDGE_TICK: Duration = Duration::from_millis(40);
 
 /// The row being dragged.
 #[derive(Clone)]
-pub(super) struct TreeDrag {
+pub(crate) struct TreeDrag {
     view: ViewId,
     id: String,
+    resource: Option<String>,
     arguments: CommandArgumentValue,
     label: SharedString,
+}
+
+impl TreeDrag {
+    /// The resource URI the dragged row stands for.
+    pub(crate) fn resource(&self) -> Option<&str> {
+        self.resource.as_deref()
+    }
 }
 
 /// What follows the pointer during a drag.
@@ -74,6 +82,7 @@ pub(super) fn row_hooks(
         let drag = TreeDrag {
             view,
             id: id.clone(),
+            resource: item.resource.clone(),
             arguments: item.arguments.clone(),
             label: item.label.clone().into(),
         };

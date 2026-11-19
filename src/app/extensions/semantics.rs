@@ -699,6 +699,7 @@ mod tests {
                         actions: Vec::new(),
                         draggable: false,
                         drop_target: false,
+                        resource: None,
                     }]),
                 },
                 cx,

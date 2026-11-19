@@ -455,6 +455,10 @@ pub struct TreeItem {
     /// A dragged row can be dropped onto this row.
     #[serde(default)]
     pub drop_target: bool,
+    /// The resource URI the row stands for. A `draggable` row with one can
+    /// be dropped onto the editor area, which opens it.
+    #[serde(default)]
+    pub resource: Option<String>,
 }
 
 /// Native content a contributed view definition provides in each window.

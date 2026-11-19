@@ -208,6 +208,7 @@ test("rows declare drags: entries drag and take drops, roots only take drops", a
   for (const item of await rows(rootRow)) {
     assert.equal(item.draggable, true, item.label);
     assert.equal(item.dropTarget, true, item.label);
+    assert.equal(item.resource, `${ROOT}/${item.label}`, item.label);
   }
 });
 

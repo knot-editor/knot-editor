@@ -20,7 +20,7 @@ pub enum SplitEdge {
 }
 
 impl SplitEdge {
-    fn split(self) -> (SplitDirection, SplitPlacement) {
+    pub fn split(self) -> (SplitDirection, SplitPlacement) {
         match self {
             Self::Left => (SplitDirection::Horizontal, SplitPlacement::Before),
             Self::Right => (SplitDirection::Horizontal, SplitPlacement::After),

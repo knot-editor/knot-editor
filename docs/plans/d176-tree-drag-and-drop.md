@@ -1,6 +1,6 @@
 # D176: Drag and drop in trees
 
-Status: 🚧 approved, checkpoints 1 and 2 done. Roadmap item [D176](../roadmap.md).
+Status: 🚧 approved, checkpoints 1 and 2 done, 3 awaiting review. Roadmap item [D176](../roadmap.md).
 References: [extension trees](../architecture/semantic-ui.md#extension-trees),
 [tree content and actions](../decisions/semantic-ui.md#extension-tree-content-and-actions),
 [workbench and lifecycle](../architecture/workbench-and-lifecycle.md).
@@ -98,7 +98,13 @@ Done: explorer rows declare the payload, and the `drop` command in
 `extensions/@knot/explorer/src/clipboard.ts` moves or copies through the helper
 Paste shares. A folder dropped into itself or a descendant is refused.
 
-### 3. Dropping a resource on the editor area
+### 3. Dropping a resource on the editor area ✅ (review gate pending)
+
+Done: `TreeItem.resource` reaches the drag value; the window previews and
+opens it from `drop_resource` in `src/app/product/tab_drag.rs`. A split edge
+splits the pane and the open replaces the split's duplicated tab, which stays
+if the open fails. Tests: `src/app/product/tests/resource_drop.rs`. Try
+command: `Try: Drag rows onto the editor area`.
 
 Deliverables: `TreeItem.resource`. Over the center, a resource drag shows the
 tab-drag pane and split previews, and a drop opens the resource pinned in that
