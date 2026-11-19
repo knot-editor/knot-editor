@@ -19,8 +19,8 @@ boundary whole.
 
 The reveal recenters only when the target was off screen, as VS Code's Go to
 Line does, so short hops never jolt the view. The message line copies Zed's
-wording, which changes less as one types than VS Code's prompts. Showing the
-current position as placeholder text, as Zed does, waits for D140.
+wording, which changes less as one types than VS Code's prompts. The current
+position is shown as placeholder text, as in Zed.
 `commands.unavailable()` exists so a handler can report that it does not apply,
 the counterpart of `invalidArguments`.
 
