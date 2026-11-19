@@ -1000,17 +1000,20 @@ Go to File's providers. The full contract
 is `providers` in
 [`knot.d.ts`](../crates/knot-host/src/js/knot.d.ts).
 
-Knot asks providers too: register an `editor.completion` provider, a
-`CompletionProvider` in `knot.d.ts`, to offer editor completion. The editor
-asks every registration and merges their items, so a later one adds to the
-others. A request names its document; a provider that reads the text gets the
-buffer from `documents.get` and keeps it while the document is open.
+### Provider names
 
-Register an `editor.paste.<languageId>` provider, a `PasteProvider` in
-`knot.d.ts`, to shape what pasting inserts in a language, as the Markdown
-package turns a URL pasted over selected text into a link. Only the latest
-registration of a language answers, and a language with none pastes without
-calling the host.
+Knot asks these providers itself. Each type is in `knot.d.ts`.
+
+| Name | Type | Asked | Registrations used |
+| --- | --- | --- | --- |
+| `editor.completion` | `CompletionProvider` | When editor completion opens; items from every registration merge, and a request names its document, which a provider reads through `documents.get`. | All, oldest first |
+| `editor.paste.<languageId>` | `PasteProvider` | When native paste runs in that language, to shape the inserted text; a language with none pastes without calling the host. Bundled: the Markdown package turns a URL pasted over selected text into a link. | Latest of that name |
+
+Bundled packages register providers for each other:
+
+| Name | Package | Methods |
+| --- | --- | --- |
+| `workspace.files`, `workspace.buffers`, `workspace.actions` | Go to File | `rows(query)`: the rows of that Search Everywhere tab for the caller's window |
 
 ## Identity and lifetime
 
