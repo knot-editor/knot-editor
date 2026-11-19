@@ -585,6 +585,19 @@ pub(crate) async fn recover(context: CommandContext, (): ()) -> Result<(), Comma
         .await
 }
 
+#[command("file.discard-recoverable", title = "Discard Unsaved Documents…", description = "Permanently delete the unsaved text kept from earlier sessions.", id = DISCARD_RECOVERABLE_COMMAND, participant = Workbench)]
+pub(crate) async fn discard_recoverable(
+    context: CommandContext,
+    (): (),
+) -> Result<(), CommandOutcome> {
+    context
+        .window(|window, _, cx| {
+            window.start_recovery_discard(cx);
+            Ok(())
+        })
+        .await
+}
+
 #[command("editor.set-language-mode", title = "Set Language Mode…", description = "Choose the language of the current document.", id = SET_LANGUAGE_MODE_COMMAND, participant = Workbench)]
 pub(crate) async fn set_language_mode(
     context: CommandContext,

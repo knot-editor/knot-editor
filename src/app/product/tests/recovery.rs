@@ -690,6 +690,57 @@ async fn native_listing_restores_and_discards_with_no_extension_host(cx: &mut Te
     open_listing_empty(&window, native_window, cx);
 }
 
+#[gpui::test]
+async fn discard_command_deletes_every_unsaved_snapshot_after_confirmation(
+    cx: &mut TestAppContext,
+) {
+    let documents = install_globals(cx);
+    let (filesystems, _) = memory_filesystems_with_provider();
+    cx.set_global(ApplicationFileSystems(filesystems));
+    let (window, native_window) = super::operations::empty_product_window(&documents, cx);
+    let first = snapshot_draft("One", None, SnapshotState::Untitled, None, "one", 1);
+    let second = snapshot_draft("Two", None, SnapshotState::Untitled, None, "two", 2);
+    seed(&[&first, &second], cx).await;
+    let discard = |cx: &mut TestAppContext| {
+        let execution = dispatch_product_command(
+            &window,
+            native_window,
+            super::super::commands::DISCARD_RECOVERABLE_COMMAND,
+            cx,
+        );
+        assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
+        crate::test_support::wait_until(cx, |cx| cx.has_pending_prompt());
+    };
+
+    discard(cx);
+    cx.simulate_prompt_answer("Cancel");
+    cx.run_until_parked();
+    assert_eq!(
+        cx.update(crate::app::recovery::recoverable)
+            .await
+            .unwrap()
+            .len(),
+        2
+    );
+
+    discard(cx);
+    cx.simulate_prompt_answer("Discard");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while !cx
+        .update(crate::app::recovery::recoverable)
+        .await
+        .unwrap()
+        .is_empty()
+    {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "discard did not commit"
+        );
+        cx.run_until_parked();
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+}
+
 fn open_listing_empty(
     window: &Entity<KnotWindow>,
     native_window: gpui::AnyWindowHandle,
@@ -885,7 +936,13 @@ async fn launch_requests_open_alongside_recovery_when_an_extension_fails(cx: &mu
         cx.read(|cx| super::super::find_window(&target, cx))
             .is_some()
     );
-    assert_eq!(notice_commands(&notice), [("Recover…", "file.recover")]);
+    assert_eq!(
+        notice_commands(&notice),
+        [
+            ("Recover…", "file.recover"),
+            ("Discard…", "file.discard-recoverable")
+        ]
+    );
 }
 
 #[gpui::test]

@@ -119,6 +119,66 @@ impl KnotWindow {
         self.tasks.push(task);
     }
 
+    /// Ask, then permanently delete every unsaved snapshot the startup notice counts.
+    pub(crate) fn start_recovery_discard(&mut self, cx: &mut Context<Self>) {
+        let listing = crate::app::recovery::recoverable(cx);
+        let task = cx.spawn(async move |this, cx| {
+            let snapshots: Vec<_> = match listing.await {
+                Ok(snapshots) => snapshots
+                    .into_iter()
+                    .filter(|snapshot| snapshot.kind != SnapshotKind::Retained)
+                    .collect(),
+                Err(error) => {
+                    Self::notice(
+                        &this,
+                        Severity::Warning,
+                        "Recovery is unavailable",
+                        Some(error.to_string()),
+                        cx,
+                    );
+                    return;
+                }
+            };
+            if snapshots.is_empty() {
+                return;
+            }
+            let Ok(answer) = this.update(cx, |window, cx| {
+                window.prompt(
+                    PromptLevel::Warning,
+                    format!("Discard {}?", plural(snapshots.len(), "unsaved document")),
+                    Some("The recovered text is permanently deleted.".into()),
+                    vec![PromptButton::new("Discard"), PromptButton::cancel("Cancel")],
+                    cx,
+                )
+            }) else {
+                return;
+            };
+            if answer.await.unwrap_or(1) != 0 {
+                return;
+            }
+            for snapshot in snapshots {
+                let discard = cx.update(|cx| {
+                    crate::app::recovery::discard_snapshot(
+                        snapshot.kind,
+                        snapshot.capture_key.clone(),
+                        cx,
+                    )
+                });
+                if let Err(error) = discard.await {
+                    Self::notice(
+                        &this,
+                        Severity::Error,
+                        "Discard failed",
+                        Some(error.to_string()),
+                        cx,
+                    );
+                    return;
+                }
+            }
+        });
+        self.tasks.push(task);
+    }
+
     fn present_recovered(
         &mut self,
         outcome: Result<RestoreOutcome, RestoreError>,
@@ -207,10 +267,10 @@ pub(super) fn startup_notice(
             plural(recovery.remaining, "unsaved document")
         ),
         detail: format!("Use File › {LISTING_TITLE}… to restore or discard them."),
-        actions: vec![crate::app::notifications::action(
-            "Recover…",
-            "file.recover",
-        )],
+        actions: vec![
+            crate::app::notifications::action("Recover…", "file.recover"),
+            crate::app::notifications::action("Discard…", "file.discard-recoverable"),
+        ],
     })
 }
 
