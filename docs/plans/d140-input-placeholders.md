@@ -1,6 +1,6 @@
 # D140: Placeholder text in input fields
 
-Status: 🚧 checkpoint 1 awaiting review. Roadmap item [D140](../roadmap.md).
+Status: 🚧 checkpoint 1 done, checkpoint 2 not started. Roadmap item [D140](../roadmap.md).
 
 ## Goal
 
@@ -37,46 +37,12 @@ it, as Zed's Go to Line does. Go to Line shows the current position as
 
 ## Checkpoints
 
-### 1. Input placeholder and Go to Line ✅ (pending review gate)
+### 1. Input placeholder and Go to Line ✅
 
-Deliverables:
-
-- `placeholder` on `InputOptions`, validated in the host and shown in the empty
-  field.
-- Tab on an empty field accepts the placeholder unless a completion row is
-  highlighted.
-- `@knot/go-to-line` shows `line:column` as its placeholder and the shorter
-  message.
-- `knot.d.ts` and the [extension guide](../extension-api.md), if it describes
-  input options, document the option and the Tab behavior.
-
-Validation:
-
-- `InputView` tests: the placeholder shows only while the field is empty; Tab
-  on an empty field fills it and publishes the change; Tab with a highlighted
-  history row accepts the row; Tab on a non-empty field without a list does
-  nothing new.
-- `go-to-line` extension test: Tab accepts the current position and Enter keeps
-  the caret there; the message reads `N of M lines`.
-- `just check`.
-
-Review gate: run `Try:` commands for Go to Line and an input with both history
-and a placeholder.
-
-**Implementation context:**
-
-- `crates/knot-host/src/js/knot.d.ts` (`InputOptions`, around line 2308) and
-  `crates/knot-host/src/js/bootstrap.js` (input option parsing near
-  `optionalText(options.prompt)`, around line 1041).
-- `src/app/extensions/host/handlers.rs`: `InputArguments` (line 1413) and both
-  `InputSpec` constructions in `show_input` and `begin_input` (around lines
-  1825 and 1870); `src/app/product/tool_commands.rs:232` builds another
-  `InputSpec`.
-- `src/app/transient.rs`: add `placeholder` to `InputSpec` (and its test
-  builder), set it on the `TextInput` in `InputView::new`, and extend the
-  `"tab"` arm of the key handler around `accept_completion`.
-- `extensions/@knot/go-to-line/src/extension.ts` and its
-  `test/extension.test.ts`.
+Done and approved. `InputOptions.placeholder` and Tab-to-accept are documented
+in the [extension guide](../extension-api.md); Go to Line shows the caret
+position as its placeholder. Extension tests cannot send Tab, so native Tab is
+covered by the `InputView` test only.
 
 ### 2. Picker tab placeholders and Search Everywhere
 
