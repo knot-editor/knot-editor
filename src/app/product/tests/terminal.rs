@@ -1256,6 +1256,27 @@ async fn new_terminals_from_a_focused_terminal_start_in_its_directory(cx: &mut T
     assert_eq!(focused_terminal_directory(&window, cx), Some(nested));
 }
 
+#[gpui::test]
+async fn terminals_without_a_requested_directory_start_in_the_first_root(cx: &mut TestAppContext) {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp_directory(&temp);
+    let documents = install_globals(cx);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (window, native_window) = product_window(document, model, cx);
+    cx.update_window(native_window, |_, _, cx| {
+        window.update(cx, |window, cx| {
+            window.replace_workspace_roots(vec![directory_uri(&root)], cx);
+            let (session, _) = window.create_terminal(cx);
+            assert_eq!(
+                KnotWindow::terminal_session_directory(session, cx),
+                Some(root.clone())
+            );
+        });
+    })
+    .unwrap();
+}
+
 /// The area and kind of the focused tab, and how many terminal sessions live.
 fn focused_area(
     window: &Entity<KnotWindow>,

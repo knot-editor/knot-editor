@@ -978,12 +978,12 @@ await commands.register("operations.terminal", async () => {{
             })
             .collect::<Vec<_>>()
     });
-    // Without a directory, a terminal starts in the home directory; the
+    // Without a directory, a terminal starts in the first root; the
     // center terminal comes first, the tool window's terminals after it.
     let explicit = std::fs::canonicalize(explicit).unwrap();
     assert_eq!(directories.len(), 3);
     assert_eq!(directories[0], explicit);
-    let home = std::fs::canonicalize(directories::BaseDirs::new().unwrap().home_dir()).unwrap();
-    assert_eq!(directories[1..], [home.clone(), home]);
+    let root = std::fs::canonicalize(root.path()).unwrap();
+    assert_eq!(directories[1..], [root.clone(), root]);
     host.update(cx, |host, cx| host.unload(key, cx).unwrap());
 }

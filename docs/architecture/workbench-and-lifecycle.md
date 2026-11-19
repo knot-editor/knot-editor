@@ -605,7 +605,7 @@ A new session's working directory is chosen when it is created and kept across
 restart. The opener chooses it: `@knot/chrome`'s New Terminal passes the focused
 terminal's directory, else the root containing the last focused document, else
 the first root. Splitting a terminal pane uses the split terminal's current
-directory, and a session opened without one starts in the home directory. A
+directory, and a session opened without one starts in the first local root, else the home directory. A
 terminal tab restored in place starts in its recorded directory, or the home
 directory when that no longer exists; restoration installs a window's roots
 before its layout.

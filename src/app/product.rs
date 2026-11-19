@@ -1167,9 +1167,14 @@ impl KnotWindow {
             .and_then(|session| session.read(cx).current_directory())
     }
 
-    /// The directory a terminal starts in when its opener names none.
-    fn home_directory() -> Option<std::path::PathBuf> {
-        directories::BaseDirs::new().map(|base| base.home_dir().to_owned())
+    /// The directory a terminal starts in when its opener names none: the
+    /// first local workspace root, else the home directory.
+    fn default_terminal_directory(&self) -> Option<std::path::PathBuf> {
+        self.root_uris()
+            .iter()
+            .find_map(|root| root.as_url().to_file_path().ok())
+            .filter(|directory| directory.is_dir())
+            .or_else(|| directories::BaseDirs::new().map(|base| base.home_dir().to_owned()))
     }
 
     pub(crate) fn application_window(
@@ -1296,7 +1301,7 @@ impl KnotWindow {
         &mut self,
         cx: &mut Context<Self>,
     ) -> (TerminalSessionId, Entity<TerminalView>) {
-        self.create_terminal_in(Self::home_directory(), cx)
+        self.create_terminal_in(self.default_terminal_directory(), cx)
     }
 
     fn create_terminal_in(
@@ -2174,7 +2179,8 @@ impl KnotWindow {
                 None => Destination::Center,
             },
         };
-        let (id, view) = self.create_terminal_in(directory.or_else(Self::home_directory), cx);
+        let directory = directory.or_else(|| self.default_terminal_directory());
+        let (id, view) = self.create_terminal_in(directory, cx);
         let Some((pane, tab)) = self.workbench.update(cx, |workbench, _| match destination {
             Destination::Pane(pane) => workbench
                 .open_terminal_tab(pane, id, view)
@@ -2221,7 +2227,8 @@ impl KnotWindow {
             _ => None,
         };
         let new_session = terminal.map(|id| {
-            let directory = Self::terminal_session_directory(id, cx).or_else(Self::home_directory);
+            let directory = Self::terminal_session_directory(id, cx)
+                .or_else(|| self.default_terminal_directory());
             self.create_terminal_in(directory, cx)
         });
         let split = self
