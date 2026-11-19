@@ -36,6 +36,15 @@ export type SubstituteFlags = {
   readonly quiet: boolean;
 };
 
+/** What `:sort` flags ask for: `!` reverses, `i` ignores case, `n` sorts by
+ * the first number, `u` keeps the first of equal lines. */
+export type SortOptions = {
+  readonly reverse: boolean;
+  readonly ignoreCase: boolean;
+  readonly numeric: boolean;
+  readonly unique: boolean;
+};
+
 export type ExCommand =
   /** `:w`, or `:w <file>`, which writes a copy; `force` replaces an existing file. */
   | { readonly kind: "write"; readonly path: string | null; readonly force: boolean }
@@ -83,6 +92,28 @@ export type ExCommand =
   | { readonly kind: "undo" | "redo" }
   /** `:pwd`. */
   | { readonly kind: "pwd" }
+  /** `:d` and `:y`: the lines of `range`, or `count` lines from its last, into
+   * `register` as `dd` and `yy` do. */
+  | {
+    readonly kind: "delete" | "yank";
+    readonly range: ExRange | null;
+    readonly register: string | null;
+    readonly count: number | null;
+  }
+  /** `:m` and `:t`, `:co`: the lines of `range` moved or copied below `destination`. */
+  | { readonly kind: "move" | "copy"; readonly range: ExRange | null; readonly destination: Address }
+  /** `:>` and `:<`, shifting the lines `amount` times. */
+  | {
+    readonly kind: "shift";
+    readonly range: ExRange | null;
+    readonly direction: ">" | "<";
+    readonly amount: number;
+    readonly count: number | null;
+  }
+  /** `:j`, joining the lines as `J` does, or with `force` without adding spaces. */
+  | { readonly kind: "join"; readonly range: ExRange | null; readonly force: boolean; readonly count: number | null }
+  /** `:sort`, over `range` or every line. */
+  | { readonly kind: "sort"; readonly range: ExRange | null; readonly options: SortOptions }
   /** `:noh`, which hides the search highlights until the next search. */
   | { readonly kind: "nohlsearch" }
   /** An empty line, which does nothing. */
@@ -96,6 +127,7 @@ const NAMES: readonly (readonly [string, number])[] = [
   ["wall", 2], ["qall", 2], ["wqall", 3], ["xall", 2],
   ["bnext", 2], ["bprevious", 2], ["bdelete", 2], ["buffer", 1], ["enew", 3], ["new", 3], ["vnew", 3],
   ["only", 2], ["close", 3], ["undo", 1], ["redo", 3], ["pwd", 2],
+  ["delete", 1], ["yank", 1], ["move", 1], ["copy", 2], ["join", 1], ["sort", 3],
 ];
 
 const BOOLEANS: Readonly<Record<string, BooleanOption>> = {
@@ -124,12 +156,30 @@ export function parseEx(text: string): ExCommand {
   if (parsed.range !== null && parsed.rest === "") return error(`E492: Not an editor command: ${line}`);
   const range = parsed.range;
   line = parsed.rest;
+  const shift = /^([<>]+)\s*(.*)$/.exec(line);
+  if (shift !== null) {
+    const count = parseCount(shift[2]!, false);
+    if (typeof count === "string") return error(count);
+    return { kind: "shift", range, direction: shift[1]![0] as ">" | "<", amount: shift[1]!.length, count: count.count };
+  }
   const match = /^([a-zA-Z]+)(!?)\s*(.*)$/.exec(line);
   const name = match === null ? null : fullName(match[1]!);
   if (match === null || name === null) return error(`E492: Not an editor command: ${line}`);
   const force = match[2] === "!";
   const argument = match[3]!;
   if (name === "substitute") return parseSubstitute(range, argument);
+  if (name === "sort") return parseSort(range, force, argument);
+  if (name === "delete" || name === "yank" || name === "join") {
+    const parsed = parseCount(argument, name !== "join");
+    if (typeof parsed === "string") return error(parsed);
+    if (name === "join") return { kind: "join", range, force, count: parsed.count };
+    return { kind: name, range, register: parsed.register, count: parsed.count };
+  }
+  if (name === "move" || name === "copy") {
+    const destination = parseAddress(argument);
+    if (destination === null || destination.rest.trim() !== "") return error("E14: Invalid address");
+    return { kind: name, range, destination: destination.address };
+  }
   if (range !== null) return error("E481: No range allowed");
   if (name === "set") return parseSet(argument);
   if (name === "edit") {
@@ -242,7 +292,31 @@ function parseSubstitute(range: ExRange | null, text: string): ExCommand {
   return { kind: "substitute", range, pattern, replacement, flags };
 }
 
+/** The optional register and count after `:d`, `:y`, `:>`, and `:j`. */
+function parseCount(
+  text: string,
+  registers: boolean,
+): { readonly register: string | null; readonly count: number | null } | string {
+  const match = /^(?:([a-zA-Z"+*_])\s*)?(\d+)?$/.exec(text);
+  if (match === null || (match[1] !== undefined && !registers)) return `E488: Trailing characters: ${text}`;
+  const count = match[2] === undefined ? null : Number(match[2]);
+  if (count === 0) return "E939: Positive count required";
+  return { register: match[1] ?? null, count };
+}
+
+/** `:sort[!] [inu]`; a pattern is not supported. */
+function parseSort(range: ExRange | null, reverse: boolean, text: string): ExCommand {
+  const flags = text.replace(/\s+/g, "");
+  if (!/^[inu]*$/.test(flags)) return error(`E474: Invalid argument: ${text}`);
+  return {
+    kind: "sort",
+    range,
+    options: { reverse, ignoreCase: flags.includes("i"), numeric: flags.includes("n"), unique: flags.includes("u") },
+  };
+}
+
 function fullName(typed: string): string | null {
+  if (typed === "t") return "copy";
   for (const [name, shortest] of NAMES) {
     if (typed.length >= shortest && name.startsWith(typed)) return name;
   }

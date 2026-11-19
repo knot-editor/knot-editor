@@ -135,6 +135,35 @@ test("unknown commands and arguments are errors", () => {
   assert.deepEqual(parseEx("s"), { kind: "error", message: "E492: Not an editor command: s" });
 });
 
+test("range commands parse their range, register, count, and flags", () => {
+  const at = (line: number) => ({ base: { kind: "line", line }, offset: 0 });
+  const range = { first: at(2), last: at(3) };
+  assert.deepEqual(parseEx("d"), { kind: "delete", range: null, register: null, count: null });
+  assert.deepEqual(parseEx("2,3d x 4"), { kind: "delete", range, register: "x", count: 4 });
+  assert.deepEqual(parseEx("2,3y"), { kind: "yank", range, register: null, count: null });
+  assert.deepEqual(parseEx("2,3ya a"), { kind: "yank", range, register: "a", count: null });
+  assert.deepEqual(parseEx("d 0"), { kind: "error", message: "E939: Positive count required" });
+  assert.deepEqual(parseEx("d x y"), { kind: "error", message: "E488: Trailing characters: x y" });
+  assert.deepEqual(parseEx("2,3m$"), { kind: "move", range, destination: { base: { kind: "last" }, offset: 0 } });
+  assert.deepEqual(parseEx("t.+1"), { kind: "copy", range: null, destination: { base: { kind: "current" }, offset: 1 } });
+  assert.deepEqual(parseEx("co0"), { kind: "copy", range: null, destination: { base: { kind: "line", line: 0 }, offset: 0 } });
+  assert.deepEqual(parseEx("m"), { kind: "error", message: "E14: Invalid address" });
+  assert.deepEqual(parseEx("m 2 x"), { kind: "error", message: "E14: Invalid address" });
+  assert.deepEqual(parseEx(">"), { kind: "shift", range: null, direction: ">", amount: 1, count: null });
+  assert.deepEqual(parseEx("2,3<<"), { kind: "shift", range, direction: "<", amount: 2, count: null });
+  assert.deepEqual(parseEx("> 3"), { kind: "shift", range: null, direction: ">", amount: 1, count: 3 });
+  assert.deepEqual(parseEx("'<,'>>").kind, "shift");
+  assert.deepEqual(parseEx("j"), { kind: "join", range: null, force: false, count: null });
+  assert.deepEqual(parseEx("2,3j! 5"), { kind: "join", range, force: true, count: 5 });
+  assert.deepEqual(parseEx("j x"), { kind: "error", message: "E488: Trailing characters: x" });
+  const none = { reverse: false, ignoreCase: false, numeric: false, unique: false };
+  assert.deepEqual(parseEx("sort"), { kind: "sort", range: null, options: none });
+  assert.deepEqual(parseEx("2,3sor! i n u"), {
+    kind: "sort", range, options: { reverse: true, ignoreCase: true, numeric: true, unique: true },
+  });
+  assert.deepEqual(parseEx("sort /x/"), { kind: "error", message: "E474: Invalid argument: /x/" });
+});
+
 test(":set turns options on, off, and over, and sets and shows values", () => {
   assert.deepEqual(parseEx("set nu nornu invwrap et! ts=2 sw:4 tabstop? number?"), {
     kind: "set",
@@ -195,7 +224,7 @@ test("command names complete, in the order of the matcher", async () => {
   assert.deepEqual(await values("se"), ["set", "saveas", "nohlsearch", "substitute", "close"]);
   assert.deepEqual(await values(":q"), [":quit", ":qall", ":wq", ":wqall"]);
   assert.deepEqual(await values("zz"), []);
-  assert.equal((await values("")).length, 28);
+  assert.equal((await values("")).length, 34);
 });
 
 test("line numbers and other arguments get no items", async () => {

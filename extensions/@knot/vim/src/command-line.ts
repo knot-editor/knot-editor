@@ -7,8 +7,9 @@ import {
   type ExRange, type SetArgument,
 } from "./ex.js";
 import { BufferLines } from "./lines.js";
-import { grouped, markOffset, moveTo, prompted, run, type State } from "./normal.js";
+import { applyOperator, grouped, join, markOffset, moveTo, prompted, record, regionText, replace, run, type State } from "./normal.js";
 import { translateReplacement } from "./pattern.js";
+import { sortLines } from "./sort.js";
 import { compile, IGNORE_CASE, invalidPattern, searchSettings, SMART_CASE } from "./search.js";
 import { firstNonBlank } from "./text.js";
 
@@ -163,10 +164,46 @@ async function runEx(state: State, command: ExCommand): Promise<string | null> {
       const directory = await baseDirectory(state);
       return directory === null ? "No directory" : pathOfUri(directory);
     }
+    case "delete":
+    case "yank":
+      return deleteOrYank(state, command);
+    case "move":
+    case "copy":
+      return moveOrCopy(state, command);
+    case "shift":
+      return shift(state, command);
+    case "join":
+      return joinLines(state, command);
+    case "sort":
+      return sort(state, command);
     case "nohlsearch":
       await state.shared.highlights.hide();
       return null;
   }
+}
+
+/** The 0-based line `address` names; it is -1 for `0`, and may lie outside
+ * the buffer. A message when a mark is unset. */
+async function addressLine(
+  state: State,
+  lines: BufferLines,
+  { base, offset }: Address,
+  current: number,
+  total: number,
+): Promise<number | string> {
+  switch (base.kind) {
+    case "line": return base.line - 1 + offset;
+    case "current": return current + offset;
+    case "last": return total - 1 + offset;
+    case "mark": {
+      const at = await markOffset(state, base.name);
+      return at === null ? "E20: Mark not set" : (await lines.position(at)).line + offset;
+    }
+  }
+}
+
+async function currentLine(state: State, lines: BufferLines): Promise<number> {
+  return (await lines.position((await state.handle.selection()).caret)).line;
 }
 
 /** The 0-based first and last line of `range`, or the current line without
@@ -177,25 +214,158 @@ async function resolveRange(
   range: ExRange | null,
 ): Promise<readonly [number, number] | string> {
   const total = await lines.count();
-  const current = (await lines.position((await state.handle.selection()).caret)).line;
-  const address = async ({ base, offset }: Address): Promise<number | string> => {
-    switch (base.kind) {
-      case "line": return base.line - 1 + offset;
-      case "current": return current + offset;
-      case "last": return total - 1 + offset;
-      case "mark": {
-        const at = await markOffset(state, base.name);
-        return at === null ? "E20: Mark not set" : (await lines.position(at)).line + offset;
-      }
-    }
-  };
+  const current = await currentLine(state, lines);
   if (range === null) return [current, current];
-  const first = await address(range.first);
-  const last = await address(range.last);
+  const first = await addressLine(state, lines, range.first, current, total);
+  const last = await addressLine(state, lines, range.last, current, total);
   if (typeof first === "string") return first;
   if (typeof last === "string") return last;
   if (Math.min(first, last) < 0 || Math.max(first, last) >= total) return "E16: Invalid range";
   return [Math.min(first, last), Math.max(first, last)];
+}
+
+/** The lines of `range`, or with `count` that many from its last line, as far
+ * as the buffer goes. */
+async function countedRange(
+  state: State,
+  lines: BufferLines,
+  range: ExRange | null,
+  count: number | null,
+): Promise<readonly [number, number] | string> {
+  const resolved = await resolveRange(state, lines, range);
+  if (typeof resolved === "string" || count === null) return resolved;
+  const last = resolved[1];
+  return [last, Math.min((await lines.count()) - 1, last + count - 1)];
+}
+
+/** The linewise region of the lines `first` to `last`. */
+const wholeLines = (first: number, last: number) =>
+  ({ start: { line: first, col: 0 }, end: { line: last, col: 0 }, linewise: true }) as const;
+
+/** `:d` and `:y`: fill the registers as `dd` and `yy` do; `:y` leaves the caret. */
+async function deleteOrYank(
+  state: State,
+  command: Extract<ExCommand, { kind: "delete" | "yank" }>,
+): Promise<string | null> {
+  const lines = new BufferLines(state.buffer);
+  const resolved = await countedRange(state, lines, command.range, command.count);
+  if (typeof resolved === "string") return resolved;
+  const region = wholeLines(...resolved);
+  if (command.kind === "yank") {
+    await record(state, command.register, await regionText(lines, region), "yank");
+  } else {
+    const from = await lines.position((await state.handle.selection()).caret);
+    await applyOperator(state, lines, "d", command.register, region, from, false);
+  }
+  return null;
+}
+
+/** `:m` and `:t`: one edit over the lines the move or copy touches, with the
+ * caret on the first non-blank of the last line placed. */
+async function moveOrCopy(
+  state: State,
+  command: Extract<ExCommand, { kind: "move" | "copy" }>,
+): Promise<string | null> {
+  const lines = new BufferLines(state.buffer);
+  const resolved = await resolveRange(state, lines, command.range);
+  if (typeof resolved === "string") return resolved;
+  const [first, last] = resolved;
+  const total = await lines.count();
+  const destination = await addressLine(state, lines, command.destination, await currentLine(state, lines), total);
+  if (typeof destination === "string") return destination;
+  if (destination < -1 || destination >= total) return "E16: Invalid range";
+  const copying = command.kind === "copy";
+  if (!copying && destination >= first && destination < last) return "E134: Cannot move a range of lines into itself";
+  const texts = async (from: number, to: number) => {
+    const out: string[] = [];
+    for (let line = from; line <= to; line++) out.push(await lines.text(line));
+    return out;
+  };
+  const block = await texts(first, last);
+  let landed: number;
+  await grouped(state, async () => {
+    if (copying) {
+      // Below the destination line, or above the first line for `0`.
+      const at = destination < 0 ? 0 : await lines.offset({ line: destination, col: (await lines.text(destination)).length });
+      await replace(state, at, at, destination < 0 ? `${block.join("\n")}\n` : `\n${block.join("\n")}`);
+      landed = destination + block.length;
+    } else if (destination > last) {
+      const between = await texts(last + 1, destination);
+      await replaceLines(state, lines, first, destination, [...between, ...block]);
+      landed = destination;
+    } else if (destination < first - 1) {
+      const between = await texts(destination + 1, first - 1);
+      await replaceLines(state, lines, destination + 1, last, [...block, ...between]);
+      landed = destination + block.length;
+    } else {
+      landed = last;
+    }
+  });
+  const fresh = new BufferLines(state.buffer);
+  await moveTo(state, fresh, { line: landed!, col: firstNonBlank(await fresh.text(landed!)) });
+  return null;
+}
+
+/** Replaces the lines `first` to `last` with `texts`, joined by line breaks. */
+async function replaceLines(state: State, lines: BufferLines, first: number, last: number, texts: readonly string[]) {
+  const start = await lines.offset({ line: first, col: 0 });
+  const end = await lines.offset({ line: last, col: (await lines.text(last)).length });
+  await replace(state, start, end, texts.join("\n"));
+}
+
+/** `:>` and `:<`, as `>>` and `<<` over the lines. */
+async function shift(state: State, command: Extract<ExCommand, { kind: "shift" }>): Promise<string | null> {
+  const lines = new BufferLines(state.buffer);
+  const resolved = await countedRange(state, lines, command.range, command.count);
+  if (typeof resolved === "string") return resolved;
+  const from = await lines.position((await state.handle.selection()).caret);
+  await applyOperator(state, lines, command.direction, null, wholeLines(...resolved), from, false, command.amount);
+  return null;
+}
+
+/** `:j`: joins the lines of the range, or the current line and the next; a
+ * range of one line does nothing. With `!` no spaces are added or removed. */
+async function joinLines(state: State, command: Extract<ExCommand, { kind: "join" }>): Promise<string | null> {
+  const lines = new BufferLines(state.buffer);
+  let resolved = await countedRange(state, lines, command.range, command.count);
+  if (typeof resolved === "string") return resolved;
+  if (command.range === null && command.count === null) {
+    const next = Math.min(resolved[0] + 1, (await lines.count()) - 1);
+    resolved = [resolved[0], next];
+  }
+  const [first, last] = resolved;
+  if (first === last) return null;
+  if (command.force) {
+    await grouped(state, async () => {
+      const texts: string[] = [];
+      for (let line = first; line <= last; line++) texts.push(await lines.text(line));
+      await replaceLines(state, lines, first, last, [texts.join("")]);
+    });
+    const fresh = new BufferLines(state.buffer);
+    await moveTo(state, fresh, { line: first, col: 0 });
+    return null;
+  }
+  await moveTo(state, lines, { line: first, col: 0 });
+  await join(state, last - first + 1);
+  return null;
+}
+
+/** `:sort`: replaces the lines with their sorted order in one edit. */
+async function sort(state: State, command: Extract<ExCommand, { kind: "sort" }>): Promise<string | null> {
+  const lines = new BufferLines(state.buffer);
+  const total = await lines.count();
+  const resolved = command.range === null ? ([0, total - 1] as const) : await resolveRange(state, lines, command.range);
+  if (typeof resolved === "string") return resolved;
+  const [first, last] = resolved;
+  const before: string[] = [];
+  for (let line = first; line <= last; line++) before.push(await lines.text(line));
+  const after = sortLines(before, command.options);
+  if (after.length !== before.length || after.some((text, at) => text !== before[at])) {
+    await grouped(state, () => replaceLines(state, lines, first, last, after));
+  }
+  const fresh = new BufferLines(state.buffer);
+  await moveTo(state, fresh, { line: first, col: firstNonBlank(await fresh.text(first)) });
+  return null;
 }
 
 /** The most matches one substitution reads. */
