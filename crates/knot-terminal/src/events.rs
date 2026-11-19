@@ -25,6 +25,9 @@ pub enum TerminalEvent {
     /// The program reported its working directory (OSC 7, 9, or 1337) as
     /// it sent it: a `file://` URI or a path; empty when cleared.
     WorkingDirectory(String),
+    /// The program asked for a desktop notification (OSC 9 or 777). The
+    /// title is empty when the program gave none.
+    Notification { title: String, body: String },
 }
 
 pub(crate) type EventHandler = Box<dyn FnMut(TerminalEvent) + Send>;
@@ -43,7 +46,7 @@ pub(crate) struct Callbacks {
 /// `callbacks` must stay valid, and not be accessed through a reference
 /// during any terminal call, until `raw` is freed.
 pub(crate) unsafe fn register(raw: ffi::GhosttyTerminal, callbacks: *mut Callbacks) {
-    let options: [(ffi::GhosttyTerminalOption, *const c_void); 6] = [
+    let options: [(ffi::GhosttyTerminalOption, *const c_void); 7] = [
         (ffi::GHOSTTY_TERMINAL_OPT_USERDATA, callbacks.cast()),
         (
             ffi::GHOSTTY_TERMINAL_OPT_WRITE_PTY,
@@ -57,6 +60,10 @@ pub(crate) unsafe fn register(raw: ffi::GhosttyTerminal, callbacks: *mut Callbac
         (
             ffi::GHOSTTY_TERMINAL_OPT_PWD_CHANGED,
             pwd_changed as *const c_void,
+        ),
+        (
+            ffi::GHOSTTY_TERMINAL_OPT_DESKTOP_NOTIFICATION,
+            desktop_notification as *const c_void,
         ),
         (ffi::GHOSTTY_TERMINAL_OPT_SIZE, size as *const c_void),
     ];
@@ -132,6 +139,29 @@ unsafe extern "C" fn pwd_changed(raw: ffi::GhosttyTerminal, userdata: *mut c_voi
     let directory = unsafe { read_string(raw, ffi::GHOSTTY_TERMINAL_DATA_PWD) };
     // SAFETY: the library passes back the registered userdata.
     unsafe { emit(userdata, TerminalEvent::WorkingDirectory(directory)) };
+}
+
+unsafe extern "C" fn desktop_notification(
+    _raw: ffi::GhosttyTerminal,
+    userdata: *mut c_void,
+    notification: *const ffi::GhosttyTerminalDesktopNotification,
+) {
+    let text = |string: ffi::GhosttyString| {
+        if string.len == 0 {
+            return String::new();
+        }
+        // SAFETY: the library passes `len` readable bytes for the call.
+        String::from_utf8_lossy(unsafe { slice::from_raw_parts(string.ptr, string.len) })
+            .into_owned()
+    };
+    // SAFETY: the library passes a readable notification for the call.
+    let notification = unsafe { *notification };
+    let event = TerminalEvent::Notification {
+        title: text(notification.title),
+        body: text(notification.body),
+    };
+    // SAFETY: the library passes back the registered userdata.
+    unsafe { emit(userdata, event) };
 }
 
 unsafe extern "C" fn size(

@@ -122,6 +122,25 @@ fn title_bell_and_working_directory_are_reported() {
 }
 
 #[test]
+fn desktop_notifications_are_reported() {
+    let (mut terminal, events) = recording(80, 24);
+    terminal.write(b"\x1b]9;build done\x1b\\\x1b]777;notify;Build;all green\x07");
+    assert_eq!(
+        take(&events),
+        [
+            TerminalEvent::Notification {
+                title: String::new(),
+                body: "build done".into(),
+            },
+            TerminalEvent::Notification {
+                title: "Build".into(),
+                body: "all green".into(),
+            },
+        ]
+    );
+}
+
+#[test]
 fn without_a_handler_queries_go_unanswered() {
     let mut terminal = Terminal::new(size(80, 24), 100);
     terminal.write(b"\x1b[6n\x07");
