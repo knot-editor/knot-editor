@@ -1,6 +1,6 @@
 // The Terminal tool window and its commands: New Terminal and New Terminal in
 // Editor. New Terminal owns where a shell starts.
-import { commands, files, terminals, windows, workbench } from "knot";
+import { commands, files, icons, terminals, windows, workbench } from "knot";
 import type { CommandContext, WindowInfo } from "knot";
 
 export const TERMINAL_VIEW = "builtin.terminal";
@@ -42,6 +42,7 @@ async function open(context: CommandContext, location: string) {
 }
 
 export async function registerTerminal() {
+  await icons.define(`tool.${TERMINAL_VIEW}`, { lucide: "square-terminal" });
   await workbench.registerView({
     id: TERMINAL_VIEW,
     title: "Terminal",
