@@ -210,7 +210,7 @@ folds hiding it; clicking a fold's placeholder expands it. The Fold, Unfold, Tog
 commands act on the [regions](#syntax-highlighting-and-languages)
 the language offers; Fold collapses the innermost uncollapsed region that
 starts on the caret's line or encloses it. Extensions fold exact line ranges
-through the [editor handle](../extension-api/ui.md).
+through the [editor handle](../extension-api/commands-and-keys.md#register-a-command).
 
 Restorable view state is the anchor and caret as byte offsets, the start of the
 top visible row as a byte offset, and horizontal scroll in pixels. Applying it
