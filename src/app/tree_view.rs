@@ -1292,6 +1292,19 @@ impl TreeView {
         }
     }
 
+    /// The inline edit field, framed like a text field so that typing is
+    /// evident among the plain rows.
+    fn edit_field(input: &Entity<crate::app::text_input::TextInput>, cx: &App) -> Div {
+        let theme = theme(cx);
+        div()
+            .px_1()
+            .border_1()
+            .rounded(crate::app::zoom::rems(crate::app::tokens::radius::SM))
+            .border_color(theme.paint_color(color::INPUT_FOCUSED_BORDER))
+            .bg(theme.paint_color(color::INPUT_BACKGROUND))
+            .child(input.clone())
+    }
+
     fn disclosure(item: &TreeItem, expanded: bool, cx: &App) -> AppIcon {
         match Self::disclosure_name(item, expanded) {
             Some(name) => AppIcon::new(icon_definition(name, cx)),
@@ -1532,7 +1545,7 @@ impl Render for TreeView {
                                         edit_label.as_ref().filter(|(label, _)| *label == item.id),
                                         search_ranges.get(&item.id),
                                     ) {
-                                        (Some((_, input)), _) => div().child(input.clone()),
+                                        (Some((_, input)), _) => Self::edit_field(input, cx),
                                         (None, Some(ranges)) => {
                                             div().truncate().child(highlighted(
                                                 item.label.clone(),
@@ -1680,7 +1693,11 @@ impl Render for TreeView {
                         icon.as_ref()
                             .map(|icon| AppIcon::new(ref_definition(icon, false, cx))),
                     )
-                    .children(edit_draft.clone().map(|input| div().flex_1().child(input)))
+                    .children(
+                        edit_draft
+                            .as_ref()
+                            .map(|input| Self::edit_field(input, cx).flex_1()),
+                    )
                     .into_any_element(),
                 VisibleRow::Status {
                     depth,

@@ -13,6 +13,7 @@ use gpui::*;
 use super::{TreeView, VisibleRow};
 use crate::app::keys::Keystroke;
 use crate::app::text_input::{TextInput, TextInputEvent};
+use crate::app::tokens;
 use crate::app::transient::TransientOutcome;
 use knot_protocol::IconRef;
 
@@ -79,7 +80,8 @@ impl TreeView {
             }
         }
         let length = value.len();
-        let input = cx.new(|cx| TextInput::new(value.clone(), cx));
+        let input =
+            cx.new(|cx| TextInput::new(value.clone(), cx).interface_text(tokens::list::TEXT_SIZE));
         input.update(cx, |input, cx| {
             input.select_range(selection.unwrap_or(0..length), cx);
         });
