@@ -28,7 +28,6 @@ point.
 
 ## Next up
 
-- 🚧 D151 — Smaller Vim commands
 - D022 — Editor autocompletion.
 - D182 — Interleave extension roots at awaits: before D067.
 - D087 — Extension entitlements: D085, D126, D067, and D101 need it.
@@ -219,7 +218,7 @@ hold the analyses that support some items.
     and takes drops, but lists nothing. When a start surface (recent projects
     and files, common commands) is selected, draw it in the empty center,
     keeping its focus and drop behavior. It lists the recent files and the
-    projects of D084.
+    projects of D084. Vim's `ctrl-w n` waits for it.
 
 - **D205 — Drag tree rows to other apps**
   - Depends on: none
@@ -469,7 +468,7 @@ hold the analyses that support some items.
   - Description: The `folds` queries serve folding only. Extensions cannot
     query the syntax tree, and there are no `textobjects` queries, so Vim's
     `if`, `ac`, and `ia`, structural selection expansion, and tree-based
-    motions cannot be built. Do it when daily Vim use misses tree-sitter text
+    motions, and Vim's `it` and `at`, cannot be built. Do it when daily Vim use misses tree-sitter text
     objects, or structural selection is selected: add per-language
     `textobjects` queries beside `folds` and `indents`, and expose node queries
     through the extension API without exposing tree-sitter objects.
@@ -500,14 +499,6 @@ Kakoune mode could use them too. The
     decorations or a generated text surface without touching the buffer, and
     decide whether the preview needs a native expansion primitive so that it
     matches what `replace` would write.
-
-- **D151 — Smaller Vim commands** 🚧
-  - Depends on: none
-  - Description: Counted `ctrl-w` focus keys, `r<cr>`, `J` and `gJ`, `_`, `|`,
-    `gi`, `ga`, `gp`, `gP`, `]p`, growing visual `i(` and `a(`, and sentence
-    motions and objects, inside the Vim package. Planned in
-    [d151-smaller-vim-commands](plans/d151-smaller-vim-commands.md). Tag
-    objects (`it`, `at`) wait for D144, and `ctrl-w n` for D061.
 
 - **D208 — Vim pane swap and rotate**
   - Depends on: none
