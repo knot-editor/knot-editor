@@ -66,7 +66,7 @@ user.
 Done and approved. Native paste asks `editor.paste.<languageId>` and applies
 the revalidated answer as one undo step; the Markdown package registers the
 link provider. See the [paste flow](../architecture/editor-and-languages.md)
-and [`PasteProvider`](../extension-api.md). `Editor.preparePaste` reuses
+and [`PasteProvider`](../extension-api/packages.md#provider-names). `Editor.preparePaste` reuses
 `EditorState::paste_request` (`crates/knot-model/src/editor/paste.rs`) and
 `call_paste_provider` (`src/app/extensions/host.rs`). Known gap: a fence in
 an unregistered language still reaches the Markdown provider.

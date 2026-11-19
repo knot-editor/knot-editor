@@ -100,7 +100,7 @@ They are ports of MIT-licensed themes; Tokyo Night's light variant is enkia's
 Tokyo Night Light rather than tokyonight.nvim's Day, which is Apache-2.0.
 
 References: [semantic UI](../architecture/semantic-ui.md#themes-and-color-keys)
-and [extension guide](../extension-api.md#register-a-theme-and-define-colors).
+and [extension guide](../extension-api/languages-and-themes.md#register-a-theme-and-define-colors).
 
 ## Decoration styles
 

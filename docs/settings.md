@@ -5,7 +5,7 @@ keys defined by bundled packages under `extensions/@knot/`. Native definitions
 live in `crates/knot-model/src/settings.rs`, typed declarations in `crates/knot-host/src/js/knot.d.ts`,
 and package definitions in the owning package's `src/extension.ts`. This page
 lists keys, types, and defaults; it does not repeat how settings work. See
-[read and write settings](extension-api.md#read-and-write-settings) for the
+[read and write settings](extension-api/settings.md#read-and-write-settings) for the
 API, and `settings.rs` for the store.
 
 ## Scopes and precedence

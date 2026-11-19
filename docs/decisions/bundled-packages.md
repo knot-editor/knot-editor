@@ -26,7 +26,7 @@ the counterpart of `invalidArguments`.
 
 References: [editor views](../architecture/editor-and-languages.md#editor-views),
 [commands](../architecture/commands.md#extension-execution), and
-[extension guide](../extension-api.md#register-a-command).
+[extension guide](../extension-api/commands-and-keys.md#register-a-command).
 
 ## Search Everywhere
 
@@ -83,7 +83,7 @@ entries of the `/`, `?` and `:` prompts and of Find's fields are a generic
 input `history` option, with a separate list per package, since a Vim pattern
 recalled into Find's literal search would be noise.
 
-References: [extension guide](../extension-api.md#bind-keys-and-modal-contexts),
+References: [extension guide](../extension-api/commands-and-keys.md#bind-keys-and-modal-contexts),
 [text search](../architecture/core-and-buffers.md#text-search),
 [settings](../settings.md#bundled-packages) and
 [roadmap](../roadmap.md) (D142, D151, D182, D201).
@@ -99,7 +99,7 @@ the extension rather than the system clipboard, so pasting text elsewhere never
 meets a file and the clipboard holds only text. Multi-select, drag and drop,
 compact folders, and Git decorations are roadmap items (D177, D176, D178, D126).
 
-References: [extension guide](../extension-api.md#activation-selection-and-editing-in-trees)
+References: [extension guide](../extension-api/ui.md#activation-selection-and-editing-in-trees)
 and [semantic UI](../architecture/semantic-ui.md#extension-trees).
 
 ## Bundled project registry

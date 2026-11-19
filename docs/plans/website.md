@@ -17,7 +17,7 @@ guide, and a feature tour.
 - **Single source of truth.** The documentation section is generated from
   Markdown under `docs/` at deploy time. User-facing pages are published;
   internal documents (`architecture*`, `decisions*`, `plans/`, `roadmap.md`,
-  `reports/`) are not. Existing [extension-api.md](../extension-api.md) and
+  `reports/`) are not. Existing [extension-api/](../extension-api/README.md) and
   [settings.md](../settings.md) are published as they stand, and the new
   user-facing pages are authored beside them.
 - **Generator.** A static generator runs inside `pages.yml`, with its output
@@ -96,7 +96,7 @@ publish the settings reference and keybinding documentation.
 - **Implementation context:** new Markdown beside the user-facing docs;
   [`src/app/personal_config.rs`](../../src/app/personal_config.rs)
   (`user_config_root`) for config locations, `docs/settings.md`,
-  [extension-api.md](../extension-api.md#bind-keys-and-modal-contexts) for
+  [the extension guide](../extension-api/commands-and-keys.md#bind-keys-and-modal-contexts) for
   keymaps. Link rather than copy.
 - **Validation:** every command in the page is run from a clean checkout;
   the link check from checkpoint 2 passes.
@@ -108,7 +108,7 @@ Publish the extension guide with the TypeScript API reference, and add a
 feature tour (workbench, projects, terminal, recovery, languages and themes)
 using the checkpoint 1 screenshots.
 
-- **Implementation context:** `docs/extension-api.md`,
+- **Implementation context:** `docs/extension-api/README.md`,
   `crates/knot-host/src/js/knot.d.ts`, `scripts/extensions/examples/`,
   `docs/schemas/knot.schema.json`; decide here whether the reference is
   generated or linked.

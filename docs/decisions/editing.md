@@ -30,7 +30,7 @@ modules were rejected: they add type checking but need Node, `build.rs`, or V8
 to load them for Rust.
 
 References: [languages](../architecture/editor-and-languages.md#syntax-highlighting-and-languages)
-and [extension guide](../extension-api.md#register-a-language).
+and [extension guide](../extension-api/languages-and-themes.md#register-a-language).
 
 ## Indentation
 
@@ -101,7 +101,7 @@ because a setting cannot express that split: the store has one default per key,
 and a frame's view ID scope exists only once someone writes it.
 
 References: [editor views](../architecture/editor-and-languages.md#editor-views)
-and [extension guide](../extension-api.md#read-only-text-frames).
+and [extension guide](../extension-api/ui.md#read-only-text-frames).
 
 ## Editing commands
 

@@ -1,6 +1,6 @@
 /**
  * Public API version 1 reference for module "knot".
- * See docs/extension-api.md for package admission and authoring.
+ * See docs/extension-api/README.md for package admission and authoring.
  *
  * Offsets, revisions and generations are nonnegative safe integers. Recognized
  * fields are validated without coercion; unknown option/data fields are ignored.

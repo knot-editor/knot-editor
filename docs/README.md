@@ -16,8 +16,8 @@ Current sources of truth:
   remove a report once its item is completed or dropped.
 - [settings.md](settings.md) lists every native and bundled-package setting
   with its type, default, and scope.
-- [extension-api.md](extension-api.md) is the extension-author guide for setup and common
-  workflows; precise API contracts live beside the TypeScript declarations.
+- [extension-api/](extension-api/README.md) is the extension-author guide for setup and common
+  workflows, one file per topic; precise API contracts live beside the TypeScript declarations.
 - [development.md](development.md) covers local checks, CI, and the Rust
   toolchain.
 

@@ -132,7 +132,7 @@ Toolchain, because gpui precompiles its shaders outside debug builds:
 `scripts/check-extensions.sh`, run by `just ext` and in CI, uses `npm ci` to check
 declarations, every TypeScript package and its tests, authoring samples, and
 positive/negative type fixtures, then runs the package tests under `node:test`
-with an in-memory host (see the [extension guide](extension-api.md#write-and-test-in-typescript)).
+with an in-memory host (see the [extension guide](extension-api/README.md#write-and-test-in-typescript)).
 It does not use a global `tsc`. Runtime contracts still require Rust/V8 tests.
 Files under a package's `test/fixtures` are test inputs and are not compiled;
 The bundled language packages keep highlight fixtures there, checked by a Rust test that

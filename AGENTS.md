@@ -39,8 +39,8 @@ canonical source before reading broadly.
 | Extension runtime, scheduling, lifecycle, records | [extension host](docs/architecture/extension-host.md) | `crates/knot-host/src/`, `crates/knot-protocol/src/`, `src/app/extensions/` |
 | Contributed UI, trees, completion, generated text | [semantic UI](docs/architecture/semantic-ui.md) | `src/app/extensions/semantics.rs`, `src/app/tree_view.rs`, `crates/knot-model/src/completion.rs`, `src/app/completion.rs` |
 | Syntax highlighting, languages, theme | [languages](docs/architecture/editor-and-languages.md#syntax-highlighting-and-languages), [themes](docs/architecture/semantic-ui.md#themes-and-color-keys), [core and buffers](docs/architecture/core-and-buffers.md#syntax-state) | `crates/knot-model/src/{syntax,theme,languages,themes}.rs`, `src/app/languages.rs`, `src/app/themes.rs`, `extensions/@knot/language-*/`, `extensions/@knot/themes/` |
-| Extension public contract | `crates/knot-host/src/js/knot.d.ts`, [extension guide](docs/extension-api.md) | `docs/schemas/knot.schema.json`, `scripts/extensions/examples/` |
-| Bundled extensions, authoring toolchain, extension tests | [extension guide](docs/extension-api.md#write-and-test-in-typescript), [development](docs/development.md) | `extensions/@knot/`, `scripts/extensions/`, `crates/knot-bundled/src/build.rs`, `crates/knot-ext-*/` |
+| Extension public contract | `crates/knot-host/src/js/knot.d.ts`, [extension guide](docs/extension-api/README.md) | `docs/schemas/knot.schema.json`, `scripts/extensions/examples/` |
+| Bundled extensions, authoring toolchain, extension tests | [extension guide](docs/extension-api/README.md#write-and-test-in-typescript), [development](docs/development.md) | `extensions/@knot/`, `scripts/extensions/`, `crates/knot-bundled/src/build.rs`, `crates/knot-ext-*/` |
 | Application-owned SQLite stores | [automatic tool-layout memory](docs/architecture/workbench-and-lifecycle.md#automatic-tool-layout-memory) | `src/app/tool_layout.rs` |
 
 ### Registering an application subsystem

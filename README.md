@@ -122,7 +122,7 @@ dropped into Knot's `extensions` folder (on macOS,
 in TypeScript and tested with `node:test` against an in-memory fake of the
 editor.
 
-- [Extension guide](docs/extension-api.md): setup, testing, and common workflows
+- [Extension guide](docs/extension-api/README.md): setup, testing, and common workflows
 - [API declarations](crates/knot-host/src/js/knot.d.ts): the precise reference
 - [Go to Line](extensions/@knot/go-to-line/): a small complete package
 - [Projects](extensions/@knot/projects/): the bundled project manager
