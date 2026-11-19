@@ -4,7 +4,7 @@ import type { WindowTarget } from "knot";
 import * as host from "knot/testing";
 import { start } from "../src/extension.js";
 import {
-  COPY, COPY_NAME, COPY_PATH, COPY_RELATIVE_PATH, CUT, DELETE, NEW_FILE, NEW_FOLDER, PASTE, RENAME, REVEAL, REVEAL_ACTIVE, VIEW_ID, parseRowId, rowId,
+  COPY, COPY_NAME, COPY_PATH, COPY_RELATIVE_PATH, CUT, DELETE, DROP, NEW_FILE, NEW_FOLDER, PASTE, RENAME, REVEAL, REVEAL_ACTIVE, VIEW_ID, parseRowId, rowId,
 } from "../src/rows.js";
 import { childUri, copyName, pathSegments, renameSelection } from "../src/names.js";
 
@@ -195,4 +195,60 @@ test("copies are named before the extension, and the clipboard keys are bound in
   assert.equal(copyName("v1.2", true, 2), "v1.2 copy 2");
   const bound = host.bindings().filter((binding) => binding.view === VIEW_ID).map((binding) => binding.key);
   for (const key of ["cmd-c", "cmd-x", "cmd-v"]) assert.ok(bound.includes(key), key);
+});
+
+function dropArguments(source: string, target: string, copy = false) {
+  return { source: { id: source, arguments: null }, target: { id: target, arguments: null }, copy };
+}
+
+test("rows declare drags: entries drag and take drops, roots only take drops", async () => {
+  const [root] = await rows();
+  assert.equal(root?.draggable, undefined);
+  assert.equal(root?.dropTarget, true);
+  for (const item of await rows(rootRow)) {
+    assert.equal(item.draggable, true, item.label);
+    assert.equal(item.dropTarget, true, item.label);
+  }
+});
+
+test("dropping moves a file and a folder, and a file target means its folder", async () => {
+  const api = await import("knot");
+  host.seedFile(`${ROOT}/lib/util.ts`, "util");
+  const items = await rows(rootRow);
+  const id = (label: string) => items.find((item) => item.label === label)!.id;
+  await host.run(DROP, { arguments: dropArguments(id("README.md"), id("src")) });
+  assert.equal(await api.files.stat(`${ROOT}/README.md`), null);
+  assert.equal(await api.files.readText(`${ROOT}/src/README.md`), "readme");
+  assert.ok(host.view(VIEW_ID).invalidated.some((call) => call.parent === rootRow));
+
+  const main = rowId(rootId, `${ROOT}/src/main.ts`);
+  await host.run(DROP, { arguments: dropArguments(id("lib"), main) });
+  assert.equal(await api.files.readText(`${ROOT}/src/lib/util.ts`), "util");
+  assert.equal(await api.files.stat(`${ROOT}/lib`), null);
+});
+
+test("Option-dropping copies with a free name, and a same-folder move does nothing", async () => {
+  const api = await import("knot");
+  const readme = (await rows(rootRow)).find((item) => item.label === "README.md")!;
+  await host.run(DROP, { arguments: dropArguments(readme.id, rootRow, true) });
+  assert.equal(await api.files.readText(`${ROOT}/README%20copy.md`), "readme");
+  await host.run(DROP, { arguments: dropArguments(readme.id, rootRow) });
+  assert.equal(await api.files.readText(`${ROOT}/README.md`), "readme");
+});
+
+test("dropping onto a taken name or into a folder's own descendant is refused", async () => {
+  const api = await import("knot");
+  host.seedFile(`${ROOT}/src/README.md`, "other");
+  host.seedFile(`${ROOT}/src/deep/x.ts`, "x");
+  const items = await rows(rootRow);
+  const id = (label: string) => items.find((item) => item.label === label)!.id;
+  await host.run(DROP, { arguments: dropArguments(id("README.md"), id("src")) });
+  assert.equal(await api.files.readText(`${ROOT}/README.md`), "readme");
+  assert.equal(await api.files.readText(`${ROOT}/src/README.md`), "other");
+
+  const deep = rowId(rootId, `${ROOT}/src/deep`);
+  await host.run(DROP, { arguments: dropArguments(id("src"), deep) });
+  await host.run(DROP, { arguments: dropArguments(id("src"), id("src"), true) });
+  assert.equal(await api.files.readText(`${ROOT}/src/deep/x.ts`), "x");
+  assert.equal(await api.files.stat(`${ROOT}/src/deep/src`), null);
 });

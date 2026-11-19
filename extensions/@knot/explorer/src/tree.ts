@@ -1,5 +1,5 @@
 import { files, icons, settings, workbench, workspaces } from "knot";
-import { NEW_FILE, NEW_FOLDER } from "./rows.js";
+import { DROP, NEW_FILE, NEW_FOLDER } from "./rows.js";
 import { entryItem, compareEntries, openFolderItem, parseRowId, rootItem, VIEW_ID } from "./rows.js";
 import { SHOW_IGNORED } from "./settings.js";
 import { loadedIn, type ExplorerState } from "./state.js";
@@ -27,6 +27,7 @@ export async function registerTree(state: ExplorerState) {
         },
       },
     },
+    drop: DROP,
     placement: { location: "leftTop", order: 0 },
     actions: [
       { label: "New File", icon: "explorer.new-file", command: NEW_FILE },

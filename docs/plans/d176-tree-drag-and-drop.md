@@ -1,6 +1,6 @@
 # D176: Drag and drop in trees
 
-Status: 🚧 approved, checkpoint 1 done. Roadmap item [D176](../roadmap.md).
+Status: 🚧 approved, checkpoints 1 and 2 done pending review of 2. Roadmap item [D176](../roadmap.md).
 References: [extension trees](../architecture/semantic-ui.md#extension-trees),
 [tree content and actions](../decisions/semantic-ui.md#extension-tree-content-and-actions),
 [workbench and lifecycle](../architecture/workbench-and-lifecycle.md).
@@ -92,7 +92,7 @@ Done: the contract and native drag live in `src/app/tree_view/drag.rs`, with
 the 700 ms hover expansion and 28 px edge scroll zone kept after review.
 `TreeItem.resource` lands with checkpoint 3.
 
-### 2. Explorer moves and copies by drag
+### 2. Explorer moves and copies by drag ✅
 
 Deliverables: explorer rows declare the payload. The explorer's `drop`
 command moves or copies through the logic Paste uses, then invalidates the

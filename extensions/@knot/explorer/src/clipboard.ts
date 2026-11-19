@@ -1,11 +1,11 @@
 // Copy, Cut, and Paste of a file or folder, and the texts and file manager
 // actions of a row: its path, relative path, and name.
 import { commands, files, keymaps, platform, workbench } from "knot";
-import type { CommandContext, WorkspaceRoot } from "knot";
-import { describe, report, rootsOf, rowFor, showCreated } from "./actions.js";
+import type { CommandContext, WindowTarget, WorkspaceRoot } from "knot";
+import { describe, object, report, rootsOf, rowFor, showCreated } from "./actions.js";
 import { childUri, copyName } from "./names.js";
 import {
-  COPY, COPY_NAME, COPY_PATH, COPY_RELATIVE_PATH, CUT, displayPath, nameOf, parentOf, parseRowId, PASTE, REVEAL, REVEAL_LABEL,
+  COPY, COPY_NAME, COPY_PATH, COPY_RELATIVE_PATH, CUT, DROP, displayPath, nameOf, parentOf, parseRowId, PASTE, REVEAL, REVEAL_LABEL,
   rowId, rootOf, trimmed, VIEW_ID,
 } from "./rows.js";
 import type { ExplorerState } from "./state.js";
@@ -50,23 +50,68 @@ async function paste(state: ExplorerState, ctx: CommandContext, selected: boolea
     state.taken = null;
     return report(`${name} no longer exists`);
   }
-  try {
-    if (taken.cut) {
-      if (parentOf(taken.uri) === trimmed(directory)) return;
-      const target = childUri(directory, [name]);
-      if ((await files.stat(target)) !== null) return report(`${name} already exists in the destination`);
-      await files.rename(taken.uri, target);
-      state.taken = null;
-      await state.view?.invalidate(rowId(row.root, parentOf(taken.uri)), window).catch(() => {});
-      await showCreated(state, window, rowId(row.root, trimmed(directory)), target);
-      return;
-    }
-    const target = childUri(directory, [await freeName(directory, name, source.kind === "directory")]);
-    await files.copy(taken.uri, target);
-    await showCreated(state, window, rowId(row.root, trimmed(directory)), target);
-  } catch (error) {
-    await report(`Cannot paste ${name}: ${describe(error)}`);
+  if (await transfer(state, window, row.root, taken.uri, source.kind === "directory", directory, taken.cut)) {
+    if (taken.cut) state.taken = null;
   }
+}
+
+/**
+ * Moves or copies `sourceUri` into `directory`, then shows the result under
+ * `root`. A copy takes the first free name; a move refuses a taken one.
+ * Returns whether something was moved or copied.
+ */
+async function transfer(
+  state: ExplorerState,
+  window: WindowTarget,
+  root: string,
+  sourceUri: string,
+  isDirectory: boolean,
+  directory: string,
+  move: boolean,
+): Promise<boolean> {
+  const name = nameOf(sourceUri);
+  const from = trimmed(sourceUri);
+  if (isDirectory && (trimmed(directory) === from || trimmed(directory).startsWith(`${from}/`))) {
+    await report(`Cannot put ${name} into itself`);
+    return false;
+  }
+  try {
+    if (move) {
+      if (parentOf(sourceUri) === trimmed(directory)) return false;
+      const target = childUri(directory, [name]);
+      if ((await files.stat(target)) !== null) {
+        await report(`${name} already exists in the destination`);
+        return false;
+      }
+      await files.rename(sourceUri, target);
+      await state.view?.invalidate(rowId(root, parentOf(sourceUri)), window).catch(() => {});
+      await showCreated(state, window, rowId(root, trimmed(directory)), target);
+      return true;
+    }
+    const target = childUri(directory, [await freeName(directory, name, isDirectory)]);
+    await files.copy(sourceUri, target);
+    await showCreated(state, window, rowId(root, trimmed(directory)), target);
+    return true;
+  } catch (error) {
+    await report(`Cannot ${move ? "move" : "copy"} ${name}: ${describe(error)}`);
+    return false;
+  }
+}
+
+/** The tree's `drop`: moves the dragged row into the folder it was dropped
+ * on, or beside a file it was dropped on; a copy when Option was held. */
+async function drop(state: ExplorerState, { arguments: args, target }: CommandContext) {
+  const value = object(args);
+  const sourceId = object(value?.source ?? null)?.id;
+  const targetId = object(value?.target ?? null)?.id;
+  if (typeof sourceId !== "string" || typeof targetId !== "string") return;
+  const source = parseRowId(sourceId);
+  const destination = parseRowId(targetId);
+  const kind = await files.stat(source.uri);
+  const destinationKind = await files.stat(destination.uri);
+  if (kind === null || destinationKind === null) return report("The file no longer exists");
+  const directory = destinationKind.kind === "file" ? parentOf(destination.uri) : destination.uri;
+  await transfer(state, target.windowTarget, destination.root, source.uri, kind.kind === "directory", directory, value?.copy !== true);
 }
 
 /** The path of `uri` below its root, "." for the root itself. */
@@ -116,6 +161,9 @@ export async function registerClipboard(state: ExplorerState) {
     await commands.register(name, (ctx) => run(ctx, false), { title, description });
     await commands.registerForView(VIEW_ID, name, (ctx) => run(ctx, true));
   }
+  // The view handler needs the global command of its name.
+  await commands.register(DROP, (ctx) => drop(state, ctx), { palette: false });
+  await commands.registerForView(VIEW_ID, DROP, (ctx) => drop(state, ctx));
   const mod = platform === "macos" ? "cmd" : "ctrl";
   keymaps.bind(`${mod}-x`, CUT, { view: VIEW_ID });
   keymaps.bind(`${mod}-c`, COPY, { view: VIEW_ID });

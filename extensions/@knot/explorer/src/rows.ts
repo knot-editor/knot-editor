@@ -14,6 +14,7 @@ export const DELETE = "explorer.delete";
 export const CUT = "explorer.cut";
 export const COPY = "explorer.copy";
 export const PASTE = "explorer.paste";
+export const DROP = "explorer.drop";
 export const COPY_PATH = "explorer.copy-path";
 export const COPY_RELATIVE_PATH = "explorer.copy-relative-path";
 export const COPY_NAME = "explorer.copy-file-name";
@@ -95,6 +96,8 @@ export function entryItem(root: string, entry: FileEntry): TreeItem {
     icon: directory ? { folder: entry.name } : { file: entry.name },
     collapsibleState: directory ? "collapsed" : "none",
     muted: entry.ignored,
+    draggable: true,
+    dropTarget: true,
     ...(directory ? {} : { command: ACTIVATE, arguments: { uri: entry.uri } }),
   };
 }
@@ -110,6 +113,7 @@ export function rootItem(root: WorkspaceRoot): TreeItem {
     description: displayPath(root.uri),
     icon: { folder: name },
     collapsibleState: "expanded",
+    dropTarget: true,
   };
 }
 
