@@ -72,7 +72,12 @@ Done and approved. The workbench model keeps the marked terminal tabs and
 clears a mark when its tab is shown; a session's bell event reaches the window
 holding it. See [workbench and lifecycle](../architecture/workbench-and-lifecycle.md#terminal-sessions-and-views).
 
-### 3. Desktop notifications as notices
+### 3. Desktop notifications as notices ✅ (awaiting review)
+
+Implemented: `TerminalEvent::Notification`, a session event routed to the window
+holding the terminal, and the `terminal.show` command (argument: session
+number) behind the "Show Terminal" action. Review gate: run the `Try:`
+commands.
 
 - **Implementation context:** `crates/knot-terminal/src/events.rs`:
   register `GHOSTTY_TERMINAL_OPT_DESKTOP_NOTIFICATION`

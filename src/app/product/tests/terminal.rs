@@ -1995,3 +1995,99 @@ fn a_bell_marks_background_tabs_and_hidden_tool_windows(cx: &mut TestAppContext)
     assert!(!marked(first, cx));
     assert!(!has_selector(badge, cx));
 }
+
+#[gpui::test]
+fn a_terminal_notification_becomes_a_notice_that_shows_the_terminal(cx: &mut TestAppContext) {
+    use crate::app::commands::dispatch::SHOW_TERMINAL_COMMAND;
+    use crate::app::notifications::{ApplicationNotifications, Severity};
+
+    let documents = install_globals(cx);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (window, native_window) = product_window(document, model, cx);
+    open_terminals_in_window(&window, native_window, 2, cx);
+
+    let (pane, first_tab, first, second) = cx.read(|cx| {
+        let workbench = window.read(cx).workbench.read(cx);
+        let pane = workbench.focused_pane().unwrap();
+        let session = |index: usize| {
+            let TabSurfaceId::Terminal(session) = pane.tabs()[index].surface_id() else {
+                panic!("only terminals")
+            };
+            session
+        };
+        (pane.id(), pane.tabs()[0].id(), session(0), session(1))
+    });
+    let write = |id, bytes: &[u8], cx: &mut TestAppContext| {
+        let session = cx.read(|cx| {
+            cx.global::<ApplicationTerminalSessions>()
+                .0
+                .borrow()
+                .sessions[&id]
+                .clone()
+        });
+        cx.read(|cx| {
+            session
+                .read(cx)
+                .with_terminal(|terminal| terminal.write(bytes))
+        });
+    };
+    let notices = |cx: &mut TestAppContext| {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            cx.run_until_parked();
+            let notices = cx.read(|cx| {
+                let store = &cx.global::<ApplicationNotifications>().0;
+                let mut terminal = store.notices().to_vec();
+                terminal.retain(|notice| notice.target.is_some());
+                terminal
+            });
+            if notices.len() == 2 {
+                return notices;
+            }
+            assert!(std::time::Instant::now() < deadline, "notices: {notices:?}");
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    };
+
+    // A notification raises a notice even from the shown terminal; without a
+    // title of its own it carries the tab's label.
+    write(second, b"\x1b]777;notify;Build;all green\x07", cx);
+    write(first, b"\x1b]9;done\x07", cx);
+    let notices = notices(cx);
+    let window_id = super::super::window_id(window.entity_id());
+    let label = cx.read(|cx| KnotWindow::terminal_session_label(first, cx).unwrap());
+    assert_eq!(notices[0].title.as_deref(), Some("Build"));
+    assert_eq!(notices[0].message, "all green");
+    assert_eq!(notices[1].title.as_deref(), Some(label.as_str()));
+    assert_eq!(notices[1].message, "done");
+    for notice in &notices {
+        assert_eq!(notice.severity, Severity::Info);
+        assert_eq!(notice.target.as_deref(), Some(window_id.as_str()));
+    }
+
+    // Its action shows the terminal that sent it.
+    let active = |cx: &TestAppContext| {
+        cx.read(|cx| {
+            window
+                .read(cx)
+                .workbench
+                .read(cx)
+                .pane(pane)
+                .unwrap()
+                .active_tab_id()
+        })
+    };
+    assert_ne!(active(cx), first_tab);
+    let action = notices[1].actions[0].command.clone();
+    assert_eq!(action.name.as_ref() as &str, SHOW_TERMINAL_COMMAND);
+    let show = dispatch_product_command_with(
+        &window,
+        native_window,
+        SHOW_TERMINAL_COMMAND,
+        action.arguments,
+        cx,
+    );
+    assert_eq!(wait_for_command(show, cx), CommandOutcome::Completed);
+    assert_eq!(active(cx), first_tab);
+}

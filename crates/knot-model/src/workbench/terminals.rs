@@ -34,6 +34,16 @@ impl Workbench {
         self.open_terminal_tab(pane, session).map(|tab| (pane, tab))
     }
 
+    /// The pane and tab that hold a terminal session.
+    pub fn terminal_tab(&self, session: TerminalSessionId) -> Option<(PaneId, TabId)> {
+        self.panes.iter().find_map(|pane| {
+            pane.tabs
+                .iter()
+                .find(|tab| tab.surface_id() == TabSurfaceId::Terminal(session))
+                .map(|tab| (pane.id, tab.id))
+        })
+    }
+
     /// Whether the session's tab is shown: the active tab of a pane that is
     /// painted.
     fn terminal_shown(&self, session: TerminalSessionId) -> bool {

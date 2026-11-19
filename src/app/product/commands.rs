@@ -1143,6 +1143,39 @@ pub(crate) async fn previous_splitter(
     focus_chosen(context, |workbench| workbench.cycle_pane_id(false)).await
 }
 
+/// The terminal a command names by its session number.
+#[derive(Clone, Copy)]
+pub(crate) struct TerminalArgument(TerminalSessionId);
+
+impl TerminalArgument {
+    pub(crate) fn argument(id: TerminalSessionId) -> CommandArgumentValue {
+        CommandArgumentValue::Number(id.0 as f64)
+    }
+}
+
+impl crate::app::commands::declarations::CommandArguments for TerminalArgument {
+    fn decode(value: &CommandArgumentValue) -> Result<Self, CommandOutcome> {
+        match value {
+            CommandArgumentValue::Number(number) if *number >= 0. && number.fract() == 0. => {
+                Ok(Self(TerminalSessionId(*number as u64)))
+            }
+            _ => Err(CommandOutcome::InvalidArgument {
+                message: "expected a terminal session number".into(),
+            }),
+        }
+    }
+}
+
+#[command("terminal.show", title = "Show Terminal", description = "Show and focus the terminal with a session number.", palette = false, id = SHOW_TERMINAL_COMMAND, participant = Workbench)]
+pub(crate) async fn show_terminal(
+    context: CommandContext,
+    terminal: TerminalArgument,
+) -> Result<(), CommandOutcome> {
+    context
+        .window(move |window, _, cx| window.reveal_terminal(terminal.0, cx))
+        .await
+}
+
 #[command("terminal.rename-session", title = "Rename Session", description = "Change the label of the focused terminal tab.", id = RENAME_SESSION_COMMAND, participant = Workbench)]
 pub(crate) async fn rename_session(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
     context

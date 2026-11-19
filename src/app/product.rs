@@ -1331,6 +1331,9 @@ impl KnotWindow {
         // holds its tab.
         App::subscribe(cx, &session, move |_, event, cx| match event {
             TerminalSessionEvent::Bell => Self::ring_terminal_bell(id, cx),
+            TerminalSessionEvent::Notification { title, body } => {
+                Self::raise_terminal_notice(id, title.clone(), body.clone(), cx)
+            }
         })
         .detach();
         cx.global::<ApplicationTerminalSessions>()
@@ -1349,6 +1352,52 @@ impl KnotWindow {
                 window.update(cx, |_, cx| cx.notify());
             }
         }
+    }
+
+    /// Raise a notice a terminal program asked for in the window that holds
+    /// it. Without a title of its own, the notice carries the tab's label.
+    fn raise_terminal_notice(id: TerminalSessionId, title: String, body: String, cx: &mut App) {
+        let Some(window) = windows_by_activation(cx).into_iter().find(|window| {
+            window
+                .read(cx)
+                .workbench
+                .read(cx)
+                .terminal_tab(id)
+                .is_some()
+        }) else {
+            return;
+        };
+        let title = if title.is_empty() {
+            Self::terminal_session_label(id, cx).unwrap_or_default()
+        } else {
+            title
+        };
+        let action = NoticeAction {
+            title: "Show Terminal".into(),
+            command: knot_model::status_bar::StatusCommand {
+                name: crate::app::commands::dispatch::SHOW_TERMINAL_COMMAND.into(),
+                arguments: commands::TerminalArgument::argument(id),
+            },
+        };
+        window.update(cx, |window, cx| {
+            window.raise_notice(Severity::Info, title, Some(body), vec![action], cx)
+        });
+    }
+
+    /// Show a terminal's tab, revealing its tool window, and focus it.
+    pub(super) fn reveal_terminal(
+        &mut self,
+        id: TerminalSessionId,
+        cx: &mut Context<Self>,
+    ) -> Result<(), knot_protocol::CommandOutcome> {
+        let (pane, tab) = self
+            .workbench
+            .read(cx)
+            .terminal_tab(id)
+            .ok_or(knot_protocol::CommandOutcome::InvalidTarget)?;
+        self.activate_tab(pane, tab, cx);
+        self.publish_tool_layout(cx);
+        Ok(())
     }
 
     fn close_terminal(&mut self, id: TerminalSessionId, cx: &mut Context<Self>) {

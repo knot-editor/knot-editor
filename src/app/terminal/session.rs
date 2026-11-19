@@ -59,6 +59,8 @@ enum TerminalState {
 pub(crate) enum TerminalSessionEvent {
     /// The program rang the bell.
     Bell,
+    /// The program asked for a desktop notification.
+    Notification { title: String, body: String },
 }
 
 impl EventEmitter<TerminalSessionEvent> for TerminalSession {}
@@ -242,6 +244,9 @@ impl TerminalSession {
                     self.title = Some(title).filter(|title| !title.is_empty());
                 }
                 PtyEvent::Terminal(TerminalEvent::Bell) => cx.emit(TerminalSessionEvent::Bell),
+                PtyEvent::Terminal(TerminalEvent::Notification { title, body }) => {
+                    cx.emit(TerminalSessionEvent::Notification { title, body });
+                }
                 // The engine answers queries itself.
                 PtyEvent::Terminal(_) | PtyEvent::Output => {}
             }
