@@ -449,6 +449,12 @@ pub struct TreeItem {
     pub badge: Option<String>,
     #[serde(default)]
     pub actions: Vec<TreeAction>,
+    /// The row can be dragged onto a `drop_target` row of its tree.
+    #[serde(default)]
+    pub draggable: bool,
+    /// A dragged row can be dropped onto this row.
+    #[serde(default)]
+    pub drop_target: bool,
 }
 
 /// Native content a contributed view definition provides in each window.

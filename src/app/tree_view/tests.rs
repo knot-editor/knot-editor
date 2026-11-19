@@ -63,6 +63,8 @@ fn item(id: &str, label: &str, kind: TreeItemKind, actions: Vec<TreeAction>) -> 
         status_text: Some("M".into()),
         badge: Some("warning".to_owned()),
         actions,
+        draggable: false,
+        drop_target: false,
     }
 }
 
@@ -164,6 +166,8 @@ fn stale_and_disposed_tree_responses_are_ignored(cx: &mut TestAppContext) {
                     status_text: None,
                     badge: None,
                     actions: Vec::new(),
+                    draggable: false,
+                    drop_target: false,
                 }]),
             },
             cx,
@@ -1361,4 +1365,340 @@ fn inline_actions_of_a_row_with_detail_sit_under_its_text(cx: &mut TestAppContex
         fixture.row_height(cx, 3),
         crate::app::tokens::list::ROW_HEIGHT
     );
+}
+
+/// Rows `dir` and `dir2` are drop targets, `f-a` and `dir` can be dragged,
+/// and `f-b` does neither.
+struct DragFixture {
+    fixture: EditFixture,
+    commands: CommandLog,
+    _subscriber: gpui::Entity<EventSubscriber>,
+}
+
+impl DragFixture {
+    const ROWS: [&'static str; 4] = ["dir", "f-a", "f-b", "dir2"];
+
+    fn new(cx: &mut TestAppContext) -> Self {
+        let fixture = EditFixture::new(cx);
+        let tree = fixture.window.root(cx).unwrap();
+        let (commands, subscriber) = subscribe_commands(cx, &tree);
+        fixture
+            .window
+            .update(cx, |tree, _, _| {
+                tree.set_drop_command(Some("example.drop".into()));
+            })
+            .unwrap();
+        let mut rows = Vec::new();
+        for id in Self::ROWS {
+            let mut row = plain(id);
+            row.arguments = CommandArgumentValue::String(format!("args-{id}"));
+            row.draggable = matches!(id, "dir" | "f-a");
+            row.drop_target = id.starts_with("dir");
+            if id.starts_with("dir") {
+                row.collapsible_state = TreeCollapsibleState::Collapsed;
+            }
+            rows.push(row);
+        }
+        fixture.load(cx, rows);
+        Self {
+            fixture,
+            commands,
+            _subscriber: subscriber,
+        }
+    }
+
+    fn center(&self, cx: &mut TestAppContext, index: usize) -> gpui::Point<gpui::Pixels> {
+        let mut visual = gpui::VisualTestContext::from_window(self.fixture.window.into(), cx);
+        visual
+            .debug_bounds(Box::leak(
+                format!("extension-tree-row-{index}").into_boxed_str(),
+            ))
+            .unwrap_or_else(|| panic!("row {index} is laid out"))
+            .center()
+    }
+
+    fn mouse(
+        &self,
+        cx: &mut TestAppContext,
+        action: fn(&mut gpui::VisualTestContext, gpui::Point<gpui::Pixels>, gpui::Modifiers),
+        at: gpui::Point<gpui::Pixels>,
+        modifiers: gpui::Modifiers,
+    ) {
+        let mut visual = gpui::VisualTestContext::from_window(self.fixture.window.into(), cx);
+        action(&mut visual, at, modifiers);
+        drop(visual);
+        draw(cx, self.fixture.window);
+    }
+
+    fn press(&self, cx: &mut TestAppContext, row: usize) -> gpui::Point<gpui::Pixels> {
+        let at = self.center(cx, row);
+        self.mouse(
+            cx,
+            |cx, at, modifiers| cx.simulate_mouse_down(at, gpui::MouseButton::Left, modifiers),
+            at,
+            gpui::Modifiers::default(),
+        );
+        at
+    }
+
+    fn move_to(
+        &self,
+        cx: &mut TestAppContext,
+        at: gpui::Point<gpui::Pixels>,
+        modifiers: gpui::Modifiers,
+    ) {
+        self.mouse(
+            cx,
+            |cx, at, modifiers| cx.simulate_mouse_move(at, gpui::MouseButton::Left, modifiers),
+            at,
+            modifiers,
+        );
+    }
+
+    fn release(
+        &self,
+        cx: &mut TestAppContext,
+        at: gpui::Point<gpui::Pixels>,
+        modifiers: gpui::Modifiers,
+    ) {
+        self.mouse(
+            cx,
+            |cx, at, modifiers| cx.simulate_mouse_up(at, gpui::MouseButton::Left, modifiers),
+            at,
+            modifiers,
+        );
+    }
+
+    /// Drag row `from` over row `to` and let go.
+    fn drag(&self, cx: &mut TestAppContext, from: usize, to: usize, modifiers: gpui::Modifiers) {
+        let start = self.press(cx, from);
+        self.move_to(
+            cx,
+            start + gpui::point(gpui::px(12.), gpui::px(0.)),
+            modifiers,
+        );
+        let end = self.center(cx, to);
+        self.move_to(cx, end, modifiers);
+        self.release(cx, end, modifiers);
+        cx.run_until_parked();
+    }
+
+    fn dragging(&self, cx: &mut TestAppContext) -> bool {
+        cx.update(|cx| cx.has_active_drag())
+    }
+}
+
+fn drop_arguments(source: &str, target: &str, copy: bool) -> CommandArgumentValue {
+    let row = |id: &str| {
+        CommandArgumentValue::Object(
+            [
+                ("id".to_owned(), CommandArgumentValue::String(id.to_owned())),
+                (
+                    "arguments".to_owned(),
+                    CommandArgumentValue::String(format!("args-{id}")),
+                ),
+            ]
+            .into(),
+        )
+    };
+    CommandArgumentValue::Object(
+        [
+            ("source".to_owned(), row(source)),
+            ("target".to_owned(), row(target)),
+            ("copy".to_owned(), CommandArgumentValue::Boolean(copy)),
+        ]
+        .into(),
+    )
+}
+
+#[gpui::test]
+fn dropping_a_row_on_a_target_runs_the_drop_command(cx: &mut TestAppContext) {
+    let drag = DragFixture::new(cx);
+    drag.drag(cx, 1, 0, gpui::Modifiers::default());
+    assert_eq!(
+        *drag.commands.borrow(),
+        [(
+            "example.drop".to_owned(),
+            drop_arguments("f-a", "dir", false)
+        )]
+    );
+    assert!(!drag.dragging(cx));
+}
+
+#[gpui::test]
+fn holding_option_at_the_drop_asks_for_a_copy(cx: &mut TestAppContext) {
+    let drag = DragFixture::new(cx);
+    let option = gpui::Modifiers {
+        alt: true,
+        ..Default::default()
+    };
+    drag.drag(cx, 1, 3, option);
+    assert_eq!(
+        *drag.commands.borrow(),
+        [(
+            "example.drop".to_owned(),
+            drop_arguments("f-a", "dir2", true)
+        )]
+    );
+}
+
+#[gpui::test]
+fn a_drop_on_the_source_or_a_row_that_is_no_target_does_nothing(cx: &mut TestAppContext) {
+    let drag = DragFixture::new(cx);
+    // Onto itself, onto a plain row, and onto a row without a drop target.
+    drag.drag(cx, 0, 0, gpui::Modifiers::default());
+    drag.drag(cx, 1, 2, gpui::Modifiers::default());
+    drag.drag(cx, 1, 1, gpui::Modifiers::default());
+    assert!(drag.commands.borrow().is_empty());
+}
+
+#[gpui::test]
+fn a_row_that_is_not_draggable_does_not_start_a_drag(cx: &mut TestAppContext) {
+    let drag = DragFixture::new(cx);
+    // `f-b` carries no payload, and `dir2` is only a target.
+    for row in [2, 3] {
+        let start = drag.press(cx, row);
+        drag.move_to(
+            cx,
+            start + gpui::point(gpui::px(12.), gpui::px(0.)),
+            gpui::Modifiers::default(),
+        );
+        assert!(!drag.dragging(cx));
+        drag.release(cx, start, gpui::Modifiers::default());
+    }
+}
+
+#[gpui::test]
+fn a_drag_starts_only_past_the_pointer_threshold(cx: &mut TestAppContext) {
+    let drag = DragFixture::new(cx);
+    let start = drag.press(cx, 1);
+    drag.move_to(
+        cx,
+        start + gpui::point(gpui::px(1.), gpui::px(0.)),
+        gpui::Modifiers::default(),
+    );
+    assert!(!drag.dragging(cx));
+    drag.move_to(
+        cx,
+        start + gpui::point(gpui::px(12.), gpui::px(0.)),
+        gpui::Modifiers::default(),
+    );
+    assert!(drag.dragging(cx));
+    drag.release(cx, start, gpui::Modifiers::default());
+}
+
+#[gpui::test]
+fn escape_cancels_a_drag(cx: &mut TestAppContext) {
+    let drag = DragFixture::new(cx);
+    let start = drag.press(cx, 1);
+    drag.move_to(
+        cx,
+        start + gpui::point(gpui::px(12.), gpui::px(0.)),
+        gpui::Modifiers::default(),
+    );
+    assert!(drag.dragging(cx));
+    let mut visual = gpui::VisualTestContext::from_window(drag.fixture.window.into(), cx);
+    visual.simulate_keystrokes("escape");
+    drop(visual);
+    assert!(!drag.dragging(cx));
+    let end = drag.center(cx, 0);
+    drag.release(cx, end, gpui::Modifiers::default());
+    assert!(drag.commands.borrow().is_empty());
+}
+
+#[gpui::test]
+fn resting_on_a_collapsed_target_expands_it(cx: &mut TestAppContext) {
+    let drag = DragFixture::new(cx);
+    let start = drag.press(cx, 1);
+    drag.move_to(
+        cx,
+        start + gpui::point(gpui::px(12.), gpui::px(0.)),
+        gpui::Modifiers::default(),
+    );
+    let target = drag.center(cx, 0);
+    drag.move_to(cx, target, gpui::Modifiers::default());
+    let expanded = |cx: &mut TestAppContext| {
+        drag.fixture
+            .window
+            .update(cx, |tree, _, _| tree.expanded.contains("dir"))
+            .unwrap()
+    };
+    cx.executor().advance_clock(super::drag::EXPAND_DELAY / 2);
+    assert!(!expanded(cx));
+    cx.executor().advance_clock(super::drag::EXPAND_DELAY);
+    cx.run_until_parked();
+    assert!(expanded(cx));
+    drag.release(cx, target, gpui::Modifiers::default());
+}
+
+#[gpui::test]
+fn moving_on_before_the_delay_does_not_expand_the_target(cx: &mut TestAppContext) {
+    let drag = DragFixture::new(cx);
+    let start = drag.press(cx, 1);
+    drag.move_to(
+        cx,
+        start + gpui::point(gpui::px(12.), gpui::px(0.)),
+        gpui::Modifiers::default(),
+    );
+    let target = drag.center(cx, 0);
+    drag.move_to(cx, target, gpui::Modifiers::default());
+    cx.executor().advance_clock(super::drag::EXPAND_DELAY / 2);
+    let elsewhere = drag.center(cx, 3);
+    drag.move_to(cx, elsewhere, gpui::Modifiers::default());
+    drag.move_to(cx, target, gpui::Modifiers::default());
+    cx.executor()
+        .advance_clock(super::drag::EXPAND_DELAY * 3 / 4);
+    cx.run_until_parked();
+    let expanded = drag
+        .fixture
+        .window
+        .update(cx, |tree, _, _| tree.expanded.contains("dir"))
+        .unwrap();
+    assert!(!expanded);
+    drag.release(cx, target, gpui::Modifiers::default());
+}
+
+#[gpui::test]
+fn a_drag_near_the_bottom_edge_scrolls_the_list(cx: &mut TestAppContext) {
+    let drag = DragFixture::new(cx);
+    let mut rows = (0..300)
+        .map(|n| plain(&format!("r{n}")))
+        .collect::<Vec<_>>();
+    rows[0].draggable = true;
+    drag.fixture.load(cx, rows);
+    let start = drag.press(cx, 0);
+    drag.move_to(
+        cx,
+        start + gpui::point(gpui::px(12.), gpui::px(0.)),
+        gpui::Modifiers::default(),
+    );
+    let top = |cx: &mut TestAppContext| {
+        drag.fixture
+            .window
+            .update(cx, |tree, _, _| tree.list.logical_scroll_top().item_ix)
+            .unwrap()
+    };
+    assert_eq!(top(cx), 0);
+    let bottom = cx.update(|cx| {
+        let window = drag.fixture.window;
+        window
+            .update(cx, |tree, _, _| tree.list.viewport_bounds().bottom())
+            .unwrap()
+    });
+    drag.move_to(
+        cx,
+        gpui::point(start.x, bottom - gpui::px(4.)),
+        gpui::Modifiers::default(),
+    );
+    for _ in 0..10 {
+        cx.executor().advance_clock(super::drag::EDGE_TICK);
+        cx.run_until_parked();
+    }
+    assert!(top(cx) > 0);
+    // Letting go ends the scrolling.
+    drag.release(cx, start, gpui::Modifiers::default());
+    let settled = top(cx);
+    cx.executor().advance_clock(super::drag::EDGE_TICK * 5);
+    cx.run_until_parked();
+    assert_eq!(top(cx), settled);
 }

@@ -361,6 +361,8 @@ function treeItem(value) {
     statusText: optionalText(value.statusText),
     badge: optionalText(value.badge),
     actions: treeActions(value.actions),
+    draggable: value.draggable == null ? false : flag(value.draggable, "tree item draggable must be a boolean"),
+    dropTarget: value.dropTarget == null ? false : flag(value.dropTarget, "tree item dropTarget must be a boolean"),
   };
 }
 
@@ -1383,6 +1385,10 @@ export async function registerView(contribution) {
   if (newTab !== null && content.kind !== "container") {
     throw new TypeError("view newTab applies only to a container");
   }
+  const drop = optionalText(value.drop);
+  if (drop !== null && content.kind !== "tree") {
+    throw new TypeError("view drop applies only to a tree");
+  }
   const actions = treeActions(value.actions);
   const language = optionalText(value.language);
   if (language !== null && content.kind !== "text") {
@@ -1435,6 +1441,7 @@ export async function registerView(contribution) {
     language,
     gutter ? 1 : 0,
     newTab,
+    drop,
   );
   if (provider !== null) treeProviders.set(registration, provider);
   const owned = ownership(() => treeProviders.delete(registration),

@@ -97,7 +97,7 @@ const tree = await workbench.registerView({
           {
             id: "id", label: "item", collapsibleState: "collapsed", icon: "folder",
             statusText: "M", badge: "warning", detail: "src/item",
-            command: "check.open",
+            command: "check.open", draggable: true, dropTarget: true,
             actions: [{ label: "Discard", command: "check.discard", arguments: { path: "a" } }],
           },
         ];
@@ -105,6 +105,7 @@ const tree = await workbench.registerView({
     },
   },
   actions: [{ label: "Refresh", command: "check.refresh", arguments: {} }],
+  drop: "check.drop",
   placement: { location: "leftTop", order: 1, visible: true },
 });
 // @ts-expect-error views are tools and live only in docks

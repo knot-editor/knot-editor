@@ -41,6 +41,7 @@ mod tool_layout;
 mod tools;
 mod transient;
 mod tree_context_menu;
+mod tree_drag;
 mod window_restore;
 mod workbench;
 mod workspaces;

@@ -60,7 +60,7 @@ user.
 
 ## Checkpoints
 
-### 1. Drag and drop inside a tree
+### 1. Drag and drop inside a tree ✅ (awaiting review gate)
 
 Deliverables: the `draggable`, `dropTarget`, and `drop` contract, the native
 drag interaction in `TreeView`, and the drop command event.
@@ -87,6 +87,13 @@ Implementation context:
 Review gate: in a `Try:` tree registered by `post-init.js`, drag rows between
 targets and check the reported arguments, highlighting, expansion, and
 scrolling.
+
+Done: `draggable`, `dropTarget` and the view's `drop` command (`TreeItem` in
+the protocol, bootstrap, marshal, `knot.d.ts`), `src/app/tree_view/drag.rs`
+(the drag payload, highlight, hover expansion after 700 ms, edge scroll in a
+28 px zone, Escape), and the drop reaching the command as `InvokeCommand`.
+`TreeItem.resource` lands with checkpoint 3. Run `Try: Drag rows between
+targets`; a drop raises a notice with the move or copy and both row IDs.
 
 ### 2. Explorer moves and copies by drag
 

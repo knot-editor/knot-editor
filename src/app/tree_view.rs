@@ -19,7 +19,9 @@ use knot_protocol::{
     TreeProviderRegistrationId, ViewId,
 };
 
+mod drag;
 mod edit;
+use drag::{DragState, TreeDrag};
 use edit::TreeEdit;
 pub(crate) use edit::{EditSession, EditTarget};
 
@@ -217,6 +219,7 @@ pub(crate) struct TreeView {
     row_keys: Vec<String>,
     /// A row to bring into view once the list knows the rows it indexes.
     pending_scroll: Option<usize>,
+    drag: DragState,
 }
 
 impl TreeView {
@@ -248,6 +251,7 @@ impl TreeView {
             list: ListState::new(0, ListAlignment::Top, px(240.)),
             row_keys: Vec::new(),
             pending_scroll: None,
+            drag: DragState::default(),
         }
     }
 
@@ -494,6 +498,7 @@ impl TreeView {
     fn clear_provider(&mut self, cx: &mut Context<Self>) {
         self.provider = None;
         self.frame_actions.clear();
+        self.drag = DragState::default();
         self.children.clear();
         self.expanded.clear();
         self.selected = None;
@@ -871,6 +876,17 @@ impl TreeView {
             .find(|item| item.id == id)
     }
 
+    /// Expand row `id`, loading its children when they are not yet.
+    fn expand(&mut self, id: &str, cx: &mut Context<Self>) {
+        self.expanded.insert(id.to_owned());
+        if !self.children.contains_key(&Some(id.to_owned()))
+            && let Some(provider) = self.provider
+        {
+            let _ = self.invalidate(provider.registration, Some(id.to_owned()), cx);
+        }
+        cx.notify();
+    }
+
     fn activate(&mut self, id: &str, gesture: TreeGesture, cx: &mut Context<Self>) {
         self.selected = Some(id.to_owned());
         let Some(item) = self.item(id).cloned() else {
@@ -907,12 +923,7 @@ impl TreeView {
             _ if !gesture.toggles() => {}
             _ if self.expanded.remove(id) => {}
             _ => {
-                self.expanded.insert(id.to_owned());
-                if !self.children.contains_key(&Some(id.to_owned()))
-                    && let Some(provider) = self.provider
-                {
-                    let _ = self.invalidate(provider.registration, Some(id.to_owned()), cx);
-                }
+                self.expand(id, cx);
             }
         }
         self.refresh_search(true);
@@ -1371,6 +1382,9 @@ impl Render for TreeView {
                 offset_in_item: px(0.),
             });
         }
+        let instance = self.instance_id;
+        let can_drop = self.takes_drops();
+        let highlight = theme(cx).paint_color(color::LIST_SELECTED_BACKGROUND);
         let list = list(self.list.clone(), move |index, _, cx| {
             let theme = theme(cx);
             match &rows[index] {
@@ -1627,6 +1641,7 @@ impl Render for TreeView {
                                 .into_any_element(),
                         ));
                     }
+                    row = drag::row_hooks(row, &entity, item, instance, can_drop, highlight);
                     row = row.children(trailing);
                     // The row is inset from the list's edges, so its rounded
                     // selection and hover float inside the card.
@@ -1731,6 +1746,17 @@ impl Render for TreeView {
         div()
             .track_focus(&self.focus)
             .key_context(key_context)
+            .on_key_down(cx.listener(|_, event: &KeyDownEvent, window, cx| {
+                if event.keystroke.key == "escape" && cx.stop_active_drag(window) {
+                    cx.stop_propagation();
+                }
+            }))
+            .on_drag_move::<TreeDrag>(cx.listener(
+                |tree, event: &DragMoveEvent<TreeDrag>, _, cx| {
+                    let drag = event.drag(cx).clone();
+                    tree.drag_moved(&drag, event.bounds, event.event.position, cx);
+                },
+            ))
             .size_full()
             .flex()
             .flex_col()

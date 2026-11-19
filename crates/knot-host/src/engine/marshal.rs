@@ -1046,6 +1046,8 @@ pub(super) fn tree_item_from_v8<'s>(
         status_text: optional_text_property(scope, object, "statusText")?,
         badge: optional_text_property(scope, object, "badge")?,
         actions: tree_actions_from_v8(scope, object, "actions")?,
+        draggable: optional_flag_property(scope, object, "draggable")?,
+        drop_target: optional_flag_property(scope, object, "dropTarget")?,
     })
 }
 

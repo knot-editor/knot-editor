@@ -2039,6 +2039,20 @@ declare module "knot" {
     readonly badge?: ColorKey | null;
     /** Row or group actions; frame actions belong to the contribution. */
     readonly actions?: readonly TreeAction[];
+    /** Whether the row can be dragged onto a `dropTarget` row of its tree.
+     * Needs the contribution's `drop` command. */
+    readonly draggable?: boolean;
+    /** Whether a dragged row can be dropped onto this row. */
+    readonly dropTarget?: boolean;
+  }
+  /** The argument value of a tree's `drop` command. */
+  export interface TreeDrop {
+    /** The dragged row. */
+    readonly source: { readonly id: string; readonly arguments: JsonValue };
+    /** The row it was dropped onto. */
+    readonly target: { readonly id: string; readonly arguments: JsonValue };
+    /** Whether Option was held at drop time, asking for a copy. */
+    readonly copy: boolean;
   }
   /** Explicit live context supplied to a contributed view's provider. */
   export interface ViewContext {
@@ -2097,6 +2111,10 @@ declare module "knot" {
     /** A container's command that opens a tab in it: the `+` button runs it,
      * and so does showing the container while it has no tabs. */
     readonly newTab?: string;
+    /** A tree's command that runs when a `draggable` row is dropped onto a
+     * `dropTarget` row; it receives a {@link TreeDrop} and rejects a drop it
+     * cannot do. */
+    readonly drop?: string;
     /** Actions shown in the frame toolbar; only meaningful for tree frames. */
     readonly actions?: readonly TreeAction[];
     readonly placement?: ViewPlacement;

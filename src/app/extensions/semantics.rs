@@ -93,6 +93,8 @@ struct TreeRegistration {
     language: Option<String>,
     /// Whether a text frame shows the editor gutter.
     gutter: bool,
+    /// A tree's command that runs when a row is dropped onto another.
+    drop: Option<String>,
 }
 
 /// Foreground registries and native view surfaces exposed to extension requests.
@@ -143,8 +145,11 @@ impl ExtensionSemanticBridge {
             .find(|entry| entry.definition.id == kind)
         {
             let actions = registration.definition.actions.clone();
+            let drop = registration.drop.clone();
             view.update(cx, |tree, cx| {
-                tree.register_provider(&kind, registration.identity, actions, cx)
+                tree.register_provider(&kind, registration.identity, actions, cx)?;
+                tree.set_drop_command(drop);
+                Ok(())
             })?;
         }
         self.tree_views
@@ -231,6 +236,7 @@ impl ExtensionSemanticBridge {
             language,
             gutter,
             new_tab,
+            drop,
         } = arguments;
 
         if id.is_empty() || id.starts_with("knot.") {
@@ -271,7 +277,9 @@ impl ExtensionSemanticBridge {
         if content == ViewContentKind::Tree {
             for view in self.live_tree_views(&id, None) {
                 view.update(cx, |tree, cx| {
-                    tree.register_provider(&id, identity, actions.clone(), cx)
+                    tree.register_provider(&id, identity, actions.clone(), cx)?;
+                    tree.set_drop_command(drop.clone());
+                    Ok(())
                 })
                 .map_err(map_tree_error)?;
             }
@@ -288,6 +296,7 @@ impl ExtensionSemanticBridge {
                 text: None,
                 language,
                 gutter,
+                drop,
             },
         );
         Ok(registration)
@@ -606,6 +615,7 @@ mod tests {
             language: None,
             gutter: false,
             new_tab: None,
+            drop: None,
         }
     }
 
@@ -621,6 +631,7 @@ mod tests {
             language: None,
             gutter: false,
             new_tab: None,
+            drop: None,
         }
     }
 
@@ -686,6 +697,8 @@ mod tests {
                         status_text: None,
                         badge: None,
                         actions: Vec::new(),
+                        draggable: false,
+                        drop_target: false,
                     }]),
                 },
                 cx,
