@@ -356,7 +356,7 @@ pickers. It matches the supplied item list locally through the shared
 matches above an item's hidden match text, and keeps the caller's order for an
 empty query and equal scores; no provider, scheduler, or event bus is added.
 The panel has a search icon and the query field, whose placeholder is the
-picker's title, above inset, rounded rows. An extension
+active tab's placeholder or else the picker's title, above inset, rounded rows. An extension
 picker with `onHighlight` or `onQuery` reports the highlighted item and the
 typed query through a pull loop in the caller's own turn, because package
 roots are serial and a notification could not run while the command awaits the
@@ -429,6 +429,9 @@ Tab accepts the highlighted completion by replacing the whole field with its
 value, which runs `onChange` again; Enter always submits the field text.
 An input with a `prompt` shows that fixed text before its field, outside its
 value, and dismisses on Backspace in an empty field, as a command line does.
+An input's `placeholder` shows in the empty field, and Tab on an empty field
+copies it in as an ordinary edit, but only when no completion row is
+highlighted; a picker has no Tab-to-accept, since Tab switches its tabs.
 Unloading the lifecycle drops its sessions with its transients.
 
 Settlement happens once on acceptance, dismissal, native-prompt answer, window

@@ -835,13 +835,14 @@ const picked = await workbench.showPicker({
 });
 ```
 
-Pass `tabs: [{ id, label }]` for scope tabs under the field, the first active
+Pass `tabs: [{ id, label, placeholder? }]` for scope tabs under the field, the first active
 (by convention "All"). With `items`, a row's `tabs: [ids]` limits it to those
 tabs and an untagged row shows in all of them. With `onQuery`, the callback
 is called as `onQuery(query, tab)` with the active tab's ID, and switching tabs
 asks again; the rows it returns apply only while the field and the tab still
 hold what they answer. `initialTab` names the tab that starts active, the first
-by default. Tab and Shift+Tab switch tabs, as the commands
+by default. A tab's `placeholder` replaces the `title` in the empty field while
+it is active. Tab and Shift+Tab switch tabs, as the commands
 `picker.next-tab` and `picker.previous-tab` bound in the `picker` view, so
 `keymaps.bind(key, command, { view: "picker" })` rebinds them; clicking a tab
 works too:

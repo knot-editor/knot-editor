@@ -1,6 +1,6 @@
 # D140: Placeholder text in input fields
 
-Status: 🚧 checkpoint 1 done, checkpoint 2 awaiting review. Roadmap item [D140](../roadmap.md).
+Status: ✅ complete. Roadmap item [D140](../roadmap.md).
 
 ## Goal
 
@@ -44,36 +44,13 @@ in the [extension guide](../extension-api.md); Go to Line shows the caret
 position as its placeholder. Extension tests cannot send Tab, so native Tab is
 covered by the `InputView` test only.
 
-### 2. Picker tab placeholders and Search Everywhere ✅ (pending review gate)
+### 2. Picker tab placeholders and Search Everywhere ✅
 
-Deliverables:
-
-- `placeholder` on `PickerTab`, carried to the native picker, which swaps the
-  field's placeholder when the active tab changes.
-- Search Everywhere sets a placeholder on each tab.
-- `knot.d.ts` documents the option.
-
-Validation:
-
-- Picker tests: the active tab's placeholder shows, switching tabs swaps it,
-  and a tab without one falls back to the title.
-- `go-to-file` extension test: opening on Files and on All shows the matching
-  placeholder, if the test harness can observe it; otherwise the picker tests
-  cover it.
-- `just check`.
-
-Review gate: run a `Try:` command that opens Search Everywhere on each tab.
-
-**Implementation context:**
-
-- `crates/knot-protocol/src/lib.rs:465` (`PickerTab`), `bootstrap.js`
-  `pickerTab` (line 931), and `knot.d.ts` `PickerTab` (around line 2215).
-- `src/app/product.rs` around line 1815 maps protocol tabs to the picker's
-  `PickerTab` (`src/app/picker.rs:92`).
-- `src/app/picker.rs`: `build` sets the title as placeholder (line 192); move
-  that into a helper called from `set_tabs` and on every tab change.
-- `extensions/@knot/go-to-file/src/searchEverywhere.ts` (`TABS`) and its
-  `test/extension.test.ts`.
+Done and approved. `PickerTab.placeholder` and the per-tab Search Everywhere
+hints are documented in the [extension guide](../extension-api.md); the
+native picker swaps the field's placeholder on every tab change. The
+extension harness cannot observe the native field, so the picker test covers
+the swap and fallback.
 
 ## Deferred decisions
 
