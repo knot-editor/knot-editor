@@ -130,18 +130,31 @@ impl Fixture {
         })
     }
 
-    /// Restart one package through the native picker and return the prompt.
+    /// Restart one package through the native picker and return the notice's
+    /// title, or its message when it has none, and the message.
     pub(super) fn restart(&self, name: &str, cx: &mut TestAppContext) -> (String, String) {
         let execution = self.command(super::super::commands::RESTART_EXTENSION_COMMAND, cx);
         assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
         wait_for_api_condition(cx, |cx| self.window.read(cx).transient.is_some());
         cx.simulate_input(self.native_window, name);
+        let before = notices(cx).len();
         cx.simulate_keystrokes(self.native_window, "enter");
-        crate::test_support::wait_until(cx, |cx| cx.has_pending_prompt());
-        let prompt = cx.pending_prompt().unwrap();
-        cx.simulate_prompt_answer("OK");
-        cx.run_until_parked();
-        prompt
+        crate::test_support::wait_until(cx, |cx| notices(cx).len() > before);
+        let notice = latest_notice(cx).unwrap();
+        assert_eq!(
+            notice.target,
+            Some(super::super::test_window_id(self.native_window))
+        );
+        let expected = if notice.title.is_some() {
+            crate::app::notifications::Severity::Error
+        } else {
+            crate::app::notifications::Severity::Info
+        };
+        assert_eq!(notice.severity, expected);
+        (
+            notice.title.unwrap_or(notice.message.clone()),
+            notice.message,
+        )
     }
 
     pub(super) fn report_entry(&self, name: &str, cx: &TestAppContext) -> LoadResult {

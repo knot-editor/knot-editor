@@ -95,10 +95,11 @@ impl KnotWindow {
                         cx.notify();
                     }
                     SaveDialogOutcome::Failed(message) => {
-                        this.show_notice(
-                            PromptLevel::Warning,
+                        this.raise_notice(
+                            Severity::Error,
                             "Save failed",
                             Some(message.clone()),
+                            vec![save_as_action()],
                             cx,
                         );
                         this.finish_save_command(
@@ -154,10 +155,11 @@ impl KnotWindow {
             .is_some_and(|document| Some(document) != target_document(&target))
         {
             let message = format!("another open document already owns {uri}");
-            self.show_notice(
-                PromptLevel::Warning,
+            self.raise_notice(
+                Severity::Error,
                 "Save failed",
                 Some(message.clone()),
+                vec![save_as_action()],
                 cx,
             );
             self.finish_save_command(
@@ -272,10 +274,11 @@ impl KnotWindow {
                     }
                     Err(error) => {
                         let message = error.to_string();
-                        this.show_notice(
-                            PromptLevel::Warning,
+                        this.raise_notice(
+                            Severity::Error,
                             "Save failed",
                             Some(message.clone()),
+                            vec![save_as_action()],
                             cx,
                         );
                         this.finish_save_command(
@@ -417,4 +420,9 @@ impl KnotWindow {
         });
         self.tasks.push(task);
     }
+}
+
+/// The action a Save failure offers: save the document elsewhere.
+fn save_as_action() -> NoticeAction {
+    crate::app::notifications::action("Save As…", "file.save-as")
 }

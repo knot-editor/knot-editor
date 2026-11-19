@@ -1,6 +1,6 @@
 # D181 — Native operation failures as notices
 
-Status: 🚧 approved, not started. Source: [roadmap D181](../roadmap.md).
+Status: 🚧 Checkpoint 1 implemented, awaiting manual review. Source: [roadmap D181](../roadmap.md).
 
 ## Outcome
 
@@ -43,19 +43,19 @@ Discard, and confirmations.
 - No "Open Log" action and no new notice API. The notification store, popups,
   and panel stay as they are.
 
-## Checkpoint 1 — Failures raise notices
+## Checkpoint 1 — Failures raise notices 🚧 review gate
 
 Deliverables:
 
-- The helper, with every OK-only prompt site converted using the severity and
+- ✅ The helper, with every OK-only prompt site converted using the severity and
   actions above.
-- Product tests that answer `"OK"` to a failure prompt now assert the raised
+- ✅ Product tests that answer `"OK"` to a failure prompt now assert the raised
   notice: its severity, title, message, target, and actions. Add a small test
   helper that reads the store's latest notice. Add a test for each kind of
   site: a Save failure with its Save As action, an Open failure, the startup
   recovery notice with its Recover action, and the info "No unsaved documents
   to recover".
-- Docs: rewrite the
+- ✅ Docs: rewrite the
   [product window chrome and failure notices](../decisions/platform.md#product-window-chrome-and-failure-notices)
   decision and its `decisions.md` index line to say that silent native failures
   are notices. Update the notifications section of

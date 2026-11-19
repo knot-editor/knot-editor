@@ -18,7 +18,7 @@ impl KnotWindow {
                 Ok(TransientOutcome::Failed(message)) => {
                     Self::notice(
                         &this,
-                        PromptLevel::Warning,
+                        Severity::Error,
                         "Cannot add folder",
                         Some(message),
                         cx,
@@ -44,10 +44,11 @@ impl KnotWindow {
                 Ok(uri) => window.add_workspace_root(uri, cx),
                 Err(error) => {
                     use knot_protocol::declarations::HostError;
-                    window.show_notice(
-                        PromptLevel::Warning,
+                    window.raise_notice(
+                        Severity::Error,
                         "Cannot add folder",
                         Some(error.code().to_string()),
+                        Vec::new(),
                         cx,
                     );
                 }

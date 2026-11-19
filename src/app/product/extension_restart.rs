@@ -15,7 +15,13 @@ impl KnotWindow {
     /// List restartable packages in the captured window and restart the selection.
     pub(crate) fn start_extension_restart(&mut self, cx: &mut Context<Self>) {
         let Some(report) = super::super::extensions::host::startup_report(cx) else {
-            self.show_notice(PromptLevel::Warning, "Extensions are unavailable", None, cx);
+            self.raise_notice(
+                Severity::Warning,
+                "Extensions are unavailable",
+                None,
+                Vec::new(),
+                cx,
+            );
             return;
         };
         let items = report
@@ -57,11 +63,15 @@ impl KnotWindow {
             });
             let Some(restart) = restart else { return };
             let entry = restart.await;
-            let (title, message) = match entry.result {
-                LoadResult::Loaded => (format!("Restarted {name}"), None),
-                LoadResult::Failed(cause) => (format!("{name} failed to restart"), Some(cause)),
+            let (severity, title, message) = match entry.result {
+                LoadResult::Loaded => (Severity::Info, format!("Restarted {name}"), None),
+                LoadResult::Failed(cause) => (
+                    Severity::Error,
+                    format!("{name} failed to restart"),
+                    Some(cause),
+                ),
             };
-            Self::notice(&this, PromptLevel::Info, &title, message, cx);
+            Self::notice(&this, severity, &title, message, cx);
         });
         self.tasks.push(task);
     }

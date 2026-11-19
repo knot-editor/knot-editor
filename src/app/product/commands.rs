@@ -688,16 +688,17 @@ async fn run_shell_command(
     work: fn() -> Result<(), String>,
 ) -> Result<(), CommandOutcome> {
     context
-        .window(move |window, _, cx| {
-            let native_window = window.native_window;
+        .window(move |_, _, cx| {
+            let window = window_id(cx.entity_id());
             cx.spawn(async move |_, cx| {
                 if let Err(message) = cx.background_spawn(async move { work() }).await {
                     cx.update(|cx| {
-                        show_notice(
-                            native_window,
-                            PromptLevel::Warning,
+                        raise_notice(
+                            window,
+                            Severity::Error,
                             failure.into(),
                             Some(message),
+                            Vec::new(),
                             cx,
                         );
                     });

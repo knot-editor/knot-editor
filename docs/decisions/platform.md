@@ -133,9 +133,12 @@ The window's look, IntelliJ's Islands (rounded cards on a darker window
 background), is a set of theme values with setting overrides rather than a
 layout mode or a hard-coded style, so a flat theme needs no code and a user can
 reshape any theme.
-The prototype's free-form status string was the only place
-some failures appeared, so native failures with no other visible effect use the
-native warning prompt instead. Success notices were dropped because their
+Native failures with no other visible effect raise a notice in the window
+where the operation ran. The prototype's free-form status string was easy to
+miss and the next message overwrote it; an OK-only native prompt interrupted
+typing for something the user could not act on and left no trace once
+dismissed, while the Notifications panel keeps a notice. Native prompts remain
+only where the user must choose. Success notices were dropped where their
 effect is visible. Extension calls get failures as results, so a package
 decides whether to tell the user. A failed package startup opens the startup
 report, because nothing else passively shows that a package failed.

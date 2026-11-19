@@ -335,10 +335,10 @@ fn restarting_the_registry_keeps_bound_sessions_active(cx: &mut TestAppContext) 
     wait_until(cx, |cx| projects.window.transient_open(cx));
     projects.window.type_input(OWNER, cx);
     projects.window.press("enter", cx);
-    wait_for_prompt(cx);
-    assert_eq!(cx.pending_prompt().unwrap().0, "Restarted @knot/projects");
-    cx.simulate_prompt_answer("OK");
-    cx.run_until_parked();
+    assert_eq!(
+        take_notice(&projects.product, cx),
+        "Restarted @knot/projects"
+    );
 
     assert_eq!(projects.list(cx)["sessions"][&a_id]["state"], "active");
     assert_eq!(projects.window.roots(cx), [file_uri(a.path())]);

@@ -207,6 +207,7 @@ impl TerminalSessions {
     }
 }
 
+use crate::app::notifications::{NoticeAction, NoticeSpec, Severity};
 pub(crate) use knot_model::workbench::closure::CloseKind as ProtectedCloseKind;
 use knot_model::workbench::closure::{
     Approval as CloseApproval, ApprovalKind as CloseApprovalKind, ViewKey as ProtectedViewKey,
@@ -2243,16 +2244,24 @@ impl KnotWindow {
         self.focus_active_surface(cx);
     }
 
-    /// Report an outcome that has no other visible effect in this window.
-    /// The prompt needs no answer.
-    pub(super) fn show_notice(
+    /// Raise a notice in this window for an outcome nothing else on screen
+    /// shows.
+    pub(super) fn raise_notice(
         &self,
-        level: PromptLevel,
+        severity: Severity,
         title: impl Into<String>,
         detail: Option<String>,
-        cx: &mut App,
+        actions: Vec<NoticeAction>,
+        cx: &mut Context<Self>,
     ) {
-        show_notice(self.native_window, level, title.into(), detail, cx);
+        raise_notice(
+            window_id(cx.entity_id()),
+            severity,
+            title.into(),
+            detail,
+            actions,
+            cx,
+        );
     }
 
     pub(crate) fn toggle_extension_report(&mut self, cx: &mut Context<Self>) {
@@ -2295,23 +2304,32 @@ fn prompt(
     receiver
 }
 
-/// Report an outcome that has no other visible effect in the window shown in
-/// `native_window`. The prompt needs no answer.
-pub(super) fn show_notice(
-    native_window: Option<AnyWindowHandle>,
-    level: PromptLevel,
+/// Raise a notice from Knot in the window with public ID `window`. The detail
+/// becomes the message under the title; without one the title is the message.
+pub(super) fn raise_notice(
+    window: String,
+    severity: Severity,
     title: String,
     detail: Option<String>,
+    actions: Vec<NoticeAction>,
     cx: &mut App,
 ) {
-    drop(prompt(
-        native_window,
-        level,
-        title,
-        detail,
-        vec![PromptButton::new("OK")],
+    let (title, message) = match detail {
+        Some(detail) => (Some(title), detail),
+        None => (None, title),
+    };
+    crate::app::notifications::raise(
+        NoticeSpec {
+            message,
+            title,
+            severity,
+            auto_dismiss: None,
+            actions,
+            target: Some(window),
+            source: "Knot".into(),
+        },
         cx,
-    ));
+    );
 }
 
 #[cfg(any(test, feature = "test-support"))]

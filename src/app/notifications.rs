@@ -31,18 +31,22 @@ pub(crate) fn raise(spec: NoticeSpec, cx: &mut App) -> u64 {
     update(cx, |store| store.raise(spec, SystemTime::now()))
 }
 
-/// Record a sticky `warning` notice for a configuration problem the user can
-/// fix, with actions that open the personal configuration and the log. It has
-/// no target, so every window shows it, and one raised before any window
-/// exists pops up when the first opens.
-pub(crate) fn raise_config_warning(message: String, cx: &mut App) -> u64 {
-    let action = |title: &str, name: &str| NoticeAction {
+/// An action that runs the command `name` without arguments.
+pub(crate) fn action(title: &str, name: &str) -> NoticeAction {
+    NoticeAction {
         title: title.into(),
         command: knot_model::status_bar::StatusCommand {
             name: name.into(),
             arguments: knot_protocol::CommandArgumentValue::Null,
         },
-    };
+    }
+}
+
+/// Record a sticky `warning` notice for a configuration problem the user can
+/// fix, with actions that open the personal configuration and the log. It has
+/// no target, so every window shows it, and one raised before any window
+/// exists pops up when the first opens.
+pub(crate) fn raise_config_warning(message: String, cx: &mut App) -> u64 {
     raise(
         NoticeSpec {
             message,

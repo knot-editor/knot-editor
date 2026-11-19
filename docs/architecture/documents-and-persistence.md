@@ -300,9 +300,9 @@ URI, after config and extension startup and before it restores the
 queued requests. Restored windows present restored documents by identity, and
 queued launch requests deduplicate against both; restored documents that no
 window presents open in the first window. Older duplicates and unreadable
-baselines remain in the store, and the first window shows a notice pointing at
-File › Recover Unsaved Documents…; an unavailable store is reported the same
-way. Retained
+baselines remain in the store, and the first window raises a warning notice
+whose Recover… action runs File › Recover Unsaved Documents…; an unavailable
+store raises a warning without it. Retained
 captures are left to their owners and not counted. That native command lists
 every leftover automatic snapshot and every retained capture, labelled with its
 owner, in the window's transient slot and restores or discards the selection.

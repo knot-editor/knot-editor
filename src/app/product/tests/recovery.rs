@@ -695,6 +695,7 @@ fn open_listing_empty(
     native_window: gpui::AnyWindowHandle,
     cx: &mut TestAppContext,
 ) {
+    let before = notices(cx).len();
     let execution = dispatch_product_command(
         window,
         native_window,
@@ -702,13 +703,18 @@ fn open_listing_empty(
         cx,
     );
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
-    crate::test_support::wait_until(cx, |cx| cx.has_pending_prompt());
+    crate::test_support::wait_until(cx, |cx| notices(cx).len() > before);
     cx.read(|cx| assert!(window.read(cx).transient.is_none()));
+    assert!(!cx.has_pending_prompt());
+    let notice = latest_notice(cx).unwrap();
+    assert_eq!(notice.severity, crate::app::notifications::Severity::Info);
+    assert_eq!(notice.title, None);
+    assert_eq!(notice.message, "No unsaved documents to recover");
     assert_eq!(
-        cx.pending_prompt().unwrap().0,
-        "No unsaved documents to recover"
+        notice.target,
+        Some(super::super::test_window_id(native_window))
     );
-    cx.simulate_prompt_answer("OK");
+    assert!(notice.actions.is_empty());
 }
 
 #[gpui::test]
@@ -763,9 +769,19 @@ async fn unavailable_recovery_store_never_blocks_startup(cx: &mut TestAppContext
     assert!(wait_for_product_startup(cx));
     assert_eq!(cx.windows().len(), 1);
     cx.run_until_parked();
-    let (title, detail) = cx.pending_prompt().unwrap();
-    assert_eq!(title, "Recovery is unavailable");
-    assert!(detail.starts_with("recovery:"), "{detail}");
+    assert!(!cx.has_pending_prompt());
+    let notice = latest_notice(cx).unwrap();
+    assert_eq!(
+        notice.severity,
+        crate::app::notifications::Severity::Warning
+    );
+    assert_eq!(notice.title.as_deref(), Some("Recovery is unavailable"));
+    assert!(
+        notice.message.starts_with("recovery:"),
+        "{}",
+        notice.message
+    );
+    assert!(notice.actions.is_empty());
     assert_eq!(std::fs::read(&corrupt).unwrap(), b"not a database");
 }
 
@@ -853,9 +869,23 @@ async fn launch_requests_open_alongside_recovery_when_an_extension_fails(cx: &mu
     assert_eq!(std::fs::read_to_string(&file).unwrap(), "on disk");
     // The snapshot left for the listing is announced.
     cx.run_until_parked();
-    let (title, detail) = cx.pending_prompt().unwrap();
-    assert_eq!(title, "1 unsaved document can be recovered");
-    assert!(detail.contains("File › Recover Unsaved Documents…"));
+    assert!(!cx.has_pending_prompt());
+    let notice = latest_notice(cx).unwrap();
+    assert_eq!(
+        notice.severity,
+        crate::app::notifications::Severity::Warning
+    );
+    assert_eq!(
+        notice.title.as_deref(),
+        Some("1 unsaved document can be recovered")
+    );
+    assert!(notice.message.contains("File › Recover Unsaved Documents…"));
+    let target = notice.target.clone().unwrap();
+    assert!(
+        cx.read(|cx| super::super::find_window(&target, cx))
+            .is_some()
+    );
+    assert_eq!(notice_commands(&notice), [("Recover…", "file.recover")]);
 }
 
 #[gpui::test]

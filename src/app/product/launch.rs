@@ -73,10 +73,8 @@ pub(super) fn open_product_window_with(
         cx,
     )
     .expect("a window must open");
-    if let Some((title, detail)) = notice {
-        window.update(cx, |window, cx| {
-            window.show_notice(PromptLevel::Warning, title, detail, cx)
-        });
+    if let Some(notice) = notice {
+        window.update(cx, |window, cx| notice.raise(window, cx));
     }
     window
 }
@@ -498,8 +496,8 @@ fn open_launch_windows(
                     window.present_document(document, cx);
                 }
             }
-            if let Some((title, detail)) = notice {
-                window.show_notice(PromptLevel::Warning, title, detail, cx);
+            if let Some(notice) = notice {
+                notice.raise(window, cx);
             }
             cx.notify();
         });

@@ -187,10 +187,11 @@ impl KnotWindow {
         }
         let existing = cx.windows();
         let Ok(destination) = create_destination(cx) else {
-            self.show_notice(
-                PromptLevel::Warning,
+            self.raise_notice(
+                Severity::Error,
                 "Could not create destination window",
                 None,
+                Vec::new(),
                 cx,
             );
             return CommandOutcome::HandlerFailure {

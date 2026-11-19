@@ -177,6 +177,14 @@ stripe button (`setBadge`) that is red while an unread notice is an error and
 blue while any other is unread. Popups can be turned off with `notifications.popups`,
 for a package that presents notices itself.
 
+A native operation that fails with no other visible effect (Save, Open,
+Reopen, Add Folder, recovery, Restart Extension, tab relocation, shell
+commands) raises a notice from Knot in the window where it ran
+(`KnotWindow::raise_notice` in `src/app/product.rs`): `error` for a failure,
+`warning` for something unavailable. A Save failure offers Save As…, and
+Restart Extension also reports success, which nothing else shows. Native
+prompts remain only where the user must choose.
+
 Every `knot::config` warning also raises a sticky `warning` notice, with
 actions that run Knot: Open Personal Configuration and Knot: Open Log: setting
 warnings and a `font.family` that is not installed. The fatal configuration

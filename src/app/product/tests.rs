@@ -226,6 +226,38 @@ struct TestRecoveryDir(tempfile::TempDir);
 
 impl gpui::Global for TestRecoveryDir {}
 
+/// The notices raised so far, without the configuration warnings the test
+/// platform's missing fonts raise.
+fn notices(cx: &TestAppContext) -> Vec<crate::app::notifications::Notice> {
+    cx.read(|cx| {
+        cx.try_global::<crate::app::notifications::ApplicationNotifications>()
+            .map(|global| {
+                global
+                    .0
+                    .notices()
+                    .iter()
+                    .filter(|notice| notice.title.as_deref() != Some("Configuration warning"))
+                    .cloned()
+                    .collect()
+            })
+            .unwrap_or_default()
+    })
+}
+
+/// The notice raised last, without configuration warnings.
+fn latest_notice(cx: &TestAppContext) -> Option<crate::app::notifications::Notice> {
+    notices(cx).pop()
+}
+
+/// The command each of `notice`'s actions runs.
+fn notice_commands(notice: &crate::app::notifications::Notice) -> Vec<(&str, &str)> {
+    notice
+        .actions
+        .iter()
+        .map(|action| (action.title.as_str(), action.command.name.as_str()))
+        .collect()
+}
+
 fn keymap_command(cx: &gpui::App, key: &str, view: Option<&str>) -> Option<String> {
     match cx.global::<ApplicationKeymaps>().0.resolve(
         &crate::app::keys::Keystroke::parse(key).unwrap().unparse(),

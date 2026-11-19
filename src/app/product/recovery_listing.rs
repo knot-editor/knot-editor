@@ -28,7 +28,7 @@ impl KnotWindow {
                 Ok(snapshots) if snapshots.is_empty() => {
                     Self::notice(
                         &this,
-                        PromptLevel::Info,
+                        Severity::Info,
                         "No unsaved documents to recover",
                         None,
                         cx,
@@ -39,7 +39,7 @@ impl KnotWindow {
                 Err(error) => {
                     Self::notice(
                         &this,
-                        PromptLevel::Warning,
+                        Severity::Warning,
                         "Recovery is unavailable",
                         Some(error.to_string()),
                         cx,
@@ -106,7 +106,7 @@ impl KnotWindow {
                     if let Err(error) = discard.await {
                         Self::notice(
                             &this,
-                            PromptLevel::Warning,
+                            Severity::Error,
                             "Discard failed",
                             Some(error.to_string()),
                             cx,
@@ -132,10 +132,11 @@ impl KnotWindow {
                 | RestoreOutcome::Preserved { document, .. },
             ) => document,
             Err(error) => {
-                self.show_notice(
-                    PromptLevel::Warning,
+                self.raise_notice(
+                    Severity::Error,
                     format!("Recovering {title} failed"),
                     Some(error.to_string()),
+                    Vec::new(),
                     cx,
                 );
                 return;
@@ -156,38 +157,60 @@ impl KnotWindow {
         self.present_open_document(document, &target, false, false, cx);
     }
 
+    /// Raise a notice without actions in `this` window, if it is still open.
     pub(super) fn notice(
         this: &WeakEntity<Self>,
-        level: PromptLevel,
+        severity: Severity,
         title: &str,
         detail: Option<String>,
         cx: &mut AsyncApp,
     ) {
         let _ = this.update(cx, |window, cx| {
-            window.show_notice(level, title, detail, cx)
+            window.raise_notice(severity, title, detail, Vec::new(), cx)
         });
     }
 }
 
-/// Status line for a window that received startup recovery.
-/// The startup notice for recovery that needs the user's attention: an
+/// The startup warning for recovery that needs the user's attention: an
 /// unavailable store, or snapshots left for the listing.
+pub(super) struct StartupNotice {
+    title: String,
+    detail: String,
+    actions: Vec<NoticeAction>,
+}
+
+impl StartupNotice {
+    pub(super) fn raise(self, window: &KnotWindow, cx: &mut Context<KnotWindow>) {
+        window.raise_notice(
+            Severity::Warning,
+            self.title,
+            Some(self.detail),
+            self.actions,
+            cx,
+        );
+    }
+}
+
 pub(super) fn startup_notice(
     recovery: &crate::app::recovery::StartupRecovery,
-) -> Option<(String, Option<String>)> {
+) -> Option<StartupNotice> {
     if let Some(error) = &recovery.error {
-        return Some(("Recovery is unavailable".into(), Some(error.to_string())));
+        return Some(StartupNotice {
+            title: "Recovery is unavailable".into(),
+            detail: error.to_string(),
+            actions: Vec::new(),
+        });
     }
-    (recovery.remaining > 0).then(|| {
-        (
-            format!(
-                "{} can be recovered",
-                plural(recovery.remaining, "unsaved document")
-            ),
-            Some(format!(
-                "Use File › {LISTING_TITLE}… to restore or discard them."
-            )),
-        )
+    (recovery.remaining > 0).then(|| StartupNotice {
+        title: format!(
+            "{} can be recovered",
+            plural(recovery.remaining, "unsaved document")
+        ),
+        detail: format!("Use File › {LISTING_TITLE}… to restore or discard them."),
+        actions: vec![crate::app::notifications::action(
+            "Recover…",
+            "file.recover",
+        )],
     })
 }
 

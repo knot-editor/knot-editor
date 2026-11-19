@@ -24,7 +24,7 @@ touches.
 - [Product window chrome and failure notices](decisions/platform.md#product-window-chrome-and-failure-notices):
   only product surfaces, with a toolbar of package-contributed widgets rather than
   fixed commands; the Islands look is theme values, not a layout mode; silent
-  native failures use the native warning prompt.
+  native failures raise notices, and prompts only ask for a decision.
 - [Command-line launcher](decisions/platform.md#command-line-launcher): the
   editor owns one socket for every build; macOS cold start through `open -a`,
   not a fork; paths open in their project's window.

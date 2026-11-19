@@ -156,10 +156,11 @@ impl KnotWindow {
                     let delivered = completion.clone();
                     if this
                         .update(cx, |this, cx| {
-                            this.show_notice(
-                                PromptLevel::Warning,
+                            this.raise_notice(
+                                Severity::Error,
                                 "Open failed",
                                 Some(message.clone()),
+                                Vec::new(),
                                 cx,
                             );
                             this.finish_open_command(
@@ -182,10 +183,11 @@ impl KnotWindow {
                     let delivered = completion.clone();
                     if this
                         .update(cx, |this, cx| {
-                            this.show_notice(
-                                PromptLevel::Warning,
+                            this.raise_notice(
+                                Severity::Error,
                                 "Open failed",
                                 Some(message.clone()),
+                                Vec::new(),
                                 cx,
                             );
                             this.finish_open_command(
@@ -272,18 +274,19 @@ impl KnotWindow {
         cx: &mut Context<Self>,
     ) -> tokio::sync::oneshot::Receiver<Result<OpenCommit, OpenFailure>> {
         let (completion, result) = tokio::sync::oneshot::channel();
-        let native_window = self.native_window;
+        let window = window_id(cx.entity_id());
         self.start_resource_operation(
             request,
             target,
             options,
             move |outcome, cx| {
                 if let Err(OpenFailure::Resource(error)) = &outcome {
-                    show_notice(
-                        native_window,
-                        PromptLevel::Warning,
+                    raise_notice(
+                        window,
+                        Severity::Error,
                         "Open failed".into(),
                         Some(error.to_string()),
+                        Vec::new(),
                         cx,
                     );
                 }

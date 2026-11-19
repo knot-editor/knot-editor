@@ -112,10 +112,11 @@ impl KnotWindow {
                                 this.focus_active_surface(cx);
                             }
                         }
-                        Err(error) => this.show_notice(
-                            PromptLevel::Warning,
+                        Err(error) => this.raise_notice(
+                            Severity::Error,
                             "Reopen failed",
                             Some(error.to_string()),
+                            Vec::new(),
                             cx,
                         ),
                     });

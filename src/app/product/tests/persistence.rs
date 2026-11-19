@@ -403,6 +403,15 @@ async fn save_as_failure_preserves_text_and_document_identity(cx: &mut TestAppCo
         assert_eq!(document.model(), &model);
         assert_eq!(model.read(cx).text(), "unsaved text");
     });
+    let notice = latest_notice(cx).unwrap();
+    assert_eq!(notice.severity, crate::app::notifications::Severity::Error);
+    assert_eq!(notice.title.as_deref(), Some("Save failed"));
+    assert!(!notice.message.is_empty());
+    assert_eq!(
+        notice.target,
+        Some(super::super::window_id(window.entity_id()))
+    );
+    assert_eq!(notice_commands(&notice), [("Save As…", "file.save-as")]);
 }
 
 #[gpui::test]
@@ -833,10 +842,16 @@ async fn folder_open_installs_a_workspace_and_failures_preserve_the_document(
             placeholder
         );
     });
-    let (title, detail) = cx.pending_prompt().unwrap();
-    assert_eq!(title, "Open failed");
-    assert!(detail.contains("not valid UTF-8"));
-    cx.simulate_prompt_answer("OK");
+    assert!(!cx.has_pending_prompt());
+    let notice = latest_notice(cx).unwrap();
+    assert_eq!(notice.severity, crate::app::notifications::Severity::Error);
+    assert_eq!(notice.title.as_deref(), Some("Open failed"));
+    assert!(notice.message.contains("not valid UTF-8"));
+    assert_eq!(
+        notice.target,
+        Some(super::super::window_id(window.entity_id()))
+    );
+    assert!(notice.actions.is_empty());
 
     let target = cx.read(|cx| current_open_target(&window, cx));
     window.update(cx, |window, cx| {
