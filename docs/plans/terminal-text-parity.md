@@ -1,6 +1,6 @@
 # Terminal text parity with Ghostty
 
-Status: checkpoint 1 complete; checkpoint 2 is next. No roadmap item.
+Status: checkpoints 1 and 2 complete; checkpoint 3 is next. No roadmap item.
 
 ## Goal
 
@@ -43,29 +43,15 @@ geometry in [workbench and lifecycle](../architecture/workbench-and-lifecycle.md
 Review gate passed: `just check` green, and side-by-side `ls` output in
 Ghostty and Knot measures the same row height.
 
-## Checkpoint 2 — Per-cell grid painting
+## Checkpoint 2 — Per-cell grid painting ✅
 
-Deliverable: every non-ligature cell paints its glyph at its own snapped
-cell origin with the cell's fixed advance; columns stay aligned and glyphs
-sit on-pixel at 1x/2x.
-
-- Tighten the paint path in `view.rs` so runs never carry proportional
-  advances across cells; keep `shaping_runs` joining only identical-look
-  ASCII punctuation on one line, clipped to its cells.
-- Validation: view/layout tests for column alignment (mixed widths, wide
-  glyphs, fallback glyphs, bold/italic/color boundaries), ligature
-  positive/negative cases, and underline/strikethrough clipping; `just
-  check`.
-- Review gate: `just check`; a `try.*` command in the personal
-  `post-init.js` opens a terminal on a fixed `ls`/box-drawing fixture for
-  side-by-side comparison with Ghostty.
-
-**Implementation context.** `src/app/terminal/view.rs` (`shaping_runs`
-~line 888, paint loop ~line 1234, `text_origin`), `src/app/terminal/layout.rs`
-(`origin`, `text_origin`, `cell_width` snapping), tests in
-`src/app/terminal/view/tests.rs` (incl. `mod shaping_runs` ~line 321).
-Personal config root is `user_config_root` in
-`src/app/personal_config.rs`.
+Done: every cell paints at its own snapped cell origin with the cell's
+fixed advance; the pieces of one run share the run's clip, so ligature
+glyphs render whole over their cluster's blank cells. See the terminal
+painting in [workbench and lifecycle](../architecture/workbench-and-lifecycle.md).
+Review gate passed: `just check` green, and the side-by-side fixture in
+Ghostty and Knot matches apart from the known weight difference
+checkpoint 3).
 
 ## Checkpoint 3 — Regular-weight parity with Ghostty
 
