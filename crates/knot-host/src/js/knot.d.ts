@@ -457,9 +457,6 @@ declare module "knot" {
     /** Whether new terminals report mouse input to the running program.
      * Native default true. */
     "terminal.mouseReportingEnabled": boolean;
-    /** Whether Esc in a terminal focuses the editor; when false, Esc goes to
-     * the shell. Native default true. */
-    "terminal.escapeToEditor": boolean;
     /** The cursor shape new terminals start with. Native default "block";
      * a program's own shape still wins. */
     "terminal.cursorStyle": "block" | "bar" | "underline" | "hollow";

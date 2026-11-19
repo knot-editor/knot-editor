@@ -239,8 +239,8 @@ generated `<viewId>.toggle` command. Hide Active Tool Window (from the editor,
 the most recently active visible window), Jump to Last Tool Window, Hide All
 Tool Windows (run again, it restores the windows it hid), Maximize Tool Window,
 the Stretch commands, Move to a slot, and the split commands are workbench
-transitions. Esc in a tool window focuses the center and leaves the window
-shown; `terminal.escapeToEditor` set to false sends it to the shell.
+transitions. Esc in a non-terminal tool window focuses the center and leaves
+the window shown; a terminal always receives Esc.
 
 A center tab sits on the tab background with an accent line under the
 active one; its close button shows on the active or hovered tab, a dirty

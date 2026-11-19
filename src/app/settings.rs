@@ -263,17 +263,6 @@ pub(crate) fn terminal_mouse_reporting(cx: &App) -> bool {
     .expect("terminal.mouseReportingEnabled is a native boolean setting")
 }
 
-/// Whether Esc in a terminal tool window focuses the editor.
-pub(crate) fn terminal_escape_to_editor(cx: &App) -> bool {
-    resolve(
-        TERMINAL_ESCAPE_TO_EDITOR,
-        &SettingsScope::default(),
-        cx,
-        Value::as_bool,
-    )
-    .expect("terminal.escapeToEditor is a native boolean setting")
-}
-
 /// Write a native boolean setting for every context.
 pub(crate) fn set_boolean(key: &str, value: bool, cx: &mut App) {
     cx.default_global::<ApplicationSettings>()

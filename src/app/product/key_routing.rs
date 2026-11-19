@@ -111,9 +111,6 @@ impl KnotWindow {
             self.focused_command_view(cx),
             Some(CommandView::Terminal(_))
         );
-        if in_tool && terminal && crate::app::settings::terminal_escape_to_editor(cx) {
-            return self.focus_editor_from_tool(cx);
-        }
         let delivered = self.deliver_key(&keystroke, cx);
         if in_tool && !terminal && !delivered {
             return self.focus_editor_from_tool(cx);

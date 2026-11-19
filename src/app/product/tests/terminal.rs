@@ -1778,33 +1778,18 @@ fn a_container_splits_moves_unsplits_and_walks_its_panes(cx: &mut TestAppContext
 }
 
 #[gpui::test]
-fn escape_in_a_terminal_follows_the_setting(cx: &mut TestAppContext) {
+fn escape_in_a_terminal_stays_with_the_shell(cx: &mut TestAppContext) {
     use crate::app::workbench::Area;
     let documents = install_globals(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (window, native_window) = product_window(document, model, cx);
-    let (area, tool) = terminal_area(&window, cx);
+    let (area, _) = terminal_area(&window, cx);
     open_terminals_in_window(&window, native_window, 1, cx);
     assert_eq!(focused_area(&window, cx), Some(area));
 
-    // The shell gets Esc when the setting is off.
-    cx.update(|cx| {
-        crate::app::settings::set_boolean(
-            knot_model::settings::TERMINAL_ESCAPE_TO_EDITOR,
-            false,
-            cx,
-        )
-    });
     press_keys(&window, "escape", cx);
     assert_eq!(focused_area(&window, cx), Some(area));
-
-    cx.update(|cx| {
-        crate::app::settings::set_boolean(knot_model::settings::TERMINAL_ESCAPE_TO_EDITOR, true, cx)
-    });
-    press_keys(&window, "escape", cx);
-    assert_eq!(focused_area(&window, cx), Some(Area::Center));
-    assert!(cx.read(|cx| window.read(cx).workbench.read(cx).tool_visible(tool)));
 
     // A terminal in the editor keeps Esc for the shell.
     let center =
