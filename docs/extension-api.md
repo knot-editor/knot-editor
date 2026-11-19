@@ -85,8 +85,8 @@ still needs product tests.
 
 ## Register a command
 
-Knot runs JavaScript. Import its public API from `"knot"` and register handlers
-during package activation:
+Import the public API from `"knot"` and register handlers during package
+activation:
 
 ```js
 import { commands } from "knot";
@@ -670,6 +670,11 @@ clipboard with `workbench.readClipboardText()`, which resolves to `null` when it
 holds no text. The bundled [Vim package](../extensions/@knot/vim/) is a
 complete modal editor on these primitives.
 
+Keybinding registration through `keymaps.bind` and `keymaps.unbind` is
+synchronous; mutations from one V8 turn apply as one atomic batch, and invalid
+input fails the batch. Bindings sit above the selected keymap preset and the
+latest write wins, so personal overrides of package bindings belong in
+`post-init`. Show Keybindings lists every binding with its owner.
 
 A preset is a named set of default bindings that replaces Knot's when the
 `keymap.preset` [setting](#read-and-write-settings) selects it; every
@@ -1204,12 +1209,8 @@ message text. Narrow optional diagnostic `details` before reading fields. On
 `RevisionConflict`, choose whether to abandon work or deliberately read a new
 snapshot. Cancellation does not roll back a commit that already succeeded.
 
-Keybinding registration through `keymaps.bind` and `keymaps.unbind` is
-synchronous; mutations from one V8 turn apply as one atomic batch. Invalid
-input fails the batch. Bindings sit above the selected keymap preset and the
-latest write wins, so personal overrides of package bindings belong in
-`post-init`. The activation example demonstrates registration and cleanup
-through the public API. Show Keybindings lists every binding with its owner.
+If a package stops responding, the palette's Developer: Restart Extension…
+stops and reloads it, re-reading an installed package from disk.
 
 ## Durable storage
 
@@ -1238,10 +1239,6 @@ its records in storage through public APIs only. Precise JSON validation,
 ordering, cancellation, and failure contracts live in the TypeScript reference;
 SQLite ownership and shutdown belong to
 [host architecture](architecture/extension-host.md#extension-record-storage).
-
-The bundled `@knot/projects` package is a worked example that combines one
-registry record, a contributed tree, a folder picker, text input, confirmation,
-and workspace opening through the public API only.
 
 ## Retained document captures
 
@@ -1307,9 +1304,6 @@ captures you restored from can be released once your new record is durable.
 
 The bundled `@knot/projects` package builds project switching on these calls;
 its behavior is described under [projects](architecture/workbench-and-lifecycle.md#projects).
-
-If a package stops responding, the palette's Developer: Restart Extension…
-stops and reloads it, re-reading an installed package from disk.
 
 ## Native contributors
 
