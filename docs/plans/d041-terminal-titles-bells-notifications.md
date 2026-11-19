@@ -66,7 +66,11 @@ Done and approved. The session resolves its label from an explicit name, then
 the program's title, then the default name; layouts record only explicit
 names. See [workbench and lifecycle](../architecture/workbench-and-lifecycle.md#terminal-sessions-and-views).
 
-### 2. Bell marks on tabs and stripe buttons
+### 2. Bell marks on tabs and stripe buttons ✅ (awaiting review)
+
+Implemented and checked: model marks and clearing, session bell event routed to
+the holding window, tab `bell-ring` icon and stripe dot. Pending the review gate
+below.
 
 - **Implementation context:** `crates/knot-model/src/workbench.rs` and
   `workbench/terminals.rs`: a marked-sessions set, `mark_bell(session)`, which

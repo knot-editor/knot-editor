@@ -87,7 +87,7 @@ use super::{
     model::{Buffer, BufferModel},
     open::{OpenResource, load_resource},
     picker::{Picker, PickerAsk, PickerEntry, PickerEvent, PickerTab},
-    terminal::session::TerminalSession,
+    terminal::session::{TerminalSession, TerminalSessionEvent},
     terminal::view::TerminalView,
     transient::{
         InputEvent, InputSpec, InputView, PromptText, TransientOutcome, TransientOwner,
@@ -1327,12 +1327,28 @@ impl KnotWindow {
         let name = knot_model::workbench::free_label(session.read(cx).name(), &taken);
         session.update(cx, |session, _| session.set_default_name(name));
         let view = cx.new(|cx| TerminalView::new(session.clone(), cx));
+        // The subscription lives as long as the session, whichever window
+        // holds its tab.
+        App::subscribe(cx, &session, move |_, event, cx| match event {
+            TerminalSessionEvent::Bell => Self::ring_terminal_bell(id, cx),
+        })
+        .detach();
         cx.global::<ApplicationTerminalSessions>()
             .0
             .borrow_mut()
             .sessions
             .insert(id, session);
         (id, view)
+    }
+
+    /// Mark the tab of terminal `id` in the window that holds it.
+    fn ring_terminal_bell(id: TerminalSessionId, cx: &mut App) {
+        for window in windows_by_activation(cx) {
+            let workbench = window.read(cx).workbench.clone();
+            if workbench.update(cx, |workbench, _| workbench.mark_bell(id)) {
+                window.update(cx, |_, cx| cx.notify());
+            }
+        }
     }
 
     fn close_terminal(&mut self, id: TerminalSessionId, cx: &mut Context<Self>) {

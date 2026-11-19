@@ -414,6 +414,10 @@ impl KnotWindow {
                     }
                     _ => false,
                 };
+                let bell_marked = matches!(
+                    tab.surface_id(),
+                    TabSurfaceId::Terminal(session) if workbench.bell_marked(session)
+                );
                 let capture = workbench.capture_tab_move(pane_id, tab_id).unwrap();
                 let source = self.capture_tab_relocation(pane_id, tab_id, cx).unwrap();
                 let icon = match tab.surface_id() {
@@ -484,6 +488,18 @@ impl KnotWindow {
                             .debug_selector(move || format!("tab-icon-{}", tab_id.value()))
                             .child(crate::app::icons::AppIcon::new(icon))
                     }))
+                    .when(bell_marked, |element| {
+                        element.child(
+                            div()
+                                .debug_selector(move || format!("bell-{}", tab_id.value()))
+                                .child(
+                                    crate::app::icons::AppIcon::new(
+                                        knot_model::icons::IconDefinition::lucide("bell-ring"),
+                                    )
+                                    .tinted(Some(color::NOTIFICATION_INFO.to_owned())),
+                                ),
+                        )
+                    })
                     .map(|element| {
                         if matches!(tab.surface_id(), TabSurfaceId::Terminal(_)) {
                             // A program's title can be arbitrarily long.

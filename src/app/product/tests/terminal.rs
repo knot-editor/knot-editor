@@ -1908,3 +1908,90 @@ fn a_program_title_labels_the_tab_and_rename_wins(cx: &mut TestAppContext) {
     let json = serde_json::to_string(&layout).unwrap();
     assert!(json.contains("\"name\":\"build\""), "{json}");
 }
+
+#[gpui::test]
+fn a_bell_marks_background_tabs_and_hidden_tool_windows(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (window, native_window) = product_window(document, model, cx);
+    open_terminals_in_window(&window, native_window, 2, cx);
+
+    let (pane, tabs) = cx.read(|cx| {
+        let workbench = window.read(cx).workbench.read(cx);
+        let pane = workbench.focused_pane().unwrap();
+        let tabs = pane
+            .tabs()
+            .iter()
+            .map(|tab| {
+                let TabSurfaceId::Terminal(session) = tab.surface_id() else {
+                    panic!("only terminals")
+                };
+                (pane.id(), tab.id(), session)
+            })
+            .collect::<Vec<_>>();
+        (pane.id(), tabs)
+    });
+    let (_, first_tab, first) = tabs[0];
+    let (_, second_tab, second) = tabs[1];
+    let ring = |id, cx: &mut TestAppContext| {
+        let session = cx.read(|cx| {
+            cx.global::<ApplicationTerminalSessions>()
+                .0
+                .borrow()
+                .sessions[&id]
+                .clone()
+        });
+        cx.read(|cx| {
+            session
+                .read(cx)
+                .with_terminal(|terminal| terminal.write(b"\x07"))
+        });
+    };
+    let marked =
+        |id, cx: &TestAppContext| cx.read(|cx| window.read(cx).workbench.read(cx).bell_marked(id));
+    let wait_for_mark = |id, cx: &mut TestAppContext| {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while !marked(id, cx) {
+            assert!(std::time::Instant::now() < deadline, "no mark");
+            cx.run_until_parked();
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    };
+    let has_selector = |selector: String, cx: &mut TestAppContext| {
+        let selector: &'static str = Box::leak(selector.into_boxed_str());
+        VisualTestContext::from_window(native_window, cx)
+            .debug_bounds(selector)
+            .is_some()
+    };
+
+    // A bell in the shown tab marks nothing; the one in a background tab
+    // paints the tab's icon until the tab is shown.
+    ring(second, cx);
+    ring(first, cx);
+    wait_for_mark(first, cx);
+    assert!(!marked(second, cx));
+    assert!(has_selector(format!("bell-{}", first_tab.value()), cx));
+    assert!(!has_selector(format!("bell-{}", second_tab.value()), cx));
+    window.update(cx, |window, cx| window.activate_tab(pane, first_tab, cx));
+    cx.run_until_parked();
+    assert!(!marked(first, cx));
+    assert!(!has_selector(format!("bell-{}", first_tab.value()), cx));
+
+    // A hidden tool window shows the info dot on its stripe button.
+    let badge = format!("stripe-badge-{}", crate::app::terminal::TERMINAL_TOOL_ID);
+    window.update(cx, |window, cx| {
+        window.toggle_tool(crate::app::terminal::TERMINAL_TOOL_ID, cx)
+    });
+    cx.run_until_parked();
+    assert!(!has_selector(badge.clone(), cx));
+    ring(first, cx);
+    wait_for_mark(first, cx);
+    assert!(has_selector(badge.clone(), cx));
+    window.update(cx, |window, cx| {
+        window.toggle_tool(crate::app::terminal::TERMINAL_TOOL_ID, cx)
+    });
+    cx.run_until_parked();
+    assert!(!marked(first, cx));
+    assert!(!has_selector(badge, cx));
+}

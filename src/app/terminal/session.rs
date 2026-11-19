@@ -6,7 +6,7 @@ use std::{
     },
 };
 
-use gpui::{Context, Task};
+use gpui::{Context, EventEmitter, Task};
 use knot_terminal::{
     Mode, Pty, PtyEvent, PtyOptions, Shell, Terminal, TerminalEvent, TerminalSize,
 };
@@ -54,6 +54,14 @@ enum TerminalState {
     Failed(String),
     Closed,
 }
+
+/// What a session tells the application about its program.
+pub(crate) enum TerminalSessionEvent {
+    /// The program rang the bell.
+    Bell,
+}
+
+impl EventEmitter<TerminalSessionEvent> for TerminalSession {}
 
 /// Owns one PTY, terminal, and process independently of any presentation.
 pub(crate) struct TerminalSession {
@@ -208,7 +216,7 @@ impl TerminalSession {
                     std::mem::take(&mut *events.lock().unwrap_or_else(PoisonError::into_inner));
                 if this
                     .update(cx, |session, cx| {
-                        session.apply_events(generation, pending);
+                        session.apply_events(generation, pending, cx);
                         cx.notify();
                     })
                     .is_err()
@@ -220,7 +228,7 @@ impl TerminalSession {
         cx.notify();
     }
 
-    fn apply_events(&mut self, generation: u64, events: Vec<PtyEvent>) {
+    fn apply_events(&mut self, generation: u64, events: Vec<PtyEvent>, cx: &mut Context<Self>) {
         if self.generation != generation {
             return;
         }
@@ -233,8 +241,8 @@ impl TerminalSession {
                 PtyEvent::Terminal(TerminalEvent::Title(title)) => {
                     self.title = Some(title).filter(|title| !title.is_empty());
                 }
-                // Bells have no product behavior yet; the engine answers
-                // queries itself.
+                PtyEvent::Terminal(TerminalEvent::Bell) => cx.emit(TerminalSessionEvent::Bell),
+                // The engine answers queries itself.
                 PtyEvent::Terminal(_) | PtyEvent::Output => {}
             }
         }
@@ -449,6 +457,7 @@ mod tests {
                     code: 0,
                     signal: None,
                 })],
+                cx,
             );
             assert_eq!(session.status(), TerminalStatus::Running);
             session.close(cx);

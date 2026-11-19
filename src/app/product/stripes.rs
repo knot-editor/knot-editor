@@ -180,12 +180,17 @@ impl KnotWindow {
         };
         let selector = format!("stripe-button-{key}");
         let tooltip_title = title.clone();
-        let badge = tool.badge.map(|badge| {
-            theme(cx).paint_color(match badge {
-                ToolBadge::Info => color::NOTIFICATION_INFO,
-                ToolBadge::Error => color::NOTIFICATION_ERROR,
-            })
-        });
+        // A hidden window holding a terminal that rang the bell shows the
+        // info dot unless a contributed badge is set.
+        let badge = tool
+            .badge
+            .or_else(|| (!visible && workbench.tool_has_bell(id)).then_some(ToolBadge::Info))
+            .map(|badge| {
+                theme(cx).paint_color(match badge {
+                    ToolBadge::Info => color::NOTIFICATION_INFO,
+                    ToolBadge::Error => color::NOTIFICATION_ERROR,
+                })
+            });
         stripe_face(icon, &title)
             .relative()
             .when_some(badge, |button, dot| {
