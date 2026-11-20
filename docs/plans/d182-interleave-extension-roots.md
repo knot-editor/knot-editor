@@ -250,10 +250,9 @@ Review gate: loading semantics and the remaining refusals.
 `enqueue_child_with_target`; `knot.d.ts` drops `ProviderBusy`; update
 `src/app/product/tests/providers.rs`.
 
-### 4. 🔍 Overlapping commands and bundled-package audit
+### 4. ✅ Overlapping commands and bundled-package audit
 
-Implemented; awaiting the review gate. Scope decisions made while
-implementing:
+Complete and approved. Scope decisions made while implementing:
 
 - ✅ The bridge starts every command on enqueue; `InvocationNode.children` is
   a set, the parent settles after all of them, and cancellation walks them
