@@ -317,9 +317,9 @@ what the tests cannot settle.
 tests in `crates/knot-ext-vim/tests/`, `crates/knot-ext-workbench/tests/`,
 and the languages group.
 
-### 5. 🔍 Pushed surface callbacks
+### 5. ✅ Pushed surface callbacks
 
-Implemented; awaiting review. Scope decisions made while implementing:
+Complete and approved. Scope decisions made while implementing:
 
 - ✅ The callbacks enter the package as surface-callback tasks
   (`pool.call_surface`, `__knotSurfaceCallback`), keyed by a session the
