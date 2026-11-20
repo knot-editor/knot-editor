@@ -44,6 +44,31 @@ pub fn wait_until(cx: &mut TestAppContext, mut ready: impl FnMut(&mut TestAppCon
     }
 }
 
+/// Run until no package has a turn to run, although some may still await
+/// host work, such as a request a test holds.
+pub(super) fn park_packages(cx: &mut TestAppContext) {
+    let Some(pool) = cx.read(crate::app::extensions::host::pool) else {
+        cx.run_until_parked();
+        return;
+    };
+    let deadline = Instant::now() + SETTLE_TIMEOUT;
+    loop {
+        let before = pool.activity();
+        cx.run_until_parked();
+        let after = pool.activity();
+        if after == before && !after.running {
+            return;
+        }
+        if after.finished_turns == before.finished_turns {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            assert!(
+                pool.wait_for_turn(after.finished_turns, remaining),
+                "a package never parked"
+            );
+        }
+    }
+}
+
 /// Run until `window` holds no keys and the extension pool is quiet: no
 /// package has work in progress, and none finished a turn while the
 /// foreground ran what it had.

@@ -152,6 +152,8 @@ pub struct SchedulerDiagnostics {
 pub struct Activity {
     /// Some extension is loading, queued, running, or awaiting host work.
     pub busy: bool,
+    /// Some extension is loading, queued, or running: it has a turn to run.
+    pub running: bool,
     pub finished_turns: u64,
 }
 
@@ -562,6 +564,12 @@ impl<W> StateMachine<W> {
                         | ExtensionState::Queued
                         | ExtensionState::Running
                         | ExtensionState::AwaitingHostWork
+                )
+            }),
+            running: self.extensions.values().any(|extension| {
+                matches!(
+                    extension.state,
+                    ExtensionState::Loading | ExtensionState::Queued | ExtensionState::Running
                 )
             }),
             finished_turns: self.finished_turns,

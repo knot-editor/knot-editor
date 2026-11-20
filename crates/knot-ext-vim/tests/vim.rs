@@ -726,42 +726,36 @@ fn keys_typed_past_the_key_hold_wait_for_the_key_still_running(cx: &mut TestAppC
     cx.update(|cx| cx.write_to_clipboard(gpui::ClipboardItem::new_string("z".into())));
     // `x` waits on its clipboard write past the hold, then `p` pastes what
     // it deleted, not what the clipboard held before.
-    product.hold_clipboard_writes(cx);
-    test_editor.press_unsettled("x", cx);
-    product.wait_for_held_clipboard_writes(1, cx);
-    test_editor.outlast_key_hold(cx);
-    test_editor.press_unsettled("p", cx);
-    let_packages_run(cx);
-    product.release_clipboard_writes(cx);
+    let held_past_the_hold = |first: &str, next: &str, cx: &mut TestAppContext| {
+        product.hold_clipboard_writes(cx);
+        test_editor.press_unsettled(first, cx);
+        product.wait_for_held_clipboard_writes(1, cx);
+        test_editor.outlast_key_hold(cx);
+        test_editor.press_unsettled(next, cx);
+        // The next key ran as far as it could before the write lands, so
+        // only taking turns keeps it from running first.
+        product.park_packages(cx);
+        product.release_clipboard_writes(cx);
+    };
+    held_past_the_hold("x", "p", cx);
     test_editor.settle(cx);
     assert_eq!(test_editor.marked(cx), "b‸acdef");
 
     // `.` repeats the change that was still running.
-    product.hold_clipboard_writes(cx);
-    test_editor.press_unsettled("x", cx);
-    product.wait_for_held_clipboard_writes(1, cx);
-    test_editor.outlast_key_hold(cx);
-    test_editor.press_unsettled(".", cx);
-    let_packages_run(cx);
-    product.release_clipboard_writes(cx);
+    held_past_the_hold("x", ".", cx);
     test_editor.settle(cx);
     assert_eq!(test_editor.marked(cx), "b‸def");
 
     // So does a macro replaying `x`.
     test_editor.press("qaxq", cx);
-    product.hold_clipboard_writes(cx);
-    test_editor.press_unsettled("@a", cx);
-    product.wait_for_held_clipboard_writes(1, cx);
-    test_editor.outlast_key_hold(cx);
-    test_editor.press_unsettled("p", cx);
-    let_packages_run(cx);
-    product.release_clipboard_writes(cx);
+    held_past_the_hold("@a", "p", cx);
     test_editor.settle(cx);
     assert_eq!(test_editor.marked(cx), "bf‸e");
 
-    // A prompt still opens and runs once the keys catch up.
-    test_editor.press(":s/f/F/<cr>", cx);
-    assert_eq!(test_editor.marked(cx), "‸bFe");
+    // A prompt opened meanwhile runs on what the key left.
+    held_past_the_hold("x", ":", cx);
+    test_editor.press("s/f/F/<cr>", cx);
+    assert_eq!(test_editor.marked(cx), "‸bF");
 }
 
 #[gpui::test]
@@ -787,15 +781,6 @@ keymaps.bind("ctrl-t", "try.delete-two", { view: "editor", context: "vim.normal"
     assert_eq!(test_editor.marked(cx), "‸efgh");
     test_editor.press("x", cx);
     assert_eq!(test_editor.marked(cx), "‸fgh");
-}
-
-/// Give the packages a moment to run what they were sent, since a key that
-/// waits for another shows nothing to wait for.
-fn let_packages_run(cx: &mut TestAppContext) {
-    for _ in 0..20 {
-        cx.run_until_parked();
-        std::thread::sleep(std::time::Duration::from_millis(5));
-    }
 }
 
 #[gpui::test]

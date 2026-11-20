@@ -283,6 +283,12 @@ impl TestProduct {
         });
     }
 
+    /// Run until no package has a turn to run, although some may still
+    /// await host work, such as the held clipboard writes.
+    pub fn park_packages(&self, cx: &mut TestAppContext) {
+        super::park_packages(cx);
+    }
+
     /// Run the held clipboard writes and stop holding new ones.
     pub fn release_clipboard_writes(&self, cx: &mut TestAppContext) {
         cx.update(|cx| {
