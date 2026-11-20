@@ -276,8 +276,17 @@ implementing:
   nothing to wait for.
 - A pre-existing race in the tree copy test (dispatching commands registered
   after the one it waited for) is fixed.
+- ✅ Review fixes: a replayed command of another package that sends Vim
+  keys runs them inside the replaying key instead of waiting for its turn
+  (it deadlocked); a Find session that failed to follow its editor counts as
+  closed. Find and Explorer have end-to-end tests of their fixes; the Vim
+  test waits for the packages to park (`park_packages`) instead of sleeping
+  and covers a prompt opened while a key still runs. Tests can hold any host
+  operation's requests (`hold_requests`).
 - Left for checkpoint 6: `knot.d.ts` still says settings and file-watch
-  listeners "run serially with other listeners".
+  listeners "run serially with other listeners"; the docs should say that
+  requests a command left in flight run as context-free once it settles,
+  even when it was cancelled.
 
 
 Deliverables: the bridge's `roots`/`active_root` removed so commands start
