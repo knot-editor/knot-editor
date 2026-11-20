@@ -317,7 +317,29 @@ what the tests cannot settle.
 tests in `crates/knot-ext-vim/tests/`, `crates/knot-ext-workbench/tests/`,
 and the languages group.
 
-### 5. Pushed surface callbacks
+### 5. 🔍 Pushed surface callbacks
+
+Implemented; awaiting review. Scope decisions made while implementing:
+
+- ✅ The callbacks enter the package as surface-callback tasks
+  (`pool.call_surface`, `__knotSurfaceCallback`), keyed by a session the
+  bootstrap numbers and drops when the surface settles (`withSurfaceCallback`).
+  `followPicker`, `followInput`, and `editTreeItem` each settle with the
+  surface's result; `PickerUpdate`, `InputUpdate`, and the host's session
+  table are gone.
+- ✅ Only `onQuery` calls overlap: each query is passed as it changes, only
+  the answer to the latest call applies (by generation, and the picker still
+  checks the query and tab), and answers pending when the picker settles are
+  dropped, so the command resumes at once. `onHighlight`, `onChange`, and
+  `validate` stay serial with coalescing, and the result waits for the call
+  in flight. Go to Line and Vim search preview from `onChange`, and Vim's `:`
+  line keeps state across calls, so overlapping calls would let an older
+  preview land after a newer one or after the view is restored.
+- ✅ A failed answer applies as no feedback, clearing an input's message, as
+  before.
+- ✅ The stale-query test now covers out-of-order answers (it relied on
+  serial calls); new test that a never-answered query blocks neither a later
+  query nor selection. The input stale-answer test is unchanged.
 
 Deliverables: picker `onHighlight`/`onQuery`, input `onChange`, and tree-edit
 `validate` invoked by the native surface as tasks of the owning package;
