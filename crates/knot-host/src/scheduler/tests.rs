@@ -102,41 +102,6 @@ fn tasks_run_while_an_invocation_awaits_host_work() {
 }
 
 #[test]
-fn an_exclusive_invocation_holds_back_other_tasks_until_it_settles() {
-    let (mut scheduler, key) = admitted();
-    let (exclusive, completion) = scheduler.enqueue_exclusive_root(key, "load").unwrap();
-    scheduler.enqueue_root(key, "other").unwrap();
-    let turn = scheduler.next_turn().unwrap();
-    assert_eq!(turn.work, "load");
-    scheduler
-        .finish_turn(key, turn.id, TurnOutcome::idle())
-        .unwrap();
-    assert!(scheduler.next_turn().is_none());
-    assert_eq!(scheduler.state(key), Ok(&ExtensionState::AwaitingHostWork));
-
-    scheduler.enqueue_task(key, None, "cancellation").unwrap();
-    let turn = scheduler.next_turn().unwrap();
-    assert_eq!(turn.work, "cancellation");
-    scheduler
-        .finish_turn(key, turn.id, TurnOutcome::idle())
-        .unwrap();
-
-    scheduler
-        .enqueue_task(key, Some(exclusive), "response")
-        .unwrap();
-    let turn = scheduler.next_turn().unwrap();
-    assert_eq!(turn.work, "response");
-    scheduler
-        .finish_turn(key, turn.id, settled(Some(exclusive)))
-        .unwrap();
-    assert_eq!(
-        completion.recv_timeout(TEST_WAIT).unwrap(),
-        CompletionOutcome::Completed
-    );
-    assert_eq!(scheduler.next_turn().unwrap().work, "other");
-}
-
-#[test]
 fn rejects_stale_lifecycle_and_duplicate_turns() {
     let (mut scheduler, key) = admitted();
     let (root, _) = scheduler.enqueue_root(key, "root").unwrap();

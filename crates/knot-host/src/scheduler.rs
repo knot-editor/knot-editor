@@ -247,9 +247,6 @@ struct Extension<W> {
     tasks: VecDeque<Task<W>>,
     /// Completion of each unsettled invocation.
     invocations: HashMap<RootId, CompletionSlot>,
-    /// Invocations that run alone, oldest first: while any is unsettled, only
-    /// its own tasks and tasks outside every invocation start.
-    exclusive: VecDeque<RootId>,
     running: Option<TurnId>,
     max_queue_depth: usize,
     turn_count: u64,
@@ -318,7 +315,6 @@ impl<W> StateMachine<W> {
                 state: ExtensionState::Loading,
                 tasks: VecDeque::new(),
                 invocations: HashMap::new(),
-                exclusive: VecDeque::new(),
                 running: None,
                 max_queue_depth: 0,
                 turn_count: 0,
@@ -340,7 +336,7 @@ impl<W> StateMachine<W> {
             return Err(SchedulerError::NotLoading);
         }
         match result {
-            Ok(()) if !extension.has_runnable() => extension.state = ExtensionState::Idle,
+            Ok(()) if extension.tasks.is_empty() => extension.state = ExtensionState::Idle,
             Ok(()) => self.make_ready(key),
             Err(failure) => self.fail(key, failure)?,
         }
@@ -352,25 +348,6 @@ impl<W> StateMachine<W> {
         &mut self,
         key: ExtensionKey,
         work: W,
-    ) -> Result<(RootId, CompletionReceiver), SchedulerError> {
-        self.enqueue_invocation(key, work, false)
-    }
-
-    /// Starts an invocation that runs alone: other tasks wait until it
-    /// settles.
-    pub fn enqueue_exclusive_root(
-        &mut self,
-        key: ExtensionKey,
-        work: W,
-    ) -> Result<(RootId, CompletionReceiver), SchedulerError> {
-        self.enqueue_invocation(key, work, true)
-    }
-
-    fn enqueue_invocation(
-        &mut self,
-        key: ExtensionKey,
-        work: W,
-        exclusive: bool,
     ) -> Result<(RootId, CompletionReceiver), SchedulerError> {
         if self.shutting_down {
             return Err(SchedulerError::ShuttingDown);
@@ -396,9 +373,6 @@ impl<W> StateMachine<W> {
                     asynchronous: Some(async_sender),
                 },
             );
-            if exclusive {
-                extension.exclusive.push_back(id);
-            }
         }
         self.next_root += 1;
         self.push_task(key, Some(id), work);
@@ -447,7 +421,7 @@ impl<W> StateMachine<W> {
         let wake = matches!(
             extension.state,
             ExtensionState::Idle | ExtensionState::AwaitingHostWork
-        ) && extension.has_runnable();
+        );
         self.record_queue_depth(key);
         if wake {
             self.make_ready(key);
@@ -465,8 +439,7 @@ impl<W> StateMachine<W> {
             if extension.key != key || extension.state != ExtensionState::Queued {
                 continue;
             }
-            let index = extension.runnable_index()?;
-            let queued = extension.tasks.remove(index)?;
+            let queued = extension.tasks.pop_front()?;
             let root = queued.root;
             let lag = queued.enqueued_at.elapsed();
             extension.max_enqueue_to_start_lag = extension.max_enqueue_to_start_lag.max(lag);
@@ -524,12 +497,11 @@ impl<W> StateMachine<W> {
         match outcome {
             TurnOutcome::Completed { settled } => {
                 for root in settled {
-                    extension.exclusive.retain(|exclusive| *exclusive != root);
                     if let Some(mut slot) = extension.invocations.remove(&root) {
                         slot.settle(CompletionOutcome::Completed);
                     }
                 }
-                if extension.has_runnable() {
+                if !extension.tasks.is_empty() {
                     self.make_ready(key);
                 } else if extension.invocations.is_empty() {
                     extension.state = ExtensionState::Idle;
@@ -700,28 +672,9 @@ impl<W> Extension<W> {
     fn queue_depth(&self) -> usize {
         self.tasks.len()
     }
-
-    /// A task outside every invocation (a cancellation, a termination wakeup)
-    /// is never held back.
-    fn runnable(&self, task: &Task<W>) -> bool {
-        task.root.is_none()
-            || self
-                .exclusive
-                .front()
-                .is_none_or(|exclusive| task.root == Some(*exclusive))
-    }
-
-    fn runnable_index(&self) -> Option<usize> {
-        self.tasks.iter().position(|task| self.runnable(task))
-    }
-
-    fn has_runnable(&self) -> bool {
-        self.runnable_index().is_some()
-    }
 }
 
 fn settle_invocations<W>(extension: &mut Extension<W>, outcome: CompletionOutcome) {
-    extension.exclusive.clear();
     for (_, mut slot) in extension.invocations.drain() {
         slot.settle(outcome.clone());
     }
@@ -777,21 +730,6 @@ impl<W> SchedulerHandle<W> {
         work: W,
     ) -> Result<(RootId, CompletionReceiver), SchedulerError> {
         let result = self.shared.state.lock().unwrap().enqueue_root(key, work);
-        self.shared.ready.notify_one();
-        result
-    }
-
-    pub fn enqueue_exclusive_root(
-        &self,
-        key: ExtensionKey,
-        work: W,
-    ) -> Result<(RootId, CompletionReceiver), SchedulerError> {
-        let result = self
-            .shared
-            .state
-            .lock()
-            .unwrap()
-            .enqueue_exclusive_root(key, work);
         self.shared.ready.notify_one();
         result
     }

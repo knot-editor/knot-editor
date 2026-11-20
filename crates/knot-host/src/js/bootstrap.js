@@ -388,11 +388,20 @@ function request(operation, ...arguments_) {
   );
 }
 
-// A registration is callable once its host reply has installed the handler,
-// but the application may call it the moment it has handled the request. A
-// call that finds no handler waits for the registrations in flight.
+// A registration or subscription is live once its host reply has installed
+// the handler, but the application may call or notify it the moment it has
+// handled the request. A call or notification that finds no handler waits
+// for the registrations in flight, and resumes in a later task, so the code
+// that registered has continued past its `await` first.
 let registrationsInFlight = 0;
 let registrationWaiters = [];
+
+function wakeRegistrationWaiters() {
+  if (registrationsInFlight > 0) return;
+  const waiters = registrationWaiters;
+  registrationWaiters = [];
+  for (const resolve of waiters) resolve();
+}
 
 async function registerCallable(install, send) {
   registrationsInFlight++;
@@ -401,16 +410,14 @@ async function registerCallable(install, send) {
     install(registration);
     return registration;
   } finally {
-    if (--registrationsInFlight === 0) {
-      const waiters = registrationWaiters;
-      registrationWaiters = [];
-      for (const resolve of waiters) resolve();
+    if (--registrationsInFlight === 0 && registrationWaiters.length > 0) {
+      new Immediate(wakeRegistrationWaiters, []);
     }
   }
 }
 
 async function callable(table, registration) {
-  if (!table.has(registration) && registrationsInFlight > 0) {
+  while (!table.has(registration) && registrationsInFlight > 0) {
     await new Promise((resolve) => registrationWaiters.push(resolve));
   }
   return table.get(registration);
@@ -642,8 +649,9 @@ function bufferFor(handle) {
       if (typeof listener !== "function") {
         throw new TypeError("onDidChange requires a listener");
       }
-      const subscription = await request("subscribeBufferChanges", handle);
-      bufferChangeListeners.set(subscription, { handle, listener });
+      const subscription = await registerCallable(
+        (subscription) => bufferChangeListeners.set(subscription, { handle, listener }),
+        () => request("subscribeBufferChanges", handle));
       const owned = ownership(() => bufferChangeListeners.delete(subscription),
         () => request("unsubscribeBufferChanges", subscription));
       return Object.freeze({ dispose: () => owned.dispose() });
@@ -921,7 +929,7 @@ export async function activeBuffer(target) {
 }
 
 globalThis.__knotDispatchBufferChange = async (subscription, change) => {
-  const entry = bufferChangeListeners.get(subscription);
+  const entry = await callable(bufferChangeListeners, subscription);
   if (!entry) return;
   await inTurn(entry, "turn", () => entry.listener(Object.freeze({
     buffer: bufferFor(entry.handle),
@@ -1991,14 +1999,15 @@ export async function resetSetting(key, scope) {
 export async function observeSetting(key, listener) {
   settingKey(key);
   if (typeof listener !== "function") throw new TypeError("settings.observe requires a listener");
-  const subscription = await request("observeSetting", key);
-  settingListeners.set(subscription, listener);
+  const subscription = await registerCallable(
+    (subscription) => settingListeners.set(subscription, listener),
+    () => request("observeSetting", key));
   const owned = ownership(() => settingListeners.delete(subscription),
     () => request("unobserveSetting", subscription));
   return Object.freeze({ dispose: () => owned.dispose() });
 }
 globalThis.__knotDispatchSettingChange = async (subscription, key) => {
-  const listener = settingListeners.get(subscription);
+  const listener = await callable(settingListeners, subscription);
   if (listener) await listener(key);
 };
 function deepFreeze(value) {
@@ -2258,14 +2267,15 @@ export async function watchFiles(uri, listener, options) {
     ? false
     : record(options, "watch options must be an object").recursive ?? false;
   if (typeof recursive !== "boolean") throw new TypeError("watch recursive must be a boolean");
-  const subscription = await request("watchFiles", uri, recursive);
-  watchListeners.set(subscription, listener);
+  const subscription = await registerCallable(
+    (subscription) => watchListeners.set(subscription, listener),
+    () => request("watchFiles", uri, recursive));
   const owned = ownership(() => watchListeners.delete(subscription),
     () => request("unwatchFiles", subscription));
   return Object.freeze({ dispose: () => owned.dispose() });
 }
 globalThis.__knotDispatchWatchChange = async (subscription, uris) => {
-  const listener = watchListeners.get(subscription);
+  const listener = await callable(watchListeners, subscription);
   if (listener) await listener(Object.freeze([...uris]));
 };
 export async function statFile(uri) {
@@ -2384,15 +2394,16 @@ function noticesFromNative(notices) {
 }
 export async function observeWorkbench(listener) {
   if (typeof listener !== "function") throw new TypeError("observe requires a listener");
-  const value = await request("observeWorkbench");
-  applicationListeners.set(value.subscription, listener);
+  const value = await registerCallable(
+    (value) => applicationListeners.set(value.subscription, listener),
+    () => request("observeWorkbench"));
   const owned = ownership(() => applicationListeners.delete(value.subscription),
     () => request("unobserveWorkbench", value.subscription));
   return Object.freeze({ snapshot: applicationSnapshotFromNative(value.snapshot), watermark: value.watermark,
     dispose: () => owned.dispose() });
 }
 globalThis.__knotDispatchApplicationChange = async (subscription, value) => {
-  const listener = applicationListeners.get(subscription);
+  const listener = await callable(applicationListeners, subscription);
   if (!listener) return;
   let payload;
   switch (value.type) {

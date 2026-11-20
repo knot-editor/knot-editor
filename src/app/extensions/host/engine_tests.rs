@@ -4081,111 +4081,123 @@ fn host_error_response_rejects_the_request_and_propagates_from_the_root() {
     pool.shutdown();
 }
 
-#[test]
-fn awaited_queued_executions_report_shutdown_and_fatal_failure() {
-    let pool = RuntimePool::new(PoolConfig::single_worker());
-    let runtime = key(1);
-    pool.load(runtime, IsolateConfig::default()).unwrap();
+/// Starts a fixture invocation parked on a host request and a script parked
+/// on a promise nothing settles, and waits until the isolate is idle.
+fn park_two_invocations(
+    pool: &RuntimePool,
+    runtime: ExtensionKey,
+) -> (RuntimeExecution, RuntimeExecution) {
     let waiting = pool
         .execute_fixture_module(
             runtime,
-            "file:///fixtures/awaited-shutdown.js",
+            "file:///fixtures/awaited.js",
             "import * as knot from 'knot'; const { workbench } = knot; await workbench.writeClipboardText('wait');",
         )
         .unwrap();
     pool.receive_request().unwrap();
-    wait_for_state(&pool, runtime, ExtensionState::AwaitingHostWork);
-    let queued = pool.execute(runtime, "queued-shutdown.js", "42").unwrap();
+    let parked = pool
+        .execute(runtime, "parked.js", "new Promise(() => {})")
+        .unwrap();
+    wait_for_state(pool, runtime, ExtensionState::AwaitingHostWork);
+    (waiting, parked)
+}
+
+#[test]
+fn awaited_outstanding_executions_report_shutdown_and_fatal_failure() {
+    let pool = RuntimePool::new(PoolConfig::single_worker());
+    let runtime = key(1);
+    pool.load(runtime, IsolateConfig::default()).unwrap();
+    let (waiting, parked) = park_two_invocations(&pool, runtime);
     pool.shutdown();
-    assert_eq!(
-        pollster::block_on(waiting).unwrap_err().kind(),
-        RuntimeErrorKind::Cancelled
-    );
-    assert_eq!(
-        pollster::block_on(queued).unwrap_err().kind(),
-        RuntimeErrorKind::Cancelled
-    );
+    for execution in [waiting, parked] {
+        assert_eq!(
+            pollster::block_on(execution).unwrap_err().kind(),
+            RuntimeErrorKind::Cancelled
+        );
+    }
 
     let pool = RuntimePool::new(PoolConfig::single_worker());
     let runtime = key(2);
     pool.load(runtime, IsolateConfig::default()).unwrap();
-    let waiting = pool
-        .execute_fixture_module(
-            runtime,
-            "file:///fixtures/awaited-fatal.js",
-            "import * as knot from 'knot'; const { workbench } = knot; await workbench.writeClipboardText('wait');",
-        )
-        .unwrap();
-    pool.receive_request().unwrap();
-    wait_for_state(&pool, runtime, ExtensionState::AwaitingHostWork);
-    let queued = pool.execute(runtime, "queued-fatal.js", "42").unwrap();
+    let (waiting, parked) = park_two_invocations(&pool, runtime);
     assert!(pool.termination_handle(runtime).unwrap().terminate());
-    assert_eq!(
-        pollster::block_on(waiting).unwrap_err().kind(),
-        RuntimeErrorKind::Terminated
-    );
-    assert_eq!(
-        pollster::block_on(queued).unwrap_err().kind(),
-        RuntimeErrorKind::LifecycleFailed
-    );
+    for execution in [waiting, parked] {
+        assert_eq!(
+            pollster::block_on(execution).unwrap_err().kind(),
+            RuntimeErrorKind::Terminated
+        );
+    }
     pool.shutdown();
 }
 
 #[test]
-fn awaited_queued_executions_report_unload_cancellation() {
+fn awaited_outstanding_executions_report_unload_cancellation() {
     let pool = RuntimePool::new(PoolConfig::single_worker());
     let runtime = key(1);
+    let tree_registration = TreeProviderRegistrationId::new(1);
+    let registration = CommandRegistrationId::new(2);
     pool.load(runtime, IsolateConfig::default()).unwrap();
-    let waiting = pool
+    install_semantic_providers(
+        &pool,
+        runtime,
+        tree_registration,
+        ProviderRegistrationId::new(3),
+    );
+    let setup = pool
         .execute_fixture_module(
             runtime,
-            "file:///fixtures/awaited-queued.js",
-            "import * as knot from 'knot'; const { workbench } = knot; await workbench.writeClipboardText('wait');",
+            "file:///fixtures/awaited-command.js",
+            r#"
+import { commands, workbench } from "knot";
+await commands.register("wait", async () => { await workbench.writeClipboardText("command wait"); });
+"#,
         )
         .unwrap();
-    pool.receive_request().unwrap();
-    wait_for_state(&pool, runtime, ExtensionState::AwaitingHostWork);
+    let request = pool.receive_request().unwrap();
+    pool.respond(HostResponse {
+        extension: runtime.extension,
+        lifecycle: runtime.lifecycle,
+        id: request.id,
+        result: Ok(success::<declared::register_command>(registration)),
+    })
+    .unwrap();
+    setup.wait().unwrap();
 
-    let script = pool.execute(runtime, "queued.js", "42").unwrap();
     let command = pool
-        .invoke_command(
-            runtime,
-            CommandInvocation {
-                id: CommandInvocationId::new(1),
-                registration: CommandRegistrationId::new(1),
-                extension: runtime.extension,
-                lifecycle: runtime.lifecycle,
-                arguments: CommandArgumentValue::Null,
-                capture: None,
-            },
-            None,
-        )
+        .invoke_command(runtime, command_invocation(runtime, 1, registration), None)
         .unwrap();
+    assert_eq!(
+        pool.receive_request().unwrap().operation,
+        clipboard_operation("command wait")
+    );
     let provider = pool
         .request_tree_children(
             runtime,
             TreeChildrenRequest {
-                registration: TreeProviderRegistrationId::new(1),
+                registration: tree_registration,
                 window: "1".into(),
                 view: knot_protocol::ViewId::new(1),
-                parent_id: None,
+                parent_id: Some("await".into()),
                 generation: 1,
             },
         )
         .unwrap();
+    assert_eq!(
+        pool.receive_request().unwrap().operation,
+        clipboard_operation("tree wait")
+    );
+    let (waiting, parked) = park_two_invocations(&pool, runtime);
 
     pool.unload(runtime).unwrap();
+    for execution in [waiting, parked] {
+        assert_eq!(
+            pollster::block_on(execution).unwrap_err().kind(),
+            RuntimeErrorKind::Cancelled
+        );
+    }
     assert_eq!(
-        pollster::block_on(waiting).unwrap_err().kind(),
+        pollster::block_on(command).unwrap_err().kind(),
         RuntimeErrorKind::Cancelled
-    );
-    assert_eq!(
-        pollster::block_on(script).unwrap_err().kind(),
-        RuntimeErrorKind::Cancelled
-    );
-    assert_eq!(
-        pollster::block_on(command).unwrap(),
-        CommandOutcome::Cancelled
     );
     assert_eq!(
         pollster::block_on(provider).unwrap_err().kind(),

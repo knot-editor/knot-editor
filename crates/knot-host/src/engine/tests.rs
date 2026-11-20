@@ -1359,6 +1359,30 @@ fn an_invocation_awaiting_its_own_timer_does_not_block_the_isolate() {
 }
 
 #[test]
+fn a_package_awaiting_its_own_timer_at_top_level_lets_other_work_run() {
+    let timers = crate::timers::ManualTimers::new();
+    let pool = RuntimePool::new(PoolConfig::new(NonZeroUsize::MIN, Arc::new(timers.clone())));
+    let runtime = key(301);
+    let graph = package_graph(
+        "file:///extensions/%40example/waits/",
+        "main.js",
+        &[(
+            "main.js",
+            "globalThis.log = ['started']; await new Promise((resolve) => setTimeout(resolve, 10)); log.push('loaded');",
+        )],
+    );
+    let loading = pool
+        .load_package(runtime, IsolateConfig::default(), graph)
+        .unwrap();
+    // Other work runs while the evaluation waits for its timer.
+    assert_eq!(run(&pool, runtime, "log.push('meanwhile'); 1"), "1");
+    timers.advance(Duration::from_millis(10));
+    loading.wait().unwrap();
+    assert_eq!(take_log(&pool, runtime), "started meanwhile loaded");
+    pool.shutdown();
+}
+
+#[test]
 fn a_rejecting_timer_callback_leaves_the_isolate_and_parked_invocations_running() {
     let (pool, timers, runtime) = timer_pool();
     let parked = pool

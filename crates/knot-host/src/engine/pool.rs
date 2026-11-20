@@ -208,7 +208,7 @@ impl RuntimePool {
         self.load_with_graph(key, config, Some(&graph))?;
         let capsule = self.capsule(key)?;
         let (result_sender, result) = tokio::sync::oneshot::channel();
-        let scheduled = self.scheduler_handle.enqueue_exclusive_root(
+        let scheduled = self.scheduler_handle.enqueue_root(
             key,
             EngineTurn {
                 capsule,
@@ -262,7 +262,7 @@ impl RuntimePool {
             })?
         };
         let (result_sender, result) = tokio::sync::oneshot::channel();
-        let (_, completion) = self.scheduler_handle.enqueue_exclusive_root(
+        let (_, completion) = self.scheduler_handle.enqueue_root(
             key,
             EngineTurn {
                 capsule,
@@ -317,7 +317,7 @@ impl RuntimePool {
             .as_ref()
             .expect("runtime pool is active")
             .handle()
-            .enqueue_exclusive_root(
+            .enqueue_root(
                 key,
                 EngineTurn {
                     capsule,

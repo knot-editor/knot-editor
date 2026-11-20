@@ -46,7 +46,7 @@ await commands.register("switch.go", async () => {
 "#;
 
 pub(super) struct Fixture {
-    host: Entity<crate::app::extensions::host::ProductExtensionHost>,
+    pub(super) host: Entity<crate::app::extensions::host::ProductExtensionHost>,
     documents: Entity<DocumentCollection>,
     window: Entity<KnotWindow>,
     native_window: gpui::AnyWindowHandle,
@@ -73,6 +73,17 @@ pub(super) fn start_allowing_failures(
     packages: &[(&str, &[&str], &str)],
     cx: &mut TestAppContext,
 ) -> Fixture {
+    let fixture = start_loading(packages, cx);
+    wait_for_extension_report(&fixture.host, cx);
+    fixture
+}
+
+/// Installs `packages` and starts loading them without waiting for startup
+/// to complete.
+pub(super) fn start_loading(
+    packages: &[(&str, &[&str], &str)],
+    cx: &mut TestAppContext,
+) -> Fixture {
     let extensions = tempfile::tempdir().unwrap();
     for (name, requires, source) in packages {
         install_extension(extensions.path(), name, requires, &[("main.js", source)]);
@@ -87,7 +98,6 @@ pub(super) fn start_allowing_failures(
     host.update(cx, |host, cx| {
         host.start_installed_extensions(extensions.path().to_owned(), cx)
     });
-    wait_for_extension_report(&host, cx);
     Fixture {
         host,
         documents,

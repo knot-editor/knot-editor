@@ -15,6 +15,7 @@ mod extension_restart;
 mod files;
 mod headless;
 mod icons;
+mod interleaving;
 mod key_hold;
 mod keybindings;
 mod languages;
