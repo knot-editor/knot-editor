@@ -416,6 +416,16 @@ async function callable(table, registration) {
   return table.get(registration);
 }
 
+// Runs `run` once the previous run queued on `owner[key]` has settled. A
+// subscription's notifications take turns this way, so a slow listener sees
+// them in order and, where the application coalesces changes until a
+// notification acknowledges them, the changes made meanwhile join the next one.
+function inTurn(owner, key, run) {
+  const result = (owner[key] ?? Promise.resolve()).then(run);
+  owner[key] = result.catch(() => {});
+  return result;
+}
+
 const buffers = new Map();
 const commandHandlers = new Map();
 const bufferChangeListeners = new Map();
@@ -854,6 +864,10 @@ export async function openEditor(target) {
 globalThis.__knotDispatchEditorEvent = async (authority, kind) => {
   const entry = editorHandles.get(authority);
   if (!entry) return;
+  if (kind === "selection") {
+    return inTurn(entry, "selectionTurn", () => dispatchSelection(authority, entry));
+  }
+  if (kind === "bars") return inTurn(entry, "barsTurn", () => dispatchBars(authority, entry));
   if (kind === "closed") {
     editorHandles.delete(authority);
     entry.closed = true;
@@ -862,31 +876,35 @@ globalThis.__knotDispatchEditorEvent = async (authority, kind) => {
     const results = await Promise.allSettled(listeners.map((listener) => listener()));
     const failure = results.find((result) => result.status === "rejected");
     if (failure) throw failure.reason;
-  } else if (kind === "selection") {
-    // Acknowledge first, so changes during the listeners queue one more turn.
-    // The turn reads the widest window any listener asked for.
-    const wanted = [...entry.selectionListeners.values()].filter((lines) => lines !== null);
-    const selection = await request("acknowledgeEditorSelection", authority,
-      wanted.length === 0 ? null : Math.max(...wanted));
-    if (selection === null) return;
-    const event = selectionFromNative(selection);
-    const listeners = [...entry.selectionListeners.keys()];
-    const results = await Promise.allSettled(listeners.map((listener) => listener(event)));
-    const failure = results.find((result) => result.status === "rejected");
-    if (failure) throw failure.reason;
-  } else if (kind === "bars") {
-    // Acknowledge first, so edits during the listeners queue one more turn.
-    const edited = await request("acknowledgeEditorBars", authority);
-    const calls = [];
-    for (const { id, fields } of edited) {
-      const event = Object.freeze({ bar: id, fields: Object.freeze(fields) });
-      for (const listener of [...entry.barListeners]) calls.push(Promise.resolve().then(() => listener(event)));
-    }
-    const results = await Promise.allSettled(calls);
-    const failure = results.find((result) => result.status === "rejected");
-    if (failure) throw failure.reason;
   }
 };
+
+async function dispatchSelection(authority, entry) {
+  // Acknowledge first, so changes during the listeners queue one more turn.
+  // The turn reads the widest window any listener asked for.
+  const wanted = [...entry.selectionListeners.values()].filter((lines) => lines !== null);
+  const selection = await request("acknowledgeEditorSelection", authority,
+    wanted.length === 0 ? null : Math.max(...wanted));
+  if (selection === null) return;
+  const event = selectionFromNative(selection);
+  const listeners = [...entry.selectionListeners.keys()];
+  const results = await Promise.allSettled(listeners.map((listener) => listener(event)));
+  const failure = results.find((result) => result.status === "rejected");
+  if (failure) throw failure.reason;
+}
+
+async function dispatchBars(authority, entry) {
+  // Acknowledge first, so edits during the listeners queue one more turn.
+  const edited = await request("acknowledgeEditorBars", authority);
+  const calls = [];
+  for (const { id, fields } of edited) {
+    const event = Object.freeze({ bar: id, fields: Object.freeze(fields) });
+    for (const listener of [...entry.barListeners]) calls.push(Promise.resolve().then(() => listener(event)));
+  }
+  const results = await Promise.allSettled(calls);
+  const failure = results.find((result) => result.status === "rejected");
+  if (failure) throw failure.reason;
+}
 
 function contextualAuthority(target) {
   if (target === undefined) return null;
@@ -905,7 +923,7 @@ export async function activeBuffer(target) {
 globalThis.__knotDispatchBufferChange = async (subscription, change) => {
   const entry = bufferChangeListeners.get(subscription);
   if (!entry) return;
-  await entry.listener(Object.freeze({
+  await inTurn(entry, "turn", () => entry.listener(Object.freeze({
     buffer: bufferFor(entry.handle),
     beforeRevision: change.beforeRevision,
     revision: change.revision,
@@ -916,7 +934,7 @@ globalThis.__knotDispatchBufferChange = async (subscription, change) => {
       }),
       text: edit.text,
     }))),
-  }));
+  })));
 };
 
 export async function registerCommand(name, handler, options = {}) {

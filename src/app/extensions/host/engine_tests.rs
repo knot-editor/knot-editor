@@ -1964,7 +1964,7 @@ fn finite_slow_buffer_change_burst_is_lossless_and_measured() {
         runtime,
         "verify-burst.js",
         r#"
-        if (events.join(",") !== "2,3,4,5,6,7,8,1") throw new Error("events lost");
+        if (events.join(",") !== "1,2,3,4,5,6,7,8") throw new Error("events lost");
     "#,
     )
     .unwrap()

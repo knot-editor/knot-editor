@@ -843,9 +843,12 @@ const log = [];
 await commands.register("selection.attach", async () => {
   const { snapshot } = await workbench.observe(() => {});
   const handle = await workbench.editor(snapshot.windows[0].panes[0].selected);
-  // Logs the payload's caret beside the caret read after a held request.
+  // Logs the payload's caret beside the caret read after a held request. The
+  // first turn takes one more round trip, so a turn running beside it would
+  // log first.
   await handle.onDidChangeSelection(async ({ caret }) => {
     await workbench.writeClipboardText("busy");
+    if (caret === 1) await handle.selection();
     log.push(`${caret}:${(await handle.selection()).caret}`);
     await workbench.writeClipboardText(log.join(" "));
   });
@@ -897,9 +900,9 @@ fn selection_notifications_coalesce_and_carry_the_selection_at_turn_start(cx: &m
     assert_eq!(cx.read(clipboard_text), None);
 
     // The first change starts a listener turn that stays busy; three more
-    // changes meanwhile produce exactly one further notification. Each
-    // payload is the caret when its turn started, while the read after the
-    // held request sees the final one.
+    // changes meanwhile produce exactly one further notification, which waits
+    // for the busy one. Each payload is the caret when its turn started, while
+    // the read after the held request sees the final one.
     host.update(cx, |host, _| host.hold_clipboard_writes());
     move_to(1, cx);
     wait_for_api_condition(cx, |cx| host.read(cx).pending_view_request_count() == 1);
