@@ -33,6 +33,7 @@ function nodeWithin(timeout, ...args) {
   try {
     execFileSync(process.execPath, args, { stdio: "inherit", timeout });
   } catch (error) {
+    if (error.code === "ETIMEDOUT") console.error(`stopped after ${timeout / 1000} s`);
     process.exit(error.status ?? 1);
   }
 }
