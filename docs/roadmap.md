@@ -13,7 +13,7 @@ Every item has the same shape:
 - **Description** says what is missing today and when it becomes worth doing,
   then what to build.
 
-The next unused ID is **D222**; take it for a new item and bump this line.
+The next unused ID is **D224**; take it for a new item and bump this line.
 
 Each section is ordered so that an item comes after the items it depends on,
 wherever the sections allow it. Items with no dependencies are ordered by
@@ -108,22 +108,18 @@ hold the analyses that support some items.
 - **D087 — Extension entitlements** 🚧
   - Depends on: none
   - Description: Packages declare entitlements in `knot.jsonc`, starting with
-    process spawning and outbound HTTP. An installed package prompts once, on
-    its first load, and again when an update adds an entitlement; the grant is
-    stored by canonical package identity. Bundled packages declare entitlements
-    through the same path but are granted by shipping with the binary, and
-    personal config is implicitly granted. A missing or denied entitlement
-    makes the API reject with a typed error instead of failing the package, and
-    grants can be reviewed and revoked. The APIs are spawning a process (with
-    arguments, working directory, and environment; streaming stdout and stderr,
-    writing stdin, observing exit, and killing it; processes are cleaned up
-    when the lifecycle tears down) and a `fetch`-shaped HTTP client. This
-    provides consent and visibility, not a sandbox: runtime isolation is not a
-    security boundary, and the decision record must say so. Decide how bundled
-    consumers locate tools: bundle `rg` with Knot, or require it on PATH.
-    Process spawning is built complete, with entitlements, as part of the
+    process spawning, and the user decides on them before an installed package
+    loads; bundled packages and personal config are granted. Extensions gain a
+    process API. This provides consent and visibility, not a sandbox. Process
+    spawning is built complete, with entitlements, as part of the
     [version control plan](plans/vcs.md), whose Git package is its first
-    consumer.
+    consumer. Plan: [d087-extension-entitlements](plans/d087-extension-entitlements.md).
+
+- **D222 — HTTP client for extensions**
+  - Depends on: D087
+  - Description: Extensions have no network access. Do it when a package needs
+    one: a `fetch`-shaped HTTP client gated by a `network` entitlement through
+    D087's declarations and startup consent.
 
 - **D089 — Project-local settings**
   - Depends on: none
