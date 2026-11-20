@@ -16,7 +16,7 @@ import { EMPTY, feed, type Pending, pendingText, type WindowAction } from "./key
 import { BufferLines } from "./lines.js";
 import { lineStart } from "./motions.js";
 import {
-  INSERT, isTyping, isVisual, leaveInsert, type Mode, moveOnto, NORMAL, type Player, REPLACE, replaceKey, run, setMode,
+  INSERT, invokeRecorded, isTyping, isVisual, leaveInsert, type Mode, moveOnto, NORMAL, type Player, REPLACE, replaceKey, run, setMode,
   type Shared, type State,
 } from "./normal.js";
 import { Registers } from "./registers.js";
@@ -114,6 +114,7 @@ export async function start() {
     marks: new Map(),
     globalMarks: new Map(),
     jumpToDocument: (document, offset, exact) => vim.jumpToDocument(document, offset, exact),
+    replayingCommands: 0,
   };
   const vim = new Vim(
     shared,
@@ -123,9 +124,12 @@ export async function start() {
 
   // Keys take turns: each waits for the ones before it, so a key that
   // outlasts the application's key hold still runs before the keys typed
-  // after it. Replays feed keys directly and never invoke these commands.
+  // after it. Replays feed this package's keys directly, but a replayed
+  // command of another package may send keys, which run inside the key that
+  // replays it rather than waiting for it.
   let turn: Promise<unknown> = Promise.resolve();
   const inTurn = <T>(run: () => Promise<T>): Promise<T> => {
+    if (shared.replayingCommands > 0) return run();
     const next = turn.then(run);
     turn = next.catch(() => {});
     return next;
@@ -501,7 +505,7 @@ class Vim {
       } else if (command === "vim.leave-insert") {
         if (isTyping(state.mode)) await this.finishInsert(state);
       } else {
-        await commands.invoke(command, args as never);
+        await invokeRecorded(this.shared, command, args);
       }
     } catch (error) {
       const code = (error as { code?: string }).code;

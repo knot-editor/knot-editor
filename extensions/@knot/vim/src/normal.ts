@@ -61,6 +61,9 @@ export type Shared = {
   /** Shows a document's editor in the command's window with the caret at
    * `offset`, or at its line's first non-blank unless `exact`. */
   jumpToDocument(document: DocumentId, offset: number, exact: boolean): Promise<void>;
+  /** How many replayed commands of other packages are running. The keys
+   * they send run inside the key that replays them. */
+  replayingCommands: number;
 };
 
 /** A change `.` repeats: the command that made it and, for one that entered
@@ -291,8 +294,18 @@ async function replay(state: State, entries: readonly RecordedCommand[]) {
     } else if (command === "vim.key") {
       await replaceKey(state, (args as { key: string }).key);
     } else {
-      await commands.invoke(command, args as never);
+      await invokeRecorded(state.shared, command, args);
     }
+  }
+}
+
+/** Runs a recorded command that is not one of this package's keys. */
+export async function invokeRecorded(shared: Shared, command: string, args: unknown) {
+  shared.replayingCommands++;
+  try {
+    await commands.invoke(command, args as never);
+  } finally {
+    shared.replayingCommands--;
   }
 }
 

@@ -764,6 +764,31 @@ fn keys_typed_past_the_key_hold_wait_for_the_key_still_running(cx: &mut TestAppC
     assert_eq!(test_editor.marked(cx), "‸bFe");
 }
 
+#[gpui::test]
+fn a_replayed_command_that_types_vim_keys_runs_them(cx: &mut TestAppContext) {
+    let product = TestProduct::start_with_post_init(
+        packages(),
+        Some(
+            r#"import { commands, keymaps, settings } from "knot";
+await settings.set("vim.enabled", true);
+await commands.register("try.delete-two", async () => {
+  for (let n = 0; n < 2; n++) await commands.invoke("vim.key", { key: "x" });
+});
+keymaps.bind("ctrl-t", "try.delete-two", { view: "editor", context: "vim.normal" });
+"#,
+        ),
+        cx,
+    );
+    let test_editor = open(&product, "abcdefgh", 0, cx);
+    test_editor.press("qa<c-t>q", cx);
+    assert_eq!(test_editor.marked(cx), "‸cdefgh");
+    // The macro runs the command, whose keys run inside it.
+    test_editor.press("@a", cx);
+    assert_eq!(test_editor.marked(cx), "‸efgh");
+    test_editor.press("x", cx);
+    assert_eq!(test_editor.marked(cx), "‸fgh");
+}
+
 /// Give the packages a moment to run what they were sent, since a key that
 /// waits for another shows nothing to wait for.
 fn let_packages_run(cx: &mut TestAppContext) {
