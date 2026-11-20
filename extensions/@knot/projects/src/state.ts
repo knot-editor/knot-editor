@@ -147,7 +147,9 @@ const queues = new WeakMap<ProjectsState, Promise<unknown>>();
 /**
  * Runs `run` after every earlier exclusive run has finished. Commands and
  * application events each read and rewrite the registry and the windows from
- * what the one before left, so they take turns.
+ * what the one before left, so they take turns. A run must not wait for
+ * another exclusive run, such as by invoking a Projects command, or neither
+ * finishes.
  */
 export function exclusive<T>(state: ProjectsState, run: () => Promise<T>): Promise<T> {
   const result = (queues.get(state) ?? Promise.resolve()).then(run);

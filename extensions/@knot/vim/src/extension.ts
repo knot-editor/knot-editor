@@ -287,8 +287,9 @@ class Vim {
     });
     await handle.onDidChangeSelection(async (selection) => {
       if (this.states.get(target) !== state || isTyping(state.mode)) return;
-      if (this.keying > 0) {
-        this.missedSelection = selection;
+      const keyed = this.keying.get(state);
+      if (keyed !== undefined) {
+        keyed.missed = selection;
         return;
       }
       const mode = state.mode;
@@ -346,28 +347,30 @@ class Vim {
     await this.showStatus(presentation.target.window);
   }
 
-  /** Keys being handled. The selection a key sets on the way is this
-   * package's own, so selection changes seen meanwhile are not followed. */
-  private keying = 0;
-  private missedSelection: EditorSelection | null = null;
+  /** The editors whose keys are being handled, with the last selection
+   * change seen meanwhile. The selection a key sets on the way is this
+   * package's own, so it is not followed. */
+  private readonly keying = new Map<Followed, { depth: number; missed: EditorSelection | null }>();
 
   async keys(context: CommandContext, keys: readonly string[]) {
     const state = await this.stateOf(context);
     if (state === null) return;
     state.message = null;
-    this.keying++;
+    const keyed = this.keying.get(state) ?? { depth: 0, missed: null };
+    this.keying.set(state, keyed);
+    keyed.depth++;
+    let open = false;
     try {
-      if (!(await this.feedKeys(state, keys))) return this.showStatus(state.target.window);
-      await showOperator(state, state.mode === "normal" && state.pending.operator !== null);
+      open = await this.feedKeys(state, keys);
+      if (open) await showOperator(state, state.mode === "normal" && state.pending.operator !== null);
     } finally {
-      this.keying--;
+      if (--keyed.depth === 0) this.keying.delete(state);
     }
     // What the keys left, such as a caret a native command moved, is followed
-    // once they are done.
-    const missed = this.missedSelection;
-    this.missedSelection = null;
+    // once the outermost keys are done.
+    const missed = keyed.depth === 0 ? keyed.missed : null;
     if (
-      missed !== null && this.states.get(state.target) === state && !isTyping(state.mode) &&
+      open && missed !== null && this.states.get(state.target) === state && !isTyping(state.mode) &&
       (missed.anchor !== missed.caret || missed.caret !== state.caret)
     ) {
       await whileOpen(() => followSelection(state));

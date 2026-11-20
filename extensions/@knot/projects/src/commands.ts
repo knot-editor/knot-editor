@@ -35,11 +35,16 @@ function explicitName(typed: string, inferred: string | null) {
 }
 
 export async function registerCommands(state: ProjectsState) {
+  // A command cancelled while it waits for its turn does nothing.
+  const inTurn = (handler: (context: CommandContext) => unknown) => (context: CommandContext) =>
+    exclusive(state, async () => {
+      if (!context.signal.aborted) await handler(context);
+    });
   const serial = {
     register: (name: string, handler: (context: CommandContext) => unknown, options?: CommandOptions) =>
-      commands.register(name, (context) => exclusive(state, async () => { await handler(context); }), options),
+      commands.register(name, inTurn(handler), options),
     registerForView: (view: string, name: string, handler: (context: CommandContext) => unknown) =>
-      commands.registerForView(view, name, (context) => exclusive(state, async () => { await handler(context); })),
+      commands.registerForView(view, name, inTurn(handler)),
   };
   // The tool starts hidden so it never displaces the native explorer selection on
   // fresh windows. A command-invoked show or hide is an explicit user arrangement,
