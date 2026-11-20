@@ -273,7 +273,8 @@ what the tests cannot settle.
 
 **Implementation context.** `src/app/commands/extension.rs`
 (`start_next_root`, `settle`, `enqueue_extension_root_for`, `admit_child`,
-`cancel_subtree`); key hold in
+`cancel_subtree`); the "await children serially" note on `invoke` in
+`knot.d.ts`; key hold in
 `src/app/product/key_hold.rs` stays. Packages under `extensions/@knot/`
 (`vim/src/extension.ts` `vim.key`/`vim.type`, `find` `refreshing`,
 `go-to-file`, `explorer`, `projects`, `notifications`, `word-highlight`);

@@ -471,7 +471,8 @@ impl ExtensionCommandBridge {
             InvocationTarget::Extension(target)
                 if (target.extension, target.lifecycle) == caller
         );
-        // A registration never runs again inside its own ancestry.
+        // A registration never runs again inside its own ancestry; a
+        // `CommandTarget` names exactly one registration of one lifecycle.
         let mut ancestor = Some(parent);
         while let Some(id) = ancestor {
             let node = self
