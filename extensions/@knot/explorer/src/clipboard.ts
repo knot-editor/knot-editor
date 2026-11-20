@@ -46,12 +46,13 @@ async function paste(state: ExplorerState, ctx: CommandContext, selected: boolea
   const directory = (await files.stat(row.uri))?.kind === "file" ? parentOf(row.uri) : row.uri;
   const source = await files.stat(taken.uri);
   const name = nameOf(taken.uri);
+  // A copy or cut made meanwhile replaces what this paste took.
   if (source === null) {
-    state.taken = null;
+    if (state.taken === taken) state.taken = null;
     return report(`${name} no longer exists`);
   }
   if (await transfer(state, window, row.root, taken.uri, source.kind === "directory", directory, taken.cut)) {
-    if (taken.cut) state.taken = null;
+    if (taken.cut && state.taken === taken) state.taken = null;
   }
 }
 
