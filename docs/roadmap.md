@@ -79,10 +79,11 @@ hold the analyses that support some items.
     deadlocks it until restart; and a language client cannot handle
     out-of-order responses or server requests. Before D067, carry each root's
     identity through its continuations instead of global state, let the
-    scheduler keep several live roots per package, make the command queue per
-    package, and audit the bundled packages for state assumed stable across an
+    scheduler keep several live roots per package, drop the serial command
+    queue, and audit the bundled packages for state assumed stable across an
     await. The [scheduling report](reports/extension-task-scheduling.md) has
-    the analysis and proposed checkpoints. It opens the
+    the analysis; the [plan](plans/d182-interleave-extension-roots.md) the
+    work. It opens the
     [version control plan](plans/vcs.md), whose Git package awaits processes
     constantly.
 
@@ -637,6 +638,19 @@ Kakoune mode could use them too. The
     registers, recreate the native mark when its document opens, open the file
     for a mark whose document is closed, and clamp an offset past a changed
     file's end, as view state does.
+
+- **D223 — Vim replays that follow focus**
+  - Depends on: D182
+  - Description: `.`, counted inserts, and macros replay an editor recording
+    through the Vim package, and a replay targets the editor that started it:
+    a macro stops when focus leaves that editor, because the package cannot
+    observe focus changes while the replaying command awaits. In Vim a
+    replay continues in whichever editor a recorded key moves focus to, so a macro
+    can split, switch windows, or jump to another file and continue there.
+    Do it when daily Vim use records a macro that crosses editors: once
+    listeners run during the replay (D182), follow focus changes in the
+    package and retarget the remaining keys, stopping when focus leaves
+    editors altogether.
 
 ### Terminal
 
