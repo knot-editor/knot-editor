@@ -25,8 +25,13 @@ function packages() {
 }
 
 function node(...args) {
+  nodeWithin(undefined, ...args);
+}
+
+// A run that outlives `timeout` milliseconds is killed and fails.
+function nodeWithin(timeout, ...args) {
   try {
-    execFileSync(process.execPath, args, { stdio: "inherit" });
+    execFileSync(process.execPath, args, { stdio: "inherit", timeout });
   } catch (error) {
     process.exit(error.status ?? 1);
   }
@@ -54,7 +59,16 @@ if (task === "check") {
   const files = ["extensions", "scripts/extensions/testing"].flatMap((base) =>
     existsSync(join(build, base)) ? testFiles(join(build, base)) : [],
   );
-  node("--import", pathToFileURL(join(tools, "testing/register.mjs")).href, "--test", ...files);
+  // A test that never settles fails by name after ten seconds; the whole run,
+  // which takes about fifteen, is cut off after two minutes.
+  nodeWithin(
+    120_000,
+    "--import",
+    pathToFileURL(join(tools, "testing/register.mjs")).href,
+    "--test",
+    "--test-timeout=10000",
+    ...files,
+  );
 } else if (task === "build" && argument !== undefined) {
   compile("-p", join(resolve(process.env.INIT_CWD ?? process.cwd(), argument), "tsconfig.json"));
 } else {

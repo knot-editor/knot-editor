@@ -1133,6 +1133,26 @@ export function notices(): readonly Knot.Notice[] {
   return state.notices;
 }
 
+const realSetTimeout = globalThis.setTimeout;
+const realClearTimeout = globalThis.clearTimeout;
+const BOUND_MS = 5000;
+
+/** Fails a step of a test that never settles, naming it, instead of hanging. */
+async function bounded<T>(step: string, work: Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expired = new Promise<never>((_, reject) => {
+    timer = realSetTimeout(
+      () => reject(new Error(`${step} did not settle within ${BOUND_MS} ms: a deadlock between a handler and an observer`)),
+      BOUND_MS,
+    );
+  });
+  try {
+    return await Promise.race([work, expired]);
+  } finally {
+    realClearTimeout(timer);
+  }
+}
+
 // Like the application, a request does not wait for observers to handle the
 // event it raises; the test's next step does.
 const deliveries: Promise<unknown>[] = [];
@@ -1771,7 +1791,7 @@ export async function run(
   const handler = viewHandler ?? state.commands.get(name);
   if (handler === undefined) throw new Error(`no command ${name}`);
   try {
-    await handler(context(window, options.arguments ?? null, options.view ?? null));
+    await bounded(`command ${name}`, Promise.resolve(handler(context(window, options.arguments ?? null, options.view ?? null))));
   } catch (error) {
     if (error instanceof Unavailable) return "unavailable";
     throw error;
@@ -1788,7 +1808,9 @@ export function commandNames(): string[] {
 /** Delivers an application event to every observer, awaiting each in turn. */
 export async function emit(change: Knot.ApplicationChange) {
   state.sequence += 1;
-  for (const listener of state.listeners) await listener({ ...change, sequence: state.sequence });
+  for (const listener of state.listeners) {
+    await bounded(`observer of ${change.type}`, Promise.resolve(listener({ ...change, sequence: state.sequence })));
+  }
   await drainDeliveries();
 }
 
