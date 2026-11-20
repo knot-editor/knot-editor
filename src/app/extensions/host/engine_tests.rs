@@ -1235,6 +1235,122 @@ fn registration_response_racing_unload_cannot_publish_late_ownership() {
 }
 
 #[test]
+fn editor_notifications_before_their_watch_reply_reach_the_new_listeners() {
+    use knot_protocol::{
+        ApplicationSnapshot, EditorEvent, PaneTarget, PresentationTarget, WindowTarget,
+        WorkbenchObservation,
+    };
+    let pool = RuntimePool::new(PoolConfig::single_worker());
+    let runtime = key(210);
+    pool.load(runtime, IsolateConfig::default()).unwrap();
+    let setup = pool
+        .execute_fixture_module(
+            runtime,
+            "file:///fixtures/early-editor-events.js",
+            r#"
+import { workbench } from "knot";
+globalThis.log = [];
+const { snapshot } = await workbench.observe(() => {});
+const handle = await workbench.editor(snapshot.activeTarget);
+await handle.onDidChangeSelection(({ caret }) => { log.push(`selection ${caret}`); });
+log.push("selection subscribed");
+await handle.onDidEditBar(({ bar }) => { log.push(`bar ${bar}`); });
+log.push("bars subscribed");
+"#,
+        )
+        .unwrap();
+    let respond = |request: &knot_protocol::HostRequest, result| {
+        pool.respond(HostResponse {
+            extension: runtime.extension,
+            lifecycle: runtime.lifecycle,
+            id: request.id,
+            result: Ok(result),
+        })
+        .unwrap();
+    };
+    let observe = pool.receive_request().unwrap();
+    let target = PresentationTarget {
+        pane: PaneTarget {
+            window: WindowTarget { window: "1".into() },
+            workbench: "1".into(),
+            pane: "1".into(),
+        },
+        tab: "1".into(),
+        presentation: "1".into(),
+    };
+    respond(
+        &observe,
+        success::<declared::observe_workbench>(WorkbenchObservation {
+            subscription: WorkbenchSubscriptionId::new(912),
+            snapshot: ApplicationSnapshot {
+                active_target: Some(target),
+                ..ApplicationSnapshot::default()
+            },
+            watermark: 0,
+        }),
+    );
+    let open = pool.receive_request().unwrap();
+    assert_eq!(open.operation.descriptor.name, "openEditor");
+    respond(&open, success::<declared::open_editor>(5));
+
+    // Each notification arrives before the reply that installs its listener.
+    let watch = pool.receive_request().unwrap();
+    assert_eq!(watch.operation.descriptor.name, "watchEditorSelection");
+    pool.dispatch_editor_event(runtime, 5, EditorEvent::SelectionChanged)
+        .unwrap();
+    respond(&watch, success::<declared::watch_editor_selection>(()));
+    let mut pending = 2;
+    while pending > 0 {
+        let request = pool.receive_request().unwrap();
+        match request.operation.descriptor.name {
+            "acknowledgeEditorSelection" => {
+                respond(
+                    &request,
+                    success::<declared::acknowledge_editor_selection>(
+                        declared::AcknowledgedSelection(Some(declared::EditorSelection {
+                            anchor: 3,
+                            caret: 3,
+                            line: None,
+                            lines: None,
+                        })),
+                    ),
+                );
+                pending -= 1;
+            }
+            "watchEditorBars" => {
+                pool.dispatch_editor_event(runtime, 5, EditorEvent::BarsEdited)
+                    .unwrap();
+                respond(&request, success::<declared::watch_editor_bars>(()));
+            }
+            "acknowledgeEditorBars" => {
+                respond(
+                    &request,
+                    success::<declared::acknowledge_editor_bars>(declared::EditedBars(vec![
+                        declared::EditedBar {
+                            id: "find".into(),
+                            fields: Default::default(),
+                        },
+                    ])),
+                );
+                pending -= 1;
+            }
+            other => panic!("unexpected request {other}"),
+        }
+    }
+    setup.wait().unwrap();
+    assert_eq!(
+        &*pool
+            .execute(runtime, "verify-editor-events.js", "log.join(', ')")
+            .unwrap()
+            .wait()
+            .unwrap()
+            .value,
+        "selection subscribed, bars subscribed, selection 3, bar find"
+    );
+    pool.shutdown();
+}
+
+#[test]
 fn application_observation_installs_before_early_delivery_and_self_disposes() {
     use knot_protocol::{ApplicationSnapshot, WorkbenchObservation};
     let pool = RuntimePool::new(PoolConfig::single_worker());

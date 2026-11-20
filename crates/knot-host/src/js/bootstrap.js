@@ -417,10 +417,14 @@ async function registerCallable(install, send) {
   }
 }
 
-async function callable(table, registration) {
-  while (!table.has(registration) && registrationsInFlight > 0) {
+async function whenRegistered(registered) {
+  while (!registered() && registrationsInFlight > 0) {
     await new Promise((resolve) => registrationWaiters.push(resolve));
   }
+}
+
+async function callable(table, registration) {
+  await whenRegistered(() => table.has(registration));
   return table.get(registration);
 }
 
@@ -853,17 +857,19 @@ export async function openEditor(target) {
       if (typeof listener !== "function") throw new TypeError("onDidChangeSelection requires a listener");
       const lines = linesOption(options);
       owned.assertActive();
-      entry.watching ??= request("watchEditorSelection", authority);
-      try { await entry.watching; } catch (error) { entry.watching = null; throw error; }
-      entry.selectionListeners.set(listener, lines);
+      await registerCallable(() => entry.selectionListeners.set(listener, lines), async () => {
+        entry.watching ??= request("watchEditorSelection", authority);
+        try { await entry.watching; } catch (error) { entry.watching = null; throw error; }
+      });
       return Object.freeze({ dispose: async () => { entry.selectionListeners.delete(listener); } });
     },
     async onDidEditBar(listener) {
       if (typeof listener !== "function") throw new TypeError("onDidEditBar requires a listener");
       owned.assertActive();
-      entry.watchingBars ??= request("watchEditorBars", authority);
-      try { await entry.watchingBars; } catch (error) { entry.watchingBars = null; throw error; }
-      entry.barListeners.add(listener);
+      await registerCallable(() => entry.barListeners.add(listener), async () => {
+        entry.watchingBars ??= request("watchEditorBars", authority);
+        try { await entry.watchingBars; } catch (error) { entry.watchingBars = null; throw error; }
+      });
       return Object.freeze({ dispose: async () => { entry.barListeners.delete(listener); } });
     },
     dispose: () => owned.dispose(),
@@ -874,9 +880,17 @@ globalThis.__knotDispatchEditorEvent = async (authority, kind) => {
   const entry = editorHandles.get(authority);
   if (!entry) return;
   if (kind === "selection") {
-    return inTurn(entry, "selectionTurn", () => dispatchSelection(authority, entry));
+    return inTurn(entry, "selectionTurn", async () => {
+      await whenRegistered(() => entry.selectionListeners.size > 0);
+      return dispatchSelection(authority, entry);
+    });
   }
-  if (kind === "bars") return inTurn(entry, "barsTurn", () => dispatchBars(authority, entry));
+  if (kind === "bars") {
+    return inTurn(entry, "barsTurn", async () => {
+      await whenRegistered(() => entry.barListeners.size > 0);
+      return dispatchBars(authority, entry);
+    });
+  }
   if (kind === "closed") {
     editorHandles.delete(authority);
     entry.closed = true;

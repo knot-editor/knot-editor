@@ -220,8 +220,8 @@ provider-package case is tested as a chain: the provider's command runs a
 consumer's command, which calls the provider back (formerly `ProviderBusy`).
 Removing exclusivity exposed the same race for subscriptions as for
 registrations: a notification could arrive before the reply that installs
-its listener. Buffer-change, setting, file-watch, and workbench
-subscriptions now go through `registerCallable`, and a waiting call or
+its listener. Buffer-change, setting, file-watch, workbench, editor
+selection, and editor bar subscriptions now go through `registerCallable`, and a waiting call or
 notification resumes in a later task (an immediate), so the subscribing code
 has continued past its `await` first. A command started before an unload
 reports it as a cancelled runtime error, as before. The guide and decision
