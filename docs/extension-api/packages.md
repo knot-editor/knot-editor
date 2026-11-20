@@ -29,11 +29,7 @@ package or personal config replaces a provider for everyone; `all` returns
 every registration, oldest first, for features several packages contribute to.
 Look a provider up when the feature runs, and fall back when it is missing: a
 handle rejects `ProviderNotFound` once its package unloads or restarts. Call
-your own package's code directly, never through `providers`. A call also
-rejects `ProviderBusy` when the provider's package is running a command that
-waits for yours, as when your command runs from that package's own picker; the
-bundled command palette is Go to File's, so a command run from it cannot call
-Go to File's providers. The full contract
+your own package's code directly, never through `providers`. The full contract
 is `providers` in
 [`knot.d.ts`](../../crates/knot-host/src/js/knot.d.ts).
 

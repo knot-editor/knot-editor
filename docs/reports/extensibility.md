@@ -51,7 +51,6 @@ plugins work only because its Lua runs synchronously
 | Several and rectangular selections | One selection per view and handle | Vim visual-block, multi-cursor editing | D142 |
 | Syntax-tree queries and text objects | Only `folds` and `indents` queries, used natively | Vim `if`, `ia`, `ac`, `it`; structural selection | D144 |
 | Key contexts on non-editor views | Terminals, trees, and contributed views resolve by view kind | Modal keys in the explorer or terminal | D147 |
-| Several live roots per package | One root runs to completion; an awaiting command freezes the package | Language client responses; Vim macros that follow focus | D182 |
 | Lifecycle hooks and native command overrides | Changes are observed after they commit | Format on save, LSP, customizing a native command | D115 |
 | Virtual text and inlay hints | Decorations and gutter markers only | LSP inlay hints and diagnostics, blame, inline suggestions | D145 |
 | Floating panels anchored to a position | None | Hunk popup, LSP hover | D220 |

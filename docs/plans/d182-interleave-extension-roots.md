@@ -373,7 +373,10 @@ the way provider calls enter a package (`pool.call_provider`,
 bootstrap and released when the surface settles. Native surfaces in
 `src/app/extensions/semantics.rs` and `src/app/tree_view.rs`.
 
-### 6. Documentation
+### 6. 🚧 Documentation
+
+Written and awaiting the review gate; the roadmap item and the scheduling
+report are removed. After approval, remove this plan in a final commit.
 
 Deliverables: [extension host](../architecture/extension-host.md) scheduler
 flow, [commands](../architecture/commands.md) extension execution, the pull

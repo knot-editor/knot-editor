@@ -1,5 +1,5 @@
-// Live tracking of active sessions. Commands and listeners are serial roots
-// of this package, so tracking never records the intermediate state of a
+// Live tracking of active sessions. Commands and application events take
+// turns, so tracking never records the intermediate state of a
 // switch. Native hot exit restores windows at startup; tracking waits
 // for launch so restored windows rebind by root set first.
 import { documents, recovery, windows } from "knot";

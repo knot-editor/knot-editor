@@ -105,10 +105,18 @@ report.
 ## Runtime and scheduler flow
 
 One application-owned `ProductExtensionHost` owns the pool, foreground bridges,
-and awaitable event-inbox task. Each lifecycle has a persistent runtime capsule,
-one FIFO root queue, and at most one active logical command tree. The pool has
-fixed worker capacity; defaults and state transitions live in
-[scheduler.rs](../../crates/knot-host/src/scheduler.rs).
+and awaitable event-inbox task. Each lifecycle has a persistent runtime capsule
+and one FIFO task queue, scheduled the way Node does: a task runs and drains
+its microtasks, and the next starts whenever the current one is parked at an
+`await`. The pool has fixed worker capacity; defaults and state transitions
+live in [scheduler.rs](../../crates/knot-host/src/scheduler.rs).
+
+An invocation is a command, provider call, tree request, surface callback,
+evaluation, listener dispatch, or timer callback, and every task continues
+one or none. It completes when its promise settles, and several of one
+package are live at once. Package and personal-config evaluation are invocations
+too and not exclusive: like Node's top-level `await`, other tasks run while
+it is parked, and a registration is live as soon as it resolves.
 
 V8 initialization must precede worker creation: every thread that may lock a
 shared isolate must be created after initialization. A worker locks a capsule
@@ -125,27 +133,53 @@ turn settles the package or config entry's evaluation, and after any turn that
 ran 100 ms or longer. The notification runs off the foreground, after the turn
 and before the root's completion is delivered.
 
+Attribution follows the continuation, as Node's `AsyncLocalStorage` does, on
+V8's continuation-preserved embedder data. Entering an invocation stores its
+frame there and `await` carries it; entry restores the previous frame when the
+synchronous part returns, so an inline child hands its parent's frame back. The
+frame names the invocation and, for a command, carries its authority (capture,
+target, signal, buffer). Requests, contextual helpers, and cancellation read the
+frame, so a listener or timer never borrows a command's authority. A call that
+reaches a registration or subscription before its reply has installed the
+handler waits in the bootstrap and resumes in a later task.
+
 Host requests retain persistent promise resolvers and yield the worker while
-awaiting native work. A validated response queues a continuation under the same
-root, settles its resolver in a later locked turn, then drains microtasks.
-Multiple requests can settle out of order. Unrelated roots remain queued until
-the active root and its detached native requests settle. Responses racing with
-a running turn are retained for the next continuation; request and turn identities
-reject stale or duplicate delivery. Forced termination also wakes an awaiting
-root, so it does not depend on a later host response.
+awaiting native work. A validated response queues a task under the requesting
+invocation, settles its resolver in a later locked turn, then drains
+microtasks. Multiple requests can settle out of order, and other tasks run
+meanwhile. Responses racing with a running turn are retained for the next
+turn; request and turn identities reject stale or duplicate delivery. Forced
+termination wakes every outstanding invocation, so it does not depend on a
+later host response. A fulfilled invocation still waits for host requests it
+left in flight; once it settles, its contextual requests fail authorization
+and context-free ones succeed.
 
 Buffer listeners, application listeners, semantic providers, and timer
-callbacks enter as unrelated FIFO roots. They may await host work without retaining a worker. Callback failure
-is isolated so later roots still run. Dropping a native provider receiver cancels
-queued work or wakes active work to release retained promises. Diagnostics measure
-queue depth, lag, and worker movement; quotas, dropping, coalescing, deadlines,
-and backpressure remain [D019](../roadmap.md).
+callbacks enter as tasks of invocations of their own. Their failures are
+reported and isolated, so later tasks still run. The notifications of one
+subscription (a buffer's changes, an editor's selection or bar edits) take
+turns in the bootstrap, so a slow listener sees them in order and the
+application's acknowledgement still coalesces changes made meanwhile; different
+subscriptions, listeners, and commands interleave. Dropping a native provider
+receiver cancels queued work or wakes active work to release retained promises.
+Diagnostics measure queue depth, lag, and worker movement; quotas, dropping,
+coalescing, deadlines, and backpressure remain [D019](../roadmap.md).
+
+Native surfaces call back into the package the same way. A picker's
+`onHighlight` and `onQuery`, an input's `onChange`, and a tree edit's `validate`
+run as surface-callback tasks while the command awaits the surface's result,
+keyed by a session the bootstrap numbers and drops when the surface settles;
+each callback restores the command's frame, so it keeps the command's
+authority until then. Only `onQuery` calls overlap, and only the answer to the
+latest applies; the others stay serial with coalescing. A failing callback
+stops further calls and rethrows once the surface settles. Behavior of the
+surfaces is in [semantic UI](semantic-ui.md#extension-transient-interactions).
 
 Each lifecycle's timer table in the host owns timer IDs and their armed waits;
 JavaScript keeps only the callbacks. A `TimerDriver`, required in the pool
 configuration, does the waiting off any thread: the application's waits on
 gpui's background executor, whose test clock `advance_clock` drives, and
-`knot-host` tests advance a manual one. An expiry queues a root that runs only
+`knot-host` tests advance a manual one. An expiry queues a task that runs only
 if the arming it belongs to is still current, so clearing or refreshing a
 timer whose root is already queued suppresses it. Teardown drops the table,
 cancelling every wait.
@@ -183,8 +217,8 @@ retains a shared reference until V8 garbage collection or isolate disposal,
 without changing the UTF-8 core.
 
 Synchronous JavaScript keybinding calls collect an ordered batch per V8 turn.
-The engine holds earlier host responses until atomic foreground batch application
-settles, so an await continuation cannot overtake preceding keymap mutations.
+The engine holds earlier host responses, isolate-wide, until atomic foreground
+batch application settles, so an await continuation cannot overtake preceding keymap mutations.
 A batch failure fails the current turn. Binding ownership and precedence belong
 to [commands](commands.md#keymaps).
 
@@ -201,7 +235,7 @@ Command cancellation wakes suspended execution, aborts its signal, and rejects
 pending JS requests. Admission/publication races retain cancellation until the
 execution is recorded. An already queued native response keeps its pending entry
 until its admitted turn consumes it without settling the rejected resolver again.
-This preserves root ownership while cancellation callbacks run. Accepted commits
+This preserves invocation ownership while cancellation callbacks run. Accepted commits
 are not rolled back.
 
 Unload, startup rollback, fatal termination, heap failure, caught worker panic,
@@ -230,16 +264,14 @@ two names: `editor.completion`, which native
 [paste](editor-and-languages.md#editor-views) asks; it never interprets the
 others.
 
-A call through a handle is a host request of the caller that enqueues a root in
+A call through a handle is a host request of the caller that enqueues a task in
 the provider's package, like a semantic provider callback, with the method
 name, a JSON argument and the caller's command window. The provider sees that
 window as its own target, and its JSON result or thrown message settles the
 caller's request. A handle names one registration: once it is disposed, a call
-rejects `ProviderNotFound`. A package runs one root at a time, so a call to its
-own provider would wait on itself; the host rejects it, and a package uses its
-own code directly. A call also waits on the provider's package when one of that
-package's commands is an ancestor of the caller's command, so the host rejects
-it `ProviderBusy` as `commands.invoke` rejects cycles back to ancestors.
+rejects `ProviderNotFound`. A call to the caller's own package is rejected, and a package uses its own code
+directly. Other calls interleave: a provider's package may be running a command
+that waits on the caller.
 
 ## Application metadata queries
 

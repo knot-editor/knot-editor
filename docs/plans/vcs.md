@@ -1,7 +1,7 @@
 # Version control
 
 Status: 🚧 approved, not started. Replaces D126 from the [roadmap](../roadmap.md)
-with D209–D216, D220, and D221, and sequences D182, D087, D199, and D197 into it.
+with D209–D216, D220, and D221, and sequences D087, D199, and D197 into it.
 
 ## Goal
 
@@ -71,11 +71,8 @@ Items in a milestone are listed in dependency order.
 
 ### 1. Change gutter
 
-- **D182 — Interleave extension roots at awaits.** `@knot/git` awaits
-  processes constantly; its listeners and providers must keep running, and
-  spawning's streamed output must not deadlock its own package.
 - **D087 — Extension entitlements.** Process spawning, complete with
-  entitlements. Depends on D182.
+  entitlements.
 - **D199 — Typed contracts between packages.** Code-defined schemas, inferred
   types, host-enforced validation.
 - **D209 — Diff function for extensions.**

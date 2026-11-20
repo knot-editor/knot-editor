@@ -87,7 +87,7 @@ touches.
   drops run a command on rows only.
 - [Extension transient interactions](decisions/semantic-ui.md#extension-transient-interactions):
   typed results, complete lists filtered natively or rows supplied per query,
-  pulled rather than pushed updates; whole-value completion items with menu accept; one native matcher
+  pushed callbacks; whole-value completion items with menu accept; one native matcher
   with user-ordered styles; recency owned by extensions.
 - [Editor bars](decisions/semantic-ui.md#editor-bars): non-modal data-described
   strips rather than the modal input; native matching and replacement, Find in
@@ -112,7 +112,8 @@ touches.
 ## [Extension host](decisions/extension-host.md)
 
 - [Extension runtime](decisions/extension-host.md#extension-runtime): direct V8,
-  persistent isolates, a bounded worker pool, external UTF-16 snapshots.
+  persistent isolates, a bounded worker pool, interleaved tasks with
+  continuation-carried attribution, external UTF-16 snapshots.
 - [Extension timers](decisions/extension-host.md#extension-timers): Node
   semantics in a host-owned table; a required driver sleeps and calls back.
 - [Handler declarations](decisions/extension-host.md#handler-declarations):

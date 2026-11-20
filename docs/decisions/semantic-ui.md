@@ -157,7 +157,7 @@ arguments, and `reveal` takes the ID path so the extension derives it from a URI
 and no `getParent` callback exists. Speed search is in every tree and highlights
 and jumps instead of filtering, as IntelliJ does, because filtering would hide
 the loaded rows the user is navigating among. Inline editing reuses the shared
-text field and validates through the input pull loop, as VS Code does.
+text field and validates through a surface callback, as VS Code does.
 
 Drag and drop in trees is declared per row and decided by the extension. A drop
 runs the contribution's `drop` command over the captured-window route, like a
@@ -214,10 +214,10 @@ invoked it.
 Pickers receive a complete item list and filter natively, which suits the
 common case. A picker whose rows depend on the query, such as Go to File over
 a large tree, supplies them through `onQuery` instead, answered per query
-over the same pull session as highlights, and shows them unmatched: the
+by a callback like highlights, and shows them unmatched: the
 extension ranks, because it holds the index and the recency, and re-matching
 its rows natively would reorder them. A streaming provider and a second
-scheduler were rejected as more machinery than one pulled answer per query.
+scheduler were rejected as more machinery than one answer per query.
 One native picker serves the palette,
 native pickers, and extensions, so every picker inherits the same matching.
 Matching uses `nucleo-matcher` rather than a hand-written scorer, because fzf's
@@ -240,10 +240,12 @@ does, so it never outranks a better match; extensions own it through
 `history`, a named list in their own storage, because the picker cannot know
 what a package's items mean.
 
-Highlights and input changes are pulled by the caller's own turn rather than
-pushed, because package roots run one at a time and a pushed notification
-would queue behind the command awaiting the picker until it settled. Keeping
-only the latest unread highlight coalesces a slow callback without a queue.
+Highlights, queries, and input changes are pushed to the package as tasks of
+its own while the command awaits the surface. Only queries overlap, with the
+latest answer winning; highlights and input changes stay serial, since Go to
+Line and Vim's `:` line preview from them and an older answer landing after a
+newer one would show a stale preview. Keeping only the latest unread highlight
+coalesces a slow callback without a queue.
 
 Confirmations and messages reuse the native gpui prompt, which already handles
 answers and focus, so a rendered dialog would add surface without behavior. One

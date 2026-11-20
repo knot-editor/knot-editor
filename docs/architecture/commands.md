@@ -249,13 +249,20 @@ actions.
 
 ## Extension execution
 
-The foreground bridge owns one serial invocation tree, admitted presentation
-authority, buffer capture, cancellation, and completion channels. The pooled
-runtime schedules JavaScript. Nested invocation first selects a participant in
-the parent's captured window; window-handled outcomes return to the bridge
-without dispatching twice. Same-lifecycle children run inline under the parent's
-scheduler root; cross-lifecycle children await foreground completion. Each parent
-has at most one unfinished child, and ancestry cycles are unavailable.
+The foreground bridge owns admitted invocation trees, presentation authority,
+buffer capture, cancellation, and completion channels. The pooled runtime
+schedules JavaScript. Nested invocation first selects a participant in the
+parent's captured window; window-handled outcomes return to the bridge without
+dispatching twice. A command starts when it is enqueued, so commands of any
+packages, including two of one package, overlap; typing order stays with the
+foreground [key hold](#ordered-delivery), which waits for a command's
+completion. Same-lifecycle children run inline in the parent's microtask
+drain; cross-lifecycle children await foreground completion. A parent may run
+several children at once, each with its own frame, and cancellation and
+settlement walk all of them. An ancestry cycle through the same registration
+is unavailable; a chain through different registrations of one package is not.
+A package whose commands must not overlap, such as Vim's key handling, takes
+turns itself.
 
 View-scoped extension handlers bind to live instances of a contributed view
 registration. The focused instance claims before global extension handlers reach

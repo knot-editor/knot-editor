@@ -11,11 +11,22 @@ Run JavaScript on direct V8 behind Knot-owned protocols that keep editor models
 free of runtime machinery. Persistent isolates preserve author state, and a
 bounded worker pool fixes thread cost as extension count grows. Locked turns let
 an isolate move between workers without a Knot-owned unsafe mobility wrapper.
-Serial callback roots simplify ownership, while yielding for host work preserves
-pool capacity. Forced interruption is fatal to the lifecycle, giving cleanup a
+Tasks of one isolate run serially, as in Node, and yield at an `await`, so a
+parked command never blocks the package while pool capacity is preserved. Forced interruption is fatal to the lifecycle, giving cleanup a
 definite boundary, and teardown releases foreground resources even when
 JavaScript cannot run cleanup. An awaitable inbox avoids periodic wake loops and
 per-extension transport threads.
+
+Interleaving at awaits replaced running one root to completion, which let a
+command awaiting a picker freeze its package's listeners and providers and
+deadlock on its own timer. Attribution of a host request to a command follows
+the continuation on V8's continuation-preserved data, as `AsyncLocalStorage`
+does, rather than a global stack of the running command, so a listener
+that runs while a command is parked never borrows its authority. Commands
+overlap, even within a package, and a package whose commands must not (Vim's
+keys) takes turns itself; a per-package command queue was rejected because it
+would keep the freeze for the one case that needs it least. Typing order
+stays with the foreground key hold, which waits for a command's completion.
 
 Immutable external UTF-16 snapshots serve V8 without changing the UTF-8 core. A
 prototype V8 149/deno_core benchmark on Apple M1 Pro/macOS release builds
@@ -247,14 +258,13 @@ consumer's choice (`get` the latest, `all` in order). A `declare("single" |
 still be accepted so personal config can override one, so a declaration would
 only document intent while adding questions of who declares and in what order.
 
-Calls cross isolates as a root in the provider's package with a JSON argument
+Calls cross isolates as a task in the provider's package with a JSON argument
 and result and the caller's window, so a provider sees the window a command
 there would. Callbacks, handles, and targets do not cross as values, which
 keeps contracts declarable locally by each consumer and typed imports for
-later (D199). A package runs one root at a time (D182), so a call that would
-wait on a root waiting for the caller rejects `ProviderBusy` rather than
-deadlock; the cost is that a command run from Go to File's own palette cannot
-call its providers. Re-entrant roots would lift that and were left to D182.
+later (D199). Tasks interleave at awaits, so a call needs no refusal for a
+provider whose package is waiting on the caller; only a call to the caller's own
+package is rejected, since its code is reachable directly.
 
 Reference: [extension host](../architecture/extension-host.md#providers).
 

@@ -187,6 +187,19 @@ contributed view's `copy` registration shares the native command name and handle
 it only when that view instance claims the command. Dispose these registrations
 when removing the feature; native definitions retain their application ownership.
 
+## Concurrency
+
+A package's code runs as Node's does: one task at a time, and other work runs
+whenever yours is parked at an `await`. A command waiting on a picker, a timer,
+or a host call does not block your listeners, providers, or other commands,
+and two commands, including two of your own package, may overlap. State read
+before an `await` may have changed after it, so revalidate it, and a package
+whose commands must not overlap (modal key handling, for example) takes turns
+itself, for example by chaining invocations on a promise. A command keeps its
+captured target across awaits, and a listener or timer never has one. A
+request a command leaves in flight when it settles runs without command
+context.
+
 ## Add menu items
 
 `menus.add(location, item)` puts a command in a menu and returns a handle;

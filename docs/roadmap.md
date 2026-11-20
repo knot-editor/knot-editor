@@ -30,7 +30,6 @@ point.
 
 The [version control plan](plans/vcs.md) comes first, in its milestone order:
 
-- D182 — Interleave extension roots at awaits.
 - D087 — Extension entitlements.
 - D199 — Typed contracts between packages.
 - D209 — Diff function for extensions.
@@ -70,23 +69,6 @@ hold the analyses that support some items.
 
 ## Architecture and technical debt
 
-- **D182 — Interleave extension roots at awaits** 🚧
-  - Depends on: none
-  - Description: A package runs one root (command, listener, timer, or provider
-    call) at a time to completion, and extension commands are serial across all
-    packages. An awaiting command freezes its package's listeners and
-    providers; a command that awaits a timer or an event of its own package
-    deadlocks it until restart; and a language client cannot handle
-    out-of-order responses or server requests. Before D067, carry each root's
-    identity through its continuations instead of global state, let the
-    scheduler keep several live roots per package, drop the serial command
-    queue, and audit the bundled packages for state assumed stable across an
-    await. The [scheduling report](reports/extension-task-scheduling.md) has
-    the analysis; the [plan](plans/d182-interleave-extension-roots.md) the
-    work. It opens the
-    [version control plan](plans/vcs.md), whose Git package awaits processes
-    constantly.
-
 - **D129 — Refactor builtin language extensions**
   - Depends on: none
   - Description: Each bundled language package is named `@knot/language-<name>`
@@ -124,7 +106,7 @@ hold the analyses that support some items.
 ### Workspace, projects, and files
 
 - **D087 — Extension entitlements** 🚧
-  - Depends on: D182
+  - Depends on: none
   - Description: Packages declare entitlements in `knot.jsonc`, starting with
     process spawning and outbound HTTP. An installed package prompts once, on
     its first load, and again when an update adds an entitlement; the grant is
@@ -314,9 +296,7 @@ hold the analyses that support some items.
     project, and language-server indexing (D067) will too. Add a progress handle
     with a title, optional percentage, and cancellation, presented alongside
     notifications, with the file index scan as its first consumer.
-    Deliver cancellation through the handle to the root that holds it: inside
-    that root when it is still active, otherwise as an ordinary queued root, so
-    it works with serial roots and needs no D182.
+    Deliver cancellation through the handle to the task that holds it.
 
 - **D145 — Virtual text and inlay hints**
   - Depends on: none
@@ -361,7 +341,7 @@ hold the analyses that support some items.
     current line's text to the request if reading the buffer costs too much.
 
 - **D067 — Language servers and semantic tokens**
-  - Depends on: D182, D087, D145, D220, D200, D115, D022
+  - Depends on: D087, D145, D220, D200, D115, D022
   - Description: No language client exists. The syntax highlighting work
     prepared for one: LSP language IDs, `Send` text snapshots, a highlight
     vocabulary that semantic token types and modifiers map onto, and a
@@ -640,15 +620,15 @@ Kakoune mode could use them too. The
     file's end, as view state does.
 
 - **D223 — Vim replays that follow focus**
-  - Depends on: D182
+  - Depends on: none
   - Description: `.`, counted inserts, and macros replay an editor recording
     through the Vim package, and a replay targets the editor that started it:
     a macro stops when focus leaves that editor, because the package cannot
     observe focus changes while the replaying command awaits. In Vim a
     replay continues in whichever editor a recorded key moves focus to, so a macro
     can split, switch windows, or jump to another file and continue there.
-    Do it when daily Vim use records a macro that crosses editors: once
-    listeners run during the replay (D182), follow focus changes in the
+    Do it when daily Vim use records a macro that crosses editors: listeners run during
+    the replay, so follow focus changes in the
     package and retarget the remaining keys, stopping when focus leaves
     editors altogether.
 

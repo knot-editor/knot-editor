@@ -313,7 +313,7 @@ duplicated tab with the opened document.
 `editLabel` turns a row's label into the shared `TextInput`, and `editNewItem`
 shows a temporary row at the top of a parent's children. Enter or focus loss
 commits, Escape dismisses, and a `validate` message shows under the field and
-blocks the commit. Validation is asked through the host's input pull loop, so a
+blocks the commit. Validation runs as a surface callback of the owning package, so a
 commit waits for the answer to the current text; focus loss while a message
 shows dismisses. An empty commit of a new item dismisses.
 
@@ -369,24 +369,22 @@ empty query and equal scores; no provider, scheduler, or event bus is added.
 The panel has a search icon and the query field, whose placeholder is the
 active tab's placeholder or else the picker's title, above inset, rounded rows. An extension
 picker with `onHighlight` or `onQuery` reports the highlighted item and the
-typed query through a pull loop in the caller's own turn, because package
-roots are serial and a notification could not run while the command awaits the
-picker:
+typed query by calling back into the package as tasks of its own while the command
+awaits the picker, which settles with the chosen item
+([scheduling](extension-host.md#runtime-and-scheduler-flow)):
 
 ```text
 showPicker({ onHighlight, onQuery })
-  beginPicker ──> highlighted(session, id) | queried(session, query, tab) ─┐
-  callback awaited                                                          │ repeat
-  nextPickerEvent(session, rows?) ──> highlighted | queried ────────────────┘
-                                  └─> selected | dismissed
+  followPicker ──> selected | dismissed
+  native ──> onHighlight(id) | onQuery(query, tab) ──> answer (rows)
 ```
 
 With `onQuery` the picker is created without rows and does no matching: each
-pull of a query is answered by the rows the next pull carries, which the
-picker shows in the order given with the supplied ranges, and a query is
-answered before the highlight it replaces. Rows apply only while the field
-and the active tab still hold the query and tab last delivered; otherwise they
-are dropped. Enter on
+query is passed as it changes, calls overlap, and only the answer to the
+latest applies. The picker shows its rows in the order given with the supplied
+ranges, and applies them only while the field and the active tab still hold
+the query and tab asked; otherwise they are dropped, as are answers still
+pending when the picker settles. Enter on
 rows that do not answer the field waits for the rows that do, freezing the
 field meanwhile, and then confirms the highlighted row; the window holds the
 keys typed meanwhile ([ordered delivery](commands.md#ordered-delivery)).
@@ -429,13 +427,11 @@ the caller's list answers the accepted text.
 
 Native code keeps only the latest unread highlight, so a slow callback skips
 intermediate items, and a settled picker wins over an unread highlight.
-An input with `onChange` follows its typed value through the same session:
-`beginInput` and `nextInputEvent` pull `changed(session, value)` until the
-input is accepted or dismissed, and each pull carries the message the
-callback returned for the previous value, which the input shows as a muted
-line under its field, with the completion list it may return. Feedback
-applies only while the field still holds the value last delivered to the
-caller; otherwise it is dropped and the next pull delivers the current value.
+An input with `onChange` follows its typed value the same way (`followInput`),
+one call at a time with later values coalesced: the message the callback
+returns shows as a muted line under the field, with the completion list it
+may return. Feedback applies only while the field still holds the value the
+call was made for; otherwise it is dropped and the current value is sent next.
 Tab accepts the highlighted completion by replacing the whole field with its
 value, which runs `onChange` again; Enter always submits the field text.
 An input with a `prompt` shows that fixed text before its field, outside its

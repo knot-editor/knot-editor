@@ -563,8 +563,8 @@ declare module "knot" {
     reset(key: SettingKey, scope?: SettingsScope): Promise<void>;
     /** Call `listener` with the key after every write or reset of it, in any
      * scope, including this caller's own. Call get for the contexts that
-     * matter. Listeners run serially with other listeners and stop with
-     * their lifecycle. */
+     * matter. Notifications reach one listener in order, and it stops with
+     * its lifecycle. */
     observe(key: SettingKey, listener: (key: SettingKey) => void | Promise<void>): Promise<Disposable>;
   }>;
   /** Which defaults fill the colors a theme leaves out. */
@@ -1095,8 +1095,8 @@ declare module "knot" {
      * When the platform drops events, the batch names `uri` itself, so rescan.
      * Entries the `files.hidden` setting names are never reported; ignored
      * entries are. Watching sees every change on disk, including Knot's own
-     * saves, and independently of open documents. Listeners run serially with
-     * other listeners and stop with their lifecycle or `dispose()`. Resolves
+     * saves, and independently of open documents. Notifications reach one
+     * listener in order, and it stops with its lifecycle or `dispose()`. Resolves
      * once the watch runs, so a read after it misses no later change.
      * @throws HostError with InvalidUri, ResourceNotFound when `uri` does not
      * exist, or ProviderFailure when the provider cannot watch. */
@@ -1384,7 +1384,7 @@ declare module "knot" {
      */
     utf16OffsetAtByte(offset: number): number;
   }
-  /** One committed edit batch, delivered as a serial listener callback. */
+  /** One committed edit batch, delivered to a listener in order. */
   export interface BufferChange {
     readonly buffer: Buffer;
     /** Revision used by the original batch. */
