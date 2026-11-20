@@ -4285,6 +4285,56 @@ fn park_two_invocations(
     (waiting, parked)
 }
 
+/// Holds the single worker in `blocker`'s turn until the returned gate is
+/// released, so tasks queued on other isolates wait without starting.
+fn block_the_worker(
+    pool: &RuntimePool,
+    blocker: ExtensionKey,
+) -> (Arc<TestGate>, RuntimeExecution) {
+    pool.load(blocker, IsolateConfig::default()).unwrap();
+    let gate = Arc::new(TestGate::default());
+    pool.capsule(blocker)
+        .unwrap()
+        .install_test_barrier(gate.clone());
+    let blocked = pool
+        .execute(blocker, "block-worker.js", "__knotTestBarrier()")
+        .unwrap();
+    {
+        let entered = gate.entered.lock().unwrap();
+        let (_entered, timeout) = gate
+            .ready
+            .wait_timeout_while(entered, Duration::from_secs(1), |entered| *entered == 0)
+            .unwrap();
+        assert!(!timeout.timed_out());
+    }
+    (gate, blocked)
+}
+
+#[test]
+fn queued_executions_that_never_started_report_unload_and_fatal_failure() {
+    let pool = RuntimePool::new(PoolConfig::single_worker());
+    let unloaded = key(1);
+    let terminated = key(2);
+    pool.load(unloaded, IsolateConfig::default()).unwrap();
+    pool.load(terminated, IsolateConfig::default()).unwrap();
+    let (gate, blocked) = block_the_worker(&pool, key(3));
+    let cancelled = pool.execute(unloaded, "queued-unload.js", "42").unwrap();
+    let failed = pool.execute(terminated, "queued-fatal.js", "42").unwrap();
+    pool.unload(unloaded).unwrap();
+    assert!(pool.termination_handle(terminated).unwrap().terminate());
+    gate.wait();
+    blocked.wait().unwrap();
+    assert_eq!(
+        pollster::block_on(cancelled).unwrap_err().kind(),
+        RuntimeErrorKind::Cancelled
+    );
+    assert_eq!(
+        pollster::block_on(failed).unwrap_err().kind(),
+        RuntimeErrorKind::Terminated
+    );
+    pool.shutdown();
+}
+
 #[test]
 fn awaited_outstanding_executions_report_shutdown_and_fatal_failure() {
     let pool = RuntimePool::new(PoolConfig::single_worker());
