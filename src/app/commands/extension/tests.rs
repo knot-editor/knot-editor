@@ -186,7 +186,7 @@ fn roots_are_fifo_and_keep_arguments_and_captured_buffer() {
 }
 
 #[test]
-fn routed_children_compose_and_reject_cycles() {
+fn routed_children_compose_and_reject_recursion() {
     let mut bridge = ExtensionCommandBridge::new();
     let first = key(1);
     let second = key(2);
@@ -282,6 +282,30 @@ fn routed_children_compose_and_reject_cycles() {
             outcome: CommandOutcome::Unavailable
         })
     ));
+    // Another registration of the first package runs inside the chain.
+    let reentry = request(
+        second,
+        9,
+        Some(child),
+        operation::<declared::invoke_command>(declared::InvokeArguments {
+            command: command("fixture.inner"),
+        }),
+    );
+    let (response, grandchild, mut reentry_reply) = routed(&mut bridge, &reentry);
+    assert!(response.is_none());
+    let grandchild = grandchild.unwrap();
+    assert!(
+        matches!(bridge.drain_events().next(), Some(ExtensionCommandEvent::DispatchExtension {
+        invocation, ..
+    }) if invocation.id == grandchild && invocation.extension == first.0)
+    );
+    bridge.complete(grandchild, CommandOutcome::Completed);
+    assert_eq!(
+        reentry_reply.try_recv().unwrap(),
+        Ok(CommandInvokeDispatch::Outcome {
+            outcome: CommandOutcome::Completed
+        })
+    );
     bridge.complete(child, CommandOutcome::Completed);
     assert_eq!(
         pending_reply.try_recv().unwrap(),

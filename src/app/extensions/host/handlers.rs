@@ -2821,11 +2821,6 @@ pub(crate) enum ProviderCallError {
         message = "a package calls its own providers directly, not through the registry"
     )]
     OwnProvider,
-    #[error(
-        code = "ProviderBusy",
-        message = "the provider's package is running a command that is waiting for this one"
-    )]
-    Busy,
     #[error(code = "ProviderFailure", message = "{message}")]
     Failure { message: String },
 }
@@ -2896,7 +2891,6 @@ pub(crate) async fn call_provider(
     arguments: CallProviderArguments,
 ) -> Result<String, ProviderCallError> {
     let caller = context.request.extension;
-    let request_invocation = context.request.invocation;
     let execution = context.foreground(move |host, _| {
         let provider = host
             .semantics
@@ -2904,15 +2898,6 @@ pub(crate) async fn call_provider(
             .ok_or(ProviderCallError::NotFound)?;
         if provider.extension == caller {
             return Err(ProviderCallError::OwnProvider);
-        }
-        // The provider's package runs one root at a time: while a command of
-        // its own waits on this call's command, the call could never start.
-        if let Some(invocation) = request_invocation
-            && host
-                .commands
-                .runs_handler_of(invocation, (provider.extension, provider.lifecycle))
-        {
-            return Err(ProviderCallError::Busy);
         }
         let key = ExtensionKey::new(provider.extension, provider.lifecycle);
         host.pool

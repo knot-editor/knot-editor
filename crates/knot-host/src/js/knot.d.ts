@@ -1298,7 +1298,7 @@ declare module "knot" {
     | "InvalidRange" | "InvalidEditBatch" | "RevisionConflict" | "ContributionSetNotFound"
     | "ViewNotFound" | "ViewIdInUse" | "InvalidViewId"
     | "ViewRegistrationNotFound" | "ContentKindMismatch" | "TreeItemNotFound"
-    | "ProviderRegistrationNotFound" | "ProviderNotFound" | "ProviderBusy"
+    | "ProviderRegistrationNotFound" | "ProviderNotFound"
     | "CommandNameInUse" | "CommandNotFound"
     | "InvalidUri" | "DocumentNotFound" | "OperationInProgress" | "PersistenceFailed" | "ResourceNotFound" | "ResourceWrongKind" | "ResourceAlreadyExists" | "InvalidUtf8" | "ProviderFailure" | "StorageUnavailable"
     | "CaptureNotFound" | "RecoveryUnavailable" | "SessionConflict"
@@ -2535,10 +2535,8 @@ declare module "knot" {
    * result, as `T` declares them; a consumer declares `T` locally. A call
    * rejects with HostError ProviderNotFound once the registration is disposed
    * (look the provider up again), ProviderFailure with the provider's message
-   * when it throws, UnsupportedOperation when the provider is the caller's
-   * own, and ProviderBusy when the provider's package is running a command
-   * that waits for the caller's (a command run from that package's picker or
-   * command, as from the command palette, which Go to File owns). */
+   * when it throws, and UnsupportedOperation when the provider is the
+   * caller's own. */
   export type ProviderHandle<T> = Readonly<T>;
   /**
    * Named providers: one package registers an object of methods under a name,
@@ -2654,8 +2652,8 @@ declare module "knot" {
     /**
      * Invoke a child of the current command; arguments default to null.
      * Inherits the originating window/buffer and resolves with execution status.
-     * Await children serially: only one unfinished child per parent; recursive
-     * handler ancestry and cross-lifecycle cycles back to ancestors are unavailable.
+     * Await children serially: only one unfinished child per parent; a handler
+     * already running in the command's own ancestry is unavailable.
      * @throws HostError with ContextUnavailable outside a command, or Cancelled
      * for transport cancellation; TypeError for non-JSON-compatible arguments.
      */

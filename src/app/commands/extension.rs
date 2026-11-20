@@ -471,6 +471,7 @@ impl ExtensionCommandBridge {
             InvocationTarget::Extension(target)
                 if (target.extension, target.lifecycle) == caller
         );
+        // A registration never runs again inside its own ancestry.
         let mut ancestor = Some(parent);
         while let Some(id) = ancestor {
             let node = self
@@ -479,12 +480,9 @@ impl ExtensionCommandBridge {
                 .expect("active ancestry is complete");
             if let (InvocationTarget::Extension(ancestor), InvocationTarget::Extension(child)) =
                 (node.target, target)
+                && ancestor == child
             {
-                let same_owner =
-                    (ancestor.extension, ancestor.lifecycle) == (child.extension, child.lifecycle);
-                if same_owner && (!same_runtime || ancestor.registration == child.registration) {
-                    return Err(CommandOutcome::Unavailable);
-                }
+                return Err(CommandOutcome::Unavailable);
             }
             ancestor = node.parent;
         }
@@ -579,28 +577,6 @@ impl ExtensionCommandBridge {
                     });
             }
         }
-    }
-
-    /// Whether `invocation` or one of its ancestors runs a handler of the
-    /// package `owner`, whose one root at a time is then busy waiting.
-    pub(crate) fn runs_handler_of(
-        &self,
-        invocation: CommandInvocationId,
-        owner: (ExtensionId, ExtensionLifecycleId),
-    ) -> bool {
-        let mut current = Some(invocation);
-        while let Some(id) = current {
-            let Some(node) = self.invocations.get(&id) else {
-                return false;
-            };
-            if matches!(node.target, InvocationTarget::Extension(handler)
-                if (handler.extension, handler.lifecycle) == owner)
-            {
-                return true;
-            }
-            current = node.parent;
-        }
-        false
     }
 
     fn root_for(&self, invocation: CommandInvocationId) -> CommandInvocationId {

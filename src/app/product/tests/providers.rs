@@ -22,7 +22,7 @@ await commands.register("provider.self", async () => {
 "#;
 
 // A command of the provider's package that runs a consumer's command, which
-// calls the provider back while the provider's package is still waiting.
+// calls the provider back while the provider's command is waiting.
 const PROVIDER_RUNS_CONSUMER: &str = r#"
 import { commands, providers } from "knot";
 await providers.register("sample.greet", { greet(name) { return `hello ${name}`; } });
@@ -118,7 +118,7 @@ fn a_call_runs_in_the_provider_package_with_the_callers_window(cx: &mut TestAppC
 }
 
 #[gpui::test]
-fn a_call_back_into_a_package_waiting_on_the_caller_is_rejected(cx: &mut TestAppContext) {
+fn a_call_back_into_a_package_waiting_on_the_caller_runs(cx: &mut TestAppContext) {
     let fixture = start_allowing_failures(
         &[
             ("@example/provider", &[], PROVIDER_RUNS_CONSUMER),
@@ -126,8 +126,7 @@ fn a_call_back_into_a_package_waiting_on_the_caller_is_rejected(cx: &mut TestApp
         ],
         cx,
     );
-    assert_eq!(fixture.clipboard_after("provider.run", cx), "ProviderBusy");
-    // Called on its own, the same command reaches the provider.
+    assert_eq!(fixture.clipboard_after("provider.run", cx), "called");
     assert_eq!(fixture.clipboard_after("consumer.direct", cx), "hello knot");
 }
 
