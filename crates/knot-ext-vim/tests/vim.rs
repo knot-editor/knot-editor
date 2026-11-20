@@ -727,15 +727,15 @@ fn keys_typed_past_the_key_hold_wait_for_the_key_still_running(cx: &mut TestAppC
     // `x` waits on its clipboard write past the hold, then `p` pastes what
     // it deleted, not what the clipboard held before.
     let held_past_the_hold = |first: &str, next: &str, cx: &mut TestAppContext| {
-        product.hold_clipboard_writes(cx);
+        product.hold_requests("writeClipboardText", cx);
         test_editor.press_unsettled(first, cx);
-        product.wait_for_held_clipboard_writes(1, cx);
+        product.wait_for_held_requests(1, cx);
         test_editor.outlast_key_hold(cx);
         test_editor.press_unsettled(next, cx);
         // The next key ran as far as it could before the write lands, so
         // only taking turns keeps it from running first.
         product.park_packages(cx);
-        product.release_clipboard_writes(cx);
+        product.release_held_requests(cx);
     };
     held_past_the_hold("x", "p", cx);
     test_editor.settle(cx);

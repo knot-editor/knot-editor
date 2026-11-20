@@ -188,7 +188,7 @@ fn storage_json_validation_and_failed_writes_cross_the_product_host(cx: &mut Tes
     "#,
     );
     let host = host(&data, cx);
-    host.update(cx, |host, _| host.hold_clipboard_writes = true);
+    host.update(cx, |host, _| host.hold_clipboard_writes());
     let completed = host.update(cx, |host, cx| {
         host.start_installed_extensions_with_completion(packages, cx)
             .unwrap()
@@ -199,12 +199,7 @@ fn storage_json_validation_and_failed_writes_cross_the_product_host(cx: &mut Tes
     let database = data.join("packages/@example/validation.sqlite3");
     let connection = rusqlite::Connection::open(&database).unwrap();
     connection.execute_batch("CREATE TRIGGER reject_write BEFORE INSERT ON records WHEN NEW.key = 'a' BEGIN SELECT RAISE(ABORT, 'injected storage failure'); END").unwrap();
-    host.update(cx, |host, cx| {
-        host.hold_clipboard_writes = false;
-        for request in std::mem::take(&mut host.deferred_view_requests) {
-            host.handle_request(request, cx);
-        }
-    });
+    host.update(cx, |host, cx| host.release_view_requests(cx));
     finish(completed, cx).unwrap();
     cx.read(|cx| {
         assert!(matches!(

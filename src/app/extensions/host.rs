@@ -703,8 +703,9 @@ pub(crate) struct ProductExtensionHost {
     command_targets: HashMap<CommandInvocationId, ProductCommandTarget>,
     view_command_handlers:
         HashMap<CommandInvocationId, (CommandTarget, knot_protocol::CommandName)>,
+    /// The operation whose requests a test holds until it releases them.
     #[cfg(any(test, feature = "test-support"))]
-    hold_clipboard_writes: bool,
+    held_operation: Option<&'static str>,
     #[cfg(any(test, feature = "test-support"))]
     deferred_view_requests: Vec<HostRequest>,
     semantics: ExtensionSemanticBridge,
@@ -786,7 +787,7 @@ impl ProductExtensionHost {
             command_targets: HashMap::new(),
             view_command_handlers: HashMap::new(),
             #[cfg(any(test, feature = "test-support"))]
-            hold_clipboard_writes: false,
+            held_operation: None,
             #[cfg(any(test, feature = "test-support"))]
             deferred_view_requests: Vec::new(),
             semantics,
@@ -1444,7 +1445,7 @@ impl ProductExtensionHost {
 
     fn handle_request(&mut self, request: HostRequest, cx: &mut Context<Self>) {
         #[cfg(any(test, feature = "test-support"))]
-        if self.hold_clipboard_writes && request.operation.descriptor.name == "writeClipboardText" {
+        if self.held_operation == Some(request.operation.descriptor.name) {
             self.deferred_view_requests.push(request);
             return;
         }
@@ -1465,9 +1466,15 @@ impl ProductExtensionHost {
         .detach();
     }
 
-    #[cfg(any(test, feature = "test-support"))]
+    #[cfg(test)]
     pub(crate) fn hold_clipboard_writes(&mut self) {
-        self.hold_clipboard_writes = true;
+        self.hold_requests("writeClipboardText");
+    }
+
+    /// Hold the requests of `operation` until [`Self::release_view_requests`].
+    #[cfg(any(test, feature = "test-support"))]
+    pub(crate) fn hold_requests(&mut self, operation: &'static str) {
+        self.held_operation = Some(operation);
     }
 
     #[cfg(any(test, feature = "test-support"))]
@@ -1477,7 +1484,7 @@ impl ProductExtensionHost {
 
     #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn release_view_requests(&mut self, cx: &mut Context<Self>) {
-        self.hold_clipboard_writes = false;
+        self.held_operation = None;
         for request in std::mem::take(&mut self.deferred_view_requests) {
             self.handle_request(request, cx);
         }

@@ -618,3 +618,42 @@ fn a_document_saved_under_a_new_name_is_selected_in_the_explorer(cx: &mut TestAp
     );
     wait_until(cx, |cx| tree.selected(cx).as_deref() == Some("renamed.rs"));
 }
+
+#[gpui::test]
+fn a_copy_made_while_a_cut_is_pasted_stays_to_paste_next(cx: &mut TestAppContext) {
+    let directory = fixture();
+    write(directory.path(), "app/assets/logo.svg", "logo");
+    let explorer = Explorer::start_windowed(&[&directory.path().join("app")], cx);
+    explorer.wait_for_labels(&["app", "assets", "docs", "src", "README.md"], cx);
+    let (product, window, tree) = (&explorer.product, &explorer.window, &explorer.tree);
+    let start = |row: &str, command: &str, cx: &mut TestAppContext| {
+        tree.gesture(row, "click", cx);
+        wait_until(cx, |cx| tree.selected(cx).as_deref() == Some(row));
+        tree.focus(cx);
+        window.start_command(command, cx)
+    };
+    assert_eq!(
+        start("src", "explorer.cut", cx).finish(cx),
+        CommandOutcome::Completed
+    );
+
+    // `assets` is copied while the cut's move waits.
+    product.hold_requests("renameFile", cx);
+    let paste = start("docs", "explorer.paste", cx);
+    product.wait_for_held_requests(1, cx);
+    assert_eq!(
+        start("assets", "explorer.copy", cx).finish(cx),
+        CommandOutcome::Completed
+    );
+    product.release_held_requests(cx);
+    assert_eq!(paste.finish(cx), CommandOutcome::Completed);
+    assert!(directory.path().join("app/docs/src/main.rs").is_file());
+
+    // The copy is still taken, so the next paste copies `assets`.
+    assert_eq!(
+        start("docs", "explorer.paste", cx).finish(cx),
+        CommandOutcome::Completed
+    );
+    assert!(directory.path().join("app/docs/assets/logo.svg").is_file());
+    assert!(directory.path().join("app/assets/logo.svg").is_file());
+}

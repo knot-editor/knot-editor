@@ -261,17 +261,17 @@ impl TestProduct {
         cx.read(crate::app::extensions::host::memory_report)
     }
 
-    /// Hold every package's clipboard writes until
-    /// [`Self::release_clipboard_writes`].
-    pub fn hold_clipboard_writes(&self, cx: &mut TestAppContext) {
+    /// Hold every package's requests of the host operation `operation`,
+    /// such as `writeClipboardText`, until [`Self::release_held_requests`].
+    pub fn hold_requests(&self, operation: &'static str, cx: &mut TestAppContext) {
         cx.update(|cx| {
             let host = crate::app::extensions::host::entity(cx).unwrap();
-            host.update(cx, |host, _| host.hold_clipboard_writes());
+            host.update(cx, |host, _| host.hold_requests(operation));
         });
     }
 
-    /// Wait until `count` clipboard writes are held.
-    pub fn wait_for_held_clipboard_writes(&self, count: usize, cx: &mut TestAppContext) {
+    /// Wait until `count` requests are held.
+    pub fn wait_for_held_requests(&self, count: usize, cx: &mut TestAppContext) {
         crate::test_support::wait_until(cx, |cx| {
             cx.read(|cx| {
                 crate::app::extensions::host::entity(cx)
@@ -289,8 +289,8 @@ impl TestProduct {
         super::park_packages(cx);
     }
 
-    /// Run the held clipboard writes and stop holding new ones.
-    pub fn release_clipboard_writes(&self, cx: &mut TestAppContext) {
+    /// Run the held requests and stop holding new ones.
+    pub fn release_held_requests(&self, cx: &mut TestAppContext) {
         cx.update(|cx| {
             let host = crate::app::extensions::host::entity(cx).unwrap();
             host.update(cx, |host, cx| host.release_view_requests(cx));
