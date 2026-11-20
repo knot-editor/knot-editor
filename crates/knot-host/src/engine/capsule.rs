@@ -284,7 +284,7 @@ impl RuntimeCapsule {
             Ok(specifier) => Arc::<str>::from(specifier),
             Err(error) => {
                 let _ = result.send(Err(error));
-                return TurnOutcome::Completed;
+                return TurnOutcome::idle();
             }
         };
         self.run_root_turn(
@@ -361,7 +361,7 @@ impl RuntimeCapsule {
             || matches!(&notification, ListenerNotification::Buffer(change) if change.buffer.value() > MAX_JS_INTEGER)
         {
             tracing::warn!(target: "knot::extensions", "listener identity cannot be represented exactly");
-            return TurnOutcome::Completed;
+            return TurnOutcome::idle();
         }
         if self.status.load(Ordering::Acquire) != ACTIVE {
             return fatal_or_completed(&self.status_error());
@@ -371,13 +371,13 @@ impl RuntimeCapsule {
             return TurnOutcome::Fatal(Failure::new("extension isolate is disposed"));
         };
         self.local_state.rejections.lock().unwrap().clear();
-        *self.local_state.current_root.lock().unwrap() = Some(root);
         let mut locker = data.isolate.lock();
         let scope = pin!(v8::HandleScope::new(&mut *locker));
         let mut scope = scope.init();
         let context = v8::Local::new(&scope, &data.context);
         let scope = &mut v8::ContextScope::new(&mut scope, context);
         v8::tc_scope!(let try_catch, scope);
+        enter_root_frame(try_catch, root);
         let evaluation = (|| {
             let function = self.local_state.callback(try_catch, callback)?;
             let subscription = v8::Number::new(try_catch, subscription as f64);
@@ -412,7 +412,7 @@ impl RuntimeCapsule {
         })();
         let Some(value) = evaluation else {
             let error = self.execution_error(try_catch, source);
-            *self.local_state.current_root.lock().unwrap() = None;
+            leave_frame(try_catch);
             if !error.is_fatal() {
                 self.report_failure(label, &error);
                 try_catch.reset();
@@ -428,15 +428,17 @@ impl RuntimeCapsule {
             resolver.get_promise(try_catch)
         };
         promise.mark_as_handled();
-        *self.local_state.active.lock().unwrap() = Some(ActiveExecution {
+        self.local_state.active.lock().unwrap().insert(
             root,
-            promise: v8::Global::new(try_catch, promise),
-            source: source.into(),
-            completion: ActiveCompletion::Detached(label),
-        });
+            ActiveExecution::new(
+                v8::Global::new(try_catch, promise),
+                source.into(),
+                ActiveCompletion::Detached(label),
+            ),
+        );
         try_catch.perform_microtask_checkpoint();
-        *self.local_state.current_root.lock().unwrap() = None;
-        self.inspect_active(try_catch, root)
+        leave_frame(try_catch);
+        self.settle_turn(try_catch, Some(root))
     }
 
     fn start_command_turn(
@@ -457,7 +459,7 @@ impl RuntimeCapsule {
             let _ = result.send(Ok(CommandOutcome::HandlerFailure {
                 message: "native command identity cannot be represented exactly".into(),
             }));
-            return TurnOutcome::Completed;
+            return TurnOutcome::idle();
         }
         if self
             .local_state
@@ -467,7 +469,7 @@ impl RuntimeCapsule {
             .remove(&invocation.id)
         {
             let _ = result.send(Ok(CommandOutcome::Cancelled));
-            return TurnOutcome::Completed;
+            return TurnOutcome::idle();
         }
         if self.status.load(Ordering::Acquire) != ACTIVE {
             let error = self.status_error();
@@ -481,13 +483,13 @@ impl RuntimeCapsule {
             return TurnOutcome::Fatal(Failure::new(error.to_string()));
         };
         self.local_state.rejections.lock().unwrap().clear();
-        *self.local_state.current_root.lock().unwrap() = Some(root);
         let mut locker = data.isolate.lock();
         let scope = pin!(v8::HandleScope::new(&mut *locker));
         let mut scope = scope.init();
         let context = v8::Local::new(&scope, &data.context);
         let scope = &mut v8::ContextScope::new(&mut scope, context);
         v8::tc_scope!(let try_catch, scope);
+        enter_root_frame(try_catch, root);
         let evaluated = (|| {
             let function = self
                 .local_state
@@ -519,7 +521,7 @@ impl RuntimeCapsule {
         })();
         let Some(value) = evaluated else {
             let error = self.execution_error(try_catch, "knot:command");
-            *self.local_state.current_root.lock().unwrap() = None;
+            leave_frame(try_catch);
             let _ = result.send(Err(error.clone()));
             if !error.is_fatal() {
                 try_catch.reset();
@@ -543,20 +545,25 @@ impl RuntimeCapsule {
         let cancelled = {
             // Cancellation either sees the published command or is consumed here.
             let mut cancelled = self.local_state.cancelled_commands.lock().unwrap();
-            *self.local_state.active.lock().unwrap() = Some(ActiveExecution {
-                root,
-                promise: v8::Global::new(try_catch, promise),
-                source: "knot:command".into(),
-                completion: ActiveCompletion::Command(result),
-            });
+            let mut execution = ActiveExecution::new(
+                v8::Global::new(try_catch, promise),
+                "knot:command".into(),
+                ActiveCompletion::Command(result),
+            );
+            execution.command = Some(invocation.id);
+            self.local_state
+                .active
+                .lock()
+                .unwrap()
+                .insert(root, execution);
             cancelled.remove(&invocation.id)
         };
         if cancelled {
-            self.cancel_command_in_scope(try_catch, root, invocation.id);
+            self.cancel_command_in_scope(try_catch, invocation.id);
         }
         try_catch.perform_microtask_checkpoint();
-        *self.local_state.current_root.lock().unwrap() = None;
-        self.inspect_active(try_catch, root)
+        leave_frame(try_catch);
+        self.settle_turn(try_catch, Some(root))
     }
 
     fn start_provider_turn(&self, root: RootId, call: ProviderCall) -> TurnOutcome {
@@ -572,14 +579,14 @@ impl RuntimeCapsule {
                 RuntimeErrorKind::Engine,
                 "native provider coordinate cannot be represented exactly",
             ));
-            return TurnOutcome::Completed;
+            return TurnOutcome::idle();
         }
         if call.cancelled() {
             call.complete_with_error(RuntimeError::fatal(
                 RuntimeErrorKind::Cancelled,
                 "semantic provider request was dropped",
             ));
-            return TurnOutcome::Completed;
+            return TurnOutcome::idle();
         }
         if self.status.load(Ordering::Acquire) != ACTIVE {
             let error = self.status_error();
@@ -593,13 +600,13 @@ impl RuntimeCapsule {
             return TurnOutcome::Fatal(Failure::new(error.to_string()));
         };
         self.local_state.rejections.lock().unwrap().clear();
-        *self.local_state.current_root.lock().unwrap() = Some(root);
         let mut locker = data.isolate.lock();
         let scope = pin!(v8::HandleScope::new(&mut *locker));
         let mut scope = scope.init();
         let context = v8::Local::new(&scope, &data.context);
         let scope = &mut v8::ContextScope::new(&mut scope, context);
         v8::tc_scope!(let try_catch, scope);
+        enter_root_frame(try_catch, root);
         let (source, evaluated) = match &call {
             ProviderCall::Tree { request, .. } => {
                 let source = "knot:tree-provider";
@@ -655,7 +662,7 @@ impl RuntimeCapsule {
         };
         let Some(value) = evaluated else {
             let error = self.execution_error(try_catch, source);
-            *self.local_state.current_root.lock().unwrap() = None;
+            leave_frame(try_catch);
             call.complete_with_error(error.clone());
             if !error.is_fatal() {
                 try_catch.reset();
@@ -671,15 +678,17 @@ impl RuntimeCapsule {
             resolver.get_promise(try_catch)
         };
         promise.mark_as_handled();
-        *self.local_state.active.lock().unwrap() = Some(ActiveExecution {
+        self.local_state.active.lock().unwrap().insert(
             root,
-            promise: v8::Global::new(try_catch, promise),
-            source: source.into(),
-            completion: call.into_active_completion(),
-        });
+            ActiveExecution::new(
+                v8::Global::new(try_catch, promise),
+                source.into(),
+                call.into_active_completion(),
+            ),
+        );
         try_catch.perform_microtask_checkpoint();
-        *self.local_state.current_root.lock().unwrap() = None;
-        self.inspect_active(try_catch, root)
+        leave_frame(try_catch);
+        self.settle_turn(try_catch, Some(root))
     }
 
     fn cancel_provider_turn(&self, root: RootId) -> TurnOutcome {
@@ -693,14 +702,10 @@ impl RuntimeCapsule {
         let context = v8::Local::new(&scope, &data.context);
         let scope = &mut v8::ContextScope::new(&mut scope, context);
         self.reject_pending_for_root(scope, root);
-        let active = self.local_state.active.lock().unwrap().take();
+        let active = self.local_state.active.lock().unwrap().remove(&root);
         let Some(active) = active else {
-            return TurnOutcome::Completed;
+            return TurnOutcome::idle();
         };
-        if active.root != root {
-            *self.local_state.active.lock().unwrap() = Some(active);
-            return TurnOutcome::Fatal(Failure::new("extension root execution identity changed"));
-        }
         let error = RuntimeError::fatal(
             RuntimeErrorKind::Cancelled,
             "semantic provider request was dropped",
@@ -717,57 +722,64 @@ impl RuntimeCapsule {
                 let _ = result.send(Err(error));
             }
             completion => {
-                *self.local_state.active.lock().unwrap() = Some(ActiveExecution {
-                    completion,
-                    ..active
-                });
+                self.local_state.active.lock().unwrap().insert(
+                    root,
+                    ActiveExecution {
+                        completion,
+                        ..active
+                    },
+                );
                 return TurnOutcome::Fatal(Failure::new(
                     "provider cancellation addressed a non-provider root",
                 ));
             }
         }
-        TurnOutcome::Completed
+        TurnOutcome::Completed {
+            settled: vec![root],
+        }
     }
 
-    fn cancel_command_turn(&self, root: RootId, invocation: CommandInvocationId) -> TurnOutcome {
-        self.local_state
-            .cancelled_commands
-            .lock()
-            .unwrap()
-            .remove(&invocation);
+    fn cancel_command_turn(&self, invocation: CommandInvocationId) -> TurnOutcome {
         let data = self.data.lock().unwrap();
         let Some(data) = data.as_ref() else {
             return TurnOutcome::Fatal(Failure::new("extension isolate is disposed"));
         };
-        *self.local_state.current_root.lock().unwrap() = Some(root);
         let mut locker = data.isolate.lock();
         let scope = pin!(v8::HandleScope::new(&mut *locker));
         let mut scope = scope.init();
         let context = v8::Local::new(&scope, &data.context);
         let scope = &mut v8::ContextScope::new(&mut scope, context);
-        self.cancel_command_in_scope(scope, root, invocation);
-        *self.local_state.current_root.lock().unwrap() = None;
-        self.inspect_active(scope, root)
+        if self.cancel_command_in_scope(scope, invocation) {
+            self.local_state
+                .cancelled_commands
+                .lock()
+                .unwrap()
+                .remove(&invocation);
+        }
+        self.settle_turn(scope, None)
     }
 
+    /// Aborts a command's controller and rejects its pending contextual
+    /// requests; false when no such command is running in the isolate.
     fn cancel_command_in_scope(
         &self,
         scope: &mut v8::PinScope<'_, '_>,
-        root: RootId,
         invocation: CommandInvocationId,
-    ) {
-        if let Some(function) = self
+    ) -> bool {
+        let found = self
             .local_state
             .callback(scope, RuntimeCallback::CancelCommand)
-        {
-            function.call(
-                scope,
-                v8::undefined(scope).into(),
-                &[v8::Number::new(scope, invocation.value() as f64).into()],
-            );
-        }
-        self.reject_pending_for_command(scope, root);
+            .and_then(|function| {
+                function.call(
+                    scope,
+                    v8::undefined(scope).into(),
+                    &[v8::Number::new(scope, invocation.value() as f64).into()],
+                )
+            })
+            .is_some_and(|found| found.is_true());
+        self.reject_pending_for_command(scope, invocation);
         scope.perform_microtask_checkpoint();
+        found
     }
 
     fn run_root_turn(
@@ -789,13 +801,13 @@ impl RuntimeCapsule {
             return TurnOutcome::Fatal(Failure::new(error.to_string()));
         };
         self.local_state.rejections.lock().unwrap().clear();
-        *self.local_state.current_root.lock().unwrap() = Some(root);
         let mut locker = data.isolate.lock();
         let scope = pin!(v8::HandleScope::new(&mut *locker));
         let mut scope = scope.init();
         let context = v8::Local::new(&scope, &data.context);
         let scope = &mut v8::ContextScope::new(&mut scope, context);
         v8::tc_scope!(let try_catch, scope);
+        enter_root_frame(try_catch, root);
         let evaluated = match evaluation {
             #[cfg(any(test, feature = "test-support"))]
             RootEvaluation::Script {
@@ -890,7 +902,7 @@ impl RuntimeCapsule {
         let value = match evaluated {
             Ok(value) => value,
             Err(error) => {
-                *self.local_state.current_root.lock().unwrap() = None;
+                leave_frame(try_catch);
                 let _ = result.send(Err(error.clone()));
                 self.reject_pending_for_root(try_catch, root);
                 return fatal_or_completed(&error);
@@ -904,23 +916,24 @@ impl RuntimeCapsule {
             resolver.get_promise(try_catch)
         };
         promise.mark_as_handled();
-        *self.local_state.active.lock().unwrap() = Some(ActiveExecution {
+        self.local_state.active.lock().unwrap().insert(
             root,
-            promise: v8::Global::new(try_catch, promise),
-            source,
-            completion: ActiveCompletion::Report(result),
-        });
+            ActiveExecution::new(
+                v8::Global::new(try_catch, promise),
+                source,
+                ActiveCompletion::Report(result),
+            ),
+        );
         try_catch.perform_microtask_checkpoint();
-        *self.local_state.current_root.lock().unwrap() = None;
-        self.inspect_active(try_catch, root)
+        leave_frame(try_catch);
+        self.settle_turn(try_catch, Some(root))
     }
 
-    fn resume_response_turn(&self, root: RootId, response: HostResponse) -> TurnOutcome {
+    fn resume_response_turn(&self, root: Option<RootId>, response: HostResponse) -> TurnOutcome {
         let data = self.data.lock().unwrap();
         let Some(data) = data.as_ref() else {
             return TurnOutcome::Fatal(Failure::new("extension isolate is disposed"));
         };
-        *self.local_state.current_root.lock().unwrap() = Some(root);
         let mut locker = data.isolate.lock();
         let scope = pin!(v8::HandleScope::new(&mut *locker));
         let mut scope = scope.init();
@@ -933,8 +946,7 @@ impl RuntimeCapsule {
                 .lock()
                 .unwrap()
                 .push(response);
-            *self.local_state.current_root.lock().unwrap() = None;
-            return TurnOutcome::AwaitingHostWork;
+            return TurnOutcome::idle();
         }
         let pending = self
             .local_state
@@ -943,7 +955,6 @@ impl RuntimeCapsule {
             .unwrap()
             .remove(&response.id);
         let Some(pending) = pending else {
-            *self.local_state.current_root.lock().unwrap() = None;
             return TurnOutcome::Fatal(Failure::new("host response lost its pending request"));
         };
         if batch_id == Some(response.id) {
@@ -958,13 +969,14 @@ impl RuntimeCapsule {
                 _ => Some("invalid keybinding batch response".into()),
             };
             if let Some(message) = error {
-                let source = self
-                    .local_state
-                    .active
-                    .lock()
-                    .unwrap()
-                    .as_ref()
-                    .map(|active| active.source.clone());
+                let source = pending.root.and_then(|root| {
+                    self.local_state
+                        .active
+                        .lock()
+                        .unwrap()
+                        .get(&root)
+                        .map(|active| active.source.clone())
+                });
                 let error = RuntimeError {
                     kind: RuntimeErrorKind::Exception,
                     message: message.into(),
@@ -979,8 +991,20 @@ impl RuntimeCapsule {
                     .lock()
                     .unwrap()
                     .clear();
-                self.fail_active_with_command_failure(error.clone());
-                return fatal_or_completed(&error);
+                // The invocation whose turn queued the batch fails with it.
+                let failed = pending.root.filter(|root| {
+                    let execution = self.local_state.active.lock().unwrap().remove(root);
+                    execution.is_some_and(|execution| {
+                        self.fail_execution(execution, error.clone(), true);
+                        true
+                    })
+                });
+                if failed.is_none() {
+                    self.report_failure("keybinding batch", &error);
+                }
+                return TurnOutcome::Completed {
+                    settled: failed.into_iter().collect(),
+                };
             }
             let deferred =
                 std::mem::take(&mut *self.local_state.deferred_responses.lock().unwrap());
@@ -996,7 +1020,7 @@ impl RuntimeCapsule {
                         RuntimeErrorKind::Engine,
                         "deferred host response lost its pending request",
                     );
-                    self.fail_active(error.clone());
+                    self.fail_all_active(error.clone());
                     return fatal_or_completed(&error);
                 };
                 Self::settle_host_response(scope, pending, response);
@@ -1005,8 +1029,7 @@ impl RuntimeCapsule {
             Self::settle_host_response(scope, pending, response);
         }
         scope.perform_microtask_checkpoint();
-        *self.local_state.current_root.lock().unwrap() = None;
-        self.inspect_active(scope, root)
+        self.settle_turn(scope, root)
     }
 
     fn settle_host_response(
@@ -1038,7 +1061,7 @@ impl RuntimeCapsule {
         }
     }
 
-    fn finish_termination_turn(&self, root: RootId) -> TurnOutcome {
+    fn finish_termination_turn(&self) -> TurnOutcome {
         let data = self.data.lock().unwrap();
         let Some(data) = data.as_ref() else {
             return TurnOutcome::Fatal(Failure::new("extension isolate is disposed"));
@@ -1048,15 +1071,40 @@ impl RuntimeCapsule {
         let mut scope = scope.init();
         let context = v8::Local::new(&scope, &data.context);
         let scope = &mut v8::ContextScope::new(&mut scope, context);
-        self.inspect_active(scope, root)
+        self.settle_turn(scope, None)
     }
 
-    fn inspect_active(&self, scope: &mut v8::PinScope<'_, '_>, root: RootId) -> TurnOutcome {
+    /// Ends a turn: reports unhandled rejections, queues pending keybinding
+    /// changes, and settles every invocation whose promise has settled. An
+    /// invocation completes when its promise does; requests it left in flight
+    /// do not keep it alive.
+    fn settle_turn(&self, scope: &mut v8::PinScope<'_, '_>, root: Option<RootId>) -> TurnOutcome {
         if self.status.load(Ordering::Acquire) != ACTIVE {
             let error = self.status_error();
-            self.reject_pending_for_root(scope, root);
-            self.fail_active(error.clone());
+            if let Some(root) = root {
+                self.reject_pending_for_root(scope, root);
+            }
+            self.fail_all_active(error.clone());
             return TurnOutcome::Fatal(Failure::new(error.to_string()));
+        }
+        let source = root
+            .and_then(|root| {
+                self.local_state
+                    .active
+                    .lock()
+                    .unwrap()
+                    .get(&root)
+                    .map(|active| active.source.clone())
+            })
+            .unwrap_or_else(|| "knot:turn".into());
+        if let Some(rejection) = self.take_unhandled_rejection(&source) {
+            let mut active = self.local_state.active.lock().unwrap();
+            if let Some(execution) = root.and_then(|root| active.get_mut(&root)) {
+                execution.rejection.get_or_insert(rejection);
+            } else {
+                drop(active);
+                self.report_failure("unhandled rejection", &rejection);
+            }
         }
         if self
             .local_state
@@ -1065,155 +1113,153 @@ impl RuntimeCapsule {
             .unwrap()
             .is_some()
         {
-            return TurnOutcome::AwaitingHostWork;
+            return TurnOutcome::idle();
         }
         match self.flush_keybinding_mutations(root) {
-            Ok(true) => return TurnOutcome::AwaitingHostWork,
+            Ok(true) => return TurnOutcome::idle(),
             Ok(false) => {}
             Err(error) => {
-                self.fail_active(error.clone());
+                self.fail_all_active(error.clone());
                 return fatal_or_completed(&error);
             }
         }
-        let mut active = self.local_state.active.lock().unwrap();
-        let Some(execution) = active.as_mut() else {
-            return TurnOutcome::Fatal(Failure::new("extension root execution is missing"));
-        };
-        if execution.root != root {
-            return TurnOutcome::Fatal(Failure::new("extension root execution identity changed"));
-        }
-        let promise = v8::Local::new(scope, &execution.promise);
-        let pending = self
+        let awaiting: HashSet<RootId> = self
             .local_state
             .pending
             .lock()
             .unwrap()
             .values()
-            .any(|pending| pending.root == root);
-        match promise.state() {
-            v8::PromiseState::Pending => TurnOutcome::AwaitingHostWork,
-            v8::PromiseState::Fulfilled if pending => TurnOutcome::AwaitingHostWork,
-            v8::PromiseState::Fulfilled => {
-                let value = promise.result(scope);
-                let execution = active.take().expect("active execution was inspected");
-                let rejection = self.take_unhandled_rejection(&execution.source);
-                match execution.completion {
-                    ActiveCompletion::Report(sender) => {
-                        let text = value.to_rust_string_lossy(scope);
-                        let result = rejection.map_or_else(
-                            || {
-                                Ok(ExecutionReport {
-                                    value: text.into(),
-                                    worker: std::thread::current().id(),
-                                })
-                            },
-                            Err,
-                        );
-                        let _ = sender.send(result);
+            .filter_map(|pending| pending.root)
+            .collect();
+        let finished: Vec<(RootId, ActiveExecution)> = {
+            let mut active = self.local_state.active.lock().unwrap();
+            let roots: Vec<RootId> = active
+                .iter()
+                .filter(|(root, execution)| {
+                    match v8::Local::new(scope, &execution.promise).state() {
+                        v8::PromiseState::Pending => false,
+                        // A request the invocation left in flight still keeps
+                        // it alive, so its effect lands before it completes.
+                        v8::PromiseState::Fulfilled => !awaiting.contains(root),
+                        v8::PromiseState::Rejected => true,
                     }
-                    ActiveCompletion::Command(sender) => {
-                        let result =
-                            rejection.map_or_else(|| command_outcome_from_v8(scope, value), Err);
-                        let _ = sender.send(result);
-                    }
-                    ActiveCompletion::Tree {
-                        request,
-                        result,
-                        completed,
-                    } => {
-                        let response = match rejection {
-                            None => tree_response_from_v8(scope, request, value),
-                            Some(error) => TreeChildrenResponse {
-                                registration: request.registration,
-                                window: request.window.clone(),
-                                view: request.view,
-                                parent_id: request.parent_id.clone(),
-                                generation: request.generation,
-                                result: Err(TreeProviderError {
-                                    message: error.to_string(),
-                                }),
-                            },
-                        };
-                        completed.store(true, Ordering::Release);
-                        let _ = result.send(Ok(response));
-                    }
-                    ActiveCompletion::Call { result, completed } => {
-                        let response = match rejection {
-                            None => provider_call_response_from_v8(scope, value),
-                            Some(error) => Err(error.to_string()),
-                        };
-                        completed.store(true, Ordering::Release);
-                        let _ = result.send(Ok(response));
-                    }
-                    ActiveCompletion::Detached(label) => {
-                        if let Some(error) = rejection {
-                            self.report_failure(label, &error);
-                        }
-                    }
-                }
-                TurnOutcome::Completed
-            }
-            v8::PromiseState::Rejected => {
-                let value = promise.result(scope);
-                let message = v8::Exception::create_message(scope, value);
-                let error = RuntimeError {
-                    kind: RuntimeErrorKind::Rejection,
-                    message: message.get(scope).to_rust_string_lossy(scope).into(),
-                    source: message
-                        .get_script_resource_name(scope)
-                        .filter(|value| !value.is_null_or_undefined())
-                        .and_then(|value| value.to_string(scope))
-                        .map(|value| value.to_rust_string_lossy(scope).into())
-                        .or_else(|| Some(Arc::clone(&execution.source))),
-                    line: message
-                        .get_line_number(scope)
-                        .and_then(|line| u32::try_from(line).ok()),
-                    column: one_based_coordinate(message.get_start_column()),
-                    stack: rejection_stack(scope, value),
-                };
-                let execution = active.take().expect("active execution was inspected");
-                match execution.completion {
-                    ActiveCompletion::Report(sender) => {
-                        let _ = sender.send(Err(error));
-                    }
-                    ActiveCompletion::Command(sender) => {
-                        let _ = sender.send(Ok(CommandOutcome::HandlerFailure {
-                            message: error.to_string(),
-                        }));
-                    }
-                    ActiveCompletion::Tree {
-                        request,
-                        result,
-                        completed,
-                    } => {
-                        completed.store(true, Ordering::Release);
-                        let _ = result.send(Ok(TreeChildrenResponse {
-                            registration: request.registration,
-                            window: request.window.clone(),
-                            view: request.view,
-                            parent_id: request.parent_id.clone(),
-                            generation: request.generation,
-                            result: Err(TreeProviderError {
-                                message: error.to_string(),
-                            }),
-                        }));
-                    }
-                    ActiveCompletion::Call { result, completed } => {
-                        completed.store(true, Ordering::Release);
-                        let _ = result.send(Ok(Err(error.to_string())));
-                    }
-                    ActiveCompletion::Detached(label) => {
-                        self.report_failure(label, &error);
-                    }
-                }
-                drop(active);
+                })
+                .map(|(root, _)| *root)
+                .collect();
+            roots
+                .into_iter()
+                .filter_map(|root| active.remove(&root).map(|execution| (root, execution)))
+                .collect()
+        };
+        let mut settled = Vec::with_capacity(finished.len());
+        for (root, execution) in finished {
+            let rejected =
+                v8::Local::new(scope, &execution.promise).state() == v8::PromiseState::Rejected;
+            self.complete_execution(scope, execution);
+            if rejected {
                 self.reject_pending_for_root(scope, root);
-                TurnOutcome::Completed
+            }
+            settled.push(root);
+        }
+        TurnOutcome::Completed { settled }
+    }
+
+    /// Delivers the result of an invocation whose promise has settled.
+    fn complete_execution(&self, scope: &mut v8::PinScope<'_, '_>, execution: ActiveExecution) {
+        let promise = v8::Local::new(scope, &execution.promise);
+        let value = promise.result(scope);
+        if promise.state() == v8::PromiseState::Rejected {
+            let message = v8::Exception::create_message(scope, value);
+            let error = RuntimeError {
+                kind: RuntimeErrorKind::Rejection,
+                message: message.get(scope).to_rust_string_lossy(scope).into(),
+                source: message
+                    .get_script_resource_name(scope)
+                    .filter(|value| !value.is_null_or_undefined())
+                    .and_then(|value| value.to_string(scope))
+                    .map(|value| value.to_rust_string_lossy(scope).into())
+                    .or_else(|| Some(Arc::clone(&execution.source))),
+                line: message
+                    .get_line_number(scope)
+                    .and_then(|line| u32::try_from(line).ok()),
+                column: one_based_coordinate(message.get_start_column()),
+                stack: rejection_stack(scope, value),
+            };
+            match execution.completion {
+                ActiveCompletion::Report(sender) => {
+                    let _ = sender.send(Err(error));
+                }
+                ActiveCompletion::Command(sender) => {
+                    let _ = sender.send(Ok(CommandOutcome::HandlerFailure {
+                        message: error.to_string(),
+                    }));
+                }
+                ActiveCompletion::Tree {
+                    request,
+                    result,
+                    completed,
+                } => {
+                    completed.store(true, Ordering::Release);
+                    let _ = result.send(Ok(tree_failure(&request, &error)));
+                }
+                ActiveCompletion::Call { result, completed } => {
+                    completed.store(true, Ordering::Release);
+                    let _ = result.send(Ok(Err(error.to_string())));
+                }
+                ActiveCompletion::Detached(label) => {
+                    self.report_failure(label, &error);
+                }
+            }
+            return;
+        }
+        let rejection = execution.rejection;
+        match execution.completion {
+            ActiveCompletion::Report(sender) => {
+                let text = value.to_rust_string_lossy(scope);
+                let result = rejection.map_or_else(
+                    || {
+                        Ok(ExecutionReport {
+                            value: text.into(),
+                            worker: std::thread::current().id(),
+                        })
+                    },
+                    Err,
+                );
+                let _ = sender.send(result);
+            }
+            ActiveCompletion::Command(sender) => {
+                let result = rejection.map_or_else(|| command_outcome_from_v8(scope, value), Err);
+                let _ = sender.send(result);
+            }
+            ActiveCompletion::Tree {
+                request,
+                result,
+                completed,
+            } => {
+                let response = match rejection {
+                    None => tree_response_from_v8(scope, request, value),
+                    Some(error) => tree_failure(&request, &error),
+                };
+                completed.store(true, Ordering::Release);
+                let _ = result.send(Ok(response));
+            }
+            ActiveCompletion::Call { result, completed } => {
+                let response = match rejection {
+                    None => provider_call_response_from_v8(scope, value),
+                    Some(error) => Err(error.to_string()),
+                };
+                completed.store(true, Ordering::Release);
+                let _ = result.send(Ok(response));
+            }
+            ActiveCompletion::Detached(label) => {
+                if let Some(error) = rejection {
+                    self.report_failure(label, &error);
+                }
             }
         }
     }
 
-    fn flush_keybinding_mutations(&self, root: RootId) -> Result<bool, RuntimeError> {
+    fn flush_keybinding_mutations(&self, root: Option<RootId>) -> Result<bool, RuntimeError> {
         let mutations = std::mem::take(&mut *self.local_state.keybinding_mutations.lock().unwrap());
         if mutations.is_empty() {
             return Ok(false);
@@ -1272,7 +1318,7 @@ impl RuntimeCapsule {
             let mut requests = self.local_state.pending.lock().unwrap();
             let ids: Vec<_> = requests
                 .iter()
-                .filter_map(|(id, pending)| (pending.root == root).then_some(*id))
+                .filter_map(|(id, pending)| (pending.root == Some(root)).then_some(*id))
                 .collect();
             ids.into_iter()
                 .filter_map(|id| requests.remove(&id))
@@ -1289,14 +1335,16 @@ impl RuntimeCapsule {
         scope.perform_microtask_checkpoint();
     }
 
-    fn reject_pending_for_command(&self, scope: &mut v8::PinScope<'_, '_>, root: RootId) {
+    fn reject_pending_for_command(
+        &self,
+        scope: &mut v8::PinScope<'_, '_>,
+        invocation: CommandInvocationId,
+    ) {
         let pending = {
             let mut requests = self.local_state.pending.lock().unwrap();
             let ids: Vec<_> = requests
                 .iter()
-                .filter_map(|(id, pending)| {
-                    (pending.root == root && pending.invocation.is_some()).then_some(*id)
-                })
+                .filter_map(|(id, pending)| (pending.invocation == Some(invocation)).then_some(*id))
                 .collect();
             ids.into_iter()
                 .filter_map(|id| {
@@ -1304,7 +1352,7 @@ impl RuntimeCapsule {
                         .get(&id)
                         .is_some_and(|pending| pending.response_queued)
                     {
-                        // Keep an admitted response attached to this root until its queued turn consumes it.
+                        // Keep an admitted response attached until its queued turn consumes it.
                         requests
                             .get_mut(&id)
                             .and_then(|pending| pending.resolver.take())
@@ -1350,42 +1398,11 @@ impl RuntimeCapsule {
         })
     }
 
-    fn fail_active(&self, error: RuntimeError) {
-        self.fail_active_with_error(error, false);
-    }
-
-    fn fail_active_with_command_failure(&self, error: RuntimeError) {
-        self.fail_active_with_error(error, true);
-    }
-
-    fn fail_active_with_error(&self, error: RuntimeError, command_failure: bool) {
-        if let Some(active) = self.local_state.active.lock().unwrap().take() {
-            match active.completion {
-                ActiveCompletion::Report(result) => {
-                    let _ = result.send(Err(error));
-                }
-                ActiveCompletion::Command(result) => {
-                    let outcome = if command_failure {
-                        Ok(CommandOutcome::HandlerFailure {
-                            message: error.to_string(),
-                        })
-                    } else {
-                        Err(error)
-                    };
-                    let _ = result.send(outcome);
-                }
-                ActiveCompletion::Tree {
-                    result, completed, ..
-                } => {
-                    completed.store(true, Ordering::Release);
-                    let _ = result.send(Err(error));
-                }
-                ActiveCompletion::Call { result, completed } => {
-                    completed.store(true, Ordering::Release);
-                    let _ = result.send(Err(error));
-                }
-                ActiveCompletion::Detached(_) => {}
-            }
+    /// Fails every unsettled invocation and forgets all in-flight host work.
+    fn fail_all_active(&self, error: RuntimeError) {
+        let executions: Vec<_> = self.local_state.active.lock().unwrap().drain().collect();
+        for (_, execution) in executions {
+            self.fail_execution(execution, error.clone(), false);
         }
         self.local_state.pending.lock().unwrap().clear();
         self.local_state
@@ -1395,7 +1412,42 @@ impl RuntimeCapsule {
             .clear();
         *self.local_state.keybinding_batch_pending.lock().unwrap() = None;
         self.local_state.deferred_responses.lock().unwrap().clear();
-        *self.local_state.current_root.lock().unwrap() = None;
+    }
+
+    /// Delivers `error` as the result of one invocation; a command reports it
+    /// as its own handler failure when `command_failure` is set.
+    fn fail_execution(
+        &self,
+        execution: ActiveExecution,
+        error: RuntimeError,
+        command_failure: bool,
+    ) {
+        match execution.completion {
+            ActiveCompletion::Report(result) => {
+                let _ = result.send(Err(error));
+            }
+            ActiveCompletion::Command(result) => {
+                let outcome = if command_failure {
+                    Ok(CommandOutcome::HandlerFailure {
+                        message: error.to_string(),
+                    })
+                } else {
+                    Err(error)
+                };
+                let _ = result.send(outcome);
+            }
+            ActiveCompletion::Tree {
+                result, completed, ..
+            } => {
+                completed.store(true, Ordering::Release);
+                let _ = result.send(Err(error));
+            }
+            ActiveCompletion::Call { result, completed } => {
+                completed.store(true, Ordering::Release);
+                let _ = result.send(Err(error));
+            }
+            ActiveCompletion::Detached(_) => {}
+        }
     }
 
     #[cfg(any(test, feature = "test-support"))]
@@ -1483,7 +1535,7 @@ impl RuntimeCapsule {
                 }
                 scope.perform_microtask_checkpoint();
             }
-            self.fail_active(error);
+            self.fail_all_active(error);
             locker.remove_near_heap_limit_callback(near_heap_limit_callback, 0);
             self.local_state
                 .rejections
@@ -1570,11 +1622,24 @@ impl Drop for RuntimeCapsule {
     }
 }
 
+fn tree_failure(request: &TreeChildrenRequest, error: &RuntimeError) -> TreeChildrenResponse {
+    TreeChildrenResponse {
+        registration: request.registration,
+        window: request.window.clone(),
+        view: request.view,
+        parent_id: request.parent_id.clone(),
+        generation: request.generation,
+        result: Err(TreeProviderError {
+            message: error.to_string(),
+        }),
+    }
+}
+
 pub(super) fn fatal_or_completed(error: &RuntimeError) -> TurnOutcome {
     if error.is_fatal() {
         TurnOutcome::Fatal(Failure::new(error.to_string()))
     } else {
-        TurnOutcome::Completed
+        TurnOutcome::idle()
     }
 }
 
@@ -1583,11 +1648,20 @@ pub(super) fn execute_engine_turn(
     finalizer: &LifecycleFinalizer,
 ) -> TurnOutcome {
     let key = turn.key;
-    let root = turn.root;
+    let task_root = turn.root;
     let work = turn.work;
     let capsule = Arc::clone(&work.capsule);
+    // Work that starts an invocation always carries its root.
+    let root = || task_root.expect("an invocation's first task carries its root");
+    let starts_invocation = !matches!(
+        work.work,
+        EngineWork::HostResponse(_)
+            | EngineWork::CancelCommand(_)
+            | EngineWork::CancelProvider
+            | EngineWork::Termination
+    );
     if matches!(work.work, EngineWork::PackageModule { .. }) {
-        *capsule.startup_root.lock().unwrap() = Some(root);
+        *capsule.startup_root.lock().unwrap() = task_root;
     }
     let started = Instant::now();
     let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match work.work {
@@ -1596,23 +1670,23 @@ pub(super) fn execute_engine_turn(
             source_name,
             source,
             result,
-        } => capsule.start_script_turn(root, source_name, source, result),
+        } => capsule.start_script_turn(root(), source_name, source, result),
         #[cfg(any(test, feature = "test-support"))]
         EngineWork::FixtureModule {
             specifier,
             source,
             result,
-        } => capsule.start_module_turn(root, specifier, source, result),
+        } => capsule.start_module_turn(root(), specifier, source, result),
         EngineWork::PackageModule { entry, result } => {
-            capsule.start_package_turn(root, entry, result)
+            capsule.start_package_turn(root(), entry, result)
         }
-        EngineWork::HostResponse(response) => capsule.resume_response_turn(root, response),
+        EngineWork::HostResponse(response) => capsule.resume_response_turn(task_root, response),
         EngineWork::BufferChange {
             subscription,
             change,
             enqueued_at,
         } => capsule.start_notification_turn(
-            root,
+            root(),
             subscription.value(),
             ListenerNotification::Buffer(change),
             enqueued_at,
@@ -1621,13 +1695,13 @@ pub(super) fn execute_engine_turn(
             subscription,
             event,
         } => capsule.start_notification_turn(
-            root,
+            root(),
             subscription.value(),
             ListenerNotification::Application(Box::new(event)),
             Instant::now(),
         ),
         EngineWork::EditorEvent { handle, event } => capsule.start_notification_turn(
-            root,
+            root(),
             handle,
             ListenerNotification::Editor(event),
             Instant::now(),
@@ -1642,23 +1716,23 @@ pub(super) fn execute_engine_turn(
                 .is_some_and(|timers| timers.take(expiry));
             if current {
                 capsule.start_notification_turn(
-                    root,
+                    root(),
                     expiry.id,
                     ListenerNotification::Timer,
                     Instant::now(),
                 )
             } else {
-                TurnOutcome::Completed
+                TurnOutcome::idle()
             }
         }
         EngineWork::SettingChange { subscription, key } => capsule.start_notification_turn(
-            root,
+            root(),
             subscription.value(),
             ListenerNotification::Setting(key),
             Instant::now(),
         ),
         EngineWork::WatchChange { subscription, uris } => capsule.start_notification_turn(
-            root,
+            root(),
             subscription.value(),
             ListenerNotification::Watch(uris),
             Instant::now(),
@@ -1667,11 +1741,11 @@ pub(super) fn execute_engine_turn(
             invocation,
             active_buffer,
             result,
-        } => capsule.start_command_turn(root, invocation, active_buffer, result),
-        EngineWork::CancelCommand(invocation) => capsule.cancel_command_turn(root, invocation),
-        EngineWork::Provider(call) => capsule.start_provider_turn(root, call),
-        EngineWork::CancelProvider => capsule.cancel_provider_turn(root),
-        EngineWork::Termination => capsule.finish_termination_turn(root),
+        } => capsule.start_command_turn(root(), invocation, active_buffer, result),
+        EngineWork::CancelCommand(invocation) => capsule.cancel_command_turn(invocation),
+        EngineWork::Provider(call) => capsule.start_provider_turn(root(), call),
+        EngineWork::CancelProvider => capsule.cancel_provider_turn(root()),
+        EngineWork::Termination => capsule.finish_termination_turn(),
         #[cfg(any(test, feature = "test-support"))]
         EngineWork::Panic { result } => {
             let _result = result;
@@ -1683,7 +1757,22 @@ pub(super) fn execute_engine_turn(
             "extension engine panicked while executing a turn",
         ))
     });
-    if matches!(outcome, TurnOutcome::Completed | TurnOutcome::Fatal(_)) {
+    let mut outcome = outcome;
+    if let (TurnOutcome::Completed { settled }, true, Some(task_root)) =
+        (&mut outcome, starts_invocation, task_root)
+        && !capsule
+            .local_state
+            .active
+            .lock()
+            .unwrap()
+            .contains_key(&task_root)
+        && !settled.contains(&task_root)
+    {
+        // The invocation never reached an `await`: its result went out
+        // during the turn, or it was dropped before running.
+        settled.push(task_root);
+    }
+    if matches!(outcome, TurnOutcome::Fatal(_)) {
         capsule
             .local_state
             .keybinding_mutations
@@ -1697,11 +1786,15 @@ pub(super) fn execute_engine_turn(
             .lock()
             .unwrap()
             .clear();
-    }
-    if !matches!(outcome, TurnOutcome::Fatal(_)) {
-        let settled_startup = matches!(outcome, TurnOutcome::Completed) && {
-            let mut startup = capsule.startup_root.lock().unwrap();
-            startup.take_if(|startup| *startup == root).is_some()
+    } else {
+        let settled_startup = match &outcome {
+            TurnOutcome::Completed { settled } => {
+                let mut startup = capsule.startup_root.lock().unwrap();
+                settled
+                    .iter()
+                    .any(|root| startup.take_if(|startup| startup == root).is_some())
+            }
+            TurnOutcome::Fatal(_) => false,
         };
         if settled_startup || started.elapsed() >= LONG_TURN {
             capsule.release_memory();
@@ -1709,6 +1802,10 @@ pub(super) fn execute_engine_turn(
     }
     match &outcome {
         TurnOutcome::Fatal(failure) => {
+            if capsule.status.load(Ordering::Acquire) != ACTIVE {
+                // Every other invocation sees the precise cause.
+                capsule.fail_all_active(capsule.status_error());
+            }
             finalizer.finalize(
                 key,
                 LifecycleEnd::Failed(failure.clone()),

@@ -8,6 +8,13 @@ fn key(extension: u64, lifecycle: u64) -> ExtensionKey {
     )
 }
 
+/// A turn that ran to its next `await` and settled `root`, if any.
+fn settled(root: Option<RootId>) -> TurnOutcome {
+    TurnOutcome::Completed {
+        settled: root.into_iter().collect(),
+    }
+}
+
 fn admitted() -> (StateMachine<&'static str>, ExtensionKey) {
     let key = key(1, 1);
     let mut scheduler = StateMachine::default();
@@ -25,18 +32,18 @@ fn transitions_through_root_and_host_continuation() {
 
     let turn = scheduler.next_turn().unwrap();
     assert_eq!(turn.work, "root");
+    assert_eq!(turn.root, Some(root));
     scheduler
-        .finish_turn(key, turn.id, TurnOutcome::AwaitingHostWork)
+        .finish_turn(key, turn.id, TurnOutcome::idle())
         .unwrap();
     assert_eq!(scheduler.state(key), Ok(&ExtensionState::AwaitingHostWork));
+    assert!(completion.try_recv().is_err());
 
-    scheduler
-        .enqueue_continuation(key, root, "response")
-        .unwrap();
+    scheduler.enqueue_task(key, Some(root), "response").unwrap();
     let turn = scheduler.next_turn().unwrap();
     assert_eq!(turn.work, "response");
     scheduler
-        .finish_turn(key, turn.id, TurnOutcome::Completed)
+        .finish_turn(key, turn.id, settled(Some(root)))
         .unwrap();
     assert_eq!(
         completion.recv_timeout(TEST_WAIT).unwrap(),
@@ -60,10 +67,10 @@ fn preserves_global_fifo_and_requeues_after_one_turn() {
     let turn = scheduler.next_turn().unwrap();
     assert_eq!(turn.key, first);
     scheduler
-        .enqueue_continuation(first, first_root, "first continuation")
+        .enqueue_task(first, Some(first_root), "first continuation")
         .unwrap();
     scheduler
-        .finish_turn(first, turn.id, TurnOutcome::ReadyForContinuation)
+        .finish_turn(first, turn.id, TurnOutcome::idle())
         .unwrap();
 
     assert_eq!(scheduler.next_turn().unwrap().key, second);
@@ -71,45 +78,83 @@ fn preserves_global_fifo_and_requeues_after_one_turn() {
 }
 
 #[test]
-fn unrelated_roots_wait_behind_an_awaiting_tree() {
+fn tasks_run_while_an_invocation_awaits_host_work() {
     let (mut scheduler, key) = admitted();
     let (active, _) = scheduler.enqueue_root(key, "active").unwrap();
     scheduler.enqueue_root(key, "unrelated").unwrap();
     let turn = scheduler.next_turn().unwrap();
     scheduler
-        .finish_turn(key, turn.id, TurnOutcome::AwaitingHostWork)
+        .finish_turn(key, turn.id, TurnOutcome::idle())
         .unwrap();
-    assert!(scheduler.next_turn().is_none());
+
+    let turn = scheduler.next_turn().unwrap();
+    assert_eq!(turn.work, "unrelated");
+    scheduler
+        .finish_turn(key, turn.id, settled(turn.root))
+        .unwrap();
+    assert_eq!(scheduler.state(key), Ok(&ExtensionState::AwaitingHostWork));
 
     scheduler
-        .enqueue_continuation(key, active, "response")
+        .enqueue_task(key, Some(active), "response")
         .unwrap();
     let turn = scheduler.next_turn().unwrap();
-    scheduler
-        .finish_turn(key, turn.id, TurnOutcome::Completed)
-        .unwrap();
-    assert_eq!(scheduler.next_turn().unwrap().work, "unrelated");
+    assert_eq!(turn.work, "response");
 }
 
 #[test]
-fn rejects_wrong_tree_stale_lifecycle_and_duplicate_turns() {
+fn an_exclusive_invocation_holds_back_other_tasks_until_it_settles() {
+    let (mut scheduler, key) = admitted();
+    let (exclusive, completion) = scheduler.enqueue_exclusive_root(key, "load").unwrap();
+    scheduler.enqueue_root(key, "other").unwrap();
+    let turn = scheduler.next_turn().unwrap();
+    assert_eq!(turn.work, "load");
+    scheduler
+        .finish_turn(key, turn.id, TurnOutcome::idle())
+        .unwrap();
+    assert!(scheduler.next_turn().is_none());
+    assert_eq!(scheduler.state(key), Ok(&ExtensionState::AwaitingHostWork));
+
+    scheduler.enqueue_task(key, None, "cancellation").unwrap();
+    let turn = scheduler.next_turn().unwrap();
+    assert_eq!(turn.work, "cancellation");
+    scheduler
+        .finish_turn(key, turn.id, TurnOutcome::idle())
+        .unwrap();
+
+    scheduler
+        .enqueue_task(key, Some(exclusive), "response")
+        .unwrap();
+    let turn = scheduler.next_turn().unwrap();
+    assert_eq!(turn.work, "response");
+    scheduler
+        .finish_turn(key, turn.id, settled(Some(exclusive)))
+        .unwrap();
+    assert_eq!(
+        completion.recv_timeout(TEST_WAIT).unwrap(),
+        CompletionOutcome::Completed
+    );
+    assert_eq!(scheduler.next_turn().unwrap().work, "other");
+}
+
+#[test]
+fn rejects_stale_lifecycle_and_duplicate_turns() {
     let (mut scheduler, key) = admitted();
     let (root, _) = scheduler.enqueue_root(key, "root").unwrap();
     let turn = scheduler.next_turn().unwrap();
-    assert!(matches!(
-        scheduler.enqueue_continuation(key, RootId::new(999), "wrong"),
-        Err(SchedulerError::WrongRoot { active, .. }) if active == root
-    ));
     let stale = ExtensionKey::new(key.extension, ExtensionLifecycleId::new(2));
     assert!(matches!(
         scheduler.enqueue_root(stale, "stale"),
         Err(SchedulerError::StaleLifecycle { .. })
     ));
+    assert!(matches!(
+        scheduler.enqueue_task(stale, Some(root), "stale"),
+        Err(SchedulerError::StaleLifecycle { .. })
+    ));
     scheduler
-        .finish_turn(key, turn.id, TurnOutcome::Completed)
+        .finish_turn(key, turn.id, settled(Some(root)))
         .unwrap();
     assert_eq!(
-        scheduler.finish_turn(key, turn.id, TurnOutcome::Completed),
+        scheduler.finish_turn(key, turn.id, TurnOutcome::idle()),
         Err(SchedulerError::DuplicateOrStaleTurn(turn.id))
     );
 }
@@ -147,18 +192,17 @@ fn stop_and_shutdown_cancel_all_work() {
     let (_, other) = scheduler.enqueue_root(second, "other").unwrap();
     let turn = scheduler.next_turn().unwrap();
     scheduler.stop(first).unwrap();
-    assert_eq!(
-        queued.recv_timeout(TEST_WAIT).unwrap(),
-        CompletionOutcome::Cancelled
-    );
     assert!(running.try_recv().is_err());
+    assert!(queued.try_recv().is_err());
     scheduler
-        .finish_turn(first, turn.id, TurnOutcome::Completed)
+        .finish_turn(first, turn.id, TurnOutcome::idle())
         .unwrap();
-    assert_eq!(
-        running.recv_timeout(TEST_WAIT).unwrap(),
-        CompletionOutcome::Cancelled
-    );
+    for completion in [running, queued] {
+        assert_eq!(
+            completion.recv_timeout(TEST_WAIT).unwrap(),
+            CompletionOutcome::Cancelled
+        );
+    }
 
     scheduler.shutdown();
     assert_eq!(
@@ -215,39 +259,27 @@ fn roots_queued_during_loading_preserve_fifo_order() {
     let turn = scheduler.next_turn().unwrap();
     assert_eq!(turn.work, "first");
     scheduler
-        .finish_turn(key, turn.id, TurnOutcome::Completed)
+        .finish_turn(key, turn.id, settled(turn.root))
         .unwrap();
     assert_eq!(scheduler.next_turn().unwrap().work, "second");
 }
 
 #[test]
-fn reports_a_ready_without_continuation_invariant_violation() {
-    let (mut scheduler, key) = admitted();
-    scheduler.enqueue_root(key, "root").unwrap();
-    let turn = scheduler.next_turn().unwrap();
-    assert_eq!(
-        scheduler.finish_turn(key, turn.id, TurnOutcome::ReadyForContinuation),
-        Err(SchedulerError::NoContinuation)
-    );
-    assert_eq!(scheduler.state(key), Ok(&ExtensionState::AwaitingHostWork));
-}
-
-#[test]
-fn multiple_continuation_wakes_enqueue_the_extension_once() {
+fn multiple_task_wakes_enqueue_the_extension_once() {
     let (mut scheduler, key) = admitted();
     let (root, _) = scheduler.enqueue_root(key, "root").unwrap();
     let turn = scheduler.next_turn().unwrap();
     scheduler
-        .finish_turn(key, turn.id, TurnOutcome::AwaitingHostWork)
+        .finish_turn(key, turn.id, TurnOutcome::idle())
         .unwrap();
-    scheduler.enqueue_continuation(key, root, "first").unwrap();
-    scheduler.enqueue_continuation(key, root, "second").unwrap();
+    scheduler.enqueue_task(key, Some(root), "first").unwrap();
+    scheduler.enqueue_task(key, Some(root), "second").unwrap();
 
     let turn = scheduler.next_turn().unwrap();
     assert_eq!(turn.work, "first");
     assert!(scheduler.next_turn().is_none());
     scheduler
-        .finish_turn(key, turn.id, TurnOutcome::ReadyForContinuation)
+        .finish_turn(key, turn.id, TurnOutcome::idle())
         .unwrap();
     assert_eq!(scheduler.next_turn().unwrap().work, "second");
 }
@@ -261,7 +293,7 @@ fn stopped_running_lifecycle_can_be_replaced_after_its_turn_returns() {
 
     assert_eq!(scheduler.state(old), Ok(&ExtensionState::Stopping));
     scheduler
-        .finish_turn(old, turn.id, TurnOutcome::Completed)
+        .finish_turn(old, turn.id, TurnOutcome::idle())
         .unwrap();
     assert_eq!(
         completion.recv_timeout(TEST_WAIT).unwrap(),
@@ -275,16 +307,15 @@ fn stopped_running_lifecycle_can_be_replaced_after_its_turn_returns() {
 #[test]
 fn diagnostics_report_queue_turn_lag_and_worker_movement() {
     let (mut scheduler, key) = admitted();
-    scheduler.enqueue_root(key, "root").unwrap();
-    scheduler.enqueue_root(key, "queued").unwrap();
+    let (root, _) = scheduler.enqueue_root(key, "root").unwrap();
+    let (queued_root, _) = scheduler.enqueue_root(key, "queued").unwrap();
     scheduler
         .extensions
         .get_mut(&key.extension)
         .unwrap()
-        .roots
+        .tasks
         .front_mut()
         .unwrap()
-        .work
         .enqueued_at -= Duration::from_millis(10);
 
     let queued = scheduler.diagnostics(2);
@@ -298,25 +329,13 @@ fn diagnostics_report_queue_turn_lag_and_worker_movement() {
 
     let root_turn = scheduler.next_turn_on_worker(0).unwrap();
     scheduler
-        .finish_turn(key, root_turn.id, TurnOutcome::AwaitingHostWork)
+        .finish_turn(key, root_turn.id, TurnOutcome::idle())
         .unwrap();
+    scheduler.enqueue_task(key, Some(root), "response").unwrap();
+    let second_turn = scheduler.next_turn_on_worker(1).unwrap();
+    assert_eq!(second_turn.work, "queued");
     scheduler
-        .enqueue_continuation(key, root_turn.root, "response")
-        .unwrap();
-    scheduler
-        .extensions
-        .get_mut(&key.extension)
-        .unwrap()
-        .active
-        .as_mut()
-        .unwrap()
-        .continuations
-        .front_mut()
-        .unwrap()
-        .enqueued_at -= Duration::from_millis(10);
-    let response_turn = scheduler.next_turn_on_worker(1).unwrap();
-    scheduler
-        .finish_turn(key, response_turn.id, TurnOutcome::Completed)
+        .finish_turn(key, second_turn.id, settled(Some(queued_root)))
         .unwrap();
 
     let diagnostics = scheduler.diagnostics(2);
@@ -359,7 +378,7 @@ fn blocking_work(
 fn blocking_executor(work: Turn<BlockingWork>) -> TurnOutcome {
     work.work.started.send(work.work.label).unwrap();
     work.work.release.recv_timeout(TEST_WAIT).unwrap();
-    TurnOutcome::Completed
+    settled(work.root)
 }
 
 #[test]
@@ -444,9 +463,9 @@ fn two_workers_never_run_one_extension_concurrently() {
         PoolConfig::with_manual_timers(NonZeroUsize::new(2).unwrap()),
         |turn: Turn<BlockingWork>| {
             let outcome = if turn.work.label == "root" {
-                TurnOutcome::ReadyForContinuation
+                TurnOutcome::idle()
             } else {
-                TurnOutcome::Completed
+                settled(turn.root)
             };
             turn.work.started.send(turn.work.label).unwrap();
             turn.work.release.recv_timeout(TEST_WAIT).unwrap();
@@ -463,7 +482,7 @@ fn two_workers_never_run_one_extension_concurrently() {
     assert_eq!(starts.recv_timeout(Duration::from_secs(2)).unwrap(), "root");
     let (continuation_work, release_continuation) = blocking_work("continuation", &started);
     handle
-        .enqueue_continuation(key, root, continuation_work)
+        .enqueue_task(key, Some(root), continuation_work)
         .unwrap();
 
     assert_eq!(starts.try_recv(), Err(mpsc::TryRecvError::Empty));
@@ -484,7 +503,7 @@ fn two_workers_never_run_one_extension_concurrently() {
 fn configured_worker_count_stays_constant_as_extensions_grow() {
     let pool = SchedulerPool::new(
         PoolConfig::with_manual_timers(NonZeroUsize::new(2).unwrap()),
-        |_: Turn<()>| TurnOutcome::Completed,
+        |_: Turn<()>| TurnOutcome::idle(),
     );
     let handle = pool.handle();
     for extension in 1..=32 {
@@ -507,7 +526,7 @@ fn configured_worker_count_stays_constant_as_extensions_grow() {
 }
 
 #[test]
-fn many_lifecycles_preserve_queued_roots_and_delayed_continuations() {
+fn many_lifecycles_preserve_queued_tasks_and_delayed_continuations() {
     let mut scheduler = StateMachine::default();
     for lifecycle in 1..=3 {
         let keys = (1..=12)
@@ -518,8 +537,8 @@ fn many_lifecycles_preserve_queued_roots_and_delayed_continuations() {
             scheduler.admit(*key).unwrap();
             scheduler.finish_loading(*key, Ok(())).unwrap();
             let (root, completed) = scheduler.enqueue_root(*key, "await host").unwrap();
-            let (_, next_completed) = scheduler.enqueue_root(*key, "next root").unwrap();
-            pending.push((root, completed, next_completed));
+            let (next_root, next_completed) = scheduler.enqueue_root(*key, "next root").unwrap();
+            pending.push((root, next_root, completed, next_completed));
         }
         assert_eq!(scheduler.diagnostics(2).queue_depth, 24);
         for key in &keys {
@@ -527,39 +546,37 @@ fn many_lifecycles_preserve_queued_roots_and_delayed_continuations() {
             assert_eq!(turn.key, *key);
             assert_eq!(turn.work, "await host");
             scheduler
-                .finish_turn(*key, turn.id, TurnOutcome::AwaitingHostWork)
+                .finish_turn(*key, turn.id, TurnOutcome::idle())
                 .unwrap();
         }
-        assert!(scheduler.next_turn().is_none());
-        assert_eq!(scheduler.diagnostics(2).queue_depth, 12);
-
-        // Host replies can arrive after every isolate has yielded, in any order.
-        for (key, (root, _, _)) in keys.iter().zip(&pending).rev() {
-            scheduler
-                .enqueue_continuation(*key, *root, "host reply")
-                .unwrap();
-        }
-        for key in keys.iter().rev() {
-            let turn = scheduler.next_turn_on_worker(1).unwrap();
-            assert_eq!(turn.key, *key);
-            assert_eq!(turn.work, "host reply");
-            scheduler
-                .finish_turn(*key, turn.id, TurnOutcome::Completed)
-                .unwrap();
-        }
-        for key in keys.iter().rev() {
+        // The isolate moves on to the next task while the first waits.
+        for (key, (_, next_root, _, _)) in keys.iter().zip(&pending) {
             let turn = scheduler.next_turn_on_worker(0).unwrap();
             assert_eq!(turn.key, *key);
             assert_eq!(turn.work, "next root");
             scheduler
-                .finish_turn(*key, turn.id, TurnOutcome::Completed)
+                .finish_turn(*key, turn.id, settled(Some(*next_root)))
                 .unwrap();
         }
         assert!(scheduler.next_turn().is_none());
-        for (first, second) in pending
-            .into_iter()
-            .map(|(_, first, second)| (first, second))
-        {
+        assert_eq!(scheduler.diagnostics(2).queue_depth, 0);
+
+        // Host replies can arrive after every isolate has yielded, in any order.
+        for (key, (root, _, _, _)) in keys.iter().zip(&pending).rev() {
+            scheduler
+                .enqueue_task(*key, Some(*root), "host reply")
+                .unwrap();
+        }
+        for (key, (root, _, _, _)) in keys.iter().zip(&pending).rev() {
+            let turn = scheduler.next_turn_on_worker(1).unwrap();
+            assert_eq!(turn.key, *key);
+            assert_eq!(turn.work, "host reply");
+            scheduler
+                .finish_turn(*key, turn.id, settled(Some(*root)))
+                .unwrap();
+        }
+        assert!(scheduler.next_turn().is_none());
+        for (_, _, first, second) in pending {
             assert_eq!(
                 first.recv_timeout(TEST_WAIT).unwrap(),
                 CompletionOutcome::Completed
@@ -577,14 +594,14 @@ fn many_lifecycles_preserve_queued_roots_and_delayed_continuations() {
     let diagnostics = scheduler.diagnostics(2);
     assert_eq!(diagnostics.worker_count, 2);
     assert_eq!(diagnostics.turn_count, 108);
-    assert_eq!(diagnostics.worker_movements, 72);
+    assert_eq!(diagnostics.worker_movements, 36);
 }
 
 #[test]
 fn yielding_turn_frees_a_worker_for_queued_extensions() {
     struct GatedWork {
         key: ExtensionKey,
-        outcome: TurnOutcome,
+        settles: bool,
         started: mpsc::Sender<ExtensionKey>,
         release: mpsc::Receiver<()>,
     }
@@ -593,7 +610,11 @@ fn yielding_turn_frees_a_worker_for_queued_extensions() {
         |turn: Turn<GatedWork>| {
             turn.work.started.send(turn.work.key).unwrap();
             turn.work.release.recv_timeout(TEST_WAIT).unwrap();
-            turn.work.outcome
+            if turn.work.settles {
+                settled(turn.root)
+            } else {
+                TurnOutcome::idle()
+            }
         },
     );
     let handle = pool.handle();
@@ -611,11 +632,7 @@ fn yielding_turn_frees_a_worker_for_queued_extensions() {
         let (release, released) = mpsc::channel();
         let work = GatedWork {
             key: *key,
-            outcome: if index == 0 {
-                TurnOutcome::AwaitingHostWork
-            } else {
-                TurnOutcome::Completed
-            },
+            settles: index != 0,
             started: started.clone(),
             release: released,
         };
@@ -655,12 +672,12 @@ fn yielding_turn_frees_a_worker_for_queued_extensions() {
 
     let (release_reply, released_reply) = mpsc::channel();
     handle
-        .enqueue_continuation(
+        .enqueue_task(
             keys[0],
-            completions[0].0,
+            Some(completions[0].0),
             GatedWork {
                 key: keys[0],
-                outcome: TurnOutcome::Completed,
+                settles: true,
                 started,
                 release: released_reply,
             },
@@ -683,7 +700,7 @@ fn yielding_turn_frees_a_worker_for_queued_extensions() {
 fn executor_panic_fails_only_its_extension() {
     let pool = SchedulerPool::new(PoolConfig::single_worker(), |turn: Turn<&'static str>| {
         assert_ne!(turn.work, "panic");
-        TurnOutcome::Completed
+        settled(turn.root)
     });
     let handle = pool.handle();
     let failed_key = key(1, 1);

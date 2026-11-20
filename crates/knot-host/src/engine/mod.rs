@@ -272,9 +272,9 @@ pub struct RuntimeLocalState {
     pub status: Arc<AtomicU8>,
     next_request: AtomicU64,
     event_sender: Mutex<Option<tokio::sync::mpsc::UnboundedSender<EngineEvent>>>,
-    current_root: Mutex<Option<RootId>>,
     pub pending: Mutex<HashMap<RequestId, PendingRequest>>,
-    active: Mutex<Option<ActiveExecution>>,
+    /// Unsettled invocations, by root.
+    active: Mutex<HashMap<RootId, ActiveExecution>>,
     rejections: Mutex<Vec<RejectionReport>>,
     modules: Mutex<ModuleRegistry>,
     callbacks: Mutex<HashMap<RuntimeCallback, v8::Global<v8::Function>>>,
@@ -308,9 +308,8 @@ impl RuntimeLocalState {
             status,
             next_request: AtomicU64::new(1),
             event_sender: Mutex::new(None),
-            current_root: Mutex::new(None),
             pending: Mutex::new(HashMap::new()),
-            active: Mutex::new(None),
+            active: Mutex::new(HashMap::new()),
             rejections: Mutex::new(Vec::new()),
             modules: Mutex::new(ModuleRegistry::new(graph)),
             callbacks: Mutex::new(HashMap::new()),
@@ -370,7 +369,8 @@ impl RuntimeLocalState {
 }
 
 pub struct PendingRequest {
-    root: RootId,
+    /// The invocation whose continuation issued the request, if any.
+    root: Option<RootId>,
     invocation: Option<CommandInvocationId>,
     operation: &'static str,
     resolver: Option<v8::Global<v8::PromiseResolver>>,
@@ -379,10 +379,30 @@ pub struct PendingRequest {
 }
 
 struct ActiveExecution {
-    root: RootId,
     promise: v8::Global<v8::Promise>,
     source: Arc<str>,
     completion: ActiveCompletion,
+    /// The command this invocation runs, for cancellation.
+    command: Option<CommandInvocationId>,
+    /// An unhandled rejection seen while the invocation ran; it fails the
+    /// invocation when its promise fulfills.
+    rejection: Option<RuntimeError>,
+}
+
+impl ActiveExecution {
+    fn new(
+        promise: v8::Global<v8::Promise>,
+        source: Arc<str>,
+        completion: ActiveCompletion,
+    ) -> Self {
+        Self {
+            promise,
+            source,
+            completion,
+            command: None,
+            rejection: None,
+        }
+    }
 }
 
 enum ActiveCompletion {

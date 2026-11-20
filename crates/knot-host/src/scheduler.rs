@@ -60,13 +60,18 @@ impl PoolConfig {
     }
 }
 
-/// Identifies one root callback and its logical command tree.
+/// Identifies one invocation: a command, provider call, evaluation, listener
+/// dispatch, or timer callback, and everything that continues it.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct RootId(u64);
 
 impl RootId {
     pub const fn new(value: u64) -> Self {
         Self(value)
+    }
+
+    pub const fn value(self) -> u64 {
+        self.0
     }
 }
 
@@ -78,7 +83,8 @@ pub struct TurnId(u64);
 #[derive(Debug)]
 pub struct Turn<W> {
     pub key: ExtensionKey,
-    pub root: RootId,
+    /// The invocation this task belongs to, if any.
+    pub root: Option<RootId>,
     pub id: TurnId,
     pub work: W,
 }
@@ -86,11 +92,21 @@ pub struct Turn<W> {
 /// The scheduler-relevant result of executing one turn.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum TurnOutcome {
-    Completed,
-    AwaitingHostWork,
-    #[cfg(any(test, feature = "test-support"))]
-    ReadyForContinuation,
+    /// The task ran to its next `await`; `settled` are the invocations whose
+    /// promises settled during it.
+    Completed {
+        settled: Vec<RootId>,
+    },
     Fatal(Failure),
+}
+
+impl TurnOutcome {
+    /// A turn that settled no invocation.
+    pub fn idle() -> Self {
+        Self::Completed {
+            settled: Vec::new(),
+        }
+    }
 }
 
 /// Final disposition delivered exactly once for each accepted root.
@@ -151,14 +167,7 @@ pub enum SchedulerError {
     },
     NotLoading,
     NotRunning,
-    NoActiveRoot,
-    WrongRoot {
-        active: RootId,
-        received: RootId,
-    },
     DuplicateOrStaleTurn(TurnId),
-    #[cfg(any(test, feature = "test-support"))]
-    NoContinuation,
     Stopping,
     Failed(Failure),
 }
@@ -224,28 +233,23 @@ impl CompletionSlot {
     }
 }
 
-struct Root<W> {
-    id: RootId,
-    work: QueuedWork<W>,
-    completion: CompletionSlot,
-}
-
-struct QueuedWork<W> {
+/// One entry of an isolate's task queue.
+struct Task<W> {
+    root: Option<RootId>,
     work: W,
     enqueued_at: Instant,
-}
-
-struct ActiveRoot<W> {
-    id: RootId,
-    completion: CompletionSlot,
-    continuations: VecDeque<QueuedWork<W>>,
 }
 
 struct Extension<W> {
     key: ExtensionKey,
     state: ExtensionState,
-    roots: VecDeque<Root<W>>,
-    active: Option<ActiveRoot<W>>,
+    /// The isolate's FIFO: every entry into a package is one task.
+    tasks: VecDeque<Task<W>>,
+    /// Completion of each unsettled invocation.
+    invocations: HashMap<RootId, CompletionSlot>,
+    /// Invocations that run alone, oldest first: while any is unsettled, only
+    /// its own tasks and tasks outside every invocation start.
+    exclusive: VecDeque<RootId>,
     running: Option<TurnId>,
     max_queue_depth: usize,
     turn_count: u64,
@@ -312,8 +316,9 @@ impl<W> StateMachine<W> {
             Extension {
                 key,
                 state: ExtensionState::Loading,
-                roots: VecDeque::new(),
-                active: None,
+                tasks: VecDeque::new(),
+                invocations: HashMap::new(),
+                exclusive: VecDeque::new(),
                 running: None,
                 max_queue_depth: 0,
                 turn_count: 0,
@@ -335,27 +340,46 @@ impl<W> StateMachine<W> {
             return Err(SchedulerError::NotLoading);
         }
         match result {
-            Ok(()) if extension.roots.is_empty() => extension.state = ExtensionState::Idle,
+            Ok(()) if !extension.has_runnable() => extension.state = ExtensionState::Idle,
             Ok(()) => self.make_ready(key),
             Err(failure) => self.fail(key, failure)?,
         }
         Ok(())
     }
 
+    /// Starts an invocation whose first task joins the isolate's FIFO.
     pub fn enqueue_root(
         &mut self,
         key: ExtensionKey,
         work: W,
     ) -> Result<(RootId, CompletionReceiver), SchedulerError> {
+        self.enqueue_invocation(key, work, false)
+    }
+
+    /// Starts an invocation that runs alone: other tasks wait until it
+    /// settles.
+    pub fn enqueue_exclusive_root(
+        &mut self,
+        key: ExtensionKey,
+        work: W,
+    ) -> Result<(RootId, CompletionReceiver), SchedulerError> {
+        self.enqueue_invocation(key, work, true)
+    }
+
+    fn enqueue_invocation(
+        &mut self,
+        key: ExtensionKey,
+        work: W,
+        exclusive: bool,
+    ) -> Result<(RootId, CompletionReceiver), SchedulerError> {
         if self.shutting_down {
             return Err(SchedulerError::ShuttingDown);
         }
         let id = RootId::new(self.next_root);
-        self.next_root += 1;
         #[cfg(any(test, feature = "test-support"))]
         let (sender, receiver) = mpsc::channel();
         let (async_sender, async_receiver) = tokio::sync::oneshot::channel();
-        let was_idle = {
+        {
             let extension = self.extension_mut(key)?;
             match &extension.state {
                 ExtensionState::Stopping => return Err(SchedulerError::Stopping),
@@ -364,24 +388,20 @@ impl<W> StateMachine<W> {
                 }
                 _ => {}
             }
-            extension.roots.push_back(Root {
+            extension.invocations.insert(
                 id,
-                work: QueuedWork {
-                    work,
-                    enqueued_at: Instant::now(),
-                },
-                completion: CompletionSlot {
+                CompletionSlot {
                     #[cfg(any(test, feature = "test-support"))]
                     blocking: Some(sender),
                     asynchronous: Some(async_sender),
                 },
-            });
-            extension.state == ExtensionState::Idle
-        };
-        self.record_queue_depth(key);
-        if was_idle {
-            self.make_ready(key);
+            );
+            if exclusive {
+                extension.exclusive.push_back(id);
+            }
         }
+        self.next_root += 1;
+        self.push_task(key, Some(id), work);
         Ok((
             id,
             CompletionReceiver {
@@ -392,45 +412,46 @@ impl<W> StateMachine<W> {
         ))
     }
 
-    pub fn enqueue_continuation(
+    /// Adds a task that continues `root` (a host response, a cancellation)
+    /// or belongs to no invocation.
+    pub fn enqueue_task(
         &mut self,
         key: ExtensionKey,
-        root: RootId,
+        root: Option<RootId>,
         work: W,
     ) -> Result<(), SchedulerError> {
         if self.shutting_down {
             return Err(SchedulerError::ShuttingDown);
         }
-        let was_awaiting = {
-            let extension = self.extension_mut(key)?;
-            match &extension.state {
-                ExtensionState::Stopping => return Err(SchedulerError::Stopping),
-                ExtensionState::Failed(failure) => {
-                    return Err(SchedulerError::Failed(failure.clone()));
-                }
-                _ => {}
+        match &self.extension(key)?.state {
+            ExtensionState::Stopping => return Err(SchedulerError::Stopping),
+            ExtensionState::Failed(failure) => {
+                return Err(SchedulerError::Failed(failure.clone()));
             }
-            let active = extension
-                .active
-                .as_mut()
-                .ok_or(SchedulerError::NoActiveRoot)?;
-            if active.id != root {
-                return Err(SchedulerError::WrongRoot {
-                    active: active.id,
-                    received: root,
-                });
-            }
-            active.continuations.push_back(QueuedWork {
-                work,
-                enqueued_at: Instant::now(),
-            });
-            extension.state == ExtensionState::AwaitingHostWork
-        };
+            _ => {}
+        }
+        self.push_task(key, root, work);
+        Ok(())
+    }
+
+    fn push_task(&mut self, key: ExtensionKey, root: Option<RootId>, work: W) {
+        let extension = self
+            .extensions
+            .get_mut(&key.extension)
+            .expect("admitted extension");
+        extension.tasks.push_back(Task {
+            root,
+            work,
+            enqueued_at: Instant::now(),
+        });
+        let wake = matches!(
+            extension.state,
+            ExtensionState::Idle | ExtensionState::AwaitingHostWork
+        ) && extension.has_runnable();
         self.record_queue_depth(key);
-        if was_awaiting {
+        if wake {
             self.make_ready(key);
         }
-        Ok(())
     }
 
     #[cfg(any(test, feature = "test-support"))]
@@ -444,20 +465,9 @@ impl<W> StateMachine<W> {
             if extension.key != key || extension.state != ExtensionState::Queued {
                 continue;
             }
-            let (root, queued) = if let Some(active) = extension.active.as_mut() {
-                let work = active.continuations.pop_front()?;
-                (active.id, work)
-            } else {
-                let pending = extension.roots.pop_front()?;
-                let root = pending.id;
-                let work = pending.work;
-                extension.active = Some(ActiveRoot {
-                    id: root,
-                    completion: pending.completion,
-                    continuations: VecDeque::new(),
-                });
-                (root, work)
-            };
+            let index = extension.runnable_index()?;
+            let queued = extension.tasks.remove(index)?;
+            let root = queued.root;
             let lag = queued.enqueued_at.elapsed();
             extension.max_enqueue_to_start_lag = extension.max_enqueue_to_start_lag.max(lag);
             extension.turn_count += 1;
@@ -504,7 +514,7 @@ impl<W> StateMachine<W> {
             return Err(SchedulerError::DuplicateOrStaleTurn(turn));
         }
         if extension.state == ExtensionState::Stopping {
-            self.settle_active(key, CompletionOutcome::Cancelled);
+            settle_invocations(extension, CompletionOutcome::Cancelled);
             return Ok(());
         }
         if extension.state != ExtensionState::Running {
@@ -512,38 +522,20 @@ impl<W> StateMachine<W> {
         }
 
         match outcome {
-            TurnOutcome::Completed => {
-                self.settle_active(key, CompletionOutcome::Completed);
-                if self.extension(key)?.roots.is_empty() {
-                    self.extension_mut(key)?.state = ExtensionState::Idle;
-                } else {
+            TurnOutcome::Completed { settled } => {
+                for root in settled {
+                    extension.exclusive.retain(|exclusive| *exclusive != root);
+                    if let Some(mut slot) = extension.invocations.remove(&root) {
+                        slot.settle(CompletionOutcome::Completed);
+                    }
+                }
+                if extension.has_runnable() {
                     self.make_ready(key);
-                }
-            }
-            TurnOutcome::AwaitingHostWork => {
-                if self
-                    .extension(key)?
-                    .active
-                    .as_ref()
-                    .is_some_and(|active| !active.continuations.is_empty())
-                {
-                    self.make_ready(key);
+                } else if extension.invocations.is_empty() {
+                    extension.state = ExtensionState::Idle;
                 } else {
-                    self.extension_mut(key)?.state = ExtensionState::AwaitingHostWork;
+                    extension.state = ExtensionState::AwaitingHostWork;
                 }
-            }
-            #[cfg(any(test, feature = "test-support"))]
-            TurnOutcome::ReadyForContinuation => {
-                if self
-                    .extension(key)?
-                    .active
-                    .as_ref()
-                    .is_some_and(|active| active.continuations.is_empty())
-                {
-                    self.extension_mut(key)?.state = ExtensionState::AwaitingHostWork;
-                    return Err(SchedulerError::NoContinuation);
-                }
-                self.make_ready(key);
             }
             TurnOutcome::Fatal(failure) => self.fail(key, failure)?,
         }
@@ -556,12 +548,9 @@ impl<W> StateMachine<W> {
         let extension = self.extension_mut(key)?;
         let was_running = extension.running.is_some();
         extension.state = ExtensionState::Stopping;
-        settle_roots(&mut extension.roots, CompletionOutcome::Cancelled);
+        extension.tasks.clear();
         if !was_running {
-            if let Some(active) = extension.active.as_mut() {
-                active.completion.settle(CompletionOutcome::Cancelled);
-            }
-            extension.active = None;
+            settle_invocations(extension, CompletionOutcome::Cancelled);
         }
         Ok(())
     }
@@ -575,12 +564,9 @@ impl<W> StateMachine<W> {
         for extension in self.extensions.values_mut() {
             let was_running = extension.running.is_some();
             extension.state = ExtensionState::Stopping;
-            settle_roots(&mut extension.roots, CompletionOutcome::Cancelled);
+            extension.tasks.clear();
             if !was_running {
-                if let Some(active) = extension.active.as_mut() {
-                    active.completion.settle(CompletionOutcome::Cancelled);
-                }
-                extension.active = None;
+                settle_invocations(extension, CompletionOutcome::Cancelled);
             }
         }
     }
@@ -699,30 +685,12 @@ impl<W> StateMachine<W> {
         self.ready.retain(|queued| *queued != key);
     }
 
-    fn settle_active(&mut self, key: ExtensionKey, outcome: CompletionOutcome) {
-        let extension = self
-            .extensions
-            .get_mut(&key.extension)
-            .expect("admitted extension");
-        if let Some(mut active) = extension.active.take() {
-            active.completion.settle(outcome);
-        }
-    }
-
     fn fail(&mut self, key: ExtensionKey, failure: Failure) -> Result<(), SchedulerError> {
         self.remove_ready(key);
         let extension = self.extension_mut(key)?;
         extension.running = None;
-        if let Some(active) = extension.active.as_mut() {
-            active
-                .completion
-                .settle(CompletionOutcome::Failed(failure.clone()));
-        }
-        extension.active = None;
-        settle_roots(
-            &mut extension.roots,
-            CompletionOutcome::Failed(failure.clone()),
-        );
+        extension.tasks.clear();
+        settle_invocations(extension, CompletionOutcome::Failed(failure.clone()));
         extension.state = ExtensionState::Failed(failure);
         Ok(())
     }
@@ -730,19 +698,33 @@ impl<W> StateMachine<W> {
 
 impl<W> Extension<W> {
     fn queue_depth(&self) -> usize {
-        self.roots.len()
-            + self
-                .active
-                .as_ref()
-                .map_or(0, |active| active.continuations.len())
+        self.tasks.len()
+    }
+
+    /// A task outside every invocation (a cancellation, a termination wakeup)
+    /// is never held back.
+    fn runnable(&self, task: &Task<W>) -> bool {
+        task.root.is_none()
+            || self
+                .exclusive
+                .front()
+                .is_none_or(|exclusive| task.root == Some(*exclusive))
+    }
+
+    fn runnable_index(&self) -> Option<usize> {
+        self.tasks.iter().position(|task| self.runnable(task))
+    }
+
+    fn has_runnable(&self) -> bool {
+        self.runnable_index().is_some()
     }
 }
 
-fn settle_roots<W>(roots: &mut VecDeque<Root<W>>, outcome: CompletionOutcome) {
-    for root in roots.iter_mut() {
-        root.completion.settle(outcome.clone());
+fn settle_invocations<W>(extension: &mut Extension<W>, outcome: CompletionOutcome) {
+    extension.exclusive.clear();
+    for (_, mut slot) in extension.invocations.drain() {
+        slot.settle(outcome.clone());
     }
-    roots.clear();
 }
 
 struct Shared<W> {
@@ -799,10 +781,25 @@ impl<W> SchedulerHandle<W> {
         result
     }
 
-    pub fn enqueue_continuation(
+    pub fn enqueue_exclusive_root(
         &self,
         key: ExtensionKey,
-        root: RootId,
+        work: W,
+    ) -> Result<(RootId, CompletionReceiver), SchedulerError> {
+        let result = self
+            .shared
+            .state
+            .lock()
+            .unwrap()
+            .enqueue_exclusive_root(key, work);
+        self.shared.ready.notify_one();
+        result
+    }
+
+    pub fn enqueue_task(
+        &self,
+        key: ExtensionKey,
+        root: Option<RootId>,
         work: W,
     ) -> Result<(), SchedulerError> {
         let result = self
@@ -810,7 +807,7 @@ impl<W> SchedulerHandle<W> {
             .state
             .lock()
             .unwrap()
-            .enqueue_continuation(key, root, work);
+            .enqueue_task(key, root, work);
         self.shared.ready.notify_one();
         result
     }

@@ -208,7 +208,7 @@ impl RuntimePool {
         self.load_with_graph(key, config, Some(&graph))?;
         let capsule = self.capsule(key)?;
         let (result_sender, result) = tokio::sync::oneshot::channel();
-        let scheduled = self.scheduler_handle.enqueue_root(
+        let scheduled = self.scheduler_handle.enqueue_exclusive_root(
             key,
             EngineTurn {
                 capsule,
@@ -262,7 +262,7 @@ impl RuntimePool {
             })?
         };
         let (result_sender, result) = tokio::sync::oneshot::channel();
-        let (_, completion) = self.scheduler_handle.enqueue_root(
+        let (_, completion) = self.scheduler_handle.enqueue_exclusive_root(
             key,
             EngineTurn {
                 capsule,
@@ -317,7 +317,7 @@ impl RuntimePool {
             .as_ref()
             .expect("runtime pool is active")
             .handle()
-            .enqueue_root(
+            .enqueue_exclusive_root(
                 key,
                 EngineTurn {
                     capsule,
@@ -469,20 +469,20 @@ impl RuntimePool {
         let capsule = self.capsule(key)?;
         let mut cancelled = capsule.local_state.cancelled_commands.lock().unwrap();
         cancelled.insert(invocation);
-        let root = capsule
+        // A command that is not running yet finds the flag when it starts;
+        // a running one, or an inline child of one, is told to abort.
+        let running = capsule
             .local_state
             .active
             .lock()
             .unwrap()
-            .as_ref()
-            .and_then(|active| {
-                matches!(&active.completion, ActiveCompletion::Command(_)).then_some(active.root)
-            });
+            .values()
+            .any(|active| matches!(&active.completion, ActiveCompletion::Command(_)));
         drop(cancelled);
-        if let Some(root) = root {
-            self.scheduler_handle.enqueue_continuation(
+        if running {
+            self.scheduler_handle.enqueue_task(
                 key,
-                root,
+                None,
                 EngineTurn {
                     capsule,
                     work: EngineWork::CancelCommand(invocation),
@@ -562,7 +562,7 @@ impl RuntimePool {
             pending.response_queued = true;
             pending.root
         };
-        if let Err(error) = self.scheduler_handle.enqueue_continuation(
+        if let Err(error) = self.scheduler_handle.enqueue_task(
             capsule.key(),
             root,
             EngineTurn {

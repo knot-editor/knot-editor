@@ -261,8 +261,8 @@ fn typing_in_a_focused_field_reaches_the_listener_and_clicks_move_focus(cx: &mut
     });
     assert_eq!(cx.read(|cx| fixture.model.read(cx).text()), "text");
 
-    // While a listener turn runs, more edits join one further notification,
-    // which reads the final text.
+    // A listener parked on a host request does not hold back the notifications
+    // for later edits; each reads the text as of its own acknowledgement.
     let host = cx.read(|cx| crate::app::extensions::host::entity(cx).unwrap());
     host.update(cx, |host, _| host.hold_clipboard_writes());
     cx.simulate_input(fixture.native_window, "b");
@@ -272,7 +272,7 @@ fn typing_in_a_focused_field_reaches_the_listener_and_clicks_move_focus(cx: &mut
     cx.run_until_parked();
     host.update(cx, |host, cx| host.release_view_requests(cx));
     wait_for_api_condition(cx, |cx| {
-        cx.read_from_clipboard().and_then(|item| item.text()) == Some("find:find:abcd:3".to_owned())
+        cx.read_from_clipboard().and_then(|item| item.text()) == Some("find:find:abcd:4".to_owned())
     });
     fixture.run("find.read", cx);
     assert_eq!(clipboard(cx).as_deref(), Some("read:abcd"));

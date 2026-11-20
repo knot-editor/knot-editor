@@ -144,7 +144,28 @@ is left until a package asks for one.
 
 Complete and approved. Frames ride continuation-preserved data (`nativeBindings.frame`, `withFrame` in `bootstrap.js`); native requests still take their root from the running turn until checkpoint 2.
 
-### 2. Event-loop scheduler and invocation completion
+### 2. ✅ Event-loop scheduler and invocation completion
+
+Implemented, awaiting review. Scope decisions made while implementing:
+
+- Completion is detected by scanning the unsettled invocations after each
+  turn's microtask drain, not by a bootstrap reaction; the effect is the same.
+- An invocation whose promise fulfilled still waits for host requests it left
+  in flight, as before. The plan's "finished invocations stop holding
+  requests" rule moved to checkpoint 4 with the bundled-package audit:
+  dropping it now let fire-and-forget calls in bundled packages outlive
+  their command.
+- Package and fixture-module evaluation are *exclusive* invocations: only
+  their own tasks and tasks outside any invocation (cancellation,
+  termination) start until they settle.
+- A registration's handler is installed when its host reply arrives, but the
+  application may call it first; the bootstrap holds such a call until
+  in-flight registrations settle (`registerCallable`).
+- Listeners now overlap commands. The bundled packages that assumed
+  otherwise got a small serialization (Vim ignores selection changes during
+  its own keys, Projects takes turns between commands and application
+  events, Go to File records in event order); the rest of the audit stays in
+  checkpoint 4.
 
 Deliverables: per-isolate task FIFO replacing `active`/`roots`; invocation
 completion on promise settlement, reported by a bootstrap reaction;
@@ -206,7 +227,9 @@ Review gate: loading semantics and the remaining refusals.
 Deliverables: the bridge's `roots`/`active_root` removed so commands start
 on enqueue; a command's children may run concurrently (`InvocationNode.child`
 becomes a set, `admit_child` drops its one-child check, cancellation and
-settlement walk every child); every bundled package audited for state assumed stable across an
+settlement walk every child); invocations stop waiting for host requests they left in flight (the
+Design's completion rule), once the audit has removed fire-and-forget calls
+that rely on it; every bundled package audited for state assumed stable across an
 `await` and for commands that must not overlap, with fixes (Vim key handling
 serialized in the package).
 

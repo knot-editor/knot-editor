@@ -341,6 +341,59 @@ await commands.register("transient.await-picker", async () => {
 }
 
 #[gpui::test]
+fn a_listener_and_a_provider_run_while_a_command_awaits_a_picker(cx: &mut TestAppContext) {
+    use knot_protocol::ExtensionKey;
+
+    const SOURCE: &str = r#"
+import { commands, providers, workbench } from "knot";
+await providers.register("interleave.echo", { echo: (value) => value });
+await workbench.observe(async (event) => {
+  if (event.type === "documentOpened") await workbench.writeClipboardText("listener ran");
+});
+await commands.register("interleave.pick", async () => {
+  const result = await workbench.showPicker({ title: "Pick", items: [{ id: "a", label: "A" }] });
+  await workbench.writeClipboardText(`picked ${result.kind}`);
+});
+"#;
+    let documents = install_globals(cx);
+    let host = cx.update(crate::app::extensions::host::install);
+    let key = ExtensionKey::new(ExtensionId::new(712), ExtensionLifecycleId::new(1));
+    host.update(cx, |host, cx| {
+        let execution = host.load_test_source(key, SOURCE).unwrap();
+        cx.spawn(async move |_, _| {
+            execution.await.unwrap();
+        })
+        .detach();
+    });
+    wait_for_api_condition(cx, |cx| {
+        cx.global::<ApplicationProductCommands>()
+            .0
+            .read(cx)
+            .catalog()
+            .borrow()
+            .resolve("interleave.pick")
+            .is_ok()
+    });
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let window = headless_window(document, model, cx);
+    let native_window = Headless;
+    let pending = dispatch_product_command(&window, native_window, "interleave.pick", cx);
+    wait_for_api_condition(cx, |cx| window.read(cx).transient.is_some());
+
+    // The package's listener answers while its command still awaits the picker.
+    cx.update(|cx| create_untitled_document(&documents, cx));
+    wait_for_api_condition(cx, |cx| {
+        cx.read_from_clipboard().and_then(|item| item.text()) == Some("listener ran".to_owned())
+    });
+    cx.read(|cx| assert!(window.read(cx).transient.is_some()));
+
+    host.update(cx, |host, cx| host.unload(key, cx).unwrap());
+    cx.run_until_parked();
+    assert_ne!(wait_for_command(pending, cx), CommandOutcome::Completed);
+}
+
+#[gpui::test]
 fn context_free_transient_requires_a_target(cx: &mut TestAppContext) {
     use knot_protocol::ExtensionKey;
 

@@ -842,12 +842,16 @@ fn pooled_capsule_moves_between_workers_and_retains_state() {
                 result
                     .send(capsule.execute("movement.js", source).unwrap())
                     .unwrap();
-                TurnOutcome::Completed
+                TurnOutcome::Completed {
+                    settled: turn.root.into_iter().collect(),
+                }
             }
             Work::Block { started, release } => {
                 started.send(std::thread::current().id()).unwrap();
                 release.recv_timeout(TEST_WAIT).unwrap();
-                TurnOutcome::Completed
+                TurnOutcome::Completed {
+                    settled: turn.root.into_iter().collect(),
+                }
             }
         },
     );
@@ -1333,6 +1337,88 @@ fn timers_fire_in_deadline_order_with_node_delay_coercion() {
     assert_eq!(take_log(&pool, runtime), "first second");
     timers.advance(Duration::from_millis(10));
     assert_eq!(take_log(&pool, runtime), "late");
+    pool.shutdown();
+}
+
+#[test]
+fn an_invocation_awaiting_its_own_timer_does_not_block_the_isolate() {
+    let (pool, timers, runtime) = timer_pool();
+    let parked = pool
+        .execute(
+            runtime,
+            "file:///timers/parked.js",
+            "(async () => { await new Promise((resolve) => setTimeout(resolve, 10)); log.push('woke'); return 'done'; })()",
+        )
+        .unwrap();
+    // Other work runs while the invocation waits for its timer.
+    assert_eq!(run(&pool, runtime, "log.push('meanwhile'); 1"), "1");
+    timers.advance(Duration::from_millis(10));
+    assert_eq!(&*parked.wait().unwrap().value, "done");
+    assert_eq!(take_log(&pool, runtime), "meanwhile woke");
+    pool.shutdown();
+}
+
+#[test]
+fn a_rejecting_timer_callback_leaves_the_isolate_and_parked_invocations_running() {
+    let (pool, timers, runtime) = timer_pool();
+    let parked = pool
+        .execute(
+            runtime,
+            "file:///timers/parked.js",
+            "(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); return 'still here'; })()",
+        )
+        .unwrap();
+    run(
+        &pool,
+        runtime,
+        "setTimeout(async () => { throw new Error('timer failure'); }, 10);",
+    );
+    timers.advance(Duration::from_millis(10));
+    assert_eq!(run(&pool, runtime, "'alive'"), "alive");
+    timers.advance(Duration::from_millis(10));
+    assert_eq!(&*parked.wait().unwrap().value, "still here");
+    pool.shutdown();
+}
+
+#[test]
+fn unloading_cancels_every_outstanding_invocation() {
+    let (pool, _timers, runtime) = timer_pool();
+    let source = "(async () => { await new Promise((resolve) => setTimeout(resolve, 1000)); })()";
+    let first = pool
+        .execute(runtime, "file:///timers/first.js", source)
+        .unwrap();
+    let second = pool
+        .execute(runtime, "file:///timers/second.js", source)
+        .unwrap();
+    assert_eq!(run(&pool, runtime, "1"), "1");
+    pool.unload(runtime).unwrap();
+    for execution in [first, second] {
+        assert_eq!(
+            execution.wait().unwrap_err().kind(),
+            RuntimeErrorKind::Cancelled
+        );
+    }
+    pool.shutdown();
+}
+
+#[test]
+fn termination_fails_every_outstanding_invocation_with_its_cause() {
+    let (pool, _timers, runtime) = timer_pool();
+    let source = "(async () => { await new Promise((resolve) => setTimeout(resolve, 1000)); })()";
+    let first = pool
+        .execute(runtime, "file:///timers/first.js", source)
+        .unwrap();
+    let second = pool
+        .execute(runtime, "file:///timers/second.js", source)
+        .unwrap();
+    assert_eq!(run(&pool, runtime, "1"), "1");
+    assert!(pool.termination_handle(runtime).unwrap().terminate());
+    for execution in [first, second] {
+        assert_eq!(
+            execution.wait().unwrap_err().kind(),
+            RuntimeErrorKind::Terminated
+        );
+    }
     pool.shutdown();
 }
 

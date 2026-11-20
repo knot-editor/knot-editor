@@ -1137,7 +1137,7 @@ const failing = await workbench.observe(() => { throw new Error("isolated observ
 const observation = await workbench.observe(async (event) => {
   if (event.sequence <= observation.watermark || event.sequence <= last) throw new Error("observation order");
   last = event.sequence;
-  if (event.type !== "documentChanged") return;
+  if (event.type !== "documentChanged" || count > 0) return;
   count++;
   const current = await documents.get(event.document.id);
   const snapshot = await current.buffer.snapshot();
@@ -1181,6 +1181,9 @@ await commands.register("observation.install-for-unload", async () => { await wo
         model.replace(0..0, "edit").unwrap();
         cx.notify();
     });
+    // The listener runs on its own while the command that follows does; it has
+    // disposed itself once its edit is in.
+    wait_for_api_condition(cx, |cx| host.read(cx).application_observer_count() == 1);
     let verify = dispatch_product_command(&window, native_window, "observation.verify", cx);
     assert_eq!(wait_for_command(verify, cx), CommandOutcome::Completed);
     cx.read(|cx| assert_eq!(host.read(cx).application_observer_count(), 0));

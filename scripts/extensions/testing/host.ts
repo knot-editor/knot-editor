@@ -1133,8 +1133,17 @@ export function notices(): readonly Knot.Notice[] {
   return state.notices;
 }
 
-async function noticesChanged() {
-  await emit({ type: "notificationsChanged", notifications: [...state.notices] });
+// Like the application, a request does not wait for observers to handle the
+// event it raises; the test's next step does.
+const deliveries: Promise<unknown>[] = [];
+
+function noticesChanged() {
+  deliveries.push(emit({ type: "notificationsChanged", notifications: [...state.notices] }));
+  return Promise.resolve();
+}
+
+async function drainDeliveries() {
+  while (deliveries.length > 0) await deliveries.shift();
 }
 
 /**
@@ -1766,6 +1775,8 @@ export async function run(
   } catch (error) {
     if (error instanceof Unavailable) return "unavailable";
     throw error;
+  } finally {
+    await drainDeliveries();
   }
   return "completed";
 }
@@ -1778,6 +1789,7 @@ export function commandNames(): string[] {
 export async function emit(change: Knot.ApplicationChange) {
   state.sequence += 1;
   for (const listener of state.listeners) await listener({ ...change, sequence: state.sequence });
+  await drainDeliveries();
 }
 
 /** Marks startup complete and delivers the launched event. */

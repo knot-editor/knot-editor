@@ -388,6 +388,34 @@ function request(operation, ...arguments_) {
   );
 }
 
+// A registration is callable once its host reply has installed the handler,
+// but the application may call it the moment it has handled the request. A
+// call that finds no handler waits for the registrations in flight.
+let registrationsInFlight = 0;
+let registrationWaiters = [];
+
+async function registerCallable(install, send) {
+  registrationsInFlight++;
+  try {
+    const registration = await send();
+    install(registration);
+    return registration;
+  } finally {
+    if (--registrationsInFlight === 0) {
+      const waiters = registrationWaiters;
+      registrationWaiters = [];
+      for (const resolve of waiters) resolve();
+    }
+  }
+}
+
+async function callable(table, registration) {
+  if (!table.has(registration) && registrationsInFlight > 0) {
+    await new Promise((resolve) => registrationWaiters.push(resolve));
+  }
+  return table.get(registration);
+}
+
 const buffers = new Map();
 const commandHandlers = new Map();
 const bufferChangeListeners = new Map();
@@ -904,8 +932,9 @@ export async function registerCommand(name, handler, options = {}) {
     throw new TypeError("command palette option must be a boolean");
   }
   const palette = options.palette === false ? 0 : 1;
-  const registration = await request("registerCommand", name, title, description, palette);
-  commandHandlers.set(registration, handler);
+  const registration = await registerCallable(
+    (registration) => commandHandlers.set(registration, handler),
+    () => request("registerCommand", name, title, description, palette));
   const owned = ownership(() => commandHandlers.delete(registration),
     () => request("unregisterCommand", registration));
   return Object.freeze({ dispose: () => owned.dispose() });
@@ -915,8 +944,9 @@ export async function registerViewCommand(viewKind, name, handler) {
   if (typeof viewKind !== "string" || typeof name !== "string" || typeof handler !== "function") {
     throw new TypeError("commands.registerForView requires a view, command name, and handler");
   }
-  const registration = await request("registerViewCommand", viewKind, name);
-  commandHandlers.set(registration, handler);
+  const registration = await registerCallable(
+    (registration) => commandHandlers.set(registration, handler),
+    () => request("registerViewCommand", viewKind, name));
   const owned = ownership(() => commandHandlers.delete(registration),
     () => request("unregisterCommand", registration));
   return Object.freeze({ dispose: () => owned.dispose() });
@@ -1309,7 +1339,8 @@ async function invokeRegisteredCommand(
   commandArguments,
   capture,
 ) {
-  const handler = commandHandlers.get(registration);
+  const handler = commandHandlers.get(registration)
+    ?? await callable(commandHandlers, registration);
   if (!handler) {
     return {
       kind: "handlerFailure",
@@ -1325,7 +1356,14 @@ async function invokeRegisteredCommand(
     tool: capture.tool,
   });
   if (target) targetAuthorities.set(target, capture.authority);
-  const frame = { invocation, controller, buffer: activeHandle, capture, target };
+  const frame = {
+    root: currentFrame()?.root ?? null,
+    invocation,
+    controller,
+    buffer: activeHandle,
+    capture,
+    target,
+  };
   liveFrames.set(invocation, frame);
   try {
     try {
@@ -1369,8 +1407,11 @@ globalThis.__knotInvokeCommand = (
   capture,
 );
 
+// Whether the command is running in this isolate.
 globalThis.__knotCancelCommand = (invocation) => {
-  liveFrames.get(invocation)?.controller.abort(new Error("command cancelled"));
+  const frame = liveFrames.get(invocation);
+  frame?.controller.abort(new Error("command cancelled"));
+  return frame !== undefined;
 };
 
 export async function registerView(contribution) {
@@ -1446,7 +1487,9 @@ export async function registerView(contribution) {
       visible = placement.visible;
     }
   }
-  const registration = await request(
+  const registration = await registerCallable(
+    (registration) => { if (provider !== null) treeProviders.set(registration, provider); },
+    () => request(
     "registerView",
     id,
     title,
@@ -1459,8 +1502,7 @@ export async function registerView(contribution) {
     gutter ? 1 : 0,
     newTab,
     drop,
-  );
-  if (provider !== null) treeProviders.set(registration, provider);
+  ));
   const owned = ownership(() => treeProviders.delete(registration),
     () => request("unregisterView", registration));
   return Object.freeze({
@@ -1558,7 +1600,8 @@ async function editTree(registration, newRow, id, options) {
 }
 
 globalThis.__knotRequestTreeChildren = async (registration, window, instance, parentId, generation) => {
-  const provider = treeProviders.get(registration);
+  const provider = treeProviders.get(registration)
+    ?? await callable(treeProviders, registration);
   if (!provider) {
     return { error: "tree data provider is disposed" };
   }
@@ -1594,8 +1637,9 @@ export async function registerProvider(name, implementation) {
   }
   const methods = providerMethods(implementation);
   if (methods.length === 0) throw new TypeError("providers.register requires at least one method");
-  const registration = await request("registerProvider", name, methods);
-  providerImplementations.set(registration, implementation);
+  const registration = await registerCallable(
+    (registration) => providerImplementations.set(registration, implementation),
+    () => request("registerProvider", name, methods));
   const owned = ownership(() => providerImplementations.delete(registration),
     () => request("unregisterProvider", registration));
   return Object.freeze({ dispose: () => owned.dispose() });
@@ -1628,7 +1672,8 @@ export async function listProviders(name) {
 }
 
 globalThis.__knotCallProvider = async (registration, method, argument, window) => {
-  const implementation = providerImplementations.get(registration);
+  const implementation = providerImplementations.get(registration)
+    ?? await callable(providerImplementations, registration);
   if (!implementation) return { error: "the provider is disposed" };
   try {
     const context = Object.freeze({ window: window === null ? null : windowTarget({ window }) });

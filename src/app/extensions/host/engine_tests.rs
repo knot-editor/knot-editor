@@ -1235,7 +1235,7 @@ fn registration_response_racing_unload_cannot_publish_late_ownership() {
 }
 
 #[test]
-fn application_observation_installs_before_queued_delivery_and_self_disposes() {
+fn application_observation_installs_before_early_delivery_and_self_disposes() {
     use knot_protocol::{ApplicationSnapshot, WorkbenchObservation};
     let pool = RuntimePool::new(PoolConfig::single_worker());
     let runtime = key(209);
@@ -1282,8 +1282,6 @@ globalThis.activationFinished = true;
     setup.wait().unwrap();
     let query = pool.receive_request().unwrap();
     assert_eq!(query.operation, operation::<declared::list_documents>(()));
-    pool.dispatch_application_change(runtime, subscription, event(9))
-        .unwrap();
     pool.respond(HostResponse {
         extension: runtime.extension,
         lifecycle: runtime.lifecycle,
@@ -1305,6 +1303,9 @@ globalThis.activationFinished = true;
         result: Ok(success::<declared::unobserve_workbench>(())),
     })
     .unwrap();
+    // A delivery after the listener disposed itself reaches nothing.
+    pool.dispatch_application_change(runtime, subscription, event(9))
+        .unwrap();
     assert_eq!(
         &*pool
             .execute(
@@ -1944,7 +1945,7 @@ fn finite_slow_buffer_change_burst_is_lossless_and_measured() {
         .unwrap();
     wait_for_state(&pool, runtime, ExtensionState::AwaitingHostWork);
     let queued = pool.buffer_change_queue_metrics(runtime).unwrap();
-    assert!(queued.max_depth >= 7, "metrics: {queued:?}");
+    assert!(queued.max_depth >= 1, "metrics: {queued:?}");
     pool.respond(HostResponse {
         extension: runtime.extension,
         lifecycle: runtime.lifecycle,
@@ -1963,14 +1964,14 @@ fn finite_slow_buffer_change_burst_is_lossless_and_measured() {
         runtime,
         "verify-burst.js",
         r#"
-        if (events.join(",") !== "1,2,3,4,5,6,7,8") throw new Error("events lost");
+        if (events.join(",") !== "2,3,4,5,6,7,8,1") throw new Error("events lost");
     "#,
     )
     .unwrap()
     .wait()
     .unwrap();
     let metrics = pool.buffer_change_queue_metrics(runtime).unwrap();
-    assert!(metrics.max_depth >= 7, "metrics: {metrics:?}");
+    assert!(metrics.max_depth >= 1, "metrics: {metrics:?}");
     assert!(metrics.max_enqueue_to_start_lag > Duration::ZERO);
     pool.shutdown();
 }
@@ -2895,7 +2896,7 @@ fn semantic_provider_callbacks_preserve_typed_generations_and_recover_from_failu
 }
 
 #[test]
-fn provider_roots_queue_serially_and_a_waiting_callback_releases_the_worker() {
+fn a_waiting_provider_callback_does_not_hold_back_the_next_provider_call() {
     let pool = RuntimePool::new(PoolConfig::single_worker());
     let runtime = key(62);
     let neighbor = key(63);
@@ -2953,7 +2954,7 @@ fn provider_roots_queue_serially_and_a_waiting_callback_releases_the_worker() {
             .wait()
             .unwrap()
             .value,
-        "tree-await-start,tree-await-end,completion-queued"
+        "tree-await-start,completion-queued,tree-await-end"
     );
     pool.shutdown();
 }
@@ -2967,49 +2968,22 @@ fn dropped_removed_and_unloaded_provider_requests_release_runtime_state() {
     pool.load(runtime, IsolateConfig::default()).unwrap();
     install_semantic_providers(&pool, runtime, tree_registration, completion_registration);
 
-    let blocker = pool
-        .request_tree_children(
-            runtime,
-            TreeChildrenRequest {
-                registration: tree_registration,
-                window: "1".into(),
-                view: knot_protocol::ViewId::new(1),
-                parent_id: Some("await".into()),
-                generation: 2,
-            },
-        )
+    let parked = pool
+        .call_provider(runtime, completion_call(completion_registration, "await"))
         .unwrap();
-    let blocker_request = pool
+    let parked_request = pool
         .receive_request_timeout(Duration::from_secs(1))
         .unwrap();
-    let queued = pool
-        .call_provider(
-            runtime,
-            completion_call(completion_registration, "queued-drop"),
-        )
-        .unwrap();
-    drop(queued);
-    pool.respond(HostResponse {
-        extension: runtime.extension,
-        lifecycle: runtime.lifecycle,
-        id: blocker_request.id,
-        result: Ok(clipboard_written()),
-    })
-    .unwrap();
-    blocker.wait().unwrap();
+    drop(parked);
     wait_for_state(&pool, runtime, ExtensionState::Idle);
-    assert!(
-        !pool
-            .execute(
-                runtime,
-                "queued-provider-cancelled.js",
-                "globalThis.providerEvents.join(',')",
-            )
-            .unwrap()
-            .wait()
-            .unwrap()
-            .value
-            .contains("completion-queued-drop")
+    assert_eq!(
+        pool.respond(HostResponse {
+            extension: runtime.extension,
+            lifecycle: runtime.lifecycle,
+            id: parked_request.id,
+            result: Ok(clipboard_written()),
+        }),
+        Err(RuntimeResponseError::UnknownRequest)
     );
 
     let dropped = pool

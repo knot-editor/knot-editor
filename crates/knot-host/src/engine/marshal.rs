@@ -88,7 +88,7 @@ pub fn host_request_callback<'s, 'i>(
     };
     let parsed = parse_host_operation(scope, &arguments);
     let sender = state.event_sender.lock().unwrap().clone();
-    let root = *state.current_root.lock().unwrap();
+    let root = frame_root(scope);
     let (operation, kind) = match parsed {
         Ok(parsed) => parsed,
         Err(error) => {
@@ -98,7 +98,7 @@ pub fn host_request_callback<'s, 'i>(
             return;
         }
     };
-    let (Some(sender), Some(root)) = (sender, root) else {
+    let Some(sender) = sender else {
         let exception = boundary_exception(
             scope,
             BoundaryError::Host(TransportError::UnsupportedOperation),
@@ -247,6 +247,34 @@ pub(super) fn frame_callback<'s, 'i>(
     if arguments.length() > 0 {
         scope.set_continuation_preserved_embedder_data(arguments.get(0));
     }
+}
+
+/// The invocation the running continuation belongs to, read from the frame
+/// that rides with it.
+fn frame_root(scope: &mut v8::PinnedRef<'_, v8::HandleScope<'_>>) -> Option<RootId> {
+    let frame =
+        v8::Local::<v8::Object>::try_from(scope.get_continuation_preserved_embedder_data()).ok()?;
+    let key = v8::String::new(scope, "root")?;
+    let value = frame.get(scope, key.into())?;
+    let root = value.number_value(scope).filter(|_| value.is_number())?;
+    Some(RootId::new(root as u64))
+}
+
+/// Starts a turn of `root`: continuations created from here on carry its
+/// frame.
+pub(super) fn enter_root_frame(scope: &mut v8::PinScope<'_, '_>, root: RootId) {
+    let frame = v8::Object::new(scope);
+    if let Some(key) = v8::String::new(scope, "root") {
+        let value = v8::Number::new(scope, root.value() as f64);
+        frame.set(scope, key.into(), value.into());
+    }
+    scope.set_continuation_preserved_embedder_data(frame.into());
+}
+
+/// Ends a turn: the next synchronous code runs with no frame.
+pub(super) fn leave_frame(scope: &mut v8::PinScope<'_, '_>) {
+    let undefined = v8::undefined(scope);
+    scope.set_continuation_preserved_embedder_data(undefined.into());
 }
 
 pub(super) fn keybinding_callback<'s, 'i>(

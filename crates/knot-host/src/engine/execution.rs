@@ -30,18 +30,11 @@ impl TerminationHandle {
         let terminated = self.isolate.terminate_execution();
         if terminated
             && let Some(wake) = &self.wake
-            && let Some(root) = wake
-                .capsule
-                .local_state
-                .active
-                .lock()
-                .unwrap()
-                .as_ref()
-                .map(|active| active.root)
+            && !wake.capsule.local_state.active.lock().unwrap().is_empty()
         {
-            let _ = wake.scheduler.enqueue_continuation(
+            let _ = wake.scheduler.enqueue_task(
                 wake.key,
-                root,
+                None,
                 EngineTurn {
                     capsule: Arc::clone(&wake.capsule),
                     work: EngineWork::Termination,
@@ -357,16 +350,16 @@ impl<T> Drop for RuntimeProviderExecution<T> {
             .unwrap()
             .values()
             .any(|pending| {
-                pending.root == cancellation.root
+                pending.root == Some(cancellation.root)
                     && pending.provider_mutation == Some(cancellation.provider)
             });
         if self_mutation {
             return;
         }
         cancellation.cancelled.store(true, Ordering::Release);
-        let _ = cancellation.scheduler.enqueue_continuation(
+        let _ = cancellation.scheduler.enqueue_task(
             cancellation.key,
-            cancellation.root,
+            Some(cancellation.root),
             EngineTurn {
                 capsule: cancellation.capsule,
                 work: EngineWork::CancelProvider,
