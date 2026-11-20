@@ -505,28 +505,24 @@ impl RuntimePool {
             .into());
         }
         let capsule = self.capsule(key)?;
-        let mut cancelled = capsule.local_state.cancelled_commands.lock().unwrap();
-        cancelled.insert(invocation);
-        // A command that is not running yet finds the flag when it starts;
-        // a running one, or an inline child of one, is told to abort.
-        let running = capsule
+        // A command that is not running yet finds the flag when it starts; a
+        // running one is told to abort. An inline child is told even when its
+        // root's execution has already finished, since it runs on in the
+        // root's frame.
+        capsule
             .local_state
-            .active
+            .cancelled_commands
             .lock()
             .unwrap()
-            .values()
-            .any(|active| matches!(&active.completion, ActiveCompletion::Command(_)));
-        drop(cancelled);
-        if running {
-            self.scheduler_handle.enqueue_task(
-                key,
-                None,
-                EngineTurn {
-                    capsule,
-                    work: EngineWork::CancelCommand(invocation),
-                },
-            )?;
-        }
+            .insert(invocation);
+        self.scheduler_handle.enqueue_task(
+            key,
+            None,
+            EngineTurn {
+                capsule,
+                work: EngineWork::CancelCommand(invocation),
+            },
+        )?;
         Ok(())
     }
 

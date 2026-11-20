@@ -85,6 +85,18 @@ await commands.register("parent.inner", async () => { await crossRan; });
 await commands.register("parent.hang", async () => {
   await Promise.all([commands.invoke("parent.hang-inner"), commands.invoke("child.hang")]);
 });
+// The handler returns once its inline child runs, which cancels the child
+// after the handler's execution has finished in the isolate.
+let leftStarted;
+const left = new Promise((resolve) => { leftStarted = resolve; });
+await commands.register("parent.leave", async () => {
+  commands.invoke("parent.left");
+  await left;
+});
+await commands.register("parent.left", (context) => new Promise((resolve) => {
+  context.signal.addEventListener("abort", () => resolve());
+  leftStarted();
+}));
 await commands.register("parent.hang-inner", (context) => new Promise((resolve) => {
   context.signal.addEventListener("abort", () => resolve());
   settings.set("parent.inner-started", true);
@@ -209,6 +221,19 @@ fn a_command_runs_an_inline_and_a_cross_package_child_at_once(cx: &mut TestAppCo
         .host
         .update(cx, |host, cx| host.cancel_active_test_commands(cx));
     assert_eq!(wait_for_command(hanging, cx), CommandOutcome::Cancelled);
+}
+
+#[gpui::test]
+fn an_inline_child_is_cancelled_after_its_parent_handler_returns(cx: &mut TestAppContext) {
+    let fixture = start_allowing_failures(
+        &[
+            ("@example/parent", &[], PARENT),
+            ("@example/child", &[], CHILD),
+        ],
+        cx,
+    );
+    let leaving = fixture.command("parent.leave", cx);
+    assert_eq!(wait_for_command(leaving, cx), CommandOutcome::Completed);
 }
 
 #[gpui::test]
