@@ -452,10 +452,11 @@ function growScope(session: Session, growth: number, revision: number) {
   session.scopeRevision = revision;
 }
 
-/** The session of the command's editor while its bar is open. */
+/** The session of the command's editor while its bar is open. A session that
+ * failed to follow its editor never opened. */
 async function openSession(context: CommandContext): Promise<Session | undefined> {
   const target = (await windows.get(context.target.windowTarget))?.currentTarget;
-  const session = target == null ? undefined : await sessions.get(target);
+  const session = target == null ? undefined : await sessions.get(target)?.catch(() => undefined);
   return session?.open ? session : undefined;
 }
 
