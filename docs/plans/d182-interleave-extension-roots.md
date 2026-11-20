@@ -163,12 +163,24 @@ Implemented, awaiting review. Scope decisions made while implementing:
   in-flight registrations settle (`registerCallable`).
 - Listeners now overlap commands. The bundled packages that assumed
   otherwise got a small serialization (Vim ignores selection changes during
-  its own keys, Projects takes turns between commands and application
-  events, Go to File records in event order); the rest of the audit stays in
-  checkpoint 4.
+  its own keys in that editor, Projects takes turns between commands and
+  application events, Go to File records in event order); the rest of the
+  audit stays in checkpoint 4.
+- Listener dispatches and timer callbacks are invocations of their own: each
+  enters a frame carrying only its root, so its requests keep it unsettled
+  and its failures are reported, but it never carries command authority.
+  The keybinding batch request belongs to the invocation whose turn flushed
+  it, which fails if the batch does.
+- The notifications of one subscription (a buffer's changes, an editor's
+  selection or bar edits) take turns in the bootstrap (`inTurn`): each waits
+  for the previous one, so a slow listener sees them in order and the
+  application's acknowledgement still coalesces the changes made meanwhile.
+  Different subscriptions, and listeners and commands, interleave.
+- While evaluation stays exclusive, a package's top-level `await` on its own
+  timer or event still deadlocks, as before; checkpoint 3 lifts it.
 
 Deliverables: per-isolate task FIFO replacing `active`/`roots`; invocation
-completion on promise settlement, reported by a bootstrap reaction;
+completion on promise settlement;
 listener and timer failures still reported; cancellation, termination,
 provider drops, stop, and failure addressed per invocation. Package and
 personal-config evaluation stay exclusive, and `ProviderBusy` and the
@@ -207,7 +219,8 @@ registration live as soon as it resolves; `ProviderBusy` and
 already in its own ancestry.
 
 Validation: engine and product tests for a command and a listener running
-while their package's evaluation is parked, a provider called from the
+while their package's evaluation is parked, a top-level `await` on the
+package's own timer, a provider called from the
 provider package's own picker command, an A → B → A chain through different
 registrations of A that succeeds, and a recursive same-registration call
 that stays `Unavailable`.
