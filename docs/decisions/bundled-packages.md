@@ -106,7 +106,8 @@ the API for all extensions, so the package proves the surface and the native
 workspace tree and its private path are gone. Cut and Copy keep the taken item in
 the extension rather than the system clipboard, so pasting text elsewhere never
 meets a file and the clipboard holds only text. Multi-select,
-compact folders, and Git decorations are roadmap items (D177, D178, D126).
+compact folders, and version control decorations are roadmap items (D177,
+D178, D213).
 
 References: [extension guide](../extension-api/ui.md#activation-selection-and-editing-in-trees)
 and [semantic UI](../architecture/semantic-ui.md#extension-trees).

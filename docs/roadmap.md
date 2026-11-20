@@ -13,7 +13,7 @@ Every item has the same shape:
 - **Description** says what is missing today and when it becomes worth doing,
   then what to build.
 
-The next unused ID is **D207**; take it for a new item and bump this line.
+The next unused ID is **D222**; take it for a new item and bump this line.
 
 Each section is ordered so that an item comes after the items it depends on,
 wherever the sections allow it. Items with no dependencies are ordered by
@@ -28,15 +28,31 @@ point.
 
 ## Next up
 
+The [version control plan](plans/vcs.md) comes first, in its milestone order:
+
+- D182 — Interleave extension roots at awaits.
+- D087 — Extension entitlements.
+- D199 — Typed contracts between packages.
+- D209 — Diff function for extensions.
+- D210 — Richer gutter contributions.
+- D211 — VCS foundation and Git change gutter.
+- D212 — Resource decorations.
+- D213 — VCS file status and current ref.
+- D197 — Diff view.
+- D220 — Anchored floating panels.
+- D221 — Hunk popup.
+- D214 — VCS changes view.
+- D215 — VCS commit.
+- D216 — Git operations.
+
+Then:
+
+- D174 — Show Difference for files changed on disk.
 - D022 — Editor autocompletion.
-- D182 — Interleave extension roots at awaits: before D067.
-- D087 — Extension entitlements: D085, D126, D067, and D101 need it.
 - D129 — Refactor builtin language extensions.
 - D138 — Extension startup report as an untitled document.
 - D054 — Dedicated read-only generated text surface.
 - D085 — Cross-file search.
-- D197 — Diff view: D126 and D174 build on it.
-- D126 — Git status and changes per root.
 
 Remove an item from this list when it is done or dropped.
 
@@ -54,7 +70,7 @@ hold the analyses that support some items.
 
 ## Architecture and technical debt
 
-- **D182 — Interleave extension roots at awaits**
+- **D182 — Interleave extension roots at awaits** 🚧
   - Depends on: none
   - Description: A package runs one root (command, listener, timer, or provider
     call) at a time to completion, and extension commands are serial across all
@@ -66,7 +82,9 @@ hold the analyses that support some items.
     scheduler keep several live roots per package, make the command queue per
     package, and audit the bundled packages for state assumed stable across an
     await. The [scheduling report](reports/extension-task-scheduling.md) has
-    the analysis and proposed checkpoints.
+    the analysis and proposed checkpoints. It opens the
+    [version control plan](plans/vcs.md), whose Git package awaits processes
+    constantly.
 
 - **D129 — Refactor builtin language extensions**
   - Depends on: none
@@ -104,8 +122,8 @@ hold the analyses that support some items.
 
 ### Workspace, projects, and files
 
-- **D087 — Extension entitlements**
-  - Depends on: none
+- **D087 — Extension entitlements** 🚧
+  - Depends on: D182
   - Description: Packages declare entitlements in `knot.jsonc`, starting with
     process spawning and outbound HTTP. An installed package prompts once, on
     its first load, and again when an update adds an entitlement; the grant is
@@ -120,6 +138,9 @@ hold the analyses that support some items.
     provides consent and visibility, not a sandbox: runtime isolation is not a
     security boundary, and the decision record must say so. Decide how bundled
     consumers locate tools: bundle `rg` with Knot, or require it on PATH.
+    Process spawning is built complete, with entitlements, as part of the
+    [version control plan](plans/vcs.md), whose Git package is its first
+    consumer.
 
 - **D089 — Project-local settings**
   - Depends on: none
@@ -156,23 +177,14 @@ hold the analyses that support some items.
     preview tab; cancelling a superseded search; and refresh. It promotes
     D007: decide here how results recover when edits make their targets stale.
 
-- **D197 — Diff view**
-  - Depends on: none
+- **D197 — Diff view** 🚧
+  - Depends on: D209
   - Description: Knot cannot compare two texts. Build a native side-by-side and
     inline diff of two buffers or snapshots that stays current while one side
     is edited, with navigation between hunks, and an extension API to open one,
-    so Git (D126) can diff against `HEAD` and D174 can diff the buffer against
-    the file.
-
-- **D126 — Git status and changes per root**
-  - Depends on: D087, D197
-  - Description: No Git integration exists, though every compared editor shows
-    at least the branch and file status, built in or through a near-universal
-    plugin. Show each root's branch and file status in the explorer and the
-    status bar from a bundled extension over process spawning or a native
-    library, decide how status refreshes with file watching, show a file's
-    changes against `HEAD` in a diff view (D197), and mark changed lines in a
-    change gutter.
+    so version control (D211) can show a file's changes and D174 can diff the
+    buffer against the file. Part of the [version control plan](plans/vcs.md);
+    it computes hunks with D209's diff function.
 
 - **D124 — Workspace trust**
   - Depends on: D089
@@ -255,14 +267,44 @@ hold the analyses that support some items.
 
 ### Extension platform and language tooling
 
-- **D199 — Importing another package's code**
+- **D199 — Typed contracts between packages** 🚧
   - Depends on: none
   - Description: A package reuses another only through named providers, with
-    JSON calls and a contract each consumer declares locally. Do it when
-    provider contracts grow large enough that untyped names and local
-    interfaces cause mistakes: let a package import a dependency's exports as
-    a module whose functions call into the dependency's isolate, typed from
-    the dependency's declarations.
+    JSON calls and a contract each consumer declares locally; nothing checks
+    either side at runtime. `@knot/vcs` and its backends (D211) are the first
+    contract large enough for this to cause mistakes. Let a package import a
+    dependency's exports as a module whose functions call into the dependency's
+    isolate, with the contract defined once in code through a small schema
+    builder in Knot's API: types are inferred from it, it ships in built
+    JavaScript so packages built outside the repository need no extra step, and
+    the host validates calls and results against it. Part of the
+    [version control plan](plans/vcs.md).
+
+- **D209 — Diff function for extensions** 🚧
+  - Depends on: none
+  - Description: Extensions cannot compare texts, and a diff written in
+    JavaScript is slow on large files and copies the text across. Add a
+    stateless native diff in the API, between two texts or a buffer and a
+    text, returning line hunks, with the policy of when and what to compare
+    left to packages as with `buffer.find`. The change gutter (D211) and the
+    diff view (D197) use it. Part of the [version control plan](plans/vcs.md).
+
+- **D210 — Richer gutter contributions** 🚧
+  - Depends on: none
+  - Description: A contribution marks only its first line with a dot. A change
+    gutter needs bars spanning lines, a marker for deleted lines, and click
+    actions that can open a popup, and language-server diagnostics (D067) need
+    the same. Extend gutter contributions for them, with native painting and
+    theme color keys. Part of the [version control plan](plans/vcs.md).
+
+- **D212 — Resource decorations** 🚧
+  - Depends on: none
+  - Description: Native tabs show only dirty and deleted state, and the
+    explorer has no way to learn a file's status from another package. Let
+    packages decorate resource URIs with a color key and a badge, painted on
+    tabs and in the explorer, so version control status (D213) and later
+    diagnostics reach them without native code knowing about either. Part of
+    the [version control plan](plans/vcs.md).
 
 - **D200 — Progress reporting**
   - Depends on: none
@@ -275,13 +317,21 @@ hold the analyses that support some items.
     that root when it is still active, otherwise as an ordinary queued root, so
     it works with serial roots and needs no D182.
 
-- **D145 — Virtual text and anchored floating panels**
+- **D145 — Virtual text and inlay hints**
   - Depends on: none
   - Description: Decoration styles exist, but extensions still cannot draw
-    virtual text or inlay hints, or anchor a floating panel to a position. Do
-    it before D067 needs hover, inlay hints, or diagnostic text: design them
-    against a real language server, as inline virtual text and an anchored
-    floating surface that reuses the semantic tree and text content kinds.
+    virtual text or inlay hints. Do it before D067 needs inlay hints or
+    diagnostic text, or blame (D217) needs annotations: design them against a
+    real language server, as inline virtual text.
+
+- **D220 — Anchored floating panels** 🚧
+  - Depends on: none
+  - Description: Extensions cannot anchor a floating panel to a position in
+    an editor. The hunk popup (D221) is the first consumer, and language-server
+    hover (D067) the next: add an anchored floating surface that reuses the
+    semantic tree and text content kinds, with focus, dismissal, and
+    positioning that follows the anchor. Part of the
+    [version control plan](plans/vcs.md).
 
 - **D115 — Lifecycle hooks and native command overrides**
   - Depends on: none
@@ -310,7 +360,7 @@ hold the analyses that support some items.
     current line's text to the request if reading the buffer costs too much.
 
 - **D067 — Language servers and semantic tokens**
-  - Depends on: D182, D087, D145, D200, D115, D022
+  - Depends on: D182, D087, D145, D220, D200, D115, D022
   - Description: No language client exists. The syntax highlighting work
     prepared for one: LSP language IDs, `Send` text snapshots, a highlight
     vocabulary that semantic token types and modifiers map onto, and a
@@ -320,8 +370,8 @@ hold the analyses that support some items.
     it needs D087), define a whole-range semantic-token contribution that
     scales to file-sized token counts unlike per-item anchored contributions,
     and connect diagnostics to decorations and completion to D022. It needs
-    D145 for hover, inlay hints, and diagnostic
-    text, and format on save builds on D115.
+    D220 for hover and D145 for inlay hints and diagnostic text, and format on
+    save builds on D115.
 
 - **D125 — Tasks and run configurations**
   - Depends on: D087, D089, D124
@@ -376,6 +426,75 @@ hold the analyses that support some items.
     scanner, which the native parser calls on every lex step, so start with a
     spike that measures per-token call overhead and isolate ownership on
     background parse threads.
+
+### Version control
+
+The [version control plan](plans/vcs.md) holds the agreed architecture and the
+milestones these items belong to.
+
+- **D211 — VCS foundation and Git change gutter** 🚧
+  - Depends on: D087, D199, D209, D210
+  - Description: No version control integration exists. Add `@knot/vcs`, which
+    defines the provider contract and owns the shared surfaces, and `@knot/git`,
+    its first backend over the `git` command line: find repositories per root,
+    supply each open document's baseline, keep a change gutter current while
+    editing, and add next and previous change commands.
+
+- **D213 — VCS file status and current ref** 🚧
+  - Depends on: D211, D212
+  - Description: Nothing shows which files changed or which branch is checked
+    out. Report file statuses through `@knot/vcs`, which maps them to resource
+    decorations on tabs and in the explorer, and show the current ref's label
+    in the status bar.
+
+- **D221 — Hunk popup** 🚧
+  - Depends on: D211, D220
+  - Description: A gutter marker shows that lines changed, not how. Clicking
+    it opens a popup anchored to the hunk that shows the baseline's lines
+    against the current ones, with revert, next and previous hunk, and opening
+    the file's diff; backends may add their own actions, such as staging the
+    hunk in D216.
+
+- **D214 — VCS changes view** 🚧
+  - Depends on: D213, D197
+  - Description: There is no list of changed files. Add a changes view that
+    shows the provider's groups of changed files (for Git: staged, unstaged,
+    untracked) with the actions the provider defines, and opens a file's
+    changes in the diff view.
+
+- **D215 — VCS commit** 🚧
+  - Depends on: D214
+  - Description: Committing needs a terminal. Add the commit UI, a message
+    editor with options the provider supplies (for Git: amend, sign-off), and
+    commit through the provider; build the UI primitives it needs as extension
+    API.
+
+- **D216 — Git operations** 🚧
+  - Depends on: D215
+  - Description: Staging, branches, push and pull, stash, and other
+    Git-specific workflows stay outside the shared provider contract. Build
+    them in `@knot/git` as the plan's last milestone.
+
+- **D217 — Blame**
+  - Depends on: D211, D145
+  - Description: Nothing shows who last changed a line and in which commit.
+    Do it after the [version control plan](plans/vcs.md): show blame through
+    the provider, as end-of-line annotations on the current line or as a
+    gutter column for the whole file, with the commit's details on hover.
+
+- **D218 — Log, graph, and file history**
+  - Depends on: D216, D197
+  - Description: There is no view of a repository's history. Do it after the
+    [version control plan](plans/vcs.md): a log view of commits with the
+    branch graph, each commit's changed files opening in the diff view, and
+    the same view filtered to one file's history across renames.
+
+- **D219 — Merge conflict resolution**
+  - Depends on: D216, D197
+  - Description: Conflicted files show only their markers. Do it after the
+    [version control plan](plans/vcs.md): list conflicted files, accept ours,
+    theirs, or both per conflict from the editor, and a three-way merge view
+    built on the diff view.
 
 ### Package manager
 
@@ -755,7 +874,7 @@ and may move into a section above when daily use asks for them.
     as Zed's `overrides.scm` does.
 
 - **D159 — Trim trailing whitespace on modified lines only**
-  - Depends on: D126
+  - Depends on: D209
   - Description: Save trims every line. Trimming only the lines a change
     touched keeps saves from adding noise to the diff of a file that already
     had trailing whitespace, and needs a notion of modified lines that Knot
