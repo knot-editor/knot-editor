@@ -782,14 +782,20 @@ await commands.register("operations.target-loss", async () => {
                 documents
                     .read(cx)
                     .document_for_resource(&ResourceUri::parse("mem://product/notes.txt").unwrap())
-                    .is_none()
+                    .is_none(),
+                "{scenario}"
             );
             assert_eq!(
                 documents.read(cx).documents().count(),
-                if scenario == "window" { 1 } else { 2 }
+                if scenario == "window" { 1 } else { 2 },
+                "{scenario}"
             );
             if scenario == "pane" {
-                assert_eq!(first.read(cx).workbench.read(cx).panes().len(), 1);
+                assert_eq!(
+                    first.read(cx).workbench.read(cx).panes().len(),
+                    1,
+                    "{scenario}"
+                );
             }
         });
         if scenario != "cancel" {
