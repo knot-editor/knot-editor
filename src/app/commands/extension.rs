@@ -71,7 +71,7 @@ struct InvocationNode {
     target: InvocationTarget,
     buffer: Option<BufferHandle>,
     parent: Option<CommandInvocationId>,
-    child: Option<CommandInvocationId>,
+    children: HashSet<CommandInvocationId>,
     completion: CommandCompletion,
     command_reply: Option<PendingCommandReply>,
     handler_outcome: Option<CommandOutcome>,
@@ -94,14 +94,13 @@ pub(crate) enum ExtensionCommandEvent {
     },
 }
 
-/// Foreground-authoritative command catalog and serial invocation tree.
+/// Foreground-authoritative command catalog and invocation trees. Every
+/// invocation starts when it is enqueued; trees overlap freely.
 pub(crate) struct ExtensionCommandBridge {
     catalog: SharedCommandCatalog,
     lifecycles: HashSet<Lifecycle>,
     next_invocation: u64,
     invocations: HashMap<CommandInvocationId, InvocationNode>,
-    roots: VecDeque<CommandInvocationId>,
-    active_root: Option<CommandInvocationId>,
     events: VecDeque<ExtensionCommandEvent>,
     /// Callers waiting for a root invocation, children included, to settle.
     settle_watchers: HashMap<CommandInvocationId, Vec<CommandCompletion>>,
@@ -124,8 +123,6 @@ impl ExtensionCommandBridge {
             lifecycles: HashSet::new(),
             next_invocation: 1,
             invocations: HashMap::new(),
-            roots: VecDeque::new(),
-            active_root: None,
             events: VecDeque::new(),
             settle_watchers: HashMap::new(),
         }
@@ -273,10 +270,12 @@ impl ExtensionCommandBridge {
         } else {
             outcome
         });
-        if let Some(child) = node.child {
-            self.cancel_subtree(child);
-        } else {
+        if node.children.is_empty() {
             self.settle(invocation);
+        } else {
+            for child in node.children.clone() {
+                self.cancel_subtree(child);
+            }
         }
     }
 
@@ -366,7 +365,6 @@ impl ExtensionCommandBridge {
             return Err(CommandOutcome::Cancelled);
         }
         if parent_node.handler_outcome.is_some()
-            || parent_node.child.is_some()
             || !matches!(
                 parent_node.target,
                 InvocationTarget::Extension(target)
@@ -440,7 +438,7 @@ impl ExtensionCommandBridge {
                 target,
                 buffer,
                 parent: None,
-                child: None,
+                children: HashSet::new(),
                 completion,
                 command_reply: None,
                 handler_outcome: None,
@@ -448,8 +446,7 @@ impl ExtensionCommandBridge {
                 cancelled: false,
             },
         );
-        self.roots.push_back(id);
-        self.start_next_root();
+        self.start_invocation(id);
         CommandExecution {
             id,
             completion: receiver,
@@ -498,7 +495,7 @@ impl ExtensionCommandBridge {
                 target,
                 buffer,
                 parent: Some(parent),
-                child: None,
+                children: HashSet::new(),
                 completion,
                 command_reply: if same_runtime {
                     None
@@ -514,7 +511,11 @@ impl ExtensionCommandBridge {
                 cancelled: false,
             },
         );
-        self.invocations.get_mut(&parent).unwrap().child = Some(id);
+        self.invocations
+            .get_mut(&parent)
+            .unwrap()
+            .children
+            .insert(id);
         if same_runtime {
             let InvocationTarget::Extension(target) = target else {
                 unreachable!();
@@ -531,16 +532,6 @@ impl ExtensionCommandBridge {
                 self.start_invocation(id);
             }
             Ok((None, id))
-        }
-    }
-
-    fn start_next_root(&mut self) {
-        if self.active_root.is_some() {
-            return;
-        }
-        if let Some(root) = self.roots.pop_front() {
-            self.active_root = Some(root);
-            self.start_invocation(root);
         }
     }
 
@@ -596,7 +587,7 @@ impl ExtensionCommandBridge {
             return;
         }
         node.cancelled = true;
-        let child = node.child;
+        let children = node.children.clone();
         if node.started
             && let InvocationTarget::Extension(target) = node.target
         {
@@ -607,7 +598,7 @@ impl ExtensionCommandBridge {
                     invocation,
                 });
         }
-        if let Some(child) = child {
+        for child in children {
             self.cancel_subtree(child);
         }
     }
@@ -629,10 +620,8 @@ impl ExtensionCommandBridge {
         }
         if let Some(parent) = node.parent {
             let parent_ready = self.invocations.get_mut(&parent).is_some_and(|parent| {
-                if parent.child == Some(invocation) {
-                    parent.child = None;
-                }
-                parent.child.is_none() && parent.handler_outcome.is_some()
+                parent.children.remove(&invocation);
+                parent.children.is_empty() && parent.handler_outcome.is_some()
             });
             if parent_ready {
                 self.settle(parent);
@@ -640,12 +629,6 @@ impl ExtensionCommandBridge {
         } else {
             for watcher in self.settle_watchers.remove(&invocation).unwrap_or_default() {
                 watcher.complete(outcome.clone());
-            }
-            if self.active_root == Some(invocation) {
-                self.active_root = None;
-                self.start_next_root();
-            } else {
-                self.roots.retain(|root| *root != invocation);
             }
         }
     }

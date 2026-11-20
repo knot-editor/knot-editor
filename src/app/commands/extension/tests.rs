@@ -139,7 +139,7 @@ fn registration_is_lifecycle_scoped_and_disposable() {
 }
 
 #[test]
-fn roots_are_fifo_and_keep_arguments_and_captured_buffer() {
+fn roots_start_on_enqueue_and_keep_arguments_and_captured_buffer() {
     let mut bridge = ExtensionCommandBridge::new();
     let owner = key(1);
     bridge.admit_lifecycle(owner.0, owner.1);
@@ -151,36 +151,43 @@ fn roots_are_fifo_and_keep_arguments_and_captured_buffer() {
     assert_eq!(second.id, CommandInvocationId::new(2));
     assert_eq!(
         bridge.drain_events().collect::<Vec<_>>(),
-        vec![ExtensionCommandEvent::DispatchExtension {
-            root: first.id,
-            invocation: CommandInvocation {
-                id: first.id,
-                registration,
-                extension: owner.0,
-                lifecycle: owner.1,
-                arguments: CommandArgumentValue::String("argument".into()),
-                capture: None,
+        vec![
+            ExtensionCommandEvent::DispatchExtension {
+                root: first.id,
+                invocation: CommandInvocation {
+                    id: first.id,
+                    registration,
+                    extension: owner.0,
+                    lifecycle: owner.1,
+                    arguments: CommandArgumentValue::String("argument".into()),
+                    capture: None,
+                },
+                buffer,
             },
-            buffer,
-        }]
+            ExtensionCommandEvent::DispatchExtension {
+                root: second.id,
+                invocation: CommandInvocation {
+                    id: second.id,
+                    registration,
+                    extension: owner.0,
+                    lifecycle: owner.1,
+                    arguments: CommandArgumentValue::String("argument".into()),
+                    capture: None,
+                },
+                buffer: None,
+            },
+        ]
     );
-    bridge.complete(first.id, CommandOutcome::Completed);
-    assert!(matches!(
-        bridge.drain_events().next(),
-        Some(ExtensionCommandEvent::DispatchExtension {
-            invocation,
-            buffer: None,
-            ..
-        })
-            if invocation.id == second.id
-    ));
+    // The second settles while the first is still running.
     bridge.complete(second.id, CommandOutcome::Completed);
     assert_eq!(
-        first.completion.try_recv().unwrap(),
+        second.completion.try_recv().unwrap(),
         CommandOutcome::Completed
     );
+    assert!(first.completion.try_recv().is_err());
+    bridge.complete(first.id, CommandOutcome::Completed);
     assert_eq!(
-        second.completion.try_recv().unwrap(),
+        first.completion.try_recv().unwrap(),
         CommandOutcome::Completed
     );
 }
@@ -215,7 +222,8 @@ fn routed_children_compose_and_reject_recursion() {
     assert!(
         matches!(response.unwrap(), Ok(CommandInvokeDispatch::Inline { invocation, .. }) if invocation == child)
     );
-    let duplicate = request(
+    // A second child runs beside the first.
+    let sibling = request(
         first,
         5,
         Some(root.id),
@@ -223,12 +231,11 @@ fn routed_children_compose_and_reject_recursion() {
             command: command("fixture.inner"),
         }),
     );
-    assert!(matches!(
-        routed(&mut bridge, &duplicate).0.unwrap(),
-        Ok(CommandInvokeDispatch::Outcome {
-            outcome: CommandOutcome::Unavailable
-        })
-    ));
+    let (response, sibling, _pending_reply) = routed(&mut bridge, &sibling);
+    let sibling = sibling.unwrap();
+    assert!(
+        matches!(response.unwrap(), Ok(CommandInvokeDispatch::Inline { invocation, .. }) if invocation == sibling)
+    );
     let recursive = request(
         first,
         6,
@@ -244,6 +251,7 @@ fn routed_children_compose_and_reject_recursion() {
         })
     ));
     bridge.complete(child, CommandOutcome::Completed);
+    bridge.complete(sibling, CommandOutcome::Completed);
     bridge.complete(root.id, CommandOutcome::Completed);
 
     let root = enqueue_registered_root(
@@ -363,14 +371,14 @@ fn window_child_settles_after_routed_dispatch() {
 }
 
 #[test]
-fn cancellation_and_lifecycle_cleanup_settle_once_and_release_the_queue() {
+fn cancellation_and_lifecycle_cleanup_settle_once() {
     let mut bridge = ExtensionCommandBridge::new();
     let owner = key(1);
     bridge.admit_lifecycle(owner.0, owner.1);
     register(&mut bridge, owner, "fixture.command", 1);
     let mut first = enqueue_registered_root(&mut bridge, command("fixture.command"), None);
     let mut second = enqueue_registered_root(&mut bridge, command("fixture.command"), None);
-    bridge.drain_events().for_each(drop);
+    assert_eq!(bridge.drain_events().count(), 2);
     bridge.cancel(first.id);
     assert!(
         matches!(bridge.drain_events().next(), Some(ExtensionCommandEvent::CancelExtension {
@@ -384,11 +392,7 @@ fn cancellation_and_lifecycle_cleanup_settle_once_and_release_the_queue() {
             message: "late".into(),
         },
     );
-    assert!(
-        matches!(bridge.drain_events().next(), Some(ExtensionCommandEvent::DispatchExtension {
-        invocation, ..
-    }) if invocation.id == second.id)
-    );
+    assert!(bridge.drain_events().next().is_none());
     assert_eq!(
         first.completion.try_recv().unwrap(),
         CommandOutcome::Cancelled
@@ -398,6 +402,72 @@ fn cancellation_and_lifecycle_cleanup_settle_once_and_release_the_queue() {
         second.completion.try_recv().unwrap(),
         CommandOutcome::Cancelled
     );
+}
+
+#[test]
+fn concurrent_children_settle_their_parent_last_and_cancel_together() {
+    let mut bridge = ExtensionCommandBridge::new();
+    let first = key(1);
+    let second = key(2);
+    bridge.admit_lifecycle(first.0, first.1);
+    bridge.admit_lifecycle(second.0, second.1);
+    register(&mut bridge, first, "fixture.parent", 1);
+    register(&mut bridge, first, "fixture.inner", 2);
+    register(&mut bridge, second, "fixture.other", 3);
+    let mut root = enqueue_registered_root(&mut bridge, command("fixture.parent"), None);
+    bridge.drain_events().for_each(drop);
+    let child = |id, name| {
+        request(
+            first,
+            id,
+            Some(root.id),
+            operation::<declared::invoke_command>(declared::InvokeArguments {
+                command: command(name),
+            }),
+        )
+    };
+    let (_, inline, _) = routed(&mut bridge, &child(2, "fixture.inner"));
+    let (_, cross, mut cross_reply) = routed(&mut bridge, &child(3, "fixture.other"));
+    let (inline, cross) = (inline.unwrap(), cross.unwrap());
+    bridge.drain_events().for_each(drop);
+
+    // The parent's own outcome waits for both children.
+    bridge.complete(inline, CommandOutcome::Completed);
+    bridge.complete(root.id, CommandOutcome::Completed);
+    assert!(root.completion.try_recv().is_err());
+    bridge.complete(cross, CommandOutcome::Completed);
+    assert_eq!(
+        root.completion.try_recv().unwrap(),
+        CommandOutcome::Completed
+    );
+    assert!(cross_reply.try_recv().is_ok());
+
+    // Cancelling the parent reaches every running child.
+    let root = enqueue_registered_root(&mut bridge, command("fixture.parent"), None);
+    bridge.drain_events().for_each(drop);
+    let child = |id, name| {
+        request(
+            first,
+            id,
+            Some(root.id),
+            operation::<declared::invoke_command>(declared::InvokeArguments {
+                command: command(name),
+            }),
+        )
+    };
+    let (_, inline, _) = routed(&mut bridge, &child(4, "fixture.inner"));
+    let (_, cross, _) = routed(&mut bridge, &child(5, "fixture.other"));
+    let (inline, cross) = (inline.unwrap(), cross.unwrap());
+    bridge.drain_events().for_each(drop);
+    bridge.cancel(root.id);
+    let cancelled = bridge
+        .drain_events()
+        .filter_map(|event| match event {
+            ExtensionCommandEvent::CancelExtension { invocation, .. } => Some(invocation),
+            _ => None,
+        })
+        .collect::<std::collections::HashSet<_>>();
+    assert_eq!(cancelled, [root.id, inline, cross].into_iter().collect());
 }
 
 #[test]

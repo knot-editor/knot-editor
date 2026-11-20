@@ -2652,8 +2652,9 @@ declare module "knot" {
     /**
      * Invoke a child of the current command; arguments default to null.
      * Inherits the originating window/buffer and resolves with execution status.
-     * Await children serially: only one unfinished child per parent; a handler
-     * already running in the command's own ancestry is unavailable.
+     * Children may run at once (for example under `Promise.all`), and
+     * cancelling the command cancels each of them; a handler already running
+     * in the command's own ancestry is unavailable.
      * @throws HostError with ContextUnavailable outside a command, or Cancelled
      * for transport cancellation; TypeError for non-JSON-compatible arguments.
      */

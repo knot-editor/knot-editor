@@ -3034,11 +3034,19 @@ pub(crate) async fn complete_inline_command(
     context: HostContext,
     arguments: InlineArguments,
 ) -> Result<(), AccessError> {
+    // A cancelled child still reports its outcome, which its parent waits
+    // for, so this skips the liveness check that rejects cancelled callers.
     let request = context.request;
-    context.foreground(|host, _| {
-        host.commands
-            .complete_inline(&request, arguments.invocation, arguments.outcome)
-    })?
+    context
+        .host
+        .update(&mut context.application.clone(), |host, cx| {
+            let result =
+                host.commands
+                    .complete_inline(&request, arguments.invocation, arguments.outcome);
+            host.drain_command_events(cx);
+            result
+        })
+        .map_err(|_| AccessError::Cancelled)?
 }
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct ListCommandsArguments {
