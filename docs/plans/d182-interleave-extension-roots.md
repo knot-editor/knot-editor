@@ -142,36 +142,7 @@ is left until a package asks for one.
 
 ### 1. ✅ Continuation-carried attribution
 
-Done: frames ride continuation-preserved data via `nativeBindings.frame`; `withFrame` saves and restores around entry, so no per-task clearing is needed. Native requests still take their root from the running turn (the invocation was already explicit); that moves in checkpoint 2.
-
-Deliverables: every invocation's frame lives in continuation-preserved
-embedder data, saved and restored around entry; `request()`, contextual
-helpers, `__knotCancelCommand`, and the native request binding read it;
-`activeCommandFrames` and `current_root` are gone. Abort on `Cancelled`
-targets the issuing invocation's controller rather than the innermost frame
-at rejection time (the one behavior fix). Scheduler otherwise unchanged.
-
-Validation: existing host, command, and extension suites pass unchanged;
-engine tests that a frame survives `await`, host-response continuations, and
-nested inline commands (the parent's frame returns after the child's
-synchronous part), that a provider continuation keeps its invocation, and
-that a timer or listener callback sees no frame.
-
-Review gate: attribution design in code; confirm no behavior change before
-the scheduler moves.
-
-**Implementation context.** `crates/knot-host/src/js/bootstrap.js`
-(`requestForInvocation`, `request`, `activeCommandFrames` users around the
-`invokeRegisteredCommand` frame push/pop, contextual buffer/capture/window
-reads, `__knotCancelCommand`). Native: expose get/set to the bootstrap
-through the existing native bindings in `crates/knot-host/src/engine/`
-(`marshal.rs` request binding, around `current_root`), using the scope's
-`set_continuation_preserved_embedder_data`. Clear the data at the start of
-every task in `capsule.rs` turn entry points (`start_*_turn`,
-`resume_response_turn`, `run_root_turn`) so a task never inherits the
-previous one's. `PendingRequest.root` comes from the frame; a request with
-no frame uses the running turn's root until checkpoint 2, after which it
-belongs to no invocation. Tests in `crates/knot-host/src/engine/tests.rs`.
+Complete and approved. Frames ride continuation-preserved data (`nativeBindings.frame`, `withFrame` in `bootstrap.js`); native requests still take their root from the running turn until checkpoint 2.
 
 ### 2. Event-loop scheduler and invocation completion
 
