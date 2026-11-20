@@ -466,21 +466,31 @@ function withFrame(frame, run) {
 // The callback a command passes to a native surface it opens (picker
 // highlights and queries, input values, tree-edit validation). The surface
 // calls it as tasks of this package while the command awaits the surface's
-// result; each call runs in the command's frame, so it keeps the command's
-// authority until the surface settles. A failing call stops further calls
-// and rethrows once the surface settles, so a surface never stays open
-// unowned.
+// result; each call runs in the command's frame, so it has the command's
+// authority until the surface settles, and a call still running afterwards
+// keeps only the command's root. A failing call stops further calls and
+// rethrows once the surface settles, so a surface never stays open unowned.
+// Calls for which `supersedes` holds overlap, and only the failure of the
+// latest of them counts, since the surface drops the others' answers.
 const surfaceCallbacks = new Map();
 let nextSurfaceSession = 1;
 
-async function withSurfaceCallback(callback, open) {
+async function withSurfaceCallback(callback, open, supersedes = () => false) {
   const session = nextSurfaceSession++;
-  const state = { frame: currentFrame(), callback, failure: null };
+  const command = currentFrame();
+  const state = { open: true, callback, supersedes, latest: 0, failure: null, frame: null };
+  if (command !== null) {
+    state.frame = { root: command.root };
+    for (const key of ["invocation", "controller", "buffer", "capture", "target"]) {
+      Object.defineProperty(state.frame, key, { get: () => (state.open ? command[key] : undefined) });
+    }
+  }
   surfaceCallbacks.set(session, state);
   let result;
   try {
     result = await open(session);
   } finally {
+    state.open = false;
     surfaceCallbacks.delete(session);
   }
   if (state.failure !== null) throw state.failure.error;
@@ -490,11 +500,13 @@ async function withSurfaceCallback(callback, open) {
 globalThis.__knotSurfaceCallback = async (session, argument) => {
   const state = surfaceCallbacks.get(session);
   if (state === undefined || state.failure !== null) return { error: "the surface callback stopped" };
+  const event = JSON.parse(argument);
+  const call = state.supersedes(event) ? ++state.latest : null;
   try {
-    const result = await withFrame(state.frame, () => state.callback(JSON.parse(argument)));
+    const result = await withFrame(state.frame, () => state.callback(event));
     return { result: JSON.stringify(result ?? null) };
   } catch (error) {
-    state.failure ??= { error };
+    if (call === null || call === state.latest) state.failure ??= { error };
     return { error: String(error?.message ?? error) };
   }
 };
@@ -1147,7 +1159,7 @@ export async function showPicker(options) {
   }, (session) => request(
     "followPicker", title, items, target, session,
     onQuery == null ? 0 : 1, onHighlight == null ? 0 : 1, tabs, initialTab,
-  ));
+  ), (event) => event.kind === "query");
   return Object.freeze(result);
 }
 

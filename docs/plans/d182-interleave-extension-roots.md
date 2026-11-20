@@ -340,6 +340,11 @@ Implemented; awaiting review. Scope decisions made while implementing:
 - ✅ The stale-query test now covers out-of-order answers (it relied on
   serial calls); new test that a never-answered query blocks neither a later
   query nor selection. The input stale-answer test is unchanged.
+- ✅ Review fixes: after a serial callback fails, each later value still gets
+  an empty answer, so a tree edit commits instead of waiting forever; only
+  the latest query call's throw counts, since the others' answers are
+  dropped; a callback still running after its surface settles keeps only
+  the command's root, not its target or invocation. Each has a product test.
 
 Deliverables: picker `onHighlight`/`onQuery`, input `onChange`, and tree-edit
 `validate` invoked by the native surface as tasks of the owning package;

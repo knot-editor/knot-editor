@@ -2164,8 +2164,8 @@ declare module "knot" {
     readonly selection?: readonly [start: number, end: number];
     /** Called with each typed value, and the initial one; a returned message
      * shows under the field and blocks the commit, nothing or null accepts.
-     * Calls are serial; a throw stops further calls and is rethrown once the
-     * edit settles. */
+     * Calls are serial; a throw stops further calls, accepts the values
+     * typed after it, and is rethrown once the edit settles. */
     readonly validate?: (value: string) => string | null | undefined | Promise<string | null | undefined>;
   }
   export interface TreeNewItemOptions extends TreeEditOptions {
@@ -2312,8 +2312,10 @@ declare module "knot" {
      * ranges they carry highlighted. Each query is passed as it changes, even
      * while an earlier call runs; only the answer to the latest call applies,
      * and answers still pending when the picker settles are dropped. A throw
-     * stops further calls and is rethrown once the picker settles. `tab` is
-     * the active tab's ID,
+     * from the latest call stops further calls and is rethrown once the
+     * picker settles; an earlier call's throw is dropped with its answer. A
+     * call still running after the picker settles loses the command's
+     * target. `tab` is the active tab's ID,
      * or null without `tabs`; a tab change calls it again, and an answer
      * applies only while the field and the tab still hold what it answers.
      * `onHighlight` works as it does with `items`.

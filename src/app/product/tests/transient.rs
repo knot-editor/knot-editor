@@ -651,7 +651,7 @@ fn field_text(input: &Entity<crate::app::transient::InputView>, cx: &gpui::App) 
 }
 
 const LIVE_INPUT_SOURCE: &str = r#"
-import { commands, completion, history, keymaps, workbench } from "knot";
+import { commands, completion, editor, history, keymaps, workbench } from "knot";
 await commands.register("transient.live-input", async () => {
   const seen = [];
   const result = await workbench.showInput({
@@ -822,6 +822,39 @@ await commands.register("transient.stale-input", async () => {
     },
   });
 });
+await commands.register("transient.superseded-throw", async () => {
+  const result = await workbench.showPicker({
+    title: "Query",
+    onQuery: async (query) => {
+      if (query === "") {
+        await released("");
+        throw new Error("boom");
+      }
+      return [{ id: query, label: `row ${query}` }];
+    },
+  });
+  await workbench.writeClipboardText(`|${JSON.stringify(result)}`);
+});
+await commands.register("transient.late-query", async ({ target }) => {
+  const outcome = () => editor.activeBuffer(target).then(() => "ok", (error) => error.code);
+  let live = null;
+  await workbench.showPicker({
+    title: "Query",
+    onQuery: async (query) => {
+      if (query === "late") {
+        await workbench.writeClipboardText("waiting late");
+        await released("late");
+        await workbench.writeClipboardText(`late ${live} ${await outcome()}`);
+      } else {
+        live = await outcome();
+      }
+      return [{ id: query, label: `row ${query}` }];
+    },
+  });
+  await workbench.writeClipboardText("settled");
+  while (!((await workbench.readClipboardText()) ?? "").startsWith("late ")) {}
+});
+// Registered last: the tests start once it is live.
 await commands.register("transient.slow-query", async () => {
   const result = await workbench.showPicker({
     title: "Query",
@@ -888,7 +921,7 @@ fn live_window(
             .read(cx)
             .catalog()
             .borrow()
-            .resolve("transient.stale-input")
+            .resolve("transient.slow-query")
             .is_ok()
     });
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
@@ -1208,6 +1241,42 @@ fn rows_for_an_older_query_are_dropped(cx: &mut TestAppContext) {
     cx.write_to_clipboard(gpui::ClipboardItem::new_string("[al][]".into()));
     crate::app::product::driver::park_packages(cx);
     assert_eq!(cx.read(|cx| picker_labels(&picker, cx)), ["row al"]);
+}
+
+#[gpui::test]
+fn a_throw_from_a_superseded_query_is_dropped(cx: &mut TestAppContext) {
+    let (_host, _key, window, _window, completion) =
+        start_live_input("transient.superseded-throw", cx);
+    let picker = transient_picker(&window, cx);
+    picker.update(cx, |picker, cx| picker.set_query("ab", cx));
+    wait_for_api_condition(cx, |cx| picker_labels(&picker, cx) == ["row ab"]);
+    cx.write_to_clipboard(gpui::ClipboardItem::new_string("[]".into()));
+    crate::app::product::driver::park_packages(cx);
+    // Later queries still reach the callback.
+    picker.update(cx, |picker, cx| picker.set_query("cd", cx));
+    wait_for_api_condition(cx, |cx| picker_labels(&picker, cx) == ["row cd"]);
+    picker.update(cx, |picker, cx| picker.confirm(cx));
+    assert_eq!(wait_for_command(completion, cx), CommandOutcome::Completed);
+    assert_eq!(
+        clipboard(cx).as_deref(),
+        Some(r#"|{"kind":"selected","id":"cd"}"#)
+    );
+}
+
+#[gpui::test]
+fn a_query_running_after_the_picker_settles_loses_the_command_target(cx: &mut TestAppContext) {
+    let (_host, _key, window, _window, completion) = start_live_input("transient.late-query", cx);
+    let picker = transient_picker(&window, cx);
+    wait_for_api_condition(cx, |cx| picker_labels(&picker, cx) == ["row "]);
+    picker.update(cx, |picker, cx| picker.set_query("late", cx));
+    wait_for_api_condition(cx, |cx| clipboard_is(cx, "waiting late"));
+    picker.update(cx, |_, cx| {
+        cx.emit(crate::app::picker::PickerEvent::Dismissed)
+    });
+    wait_for_api_condition(cx, |cx| clipboard_is(cx, "settled"));
+    cx.write_to_clipboard(gpui::ClipboardItem::new_string("[late]".into()));
+    assert_eq!(wait_for_command(completion, cx), CommandOutcome::Completed);
+    assert_eq!(clipboard(cx).as_deref(), Some("late ok InvalidTarget"));
 }
 
 #[gpui::test]

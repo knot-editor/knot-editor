@@ -1510,7 +1510,9 @@ type ApplyAnswer<Q> = Box<dyn FnMut(&HostContext, &Q, Option<String>)>;
 /// has returned; its answer goes to `apply` only when no later value was
 /// passed meanwhile, as `None` when the call failed. Each new highlight is
 /// passed once the previous one's call has returned. A failing call stops
-/// further calls. Concurrent answers still pending when the surface settles
+/// further calls, unless its answer was dropped for a later one; values of a
+/// serial source then still go to `apply` as `None`, so a field waiting for
+/// an answer to its text gets one. Concurrent answers still pending when the surface settles
 /// are dropped, but the outcome waits for the calls of a serial source and
 /// for a highlight's, so a preview never lands after the command resumes.
 async fn follow_surface<Q: Clone>(
@@ -1560,7 +1562,10 @@ async fn follow_surface<Q: Clone>(
         let next = {
             let answering = !concurrent && !answers.is_empty();
             let mut answer = std::pin::pin!(async {
-                match answered.as_mut().filter(|_| !failed && !answering) {
+                match answered
+                    .as_mut()
+                    .filter(|_| !(failed && concurrent) && !answering)
+                {
                     Some(answered) => answered.changed().await.is_ok(),
                     None => std::future::pending().await,
                 }
@@ -1600,8 +1605,8 @@ async fn follow_surface<Q: Clone>(
                 failed |= result.is_none();
             }
             Next::Answer(answered, value, result) => {
-                failed |= result.is_none();
                 if answered == generation {
+                    failed |= result.is_none();
                     apply(context, &value, result);
                 }
             }
@@ -1612,6 +1617,10 @@ async fn follow_surface<Q: Clone>(
                     .expect("answered values")
                     .borrow_and_update()
                     .clone();
+                if failed {
+                    apply(context, &value, None);
+                    continue;
+                }
                 generation += 1;
                 let pending = call(argument(&value));
                 answers.push(pending.map(move |result| (generation, value, result)));

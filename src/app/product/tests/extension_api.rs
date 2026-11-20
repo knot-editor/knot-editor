@@ -1447,6 +1447,19 @@ await commands.register("test.create", async () => {
 await commands.register("test.missing", async () => {
   try { await view.editLabel("absent"); } catch (error) { await report({ error: error.code }); }
 });
+await commands.register("test.failing", async () => {
+  try {
+    await view.editLabel("file", {
+      validate: async (value) => {
+        if (!value.includes("!")) return null;
+        await workbench.writeClipboardText("threw");
+        throw new Error("boom");
+      },
+    });
+  } catch (error) {
+    await workbench.writeClipboardText(`caught ${error.message}`);
+  }
+});
 "#;
 
     let documents = install_globals(cx);
@@ -1523,6 +1536,16 @@ await commands.register("test.missing", async () => {
     let missing = dispatch_product_command(&window, native_window, "test.missing", cx);
     assert_eq!(wait_for_command(missing, cx), CommandOutcome::Completed);
     clipboard(r#"{"error":"TreeItemNotFound"}"#, cx);
+
+    // After a throw, the values typed later commit, and the throw is rethrown.
+    let failing = dispatch_product_command(&window, native_window, "test.failing", cx);
+    wait_for_api_condition(cx, |cx| tree.read(cx).is_editing());
+    cx.simulate_input(native_window, "x!");
+    clipboard("threw", cx);
+    cx.simulate_keystrokes(native_window, "backspace");
+    cx.simulate_keystrokes(native_window, "enter");
+    assert_eq!(wait_for_command(failing, cx), CommandOutcome::Completed);
+    clipboard("caught boom", cx);
 }
 
 #[gpui::test]
