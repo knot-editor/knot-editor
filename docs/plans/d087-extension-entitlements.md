@@ -1,6 +1,6 @@
 # D087 — Extension entitlements
 
-Status: 🚧 checkpoint 1 implemented, awaiting its review gate. Source: [roadmap D087](../roadmap.md), first
+Status: 🚧 checkpoint 1 done; checkpoints 2 and 3 not started. Source: [roadmap D087](../roadmap.md), first
 item of the [version control plan](vcs.md), whose `@knot/git` package is the
 first consumer of process spawning.
 
@@ -144,58 +144,17 @@ and the decision record says so.
 
 ## Checkpoints
 
-### 1. Declarations, grants, and startup consent ✅ (review gate pending)
+### 1. Declarations, grants, and startup consent ✅ approved
 
-Deliverables:
-
-- ✅ `entitlements` in `Manifest`, the JSON schema, the package guide, and the
-  bundled manifest type. An unknown entitlement name is a manifest error.
-- ✅ The grant record in the state database, and the model policy as plain
-  functions in `knot-model`: given discovered packages and the grant record, the
-  undecided packages to ask about, which packages may load, and the report
-  cause of the rest.
-- ✅ The consent window between pre-init and installed loading. Not-loaded
-  outcomes go in the startup report, and dependents fail.
-- ✅ Restart Extension… asks about undecided entitlements and respects denials.
-
-Validation: `knot-model` tests for the policy (new package, an update adding an
-entitlement, denied, bundled, undeclared). Application tests for startup with
-grants present, allow, deny, close-without-deciding asking again at the next
-startup, a dependent of a denied package failing, grants persisting through the
-state database, and restart asking about an undecided entitlement. `just check`.
-
-Decisions made while implementing: the consent window stays open after
-Continue or close until the workbench opens (closing it earlier would quit on
-platforms that quit with the last window), and its Quit key is bound beside the
-configuration-error window's. A package held back by an entitlement is a new
-`LoadResult::NotLoaded`, which does not open the report on launch; its
-dependents fail normally.
-
-Review gate: the consent window and report wording in the real app, through a
-`Try:` setup with a fake installed package that declares `process`.
-
-**Implementation context:**
-
-- Manifest: `crates/knot-model/src/extensions/package.rs` (`Manifest`,
-  `deny_unknown_fields`), `docs/schemas/knot.schema.json`,
-  `docs/extension-api/packages.md`, and the manifest typing in
-  `crates/knot-bundled/src/build.rs` if it validates fields.
-- Load policy: `crates/knot-model/src/extensions/load.rs` (`DependencyPlan`,
-  `LoadResult`, `LoadEntry`). Add a "not loaded" cause that fails dependents
-  the way a failed package does.
-- Startup sequencing: `ProductExtensionHost::start_product_startup` and
-  `start_installed_extensions_with_completion` in `src/app/extensions/host.rs`.
-  Split discovery from loading so consent sits between them, after pre-init.
-- Consent window: mirror `src/app/personal_config_error.rs` (`open`, a
-  standalone window before the workbench) and its tests. Window admission is in
-  `src/app/product/launch.rs` (`finish_product_startup`,
-  `open_report_after_failed_startup`).
-- Grant record: mirror a `RecordStore` user such as `src/app/zoom.rs` or
-  `src/app/tool_layout.rs` over `crates/knot-model/src/state_database.rs`, and
-  make sure `extensions::host::quit_after_storage` flushes it.
-- Restart: `src/app/product/extension_restart.rs`,
-  `ProductExtensionHost::restart_package`, and tests in
-  `src/app/product/tests/extension_restart.rs`.
+Manifest `entitlements`, the grant record (`knot-model`
+`extensions/entitlements.rs`, persisted by `src/app/extensions/entitlements.rs`),
+the startup consent window (`src/app/extensions/consent.rs`), the
+`LoadResult::NotLoaded` outcome, and the restart confirmation are in place.
+The consent window stays open after Continue or close until the workbench
+opens, so quitting with the last window cannot fire in between. A package held
+back by an entitlement does not open the startup report on launch; its
+dependents fail normally. The author guide covers `entitlements` in
+[packages](../extension-api/README.md#package-and-check-your-code).
 
 ### 2. Process API
 
