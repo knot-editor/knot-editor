@@ -141,3 +141,16 @@ export function boundWindows(state: ProjectsState, project: Project, list: reado
 export function matchingWindows(project: Project, list: readonly WindowInfo[]) {
   return list.filter((window) => sameRoots(windowRoots(window), project.roots));
 }
+
+const queues = new WeakMap<ProjectsState, Promise<unknown>>();
+
+/**
+ * Runs `run` after every earlier exclusive run has finished. Commands and
+ * application events each read and rewrite the registry and the windows from
+ * what the one before left, so they take turns.
+ */
+export function exclusive<T>(state: ProjectsState, run: () => Promise<T>): Promise<T> {
+  const result = (queues.get(state) ?? Promise.resolve()).then(run);
+  queues.set(state, result.catch(() => {}));
+  return result;
+}

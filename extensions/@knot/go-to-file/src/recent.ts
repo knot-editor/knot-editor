@@ -20,13 +20,23 @@ async function fileOf(target: ViewTarget): Promise<string | null> {
   return (await documentOf(target))?.resourceUri ?? null;
 }
 
-/** Records the document and file of a newly active tab. */
-export async function recordActive(event: ApplicationEvent) {
-  if (event.type !== "activeTargetChanged" || event.activeTarget === null) return;
-  const document = await documentOf(event.activeTarget);
-  if (document === null) return;
-  await history.record(BUFFER_HISTORY, document.id);
-  if (document.resourceUri !== null) await history.record(HISTORY, document.resourceUri);
+let recording: Promise<unknown> = Promise.resolve();
+
+/**
+ * Records the document and file of a newly active tab. Recordings run in
+ * event order, so the newest tab ends up first.
+ */
+export function recordActive(event: ApplicationEvent): Promise<void> {
+  if (event.type !== "activeTargetChanged" || event.activeTarget === null) return Promise.resolve();
+  const target = event.activeTarget;
+  const run = recording.then(async () => {
+    const document = await documentOf(target);
+    if (document === null) return;
+    await history.record(BUFFER_HISTORY, document.id);
+    if (document.resourceUri !== null) await history.record(HISTORY, document.resourceUri);
+  });
+  recording = run.catch(() => {});
+  return run;
 }
 
 /** A recent file under one of the roots, with its path below that root. */

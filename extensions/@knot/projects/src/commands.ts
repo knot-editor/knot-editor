@@ -1,5 +1,5 @@
 import { commands, documents, storage, windows, workbench } from "knot";
-import type { JsonValue } from "knot";
+import type { CommandContext, CommandOptions, JsonValue } from "knot";
 import { adopt } from "./adopt.js";
 import { syncBindings } from "./bindings.js";
 import { repositoryRoot, windowWithRoot } from "./inference.js";
@@ -19,7 +19,7 @@ import {
 } from "./registry.js";
 import { describe, report } from "./report.js";
 import { capturesOf, sessionKey } from "./session.js";
-import { commit, refreshTree, release, reload, type ProjectsState } from "./state.js";
+import { commit, exclusive, refreshTree, release, reload, type ProjectsState } from "./state.js";
 import { switchTo, type SwitchOptions } from "./switch.js";
 import { VIEW_ID } from "./tree.js";
 
@@ -35,21 +35,27 @@ function explicitName(typed: string, inferred: string | null) {
 }
 
 export async function registerCommands(state: ProjectsState) {
+  const serial = {
+    register: (name: string, handler: (context: CommandContext) => unknown, options?: CommandOptions) =>
+      commands.register(name, (context) => exclusive(state, async () => { await handler(context); }), options),
+    registerForView: (view: string, name: string, handler: (context: CommandContext) => unknown) =>
+      commands.registerForView(view, name, (context) => exclusive(state, async () => { await handler(context); })),
+  };
   // The tool starts hidden so it never displaces the native explorer selection on
   // fresh windows. A command-invoked show or hide is an explicit user arrangement,
   // so the native tool-layout snapshot remembers it as the fresh-window default.
-  await commands.register("projects.show", async () => {
+  await serial.register("projects.show", async () => {
     if (state.view !== null) await state.view.show();
   }, { title: "Show Projects", description: "Show the Projects tool." });
 
-  await commands.register("projects.hide", async () => {
+  await serial.register("projects.hide", async () => {
     if (state.view !== null) await state.view.hide();
   }, { title: "Hide Projects", description: "Hide the Projects tool." });
 
   // Both pickers list the projects; Open leaves the window as it is, while
   // Switch replaces its session.
   const pickProject = (options: SwitchOptions, title: string, description: string, name: string, label: string) =>
-    commands.register(name, async ({ target }) => {
+    serial.register(name, async ({ target }) => {
       await reload(state);
       if (state.registry.projects.length === 0) {
         await report("no projects yet; create one first");
@@ -84,7 +90,7 @@ export async function registerCommands(state: ProjectsState) {
 
   // Row activation routes through the focused tree instance. A click or Enter
   // opens the selected row's project like Open Project; other gestures do nothing.
-  await commands.registerForView(VIEW_ID, "projects.select", async ({ target, arguments: args }) => {
+  await serial.registerForView(VIEW_ID, "projects.select", async ({ target, arguments: args }) => {
     const gesture = object(args)?.gesture;
     if (gesture !== "click" && gesture !== "enter") return;
     await reload(state);
@@ -95,7 +101,7 @@ export async function registerCommands(state: ProjectsState) {
 
   // A window opened with the project's roots binds to it like any other window
   // with those roots.
-  await commands.register("projects.new-window", async ({ target }) => {
+  await serial.register("projects.new-window", async ({ target }) => {
     await reload(state);
     await syncBindings(state, await windows.list());
     const id = state.bindings.get(target.windowTarget);
@@ -114,7 +120,7 @@ export async function registerCommands(state: ProjectsState) {
   // The repository of the active document, as automatic adoption would infer
   // it, for windows it never adopts automatically: a rooted one keeps its
   // project and the repository opens beside it.
-  await commands.register("projects.open-containing-repository", async ({ target }) => {
+  await serial.register("projects.open-containing-repository", async ({ target }) => {
     await reload(state);
     const list = await windows.list();
     const window = list.find((window) => window.target === target.windowTarget);
@@ -145,7 +151,7 @@ export async function registerCommands(state: ProjectsState) {
     description: "Open the Git repository that contains this document as a project.",
   });
 
-  await commands.register("projects.rename", async ({ arguments: args }) => {
+  await serial.register("projects.rename", async ({ arguments: args }) => {
     await reload(state);
     const id = idArgument(args);
     const project = id === null ? null : projectById(state.registry, id);
@@ -163,7 +169,7 @@ export async function registerCommands(state: ProjectsState) {
     }
   }, { title: "Rename Project…", palette: false });
 
-  await commands.register("projects.remove", async ({ arguments: args }) => {
+  await serial.register("projects.remove", async ({ arguments: args }) => {
     await reload(state);
     const id = idArgument(args);
     const project = id === null ? null : projectById(state.registry, id);
@@ -196,7 +202,7 @@ export async function registerCommands(state: ProjectsState) {
     await release(captures);
   }, { title: "Remove Project…", palette: false });
 
-  await commands.register("projects.list", async () => {
+  await serial.register("projects.list", async () => {
     await reload(state);
     await refreshTree(state);
     // The tree is the list; showing it is the visible result.
@@ -212,7 +218,7 @@ export async function registerCommands(state: ProjectsState) {
     );
   }, { title: "Developer: Copy Projects Record", description: "Copy the stored projects and sessions as JSON." });
 
-  await commands.register("projects.refresh", async () => {
+  await serial.register("projects.refresh", async () => {
     await reload(state);
     await refreshTree(state);
     if (state.loadFailure !== null) await report(`cannot read projects: ${state.loadFailure}`);

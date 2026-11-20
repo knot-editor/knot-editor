@@ -7,7 +7,7 @@
 // keys that edit come here to type over the text.
 import { commands, documents, keymaps, settings, storage, windows, workbench } from "knot";
 import type {
-  CommandContext, DocumentId, EditorHandle, JsonValue, RecordedCommand, StatusItem, ViewTarget, WindowTarget,
+  CommandContext, DocumentId, EditorHandle, EditorSelection, JsonValue, RecordedCommand, StatusItem, ViewTarget, WindowTarget,
 } from "knot";
 import { commandLine } from "./command-line.js";
 import { Highlights } from "./highlight.js";
@@ -287,6 +287,10 @@ class Vim {
     });
     await handle.onDidChangeSelection(async (selection) => {
       if (this.states.get(target) !== state || isTyping(state.mode)) return;
+      if (this.keying > 0) {
+        this.missedSelection = selection;
+        return;
+      }
       const mode = state.mode;
       await whileOpen(() => followSelection(state, selection));
       if (state.mode !== mode) await this.showStatus(target.window);
@@ -342,12 +346,32 @@ class Vim {
     await this.showStatus(presentation.target.window);
   }
 
+  /** Keys being handled. The selection a key sets on the way is this
+   * package's own, so selection changes seen meanwhile are not followed. */
+  private keying = 0;
+  private missedSelection: EditorSelection | null = null;
+
   async keys(context: CommandContext, keys: readonly string[]) {
     const state = await this.stateOf(context);
     if (state === null) return;
     state.message = null;
-    if (!(await this.feedKeys(state, keys))) return this.showStatus(state.target.window);
-    await showOperator(state, state.mode === "normal" && state.pending.operator !== null);
+    this.keying++;
+    try {
+      if (!(await this.feedKeys(state, keys))) return this.showStatus(state.target.window);
+      await showOperator(state, state.mode === "normal" && state.pending.operator !== null);
+    } finally {
+      this.keying--;
+    }
+    // What the keys left, such as a caret a native command moved, is followed
+    // once they are done.
+    const missed = this.missedSelection;
+    this.missedSelection = null;
+    if (
+      missed !== null && this.states.get(state.target) === state && !isTyping(state.mode) &&
+      (missed.anchor !== missed.caret || missed.caret !== state.caret)
+    ) {
+      await whileOpen(() => followSelection(state));
+    }
     await this.showStatus(state.target.window);
   }
 
