@@ -1123,26 +1123,12 @@ impl RuntimeCapsule {
                 return fatal_or_completed(&error);
             }
         }
-        let awaiting: HashSet<RootId> = self
-            .local_state
-            .pending
-            .lock()
-            .unwrap()
-            .values()
-            .filter_map(|pending| pending.root)
-            .collect();
         let finished: Vec<(RootId, ActiveExecution)> = {
             let mut active = self.local_state.active.lock().unwrap();
             let roots: Vec<RootId> = active
                 .iter()
-                .filter(|(root, execution)| {
-                    match v8::Local::new(scope, &execution.promise).state() {
-                        v8::PromiseState::Pending => false,
-                        // A request the invocation left in flight still keeps
-                        // it alive, so its effect lands before it completes.
-                        v8::PromiseState::Fulfilled => !awaiting.contains(root),
-                        v8::PromiseState::Rejected => true,
-                    }
+                .filter(|(_, execution)| {
+                    v8::Local::new(scope, &execution.promise).state() != v8::PromiseState::Pending
                 })
                 .map(|(root, _)| *root)
                 .collect();

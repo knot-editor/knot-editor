@@ -414,11 +414,14 @@ impl ExtensionCommandBridge {
         Ok(root)
     }
 
+    /// Whether `invocation` is cancelled and still unsettled. A settled
+    /// command's requests run like any other: contextual ones fail their
+    /// authorization, the rest succeed.
     pub(crate) fn is_cancelled(&self, invocation: Option<CommandInvocationId>) -> bool {
         invocation.is_some_and(|invocation| {
             self.invocations
                 .get(&invocation)
-                .is_none_or(|node| node.cancelled)
+                .is_some_and(|node| node.cancelled)
         })
     }
 

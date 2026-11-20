@@ -1,6 +1,6 @@
 //! A package's code running while another of its invocations awaits: its
-//! loading, command chains that come back into it, and overlapping commands
-//! and children.
+//! loading, command chains that come back into it, overlapping commands
+//! and children, and requests that outlive their command.
 
 use super::extension_restart::{start_allowing_failures, start_loading};
 use super::*;
@@ -98,6 +98,11 @@ await commands.register("child.hang", (context) => new Promise((resolve) => {
   context.signal.addEventListener("abort", () => resolve());
   settings.set("parent.cross-started", true);
 }));
+"#;
+
+const FIRES: &str = r#"
+import { commands, workbench } from "knot";
+await commands.register("fires.write", () => { workbench.writeClipboardText("late"); });
 "#;
 
 fn startup_state(cx: &TestAppContext) -> StartupState {
@@ -204,4 +209,23 @@ fn a_command_runs_an_inline_and_a_cross_package_child_at_once(cx: &mut TestAppCo
         .host
         .update(cx, |host, cx| host.cancel_active_test_commands(cx));
     assert_eq!(wait_for_command(hanging, cx), CommandOutcome::Cancelled);
+}
+
+#[gpui::test]
+fn a_command_completes_without_waiting_for_a_request_it_left_running(cx: &mut TestAppContext) {
+    let fixture = start_allowing_failures(&[("@example/fires", &[], FIRES)], cx);
+    fixture
+        .host
+        .update(cx, |host, _| host.hold_clipboard_writes());
+    let execution = fixture.command("fires.write", cx);
+    assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
+    assert_eq!(
+        cx.read(|cx| fixture.host.read(cx).pending_view_request_count()),
+        1
+    );
+    // The request still runs once its command is gone.
+    fixture
+        .host
+        .update(cx, |host, cx| host.release_view_requests(cx));
+    wait_for_clipboard("late", cx);
 }
