@@ -211,9 +211,9 @@ each invocation promise that reports through a native binding. Listener
 acknowledgements in `bootstrap.js` (`__knotDispatchBufferChange` and the
 selection dispatch) and their foreground counterparts.
 
-### 3. 🔍 Non-exclusive loading and lifted refusals
+### 3. ✅ Non-exclusive loading and lifted refusals
 
-Implemented, awaiting review. The scheduler no longer has exclusive
+Complete and approved. The scheduler no longer has exclusive
 invocations; a call that reaches a registration before its handler is
 installed still waits in the bootstrap (`registerCallable`). The
 provider-package case is tested as a chain: the provider's command runs a
