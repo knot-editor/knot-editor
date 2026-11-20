@@ -55,6 +55,7 @@ await commands.register("api.capture", async (context) => {
   const snapshot = await context.buffer.snapshot();
   if (snapshot.text !== "first") throw new Error(`wrong buffer: ${snapshot.text}`);
   if ((await commands.invoke("api.inline")).kind !== "completed") throw new Error("inline failed");
+  if (await editor.activeBuffer(context.target) !== context.buffer) throw new Error("parent frame lost after inline child");
   if ((await commands.invoke("api.cross", { window: context.target.window })).kind !== "completed") throw new Error("cross failed");
   await context.buffer.onDidChange(async (change) => {
 await expectCode(() => editor.activeBuffer(), "ContextUnavailable");

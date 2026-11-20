@@ -236,6 +236,19 @@ pub(super) fn timer_callback<'s, 'i>(
     }
 }
 
+/// Reads, and with an argument replaces, the frame carried by the running
+/// continuation; the previous value is returned.
+pub(super) fn frame_callback<'s, 'i>(
+    scope: &mut v8::PinnedRef<'s, v8::HandleScope<'i>>,
+    arguments: v8::FunctionCallbackArguments<'s>,
+    mut result: v8::ReturnValue,
+) {
+    result.set(scope.get_continuation_preserved_embedder_data());
+    if arguments.length() > 0 {
+        scope.set_continuation_preserved_embedder_data(arguments.get(0));
+    }
+}
+
 pub(super) fn keybinding_callback<'s, 'i>(
     scope: &mut v8::PinnedRef<'s, v8::HandleScope<'i>>,
     arguments: v8::FunctionCallbackArguments<'s>,

@@ -140,7 +140,9 @@ is left until a package asks for one.
 
 ## Checkpoints
 
-### 1. Continuation-carried attribution
+### 1. ✅ Continuation-carried attribution
+
+Done: frames ride continuation-preserved data via `nativeBindings.frame`; `withFrame` saves and restores around entry, so no per-task clearing is needed. Native requests still take their root from the running turn (the invocation was already explicit); that moves in checkpoint 2.
 
 Deliverables: every invocation's frame lives in continuation-preserved
 embedder data, saved and restored around entry; `request()`, contextual

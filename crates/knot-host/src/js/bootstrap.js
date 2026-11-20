@@ -375,14 +375,14 @@ async function requestForInvocation(invocation, operation, ...arguments_) {
       ...arguments_,
     );
   } catch (error) {
-    if (error?.code === "Cancelled") activeCommandFrames.at(-1)?.controller.abort(error);
+    if (error?.code === "Cancelled") liveFrames.get(invocation)?.controller.abort(error);
     throw error;
   }
 }
 
 function request(operation, ...arguments_) {
   return requestForInvocation(
-    activeCommandFrames.at(-1)?.invocation ?? null,
+    currentFrame()?.invocation ?? null,
     operation,
     ...arguments_,
   );
@@ -393,7 +393,25 @@ const commandHandlers = new Map();
 const bufferChangeListeners = new Map();
 const treeProviders = new Map();
 const providerImplementations = new Map();
-const activeCommandFrames = [];
+// The frame of the invocation a continuation belongs to travels with the
+// continuation itself (V8's continuation-preserved embedder data), so it
+// survives awaits and promise reactions. `liveFrames` indexes the frames of
+// unfinished command invocations for cancellation.
+const liveFrames = new Map();
+
+function currentFrame() {
+  return nativeBindings.frame() ?? null;
+}
+
+function withFrame(frame, run) {
+  const previous = nativeBindings.frame();
+  nativeBindings.frame(frame);
+  try {
+    return run();
+  } finally {
+    nativeBindings.frame(previous);
+  }
+}
 const snapshotTables = new WeakMap();
 const targetAuthorities = new WeakMap();
 const invalidArgumentErrors = new WeakSet();
@@ -844,7 +862,7 @@ globalThis.__knotDispatchEditorEvent = async (authority, kind) => {
 
 function contextualAuthority(target) {
   if (target === undefined) return null;
-  const frame = activeCommandFrames.at(-1);
+  const frame = currentFrame();
   const authority = targetAuthorities.get(target);
   if (authority === undefined || !frame?.target ||
       authority !== targetAuthorities.get(frame.target)) hostError("InvalidTarget");
@@ -1223,9 +1241,9 @@ export async function invokeCommand(name, commandArguments) {
   const outcome = await invokeRegisteredCommand(
     dispatch.invocation,
     dispatch.registration,
-    activeCommandFrames.at(-1)?.buffer ?? null,
+    currentFrame()?.buffer ?? null,
     normalized,
-    activeCommandFrames.at(-1)?.capture ?? null,
+    currentFrame()?.capture ?? null,
   );
   await requestForInvocation(
     dispatch.invocation,
@@ -1308,16 +1326,16 @@ async function invokeRegisteredCommand(
   });
   if (target) targetAuthorities.set(target, capture.authority);
   const frame = { invocation, controller, buffer: activeHandle, capture, target };
-  activeCommandFrames.push(frame);
+  liveFrames.set(invocation, frame);
   try {
     try {
-      await handler(Object.freeze({
+      await withFrame(frame, () => handler(Object.freeze({
         target,
         buffer: activeHandle === null ? null : bufferFor(activeHandle),
         editor: capture?.editor ? editorFor(capture.authority) : null,
         arguments: validateJsonValue(commandArguments),
         signal: controller.signal,
-      }));
+      })));
       return controller.signal.aborted
         ? { kind: "cancelled" }
         : { kind: "completed" };
@@ -1333,8 +1351,7 @@ async function invokeRegisteredCommand(
       return { kind: "handlerFailure", message };
     }
   } finally {
-    const popped = activeCommandFrames.pop();
-    if (popped !== frame) throw new Error("Knot command frame stack is corrupted");
+    liveFrames.delete(invocation);
   }
 }
 
@@ -1353,8 +1370,7 @@ globalThis.__knotInvokeCommand = (
 );
 
 globalThis.__knotCancelCommand = (invocation) => {
-  const frame = activeCommandFrames.find((frame) => frame.invocation === invocation);
-  frame?.controller.abort(new Error("command cancelled"));
+  liveFrames.get(invocation)?.controller.abort(new Error("command cancelled"));
 };
 
 export async function registerView(contribution) {
@@ -1593,7 +1609,7 @@ function providerHandle(info) {
     handle[method] = async (...arguments_) => {
       if (arguments_.length > 1) throw new TypeError("provider methods take at most one argument");
       const argument = JSON.stringify(validateJsonValue(arguments_[0] ?? null));
-      const window = activeCommandFrames.at(-1)?.capture?.window ?? null;
+      const window = currentFrame()?.capture?.window ?? null;
       return JSON.parse(await request("callProvider", info.registration, method, argument, window));
     };
   }
