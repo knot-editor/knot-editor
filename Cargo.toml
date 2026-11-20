@@ -11,6 +11,7 @@ default-members = [
     "crates/knot-handler-macros",
     "crates/knot-host",
     "crates/knot-model",
+    "crates/knot-process",
     "crates/knot-protocol",
     "crates/knot-terminal",
 ]
@@ -94,6 +95,7 @@ knot-core = { path = "crates/knot-core" }
 knot-handler-macros = { path = "crates/knot-handler-macros" }
 knot-host = { path = "crates/knot-host" }
 knot-model = { path = "crates/knot-model" }
+knot-process = { path = "crates/knot-process" }
 knot-protocol = { path = "crates/knot-protocol" }
 knot-terminal = { path = "crates/knot-terminal" }
 anyhow = { workspace = true }

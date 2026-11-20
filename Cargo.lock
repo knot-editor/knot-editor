@@ -3787,6 +3787,7 @@ dependencies = [
  "knot-handler-macros",
  "knot-host",
  "knot-model",
+ "knot-process",
  "knot-protocol",
  "knot-terminal",
  "libc",
@@ -3939,6 +3940,16 @@ dependencies = [
  "unicode-width",
  "url",
  "uuid",
+]
+
+[[package]]
+name = "knot-process"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "libc",
+ "tempfile",
+ "tracing",
 ]
 
 [[package]]
