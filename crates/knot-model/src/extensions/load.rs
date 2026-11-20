@@ -426,7 +426,10 @@ mod tests {
             package("@test/b", &["@test/a"]),
             package("@test/c", &[]),
         ])
-        .with_not_loaded(BTreeMap::from([("@test/a".into(), "not loaded: denied".into())]));
+        .with_not_loaded(BTreeMap::from([(
+            "@test/a".into(),
+            "not loaded: denied".into(),
+        )]));
         let mut started = Vec::new();
         let report = pollster::block_on(plan.execute(|package| {
             started.push(package.manifest.name.clone());

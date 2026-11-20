@@ -1,6 +1,6 @@
 # D087 — Extension entitlements
 
-Status: 🚧 approved, not started. Source: [roadmap D087](../roadmap.md), first
+Status: 🚧 checkpoint 1 implemented, awaiting its review gate. Source: [roadmap D087](../roadmap.md), first
 item of the [version control plan](vcs.md), whose `@knot/git` package is the
 first consumer of process spawning.
 
@@ -144,25 +144,32 @@ and the decision record says so.
 
 ## Checkpoints
 
-### 1. Declarations, grants, and startup consent
+### 1. Declarations, grants, and startup consent ✅ (review gate pending)
 
 Deliverables:
 
-- `entitlements` in `Manifest`, the JSON schema, the package guide, and the
+- ✅ `entitlements` in `Manifest`, the JSON schema, the package guide, and the
   bundled manifest type. An unknown entitlement name is a manifest error.
-- The grant record in the state database, and the model policy as plain
+- ✅ The grant record in the state database, and the model policy as plain
   functions in `knot-model`: given discovered packages and the grant record, the
   undecided packages to ask about, which packages may load, and the report
   cause of the rest.
-- The consent window between pre-init and installed loading. Not-loaded
+- ✅ The consent window between pre-init and installed loading. Not-loaded
   outcomes go in the startup report, and dependents fail.
-- Restart Extension… asks about undecided entitlements and respects denials.
+- ✅ Restart Extension… asks about undecided entitlements and respects denials.
 
 Validation: `knot-model` tests for the policy (new package, an update adding an
 entitlement, denied, bundled, undeclared). Application tests for startup with
 grants present, allow, deny, close-without-deciding asking again at the next
 startup, a dependent of a denied package failing, grants persisting through the
 state database, and restart asking about an undecided entitlement. `just check`.
+
+Decisions made while implementing: the consent window stays open after
+Continue or close until the workbench opens (closing it earlier would quit on
+platforms that quit with the last window), and its Quit key is bound beside the
+configuration-error window's. A package held back by an entitlement is a new
+`LoadResult::NotLoaded`, which does not open the report on launch; its
+dependents fail normally.
 
 Review gate: the consent window and report wording in the real app, through a
 `Try:` setup with a fake installed package that declares `process`.

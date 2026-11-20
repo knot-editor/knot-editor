@@ -485,10 +485,17 @@ fn entitlements_default_to_empty_and_unknown_or_duplicate_names_are_manifest_err
         discover(root.path())
     };
     let report = declared(r#"["process"]"#);
-    assert_eq!(report.packages[0].manifest.entitlements, [Entitlement::Process]);
+    assert_eq!(
+        report.packages[0].manifest.entitlements,
+        [Entitlement::Process]
+    );
     let report = declared(r#"["teleport"]"#);
     assert!(report.packages.is_empty());
     assert!(report.diagnostics[0].cause.contains("teleport"));
     let report = declared(r#"["process", "process"]"#);
-    assert!(report.diagnostics[0].cause.contains("duplicate entitlements"));
+    assert!(
+        report.diagnostics[0]
+            .cause
+            .contains("duplicate entitlements")
+    );
 }

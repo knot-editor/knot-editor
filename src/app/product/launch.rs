@@ -441,7 +441,10 @@ pub(in crate::app) fn finish_product_startup(
                         batches.push(resolve_batch(providers.clone(), batch).await);
                     }
                 }
-                cx.update(|cx| open_launch_windows(restored, recovery, batches, cx));
+                cx.update(|cx| {
+                    open_launch_windows(restored, recovery, batches, cx);
+                    crate::app::extensions::consent::close(cx);
+                });
             })
             .detach();
         }
@@ -453,6 +456,7 @@ pub(in crate::app) fn finish_product_startup(
                 diagnostic.clipboard_text().replace('\n', ": ")
             );
             crate::app::personal_config_error::open(diagnostic, cx);
+            crate::app::extensions::consent::close(cx);
         }
     }
 }
@@ -532,7 +536,7 @@ fn activate_shown_window(window: &Entity<KnotWindow>, cx: &mut App) {
 
 /// A package that failed at startup has no other passive sign, so each launch
 /// window opens the startup report once.
-fn open_report_after_failed_startup(cx: &mut App) {
+pub(super) fn open_report_after_failed_startup(cx: &mut App) {
     let failed = crate::app::extensions::host::startup_report(cx).is_some_and(|report| {
         report.report.entries.iter().any(|entry| {
             matches!(
@@ -619,6 +623,7 @@ pub(crate) fn run(
         ));
         crate::app::window_record::install(&state, cx);
         cx.set_global(crate::app::zoom::ApplicationZoom::open(&state));
+        cx.set_global(crate::app::extensions::entitlements::ApplicationEntitlements::open(&state));
         cx.set_global(crate::app::record_store::ApplicationState(state));
         cx.set_global(ApplicationLaunchGate(RefCell::new(LaunchGate::Pending(
             Vec::new(),

@@ -304,7 +304,7 @@ impl TestProduct {
         cx.update(|cx| {
             let host = crate::app::extensions::host::entity(cx).unwrap();
             host.update(cx, |host, cx| {
-                let task = host.restart_package(name.into(), cx);
+                let task = host.restart_package(name.into(), None, cx);
                 cx.spawn(async move |_, _| *result.lock().unwrap() = Some(task.await))
                     .detach();
             })

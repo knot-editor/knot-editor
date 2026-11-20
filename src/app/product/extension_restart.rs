@@ -40,6 +40,7 @@ impl KnotWindow {
                     label: name,
                     description: Some(match &entry.result {
                         LoadResult::Loaded => "loaded".into(),
+                        LoadResult::NotLoaded(cause) => cause.clone(),
                         LoadResult::Failed(cause) => format!("failed: {cause}"),
                     }),
                 })
@@ -53,18 +54,27 @@ impl KnotWindow {
         else {
             return;
         };
+        let window = cx.weak_entity();
         let task = cx.spawn(async move |this, cx| {
             let Ok(TransientOutcome::Picker(name)) = receiver.await else {
                 return;
             };
             let restart = cx.update(|cx| {
-                super::super::extensions::host::entity(cx)
-                    .map(|host| host.update(cx, |host, cx| host.restart_package(name.clone(), cx)))
+                super::super::extensions::host::entity(cx).map(|host| {
+                    host.update(cx, |host, cx| {
+                        host.restart_package(name.clone(), Some(window), cx)
+                    })
+                })
             });
             let Some(restart) = restart else { return };
             let entry = restart.await;
             let (severity, title, message) = match entry.result {
                 LoadResult::Loaded => (Severity::Info, format!("Restarted {name}"), None),
+                LoadResult::NotLoaded(cause) => (
+                    Severity::Warning,
+                    format!("{name} was not restarted"),
+                    Some(cause),
+                ),
                 LoadResult::Failed(cause) => (
                     Severity::Error,
                     format!("{name} failed to restart"),

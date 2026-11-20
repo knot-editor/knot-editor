@@ -2126,7 +2126,7 @@ pub(crate) async fn show_confirmation(
             target.as_deref(),
             move |window, cx| {
                 window.begin_confirmation(
-                    owner,
+                    Some(owner),
                     PromptText { title, message },
                     confirm_label.unwrap_or_else(|| "OK".to_owned()),
                     cancel_label.unwrap_or_else(|| "Cancel".to_owned()),

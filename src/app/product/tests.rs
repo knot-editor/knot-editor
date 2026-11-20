@@ -10,6 +10,7 @@ mod editing;
 mod editor_api;
 mod editor_bars;
 mod editor_tabs;
+mod entitlements;
 mod extension_api;
 mod extension_restart;
 mod files;

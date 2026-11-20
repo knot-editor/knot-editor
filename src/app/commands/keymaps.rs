@@ -25,7 +25,7 @@ pub(crate) fn install(cx: &mut App) {
 }
 
 /// Give gpui the bindings it still needs: menu key equivalents, the config
-/// error window's Quit, and gpui-component's own.
+/// error and entitlement consent windows' Quit, and gpui-component's own.
 ///
 /// Menus show the key bound to their action. Binding the menu shortcuts to the
 /// menu action in a context no element declares labels the menu without the
@@ -37,6 +37,12 @@ pub(crate) fn rebuild(cx: &mut App) {
         .into_iter()
         .filter_map(|(name, key)| binding(&key, name.as_ref(), MENU_SHORTCUT_CONTEXT, cx))
         .chain(binding("secondary-q", QUIT_COMMAND, "config-error", cx))
+        .chain(binding(
+            "secondary-q",
+            QUIT_COMMAND,
+            "entitlement-consent",
+            cx,
+        ))
         .chain(crate::app::components::key_bindings(cx))
         .collect();
     cx.bind_keys(bindings);

@@ -152,7 +152,7 @@ fn input_and_native_prompts_settle_once(cx: &mut TestAppContext) {
         .update_window(native_window, |_, _, cx| {
             window.update(cx, |window, cx| {
                 window.begin_confirmation(
-                    owner(None),
+                    Some(owner(None)),
                     PromptText {
                         title: "Remove?".into(),
                         message: Some("fixture".into()),
@@ -173,7 +173,7 @@ fn input_and_native_prompts_settle_once(cx: &mut TestAppContext) {
         .update_window(native_window, |_, _, cx| {
             window.update(cx, |window, cx| {
                 window.begin_confirmation(
-                    owner(None),
+                    Some(owner(None)),
                     PromptText {
                         title: "Remove?".into(),
                         message: None,

@@ -29,6 +29,7 @@ use knot_host::{
     scheduler::PoolConfig,
     timers::{TimerDriver, TimerGuard},
 };
+use knot_model::extensions::entitlements as entitlement_policy;
 use knot_protocol::ExtensionKey;
 use knot_protocol::{
     Command, CommandInvocationId, ExtensionId, ExtensionLifecycleId, HostRequest, ViewId,
@@ -41,6 +42,8 @@ use crate::app::{
     },
     commands::extension::{ExtensionCommandBridge, ExtensionCommandEvent, RoutedCommandTarget},
     extensions::buffers::ExtensionBufferBridge,
+    extensions::consent,
+    extensions::entitlements,
     extensions::load::{DependencyPlan, LoadEntry, LoadReport, LoadResult, StartupAttempt},
     extensions::package::InstalledPackage,
     extensions::semantics::ExtensionSemanticBridge,
@@ -899,6 +902,7 @@ impl ProductExtensionHost {
         let next_extension_id = self.next_extension_id.clone();
         self._startup_task = Some(cx.spawn(async move |this, cx| {
             let discovered = discovery.await;
+            let not_loaded = Self::consent_to_entitlements(&discovered.packages, cx).await;
             let _ = this.update(cx, |host, cx| {
                 if let Some(snapshot) = &mut host.startup_report {
                     snapshot.state = StartupState::Loading;
@@ -908,6 +912,7 @@ impl ProductExtensionHost {
             let report_host = this.clone();
             let mut report_cx = cx.clone();
             let report = DependencyPlan::new(discovered)
+                .with_not_loaded(not_loaded)
                 .execute_with_progress(
                     |package| {
                         let id = next_extension_id.fetch_add(1, Ordering::Relaxed);
@@ -945,6 +950,9 @@ impl ProductExtensionHost {
                         let name = entry.name.as_deref().unwrap_or("<invalid package>");
                         match &entry.result {
                             LoadResult::Loaded => tracing::info!(target: "knot::extensions", "extension loaded: {name}"),
+                            LoadResult::NotLoaded(cause) => {
+                                tracing::info!(target: "knot::extensions", "extension {name}: {cause}")
+                            }
                             LoadResult::Failed(cause) => tracing::error!(
                                 target: "knot::extensions",
                                 "extension failed: {name} ({}): {cause}",
@@ -972,6 +980,87 @@ impl ProductExtensionHost {
         Some(done_receiver)
     }
 
+    /// Ask the user about every undecided entitlement of the discovered
+    /// installed packages, record the answers, and return the packages that
+    /// may not load with their report causes. Without anything undecided, no
+    /// window opens.
+    async fn consent_to_entitlements(
+        packages: &[InstalledPackage],
+        cx: &mut gpui::AsyncApp,
+    ) -> std::collections::BTreeMap<String, String> {
+        let undecided =
+            cx.update(|cx| entitlement_policy::undecided(packages, &entitlements::grants(cx)));
+        if !undecided.is_empty() {
+            let answer = cx.update(|cx| consent::open(undecided, cx));
+            // A window closed without an answer decides nothing.
+            let decisions = answer.await.unwrap_or_default();
+            cx.update(|cx| {
+                for (package, decision) in decisions {
+                    entitlements::decide(&package.name, &package.entitlements, decision, cx);
+                }
+            });
+        }
+        cx.update(|cx| entitlement_policy::not_loaded(packages, &entitlements::grants(cx)))
+    }
+
+    /// Why a restarted `package` may not load, after asking about an entitlement
+    /// the user has not decided on.
+    async fn restart_block(
+        package: &InstalledPackage,
+        window: Option<gpui::WeakEntity<KnotWindow>>,
+        cx: &mut gpui::AsyncApp,
+    ) -> Option<String> {
+        let grants = cx.update(|cx| entitlements::grants(cx));
+        if let Some(undecided) = entitlement_policy::undecided_package(package, &grants) {
+            let wanted = undecided
+                .entitlements
+                .iter()
+                .map(|entitlement| format!("{}: {}", entitlement.name(), entitlement.summary()))
+                .collect::<Vec<_>>()
+                .join("\n");
+            let receiver = match window {
+                Some(window) => window
+                    .update(cx, |window, cx| {
+                        window.begin_confirmation(
+                            None,
+                            crate::app::transient::PromptText {
+                                title: format!("Allow {} to load?", undecided.display_name),
+                                message: Some(format!(
+                                    "{} {} asks for:\n{wanted}",
+                                    undecided.name, undecided.version
+                                )),
+                            },
+                            "Allow".into(),
+                            "Dismiss".into(),
+                            cx,
+                        )
+                    })
+                    .ok()
+                    .and_then(Result::ok),
+                None => None,
+            };
+            let allowed = match receiver {
+                Some(receiver) => matches!(
+                    receiver.await,
+                    Ok(crate::app::transient::TransientOutcome::Confirmed)
+                ),
+                None => false,
+            };
+            if allowed {
+                cx.update(|cx| {
+                    entitlements::decide(
+                        &undecided.name,
+                        &undecided.entitlements,
+                        entitlement_policy::Decision::Granted,
+                        cx,
+                    )
+                });
+            }
+        }
+        let grants = cx.update(|cx| entitlements::grants(cx));
+        entitlement_policy::not_loaded_cause(package, &grants)
+    }
+
     /// Stop one package with a terminating unload, as quitting would.
     #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn unload_package_for_test(&mut self, name: &str, cx: &mut Context<Self>) {
@@ -985,9 +1074,15 @@ impl ProductExtensionHost {
     /// sources, or its installed directory re-read from disk), and load a fresh
     /// lifecycle. The outcome replaces the package's startup report entry.
     /// Dependents keep running; they share only the global command namespace.
-    pub(crate) fn restart_package(
+    ///
+    /// An entitlement the user has not decided on is asked about in `window`
+    /// with the native confirmation; without a window, or when it is
+    /// dismissed, the package stays unloaded and nothing is stored. A denial
+    /// is never overridden here.
+    pub(in crate::app) fn restart_package(
         &mut self,
         name: String,
+        window: Option<gpui::WeakEntity<KnotWindow>>,
         cx: &mut Context<Self>,
     ) -> Task<LoadEntry> {
         let root = self
@@ -1017,11 +1112,20 @@ impl ProductExtensionHost {
         let next_extension_id = self.next_extension_id.clone();
         cx.spawn(async move |this, cx| {
             let discovered = discovery.await;
-            let entry = match discovered
+            let found = discovered
                 .packages
                 .into_iter()
-                .find(|package| package.manifest.name == name)
-            {
+                .find(|package| package.manifest.name == name);
+            let blocked = match &found {
+                Some(package) => Self::restart_block(package, window, cx).await,
+                None => None,
+            };
+            let entry = match found {
+                Some(package) if blocked.is_some() => LoadEntry {
+                    directory: package.directory,
+                    name: Some(name),
+                    result: LoadResult::NotLoaded(blocked.unwrap()),
+                },
                 Some(package) => {
                     let id = next_extension_id.fetch_add(1, Ordering::Relaxed);
                     assert_ne!(id, u64::MAX, "extension identity exhausted");
@@ -1090,6 +1194,11 @@ impl ProductExtensionHost {
                         entry.name.as_deref().unwrap_or_default()
                     )
                 }
+                LoadResult::NotLoaded(cause) => tracing::info!(
+                    target: "knot::extensions",
+                    "extension not restarted: {}: {cause}",
+                    entry.name.as_deref().unwrap_or_default()
+                ),
                 LoadResult::Failed(cause) => tracing::error!(
                     target: "knot::extensions",
                     "extension restart failed: {}: {cause}",

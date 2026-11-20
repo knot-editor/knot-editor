@@ -200,7 +200,7 @@ impl Fixture {
     }
 }
 
-fn resolves(name: &str, cx: &TestAppContext) -> bool {
+pub(super) fn resolves(name: &str, cx: &TestAppContext) -> bool {
     cx.read(|cx| {
         cx.global::<ApplicationProductCommands>()
             .0

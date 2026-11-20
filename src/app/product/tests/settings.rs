@@ -184,7 +184,7 @@ fn config_and_packages_share_settings_across_phases_and_restart(cx: &mut TestApp
     let restarted = Arc::new(Mutex::new(None));
     let result = restarted.clone();
     host.update(cx, |host, cx| {
-        let task = host.restart_package("@example/settings".into(), cx);
+        let task = host.restart_package("@example/settings".into(), None, cx);
         cx.spawn(async move |_, _| {
             *result.lock().unwrap() = Some(task.await);
         })

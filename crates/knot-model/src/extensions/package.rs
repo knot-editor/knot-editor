@@ -12,9 +12,7 @@ pub const SUPPORTED_API_VERSION: u32 = 1;
 
 /// A capability a package declares in its manifest and the user decides on
 /// before the package loads.
-#[derive(
-    Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
-)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Entitlement {
     /// Spawn processes on the user's machine.
@@ -370,7 +368,10 @@ fn validate_manifest(manifest: &Manifest, bundled: bool) -> Result<(), String> {
     let mut entitlements = BTreeSet::new();
     for entitlement in &manifest.entitlements {
         if !entitlements.insert(entitlement) {
-            return Err(format!("duplicate entitlements entry {}", entitlement.name()));
+            return Err(format!(
+                "duplicate entitlements entry {}",
+                entitlement.name()
+            ));
         }
     }
     for (field, value) in [

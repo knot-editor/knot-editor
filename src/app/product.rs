@@ -2038,7 +2038,7 @@ impl KnotWindow {
     /// is answered.
     pub(crate) fn begin_confirmation(
         &mut self,
-        owner: TransientOwner,
+        owner: Option<TransientOwner>,
         text: PromptText,
         confirm_label: String,
         cancel_label: String,
@@ -2058,7 +2058,7 @@ impl KnotWindow {
         );
         let (completion, receiver) = tokio::sync::oneshot::channel();
         self.transient = Some(ActiveTransient {
-            owner: Some(owner),
+            owner,
             surface: None,
             focus: None,
             completion: Some(completion),

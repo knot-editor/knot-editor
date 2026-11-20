@@ -49,7 +49,10 @@ pub struct UndecidedPackage {
 
 /// The installed packages that declare an entitlement without a decision, in
 /// identity order.
-pub fn undecided(packages: &[InstalledPackage], grants: &EntitlementGrants) -> Vec<UndecidedPackage> {
+pub fn undecided(
+    packages: &[InstalledPackage],
+    grants: &EntitlementGrants,
+) -> Vec<UndecidedPackage> {
     let mut asked = packages
         .iter()
         .filter_map(|package| undecided_package(package, grants))
@@ -71,7 +74,11 @@ pub fn undecided_package(
         .entitlements
         .iter()
         .copied()
-        .filter(|entitlement| grants.decision(&package.manifest.name, *entitlement).is_none())
+        .filter(|entitlement| {
+            grants
+                .decision(&package.manifest.name, *entitlement)
+                .is_none()
+        })
         .collect::<Vec<_>>();
     (!entitlements.is_empty()).then(|| UndecidedPackage {
         name: package.manifest.name.clone(),
@@ -95,7 +102,12 @@ pub fn not_loaded_cause(package: &InstalledPackage, grants: &EntitlementGrants) 
         .manifest
         .entitlements
         .iter()
-        .map(|entitlement| (*entitlement, grants.decision(&package.manifest.name, *entitlement)))
+        .map(|entitlement| {
+            (
+                *entitlement,
+                grants.decision(&package.manifest.name, *entitlement),
+            )
+        })
         .collect::<Vec<_>>();
     if let Some((entitlement, _)) = decisions
         .iter()
@@ -110,7 +122,10 @@ pub fn not_loaded_cause(package: &InstalledPackage, grants: &EntitlementGrants) 
         .iter()
         .find(|(_, decision)| decision.is_none())
         .map(|(entitlement, _)| {
-            format!("not loaded: entitlement `{}` not decided", entitlement.name())
+            format!(
+                "not loaded: entitlement `{}` not decided",
+                entitlement.name()
+            )
         })
 }
 
@@ -134,7 +149,11 @@ mod tests {
     use super::*;
     use crate::extensions::package::Manifest;
 
-    fn package(name: &str, origin: PackageOrigin, entitlements: &[Entitlement]) -> InstalledPackage {
+    fn package(
+        name: &str,
+        origin: PackageOrigin,
+        entitlements: &[Entitlement],
+    ) -> InstalledPackage {
         InstalledPackage {
             directory: PathBuf::from(name),
             origin,
@@ -207,7 +226,9 @@ mod tests {
         let mut grants = EntitlementGrants::default();
         grants.decide("@test/git", &[Entitlement::Process], Decision::Denied);
         grants.decide("@test/git", &[Entitlement::Process], Decision::Granted);
-        assert!(not_loaded_cause(&installed("@test/git", &[Entitlement::Process]), &grants).is_none());
+        assert!(
+            not_loaded_cause(&installed("@test/git", &[Entitlement::Process]), &grants).is_none()
+        );
     }
 
     #[test]
@@ -226,6 +247,9 @@ mod tests {
         let mut grants = EntitlementGrants::default();
         grants.decide("@test/git", &[Entitlement::Process], Decision::Granted);
         let text = serde_json::to_string(&grants).unwrap();
-        assert_eq!(serde_json::from_str::<EntitlementGrants>(&text).unwrap(), grants);
+        assert_eq!(
+            serde_json::from_str::<EntitlementGrants>(&text).unwrap(),
+            grants
+        );
     }
 }

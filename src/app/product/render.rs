@@ -1154,6 +1154,7 @@ pub(super) fn render_extension_report(
             let name = entry.name.unwrap_or_else(|| "<invalid package>".into());
             let (label, status_color, cause) = match entry.result {
                 LoadResult::Loaded => ("Loaded", color::SUCCESS, None),
+                LoadResult::NotLoaded(cause) => ("Not loaded", color::WARNING, Some(cause)),
                 LoadResult::Failed(cause) => ("Failed", color::ERROR, Some(cause)),
             };
             div()
