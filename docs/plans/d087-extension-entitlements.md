@@ -1,6 +1,6 @@
 # D087 — Extension entitlements
 
-Status: 🚧 checkpoint 1 done; checkpoints 2 and 3 not started. Source: [roadmap D087](../roadmap.md), first
+Status: 🚧 checkpoints 1 done; checkpoint 2 awaiting review; checkpoint 3 not started. Source: [roadmap D087](../roadmap.md), first
 item of the [version control plan](vcs.md), whose `@knot/git` package is the
 first consumer of process spawning.
 
@@ -135,10 +135,8 @@ and the decision record says so.
 
 ## Deferred decisions
 
-- Whether the process primitives live in a new leaf crate that owns children
-  and their reader threads without gpui, as `knot-terminal` does, or in an
-  application module. Decide in checkpoint 2 from how much of it is testable
-  without gpui; a leaf crate is the default.
+- ✅ The process primitives live in the leaf crate `knot-process`, which owns
+  children and their threads without gpui and is tested on its own.
 - The exact layout of the consent window. It is decided at checkpoint 1's
   review.
 
@@ -156,7 +154,17 @@ back by an entitlement does not open the startup report on launch; its
 dependents fail normally. The author guide covers `entitlements` in
 [packages](../extension-api/README.md#package-and-check-your-code).
 
-### 2. Process API
+### 2. Process API 🔎 awaiting review
+
+✅ All deliverables are in. Decisions made on the way: output streams are
+pull-based (a listener loop in the bootstrap requests each next chunk after
+its listeners finish, so acknowledgement needs no new engine notification),
+and a child that writes more than its pipe holds does not exit until its
+output is read. New codes: `EntitlementNotDeclared`, `ProgramNotFound`,
+`WorkingDirectoryNotFound`, `ProcessFailed`, `ProcessInputClosed`. Product
+tests in `src/app/product/tests/processes.rs` run real programs through
+installed, bundled, and personal-config packages. The review gate is the
+`Try:` commands of the `@try/git` package and the personal config.
 
 Deliverables:
 
