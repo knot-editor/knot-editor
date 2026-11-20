@@ -116,6 +116,22 @@ fn edits_while_the_bar_is_open_search_again(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+fn two_finds_at_once_share_one_bar(cx: &mut TestAppContext) {
+    let product = TestProduct::start(only(&["@knot/find"]), cx);
+    let editor = product.windowed_editor("ab\nab\n", cx);
+
+    editor.run_commands_at_once(&["editor.find", "editor.find"], cx);
+    assert!(editor.first_bar(cx).is_some());
+    // Once closed, no other session of the editor brings the bar back on an
+    // edit.
+    editor.press_unsettled("<esc>", cx);
+    wait_until(cx, |cx| editor.first_bar(cx).is_none());
+    editor.run_command("editor.delete-forward", cx);
+    assert!(editor.first_bar(cx).is_none());
+    assert!(editor.decorations(cx).is_empty());
+}
+
+#[gpui::test]
 fn two_splits_of_one_buffer_keep_their_own_bars_and_highlights(cx: &mut TestAppContext) {
     let product = TestProduct::start(only(&["@knot/find"]), cx);
     let first = product.windowed_editor("foo bar\nbar baz\n", cx);

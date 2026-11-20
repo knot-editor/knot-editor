@@ -233,28 +233,42 @@ impl TestEditor {
     /// Run the command `name` without arguments against the focused
     /// surface, settle, and require that it completed.
     pub fn run_command(&self, name: &str, cx: &mut TestAppContext) {
-        let target = self
-            .window
-            .update(cx, |window, cx| window.capture_command_target(cx));
-        let mut execution = cx.update(|cx| {
-            let dispatcher = cx.global::<ApplicationProductCommands>().0.clone();
-            dispatcher.update(cx, |dispatcher, cx| {
-                dispatcher.dispatch(
-                    Command {
-                        name: name.into(),
-                        arguments: CommandArgumentValue::Null,
-                    },
-                    target,
-                    cx,
-                )
+        self.run_commands_at_once(&[name], cx);
+    }
+
+    /// Start the commands `names` without arguments against the focused
+    /// surface, all before any runs, then settle and require that each
+    /// completed.
+    pub fn run_commands_at_once(&self, names: &[&str], cx: &mut TestAppContext) {
+        let mut executions = names
+            .iter()
+            .map(|name| {
+                let target = self
+                    .window
+                    .update(cx, |window, cx| window.capture_command_target(cx));
+                cx.update(|cx| {
+                    let dispatcher = cx.global::<ApplicationProductCommands>().0.clone();
+                    dispatcher.update(cx, |dispatcher, cx| {
+                        dispatcher.dispatch(
+                            Command {
+                                name: (*name).into(),
+                                arguments: CommandArgumentValue::Null,
+                            },
+                            target,
+                            cx,
+                        )
+                    })
+                })
             })
-        });
+            .collect::<Vec<_>>();
         self.settle(cx);
-        assert_eq!(
-            execution.completion.try_recv(),
-            Ok(CommandOutcome::Completed),
-            "{name}"
-        );
+        for (name, execution) in names.iter().zip(&mut executions) {
+            assert_eq!(
+                execution.completion.try_recv(),
+                Ok(CommandOutcome::Completed),
+                "{name}"
+            );
+        }
     }
 
     /// Lay the editor out `rows` rows tall and `columns` cells wide, as a
