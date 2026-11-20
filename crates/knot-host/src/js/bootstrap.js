@@ -462,6 +462,42 @@ function withFrame(frame, run) {
     nativeBindings.frame(previous);
   }
 }
+
+// The callback a command passes to a native surface it opens (picker
+// highlights and queries, input values, tree-edit validation). The surface
+// calls it as tasks of this package while the command awaits the surface's
+// result; each call runs in the command's frame, so it keeps the command's
+// authority until the surface settles. A failing call stops further calls
+// and rethrows once the surface settles, so a surface never stays open
+// unowned.
+const surfaceCallbacks = new Map();
+let nextSurfaceSession = 1;
+
+async function withSurfaceCallback(callback, open) {
+  const session = nextSurfaceSession++;
+  const state = { frame: currentFrame(), callback, failure: null };
+  surfaceCallbacks.set(session, state);
+  let result;
+  try {
+    result = await open(session);
+  } finally {
+    surfaceCallbacks.delete(session);
+  }
+  if (state.failure !== null) throw state.failure.error;
+  return result;
+}
+
+globalThis.__knotSurfaceCallback = async (session, argument) => {
+  const state = surfaceCallbacks.get(session);
+  if (state === undefined || state.failure !== null) return { error: "the surface callback stopped" };
+  try {
+    const result = await withFrame(state.frame, () => state.callback(JSON.parse(argument)));
+    return { result: JSON.stringify(result ?? null) };
+  } catch (error) {
+    state.failure ??= { error };
+    return { error: String(error?.message ?? error) };
+  }
+};
 const snapshotTables = new WeakMap();
 const targetAuthorities = new WeakMap();
 const invalidArgumentErrors = new WeakSet();
@@ -1104,33 +1140,15 @@ export async function showPicker(options) {
   if (onHighlight != null && typeof onHighlight !== "function") {
     throw new TypeError("picker onHighlight must be a function");
   }
-  // Highlights and queries are pulled inside this turn: a separate
-  // notification could not run while the caller awaits the picker. A failing
-  // callback stops further calls and rethrows once the picker settles, so it
-  // never stays open unowned. The rows answering a query travel back with
-  // the next pull.
-  let failure = null;
-  let update = await request("beginPicker", title, items, target, onQuery == null ? 0 : 1, tabs, initialTab);
-  while (update.kind === "highlighted" || update.kind === "queried") {
-    let rows = null;
-    if (failure === null) {
-      try {
-        if (update.kind === "queried") {
-          rows = arrayItems(await onQuery(update.query, update.tab), pickerRow);
-        } else if (onHighlight != null) {
-          await onHighlight(update.id);
-        }
-      } catch (error) {
-        failure = { error };
-        rows = null;
-      }
-    }
-    update = await request("nextPickerEvent", update.session, rows);
-  }
-  if (failure !== null) throw failure.error;
-  return update.kind === "selected"
-    ? Object.freeze({ kind: "selected", id: update.id })
-    : Object.freeze({ kind: "dismissed" });
+  const result = await withSurfaceCallback(async (event) => {
+    if (event.kind === "query") return arrayItems(await onQuery(event.query, event.tab), pickerRow);
+    await onHighlight(event.id);
+    return null;
+  }, (session) => request(
+    "followPicker", title, items, target, session,
+    onQuery == null ? 0 : 1, onHighlight == null ? 0 : 1, tabs, initialTab,
+  ));
+  return Object.freeze(result);
 }
 
 export async function showInput(options) {
@@ -1147,32 +1165,17 @@ export async function showInput(options) {
   if (typeof onChange !== "function") {
     throw new TypeError("input onChange must be a function");
   }
-  // Values are pulled inside this turn, as picker highlights are, and each
-  // returned message and completions travel back with the next pull.
-  let failure = null;
-  let update = await request("beginInput", title, value, prompt, target, history, placeholder);
-  while (update.kind === "changed") {
-    let message = null;
-    let items = [];
-    if (failure === null) {
-      try {
-        const result = await onChange(update.value);
-        if (typeof result === "string") message = result;
-        else if (result != null) {
-          record(result, "input onChange must return text, an object, or nothing");
-          message = optionalText(result.message);
-          if (result.items != null) items = arrayItems(result.items, inputCompletion);
-        }
-      } catch (error) {
-        failure = { error };
-      }
-    }
-    update = await request("nextInputEvent", update.session, message, items);
-  }
-  if (failure !== null) throw failure.error;
-  return update.kind === "accepted"
-    ? Object.freeze({ kind: "accepted", value: update.value, highlighted: update.highlighted })
-    : Object.freeze({ kind: "dismissed" });
+  const result = await withSurfaceCallback(async (value) => {
+    const answer = await onChange(value);
+    if (typeof answer === "string") return { message: answer, items: [] };
+    if (answer == null) return { message: null, items: [] };
+    record(answer, "input onChange must return text, an object, or nothing");
+    return {
+      message: optionalText(answer.message),
+      items: answer.items == null ? [] : arrayItems(answer.items, inputCompletion),
+    };
+  }, (session) => request("followInput", title, value, prompt, target, history, placeholder, session));
+  return Object.freeze(result);
 }
 
 export async function showConfirmation(options) {
@@ -1607,8 +1610,8 @@ export async function registerView(contribution) {
   });
 }
 
-// An inline edit is pulled inside this turn, as an input with `onChange` is:
-// each value goes to `validate`, and its message travels back with the pull.
+// An inline edit passes each value to `validate`, whose message is shown
+// under the field.
 async function editTree(registration, newRow, id, options) {
   const fields = options == null ? {} : record(options, "edit options must be an object");
   const value = optionalText(fields.value) ?? "";
@@ -1617,27 +1620,15 @@ async function editTree(registration, newRow, id, options) {
   if (validate != null && typeof validate !== "function") {
     throw new TypeError("edit validate must be a function");
   }
-  let failure = null;
-  let update = await request(
-    "beginTreeEdit", registration, newRow ? 1 : 0, id, value, selection,
-    iconRef(fields.icon), validate == null ? 0 : 1, null,
+  const edit = (session) => request(
+    "editTreeItem", registration, newRow ? 1 : 0, id, value, selection,
+    iconRef(fields.icon), session, null,
   );
-  while (update.kind === "changed") {
-    let message = null;
-    if (failure === null) {
-      try {
-        const result = await validate(update.value);
-        message = result == null ? null : string(result, "edit validate must return text or nothing");
-      } catch (error) {
-        failure = { error };
-      }
-    }
-    update = await request("nextInputEvent", update.session, message, []);
-  }
-  if (failure !== null) throw failure.error;
-  return update.kind === "accepted"
-    ? Object.freeze({ kind: "accepted", value: update.value, highlighted: update.highlighted })
-    : Object.freeze({ kind: "dismissed" });
+  const result = validate == null ? await edit(null) : await withSurfaceCallback(async (current) => {
+    const message = await validate(current);
+    return { message: message == null ? null : string(message, "edit validate must return text or nothing") };
+  }, edit);
+  return Object.freeze(result);
 }
 
 globalThis.__knotRequestTreeChildren = async (registration, window, instance, parentId, generation) => {

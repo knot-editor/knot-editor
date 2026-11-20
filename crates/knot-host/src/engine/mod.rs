@@ -40,9 +40,10 @@ use knot_protocol::{
     ByteRange, Command, CommandArgumentValue, CommandInvocation, CommandInvocationId,
     CommandOutcome, Decoration, DecorationStyle, EditorContribution, EditorEvent, ExtensionId,
     HostRequest, HostResponse, KeybindingMutation, ProviderCallRequest, ProviderCallResponse,
-    ProviderIdentity, RequestId, SettingsSubscriptionId, SnapshotText, TextEdit, TextSnapshot,
-    TreeAction, TreeChildrenRequest, TreeChildrenResponse, TreeCollapsibleState, TreeItem,
-    TreeItemKind, TreeProviderError, WatchSubscriptionId, WorkbenchSubscriptionId,
+    ProviderIdentity, RequestId, SettingsSubscriptionId, SnapshotText, SurfaceCallbackRequest,
+    TextEdit, TextSnapshot, TreeAction, TreeChildrenRequest, TreeChildrenResponse,
+    TreeCollapsibleState, TreeItem, TreeItemKind, TreeProviderError, WatchSubscriptionId,
+    WorkbenchSubscriptionId,
 };
 
 static V8_INITIALIZATION: Once = Once::new();
@@ -264,6 +265,7 @@ enum RuntimeCallback {
     CancelCommand,
     Tree,
     ProviderCall,
+    SurfaceCallback,
 }
 
 pub struct RuntimeLocalState {
@@ -456,14 +458,20 @@ enum ProviderCall {
         cancelled: Arc<AtomicBool>,
         completed: Arc<AtomicBool>,
     },
+    Surface {
+        request: SurfaceCallbackRequest,
+        result: ResultSender<ProviderCallResponse>,
+        cancelled: Arc<AtomicBool>,
+        completed: Arc<AtomicBool>,
+    },
 }
 
 impl ProviderCall {
     fn cancelled(&self) -> bool {
         match self {
-            Self::Tree { cancelled, .. } | Self::Call { cancelled, .. } => {
-                cancelled.load(Ordering::Acquire)
-            }
+            Self::Tree { cancelled, .. }
+            | Self::Call { cancelled, .. }
+            | Self::Surface { cancelled, .. } => cancelled.load(Ordering::Acquire),
         }
     }
 
@@ -476,6 +484,9 @@ impl ProviderCall {
                 let _ = result.send(Err(error));
             }
             Self::Call {
+                result, completed, ..
+            }
+            | Self::Surface {
                 result, completed, ..
             } => {
                 completed.store(true, Ordering::Release);
@@ -497,6 +508,9 @@ impl ProviderCall {
                 completed,
             },
             Self::Call {
+                result, completed, ..
+            }
+            | Self::Surface {
                 result, completed, ..
             } => ActiveCompletion::Call { result, completed },
         }

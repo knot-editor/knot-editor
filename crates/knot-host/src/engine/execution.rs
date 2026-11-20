@@ -245,7 +245,8 @@ pub struct RuntimeProviderExecution<T> {
 impl<T> Unpin for RuntimeProviderExecution<T> {}
 
 pub(super) struct ProviderCancellation {
-    pub(super) provider: ProviderIdentity,
+    /// The provider whose own mutation may drop the receiver, if any.
+    pub(super) provider: Option<ProviderIdentity>,
     pub(super) key: ExtensionKey,
     pub(super) root: RootId,
     pub capsule: Arc<RuntimeCapsule>,
@@ -351,7 +352,8 @@ impl<T> Drop for RuntimeProviderExecution<T> {
             .values()
             .any(|pending| {
                 pending.root == Some(cancellation.root)
-                    && pending.provider_mutation == Some(cancellation.provider)
+                    && cancellation.provider.is_some()
+                    && pending.provider_mutation == cancellation.provider
             });
         if self_mutation {
             return;

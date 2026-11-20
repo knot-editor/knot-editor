@@ -573,6 +573,7 @@ impl RuntimeCapsule {
                     && request.generation <= MAX_JS_INTEGER
             }
             ProviderCall::Call { request, .. } => request.registration.value() <= MAX_JS_INTEGER,
+            ProviderCall::Surface { request, .. } => request.session <= MAX_JS_INTEGER,
         };
         if !exact {
             call.complete_with_error(RuntimeError::fatal(
@@ -654,6 +655,24 @@ impl RuntimeCapsule {
                             method.into(),
                             argument.into(),
                             window,
+                        ],
+                    )
+                })();
+                (source, value)
+            }
+            ProviderCall::Surface { request, .. } => {
+                let source = "knot:surface-callback";
+                let value = (|| {
+                    let function = self
+                        .local_state
+                        .callback(try_catch, RuntimeCallback::SurfaceCallback)?;
+                    let argument = v8::String::new(try_catch, &request.argument)?;
+                    function.call(
+                        try_catch,
+                        v8::undefined(try_catch).into(),
+                        &[
+                            v8::Number::new(try_catch, request.session as f64).into(),
+                            argument.into(),
                         ],
                     )
                 })();

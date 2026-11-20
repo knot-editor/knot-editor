@@ -405,7 +405,7 @@ impl RuntimePool {
             result: Some(result),
             completion,
             cancellation: Some(ProviderCancellation {
-                provider: ProviderIdentity::Tree(registration),
+                provider: Some(ProviderIdentity::Tree(registration)),
                 key,
                 root,
                 capsule,
@@ -443,7 +443,45 @@ impl RuntimePool {
             result: Some(result),
             completion,
             cancellation: Some(ProviderCancellation {
-                provider: ProviderIdentity::Named(registration),
+                provider: Some(ProviderIdentity::Named(registration)),
+                key,
+                root,
+                capsule,
+                scheduler: self.scheduler_handle.clone(),
+                cancelled,
+                completed,
+            }),
+        })
+    }
+
+    /// Runs the callback a command passed to a native surface as one of the
+    /// isolate's tasks.
+    pub fn call_surface(
+        &self,
+        key: ExtensionKey,
+        request: SurfaceCallbackRequest,
+    ) -> Result<RuntimeProviderExecution<ProviderCallResponse>, RuntimePoolError> {
+        let capsule = self.capsule(key)?;
+        let (result_sender, result) = tokio::sync::oneshot::channel();
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let completed = Arc::new(AtomicBool::new(false));
+        let (root, completion) = self.scheduler_handle.enqueue_root(
+            key,
+            EngineTurn {
+                capsule: Arc::clone(&capsule),
+                work: EngineWork::Provider(ProviderCall::Surface {
+                    request,
+                    result: result_sender,
+                    cancelled: Arc::clone(&cancelled),
+                    completed: Arc::clone(&completed),
+                }),
+            },
+        )?;
+        Ok(RuntimeProviderExecution {
+            result: Some(result),
+            completion,
+            cancellation: Some(ProviderCancellation {
+                provider: None,
                 key,
                 root,
                 capsule,
@@ -884,6 +922,7 @@ pub(super) fn initialize_extension_context(
         (RuntimeCallback::CancelCommand, "__knotCancelCommand"),
         (RuntimeCallback::Tree, "__knotRequestTreeChildren"),
         (RuntimeCallback::ProviderCall, "__knotCallProvider"),
+        (RuntimeCallback::SurfaceCallback, "__knotSurfaceCallback"),
     ] {
         let name = v8::String::new(scope, name).ok_or_else(RuntimeError::disposed)?;
         let function = global

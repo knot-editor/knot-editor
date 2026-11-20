@@ -270,18 +270,6 @@ impl HostSuccess for crate::PickerResult {
     }
 }
 
-impl HostSuccess for crate::PickerUpdate {
-    fn encode(self) -> Result<EncodedValue, DecodeError> {
-        encode_json(self)
-    }
-}
-
-impl HostSuccess for crate::InputUpdate {
-    fn encode(self) -> Result<EncodedValue, DecodeError> {
-        encode_json(self)
-    }
-}
-
 impl HostSuccess for crate::InputResult {
     fn encode(self) -> Result<EncodedValue, DecodeError> {
         encode_json(self)

@@ -799,12 +799,15 @@ await commands.register("transient.failing-query", async () => {
   }
   await workbench.writeClipboardText("not rethrown");
 });
+// Each answer waits until the clipboard lists its value in brackets.
+async function released(value) {
+  while (!((await workbench.readClipboardText()) ?? "").includes(`[${value}]`)) {}
+}
 await commands.register("transient.stale-query", async () => {
   await workbench.showPicker({
     title: "Query",
     onQuery: async (query) => {
-      await workbench.writeClipboardText(`waiting ${query}`);
-      while ((await workbench.readClipboardText()) !== `go ${query}`) {}
+      await released(query);
       return [{ id: query, label: `row ${query}` }];
     },
   });
@@ -818,6 +821,16 @@ await commands.register("transient.stale-input", async () => {
       return { message: `for ${value}`, items: [{ label: value, value }] };
     },
   });
+});
+await commands.register("transient.slow-query", async () => {
+  const result = await workbench.showPicker({
+    title: "Query",
+    onQuery: async (query) => {
+      if (query === "slow") await new Promise(() => {});
+      return [{ id: query, label: `row ${query}` }];
+    },
+  });
+  await workbench.writeClipboardText(`|${JSON.stringify(result)}`);
 });
 "#;
 
@@ -1187,14 +1200,32 @@ fn a_throwing_query_callback_stops_and_rethrows_once_the_picker_settles(cx: &mut
 fn rows_for_an_older_query_are_dropped(cx: &mut TestAppContext) {
     let (_host, _key, window, _window, _completion) = start_live_input("transient.stale-query", cx);
     let picker = transient_picker(&window, cx);
-    wait_for_api_condition(cx, |cx| clipboard_is(cx, "waiting "));
+    // The rows for "al" arrive while those for the empty query are still
+    // pending, and the empty query's rows arriving last are dropped.
     picker.update(cx, |picker, cx| picker.set_query("al", cx));
-    cx.write_to_clipboard(gpui::ClipboardItem::new_string("go ".into()));
-    // The answer for the empty query is delivered while the field says "al".
-    wait_for_api_condition(cx, |cx| clipboard_is(cx, "waiting al"));
-    assert!(cx.read(|cx| picker_labels(&picker, cx)).is_empty());
-    cx.write_to_clipboard(gpui::ClipboardItem::new_string("go al".into()));
+    cx.write_to_clipboard(gpui::ClipboardItem::new_string("[al]".into()));
     wait_for_api_condition(cx, |cx| picker_labels(&picker, cx) == ["row al"]);
+    cx.write_to_clipboard(gpui::ClipboardItem::new_string("[al][]".into()));
+    crate::app::product::driver::park_packages(cx);
+    assert_eq!(cx.read(|cx| picker_labels(&picker, cx)), ["row al"]);
+}
+
+#[gpui::test]
+fn a_slow_query_blocks_neither_later_queries_nor_selection(cx: &mut TestAppContext) {
+    let (_host, _key, window, _window, completion) = start_live_input("transient.slow-query", cx);
+    let picker = transient_picker(&window, cx);
+    wait_for_api_condition(cx, |cx| picker_labels(&picker, cx) == ["row "]);
+    picker.update(cx, |picker, cx| picker.set_query("slow", cx));
+    crate::app::product::driver::park_packages(cx);
+    picker.update(cx, |picker, cx| picker.set_query("ab", cx));
+    wait_for_api_condition(cx, |cx| picker_labels(&picker, cx) == ["row ab"]);
+    // The command resumes although the answer for "slow" never came.
+    picker.update(cx, |picker, cx| picker.confirm(cx));
+    assert_eq!(wait_for_command(completion, cx), CommandOutcome::Completed);
+    assert_eq!(
+        clipboard(cx).as_deref(),
+        Some(r#"|{"kind":"selected","id":"ab"}"#)
+    );
 }
 
 fn clipboard_is(cx: &gpui::App, expected: &str) -> bool {

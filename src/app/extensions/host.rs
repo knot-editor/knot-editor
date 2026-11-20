@@ -677,9 +677,6 @@ pub(crate) struct ProductExtensionHost {
     /// Lifecycle-owned file watches.
     file_watches: HashMap<knot_protocol::WatchSubscriptionId, FileWatch>,
     next_file_watch: u64,
-    /// Pickers whose callers preview highlights, between pulls.
-    transient_sessions: HashMap<u64, handlers::TransientSession>,
-    next_transient_session: u64,
     /// Values dropped because a later definition gave their key another type.
     setting_warnings: Vec<String>,
     /// Editors each lifecycle set a key context or caret shape on or opened a
@@ -772,8 +769,6 @@ impl ProductExtensionHost {
             file_watches: HashMap::new(),
             next_file_watch: 0,
             next_setting_observer: 0,
-            transient_sessions: HashMap::new(),
-            next_transient_session: 0,
             setting_warnings: Vec::new(),
             #[cfg(any(test, feature = "test-support"))]
             application_events: Vec::new(),
@@ -3036,7 +3031,7 @@ impl ProductExtensionHost {
             value,
             selection,
             icon,
-            watching,
+            session,
             window,
         } = arguments;
         let kind = self.semantics.owned_kind(registration, request)?;
@@ -3056,7 +3051,7 @@ impl ProductExtensionHost {
         let session = handle
             .update(cx, |_, window, cx| {
                 tree.update(cx, |tree, cx| {
-                    tree.begin_edit(target, value, selection, watching, window, cx)
+                    tree.begin_edit(target, value, selection, session.is_some(), window, cx)
                 })
             })
             .map_err(|_| AccessError::InvalidTarget)?
@@ -3065,28 +3060,6 @@ impl ProductExtensionHost {
         // meanwhile belong to the field.
         knot_window.update(cx, |knot_window, cx| knot_window.release_key_hold_now(cx));
         Ok((session, weak))
-    }
-
-    /// Keep a previewing picker between pulls and return the number its
-    /// caller asks again with.
-    pub(crate) fn keep_transient_session(&mut self, session: handlers::TransientSession) -> u64 {
-        self.next_transient_session += 1;
-        self.transient_sessions
-            .insert(self.next_transient_session, session);
-        self.next_transient_session
-    }
-
-    /// Take a followed picker or input for its next pull; another
-    /// lifecycle's number finds nothing.
-    pub(crate) fn take_transient_session(
-        &mut self,
-        owner: ExtensionKey,
-        number: u64,
-    ) -> Option<handlers::TransientSession> {
-        if self.transient_sessions.get(&number)?.owner() != owner {
-            return None;
-        }
-        self.transient_sessions.remove(&number)
     }
 
     /// Settle any live transient interaction owned by the given extension
@@ -3207,8 +3180,6 @@ impl ProductExtensionHost {
         self.application_observation.remove_lifecycle(key);
         self.setting_observers.retain(|_, (_, owner)| *owner != key);
         self.file_watches.retain(|_, watch| watch.owner != key);
-        self.transient_sessions
-            .retain(|_, session| session.owner() != key);
         if cx.has_global::<crate::app::commands::keymaps::ApplicationKeymaps>() {
             let owner = crate::app::commands::keymaps::BindingOwner::Extension(
                 key.extension,

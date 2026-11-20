@@ -523,28 +523,6 @@ pub enum PickerResult {
     Dismissed,
 }
 
-/// One step of a picker whose caller previews the highlighted item or answers
-/// its query: the highlight or query with the session to ask again, or the
-/// settled outcome.
-#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
-#[serde(tag = "kind", rename_all = "camelCase")]
-pub enum PickerUpdate {
-    Highlighted {
-        session: u64,
-        id: Option<String>,
-    },
-    Queried {
-        session: u64,
-        query: String,
-        /// The ID of the active tab, for a picker with tabs.
-        tab: Option<String>,
-    },
-    Selected {
-        id: String,
-    },
-    Dismissed,
-}
-
 /// One completion offered under a text input: accepting it replaces the
 /// whole field with `value`.
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
@@ -597,21 +575,6 @@ fn unit_ranges<'de, D: serde::Deserializer<'de>>(
 pub struct MatchedCandidate {
     pub index: usize,
     pub ranges: Vec<[usize; 2]>,
-}
-
-/// The next change of a followed text input, or its outcome.
-#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
-#[serde(tag = "kind", rename_all = "camelCase")]
-pub enum InputUpdate {
-    Changed {
-        session: u64,
-        value: String,
-    },
-    Accepted {
-        value: String,
-        highlighted: Option<usize>,
-    },
-    Dismissed,
 }
 
 /// Settled outcome of a text input interaction.
@@ -721,6 +684,16 @@ pub struct ProviderCallRequest {
 
 /// A provider method's JSON result as text, or the message of what it threw.
 pub type ProviderCallResponse = Result<String, String>;
+
+/// One call of the callback a command passed to a native surface it opened
+/// (a picker, input, or inline tree edit), with the JSON argument as text.
+/// Its response is a [`ProviderCallResponse`].
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SurfaceCallbackRequest {
+    /// The surface session the extension numbered when it opened the surface.
+    pub session: u64,
+    pub argument: String,
+}
 
 /// Discoverable live product targets, separate from command invocation authority.
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize)]

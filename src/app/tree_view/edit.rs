@@ -1,6 +1,6 @@
 //! Inline editing of a row's label or of a new row, in the shared text input.
 //!
-//! An edit settles through a channel the extension host pulls from: accepted
+//! An edit settles through a channel the extension host follows: accepted
 //! with the typed value, or dismissed. When the caller validates, each typed
 //! value travels to it and its answer comes back as a message under the field;
 //! a commit waits for the answer to the current text and is blocked by a
@@ -46,7 +46,7 @@ pub(super) struct TreeEdit {
     _subscriptions: Vec<Subscription>,
 }
 
-/// The channels an edit's caller pulls from.
+/// The channels the extension host follows an edit through.
 pub(crate) struct EditSession {
     pub(crate) completion: tokio::sync::oneshot::Receiver<TransientOutcome>,
     pub(crate) changes: tokio::sync::watch::Receiver<Option<String>>,

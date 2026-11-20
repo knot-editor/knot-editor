@@ -1218,9 +1218,9 @@ pub(crate) async fn dispose_editor_contributions(
 
 use crate::app::extensions::semantics::{SemanticError, ViewPresentation};
 use knot_protocol::{
-    ConfirmationResult, FolderPickerResult, InputCompletion, InputResult, InputUpdate, PickerItem,
-    PickerResult, PickerRow, PickerTab, PickerUpdate, ProviderIdentity, TreeAction,
-    TreeProviderRegistrationId, ViewContentKind,
+    ConfirmationResult, FolderPickerResult, InputCompletion, InputResult, PickerItem, PickerResult,
+    PickerRow, PickerTab, ProviderIdentity, TreeAction, TreeProviderRegistrationId,
+    ViewContentKind,
 };
 
 use crate::app::transient::{InputSpec, PromptText, TransientOutcome, TransientOwner};
@@ -1489,104 +1489,207 @@ pub(crate) async fn show_picker(
     }
 }
 
-/// A picker or input whose caller follows its changes: the highlighted item,
-/// or the typed value. The caller pulls each change within its own turn,
-/// because a separate notification root could not run while the caller awaits
-/// the interaction.
-pub(crate) struct TransientSession {
-    owner: ExtensionKey,
-    completion: tokio::sync::oneshot::Receiver<TransientOutcome>,
-    changes: tokio::sync::watch::Receiver<Option<String>>,
-    /// Where the caller's messages are shown.
-    input: Option<FeedbackTarget>,
-    /// The value the caller last pulled; feedback applies only while the
-    /// field still holds it.
-    delivered: Option<String>,
-    /// The picker whose rows the caller supplies, with the queries it asks
-    /// for.
-    queried: Option<QueriedPicker>,
+/// The values a surface passes its callback for an answer, and what becomes
+/// of each answer.
+struct Answered<Q> {
+    values: Option<tokio::sync::watch::Receiver<Q>>,
+    /// Whether a value is passed while an earlier call still runs.
+    concurrent: bool,
+    argument: fn(&Q) -> serde_json::Value,
+    apply: ApplyAnswer<Q>,
 }
 
-/// A text field that shows the messages a caller derives from its value.
-enum FeedbackTarget {
-    Input(WeakEntity<crate::app::transient::InputView>),
-    TreeEdit(WeakEntity<crate::app::tree_view::TreeView>),
-}
+/// Shows a callback's answer as JSON text for a value, or `None` when the
+/// call failed.
+type ApplyAnswer<Q> = Box<dyn FnMut(&HostContext, &Q, Option<String>)>;
 
-struct QueriedPicker {
-    picker: WeakEntity<crate::app::picker::Picker>,
-    queries: tokio::sync::watch::Receiver<Option<crate::app::picker::PickerAsk>>,
-    /// The query and tab the caller last pulled; rows apply only while the
-    /// field and the active tab still hold them.
-    delivered: Option<crate::app::picker::PickerAsk>,
-}
+/// Settles with a surface's outcome while calling the callback the command
+/// passed with it (the `session` the bootstrap numbered) as tasks of the
+/// command's package. A new value of `answered` is passed to the callback at
+/// once when the source is concurrent, and otherwise once the previous call
+/// has returned; its answer goes to `apply` only when no later value was
+/// passed meanwhile, as `None` when the call failed. Each new highlight is
+/// passed once the previous one's call has returned. A failing call stops
+/// further calls. Concurrent answers still pending when the surface settles
+/// are dropped, but the outcome waits for the calls of a serial source and
+/// for a highlight's, so a preview never lands after the command resumes.
+async fn follow_surface<Q: Clone>(
+    context: &HostContext,
+    session: u64,
+    mut completion: tokio::sync::oneshot::Receiver<TransientOutcome>,
+    answered: Answered<Q>,
+    mut highlights: Option<tokio::sync::watch::Receiver<Option<String>>>,
+) -> Result<TransientOutcome, TransientError> {
+    use futures::{FutureExt as _, StreamExt as _, future::LocalBoxFuture};
+    use std::task::Poll;
 
-impl TransientSession {
-    pub(crate) fn owner(&self) -> ExtensionKey {
-        self.owner
+    enum Next<Q> {
+        Settled(Result<TransientOutcome, tokio::sync::oneshot::error::RecvError>),
+        Answer(u64, Q, Option<String>),
+        Highlighted(Option<String>),
+        Answered(bool),
+        Highlight(bool),
     }
-}
-
-/// The next thing a caller pulls from a session.
-enum Pulled {
-    Changed {
-        session: u64,
-        value: Option<String>,
-    },
-    Queried {
-        session: u64,
-        query: String,
-        tab: Option<String>,
-    },
-    Settled(TransientOutcome),
+    let Answered {
+        values: mut answered,
+        concurrent,
+        argument,
+        mut apply,
+    } = answered;
+    let key = ExtensionKey::new(context.request.extension, context.request.lifecycle);
+    let call = |argument: serde_json::Value| -> LocalBoxFuture<'static, Option<String>> {
+        let execution = context
+            .foreground(|host, _| {
+                host.pool.call_surface(
+                    key,
+                    knot_protocol::SurfaceCallbackRequest {
+                        session,
+                        argument: argument.to_string(),
+                    },
+                )
+            })
+            .ok()
+            .and_then(Result::ok);
+        async move { execution?.await.ok()?.ok() }.boxed_local()
+    };
+    let mut answers = futures::stream::FuturesUnordered::new();
+    let mut highlight: Option<LocalBoxFuture<'static, Option<String>>> = None;
+    let mut generation = 0;
+    let mut failed = false;
+    let outcome = loop {
+        let next = {
+            let answering = !concurrent && !answers.is_empty();
+            let mut answer = std::pin::pin!(async {
+                match answered.as_mut().filter(|_| !failed && !answering) {
+                    Some(answered) => answered.changed().await.is_ok(),
+                    None => std::future::pending().await,
+                }
+            });
+            let highlighting = highlight.is_some();
+            let mut highlighted = std::pin::pin!(async {
+                match highlights.as_mut().filter(|_| !failed && !highlighting) {
+                    Some(highlights) => highlights.changed().await.is_ok(),
+                    None => std::future::pending().await,
+                }
+            });
+            std::future::poll_fn(|task| {
+                if let Poll::Ready(outcome) = std::pin::Pin::new(&mut completion).poll(task) {
+                    return Poll::Ready(Next::Settled(outcome));
+                }
+                if let Some(Poll::Ready(result)) =
+                    highlight.as_mut().map(|call| call.poll_unpin(task))
+                {
+                    return Poll::Ready(Next::Highlighted(result));
+                }
+                if let Poll::Ready(Some((generation, value, result))) =
+                    answers.poll_next_unpin(task)
+                {
+                    return Poll::Ready(Next::Answer(generation, value, result));
+                }
+                if let Poll::Ready(open) = answer.as_mut().poll(task) {
+                    return Poll::Ready(Next::Answered(open));
+                }
+                highlighted.as_mut().poll(task).map(Next::Highlight)
+            })
+            .await
+        };
+        match next {
+            Next::Settled(outcome) => break outcome,
+            Next::Highlighted(result) => {
+                highlight = None;
+                failed |= result.is_none();
+            }
+            Next::Answer(answered, value, result) => {
+                failed |= result.is_none();
+                if answered == generation {
+                    apply(context, &value, result);
+                }
+            }
+            Next::Answered(false) => answered = None,
+            Next::Answered(true) => {
+                let value = answered
+                    .as_mut()
+                    .expect("answered values")
+                    .borrow_and_update()
+                    .clone();
+                generation += 1;
+                let pending = call(argument(&value));
+                answers.push(pending.map(move |result| (generation, value, result)));
+            }
+            Next::Highlight(false) => highlights = None,
+            Next::Highlight(true) => {
+                let id = highlights
+                    .as_mut()
+                    .expect("highlights")
+                    .borrow_and_update()
+                    .clone();
+                highlight = Some(call(serde_json::json!({ "kind": "highlight", "id": id })));
+            }
+        }
+    };
+    if let Some(highlight) = highlight {
+        highlight.await;
+    }
+    if !concurrent {
+        while answers.next().await.is_some() {}
+    }
+    outcome.map_err(|_| TransientError::Cancelled)
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct BeginPickerArguments {
+pub(crate) struct FollowPickerArguments {
     picker: PickerArguments,
-    /// Whether the caller supplies the rows for each query.
+    /// The callback session the bootstrap numbered for this picker.
+    session: u64,
+    /// Whether the callback supplies the rows for each query.
     queried: bool,
+    /// Whether the callback follows the highlighted item.
+    highlights: bool,
     tabs: Vec<PickerTab>,
     /// The index of the tab that starts active.
     initial_tab: usize,
 }
-impl HostArguments for BeginPickerArguments {
+impl HostArguments for FollowPickerArguments {
     fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
         Ok(Self {
             picker: PickerArguments::decode(reader)?,
-            queried: reader.integer(5)? != 0,
-            tabs: serde_json::to_value(reader.command_arguments(6)?)
+            session: reader.integer(5)?,
+            queried: reader.integer(6)? != 0,
+            highlights: reader.integer(7)? != 0,
+            tabs: serde_json::to_value(reader.command_arguments(8)?)
                 .ok()
                 .and_then(|value| serde_json::from_value::<Vec<PickerTab>>(value).ok())
                 .ok_or(DecodeError::Type("invalid picker tabs"))?,
-            initial_tab: reader.integer(7)? as usize,
+            initial_tab: reader.integer(9)? as usize,
         })
     }
 }
 
-/// Open a picker and settle with its first highlight or query, or its
-/// outcome.
-#[host_operation("beginPicker")]
-pub(crate) async fn begin_picker(
+/// Open a picker with tabs, or whose callback follows its highlight or
+/// supplies the rows for each query, and settle with its outcome.
+#[host_operation("followPicker")]
+pub(crate) async fn follow_picker(
     context: HostContext,
-    arguments: BeginPickerArguments,
-) -> Result<PickerUpdate, TransientError> {
+    arguments: FollowPickerArguments,
+) -> Result<PickerResult, TransientError> {
     let request = context.request;
     let owner = transient_owner(&request);
-    let BeginPickerArguments {
+    let FollowPickerArguments {
         picker:
             PickerArguments {
                 title,
                 items,
                 target,
             },
+        session,
         queried,
+        highlights,
         tabs,
         initial_tab,
     } = arguments;
     let (sender, changes) = tokio::sync::watch::channel(None);
     let (query_sender, queries) = tokio::sync::watch::channel(None);
-    let (completion, queried) = context.foreground(|host, cx| {
+    let (completion, picker) = context.foreground(|host, cx| {
         host.with_transient_window(
             &request,
             target.as_deref(),
@@ -1600,14 +1703,7 @@ pub(crate) async fn begin_picker(
                         query_sender,
                         cx,
                     )?;
-                    Ok((
-                        completion,
-                        Some(QueriedPicker {
-                            picker,
-                            queries,
-                            delivered: None,
-                        }),
-                    ))
+                    Ok((completion, Some(picker)))
                 } else {
                     let completion = window.begin_tabbed_picker(
                         owner,
@@ -1623,33 +1719,38 @@ pub(crate) async fn begin_picker(
             cx,
         )
     })??;
-    let session = TransientSession {
-        owner: ExtensionKey::new(request.extension, request.lifecycle),
-        completion,
-        changes,
-        input: None,
-        delivered: None,
-        queried,
+    let answered = Answered {
+        values: picker.is_some().then_some(queries),
+        concurrent: true,
+        argument: |ask: &Option<crate::app::picker::PickerAsk>| {
+            let (query, tab) = ask.clone().unwrap_or_default();
+            serde_json::json!({ "kind": "query", "query": query, "tab": tab })
+        },
+        apply: Box::new(
+            move |context: &HostContext,
+                  ask: &Option<crate::app::picker::PickerAsk>,
+                  rows: Option<String>| {
+                let (Some(picker), Some(Ok(rows))) = (
+                    picker.as_ref().and_then(WeakEntity::upgrade),
+                    rows.map(|rows| serde_json::from_str::<Vec<PickerRow>>(&rows)),
+                ) else {
+                    return;
+                };
+                let (query, tab) = ask.clone().unwrap_or_default();
+                let entries = rows.into_iter().map(picker_entry).collect();
+                let _ = context.foreground(|_, cx| {
+                    picker.update(cx, |picker, cx| {
+                        picker.supply(&query, tab.as_deref(), entries, cx)
+                    })
+                });
+            },
+        ),
     };
-    picker_update(next_change(&context, session).await?)
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) struct PickerSessionArguments {
-    pub session: u64,
-    /// The rows answering the last pulled query, if that is what was pulled.
-    pub rows: Option<Vec<PickerRow>>,
-}
-impl HostArguments for PickerSessionArguments {
-    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
-        let rows = serde_json::to_value(reader.command_arguments(3)?)
-            .ok()
-            .and_then(|value| serde_json::from_value::<Option<Vec<PickerRow>>>(value).ok())
-            .ok_or(DecodeError::Type("invalid picker rows"))?;
-        Ok(Self {
-            session: reader.integer(2)?,
-            rows,
-        })
+    let highlights = highlights.then_some(changes);
+    match follow_surface(&context, session, completion, answered, highlights).await? {
+        TransientOutcome::Picker(id) => Ok(PickerResult::Selected { id }),
+        TransientOutcome::Dismissed => Ok(PickerResult::Dismissed),
+        _ => Err(TransientError::Cancelled),
     }
 }
 
@@ -1680,129 +1781,34 @@ fn picker_entry(row: PickerRow) -> crate::app::picker::PickerEntry {
     }
 }
 
-/// Show the rows the caller derived from the last pulled query, unless the
-/// field has changed since, then settle with the picker's next query or
-/// highlight, or with its outcome once it settles. Only the latest unread
-/// change of each is kept.
-#[host_operation("nextPickerEvent")]
-pub(crate) async fn next_picker_event(
-    context: HostContext,
-    arguments: PickerSessionArguments,
-) -> Result<PickerUpdate, TransientError> {
-    let owner = ExtensionKey::new(context.request.extension, context.request.lifecycle);
-    let PickerSessionArguments { session, rows } = arguments;
-    let session = context
-        .foreground(|host, cx| {
-            let session = host.take_transient_session(owner, session)?;
-            if let (Some(rows), Some(queried)) = (rows, session.queried.as_ref())
-                && let (Some(picker), Some((query, tab))) =
-                    (queried.picker.upgrade(), queried.delivered.as_ref())
-            {
-                let entries = rows.into_iter().map(picker_entry).collect();
-                picker.update(cx, |picker, cx| {
-                    picker.supply(query, tab.as_deref(), entries, cx)
-                });
-            }
-            Some(session)
-        })?
-        .ok_or(TransientError::Cancelled)?;
-    picker_update(next_change(&context, session).await?)
+/// What a callback following a text field answers for one value.
+#[derive(Default, serde::Deserialize)]
+struct FieldFeedback {
+    message: Option<String>,
+    #[serde(default)]
+    items: Vec<InputCompletion>,
 }
 
-fn picker_update(pulled: Pulled) -> Result<PickerUpdate, TransientError> {
-    match pulled {
-        Pulled::Changed { session, value } => Ok(PickerUpdate::Highlighted { session, id: value }),
-        Pulled::Queried {
-            session,
-            query,
-            tab,
-        } => Ok(PickerUpdate::Queried {
-            session,
-            query,
-            tab,
+/// The answers of a field's callback to `changes`, serially: each value is
+/// passed as JSON text, and `feedback` shows the answer for the value it
+/// answers, or no message and completions when the callback failed.
+fn field_answers(
+    changes: tokio::sync::watch::Receiver<Option<String>>,
+    feedback: impl Fn(&HostContext, &str, FieldFeedback) + 'static,
+) -> Answered<Option<String>> {
+    Answered {
+        values: Some(changes),
+        concurrent: false,
+        argument: |value: &Option<String>| {
+            serde_json::Value::from(value.clone().unwrap_or_default())
+        },
+        apply: Box::new(move |context, value, answer| {
+            let answer = match answer {
+                Some(answer) => serde_json::from_str::<FieldFeedback>(&answer).unwrap_or_default(),
+                None => FieldFeedback::default(),
+            };
+            feedback(context, value.as_deref().unwrap_or_default(), answer);
         }),
-        Pulled::Settled(TransientOutcome::Picker(id)) => Ok(PickerUpdate::Selected { id }),
-        Pulled::Settled(TransientOutcome::Dismissed) => Ok(PickerUpdate::Dismissed),
-        Pulled::Settled(_) => Err(TransientError::Cancelled),
-    }
-}
-
-/// Settle with the session's next change, or with its outcome once it settles.
-async fn next_change(
-    context: &HostContext,
-    mut session: TransientSession,
-) -> Result<Pulled, TransientError> {
-    enum Next {
-        Settled(Result<TransientOutcome, tokio::sync::oneshot::error::RecvError>),
-        Queried,
-        Changed,
-        Closed,
-    }
-    // A settled interaction wins over a change that was never read.
-    let next = match session.completion.try_recv() {
-        Ok(outcome) => Next::Settled(Ok(outcome)),
-        Err(tokio::sync::oneshot::error::TryRecvError::Closed) => {
-            return Err(TransientError::Cancelled);
-        }
-        Err(tokio::sync::oneshot::error::TryRecvError::Empty) => {
-            let completion = &mut session.completion;
-            let queries = session.queried.as_mut().map(|queried| &mut queried.queries);
-            let mut queried = std::pin::pin!(async {
-                match queries {
-                    Some(queries) => queries.changed().await,
-                    None => std::future::pending().await,
-                }
-            });
-            let mut changed = std::pin::pin!(session.changes.changed());
-            std::future::poll_fn(|task| {
-                if let std::task::Poll::Ready(outcome) =
-                    std::pin::Pin::new(&mut *completion).poll(task)
-                {
-                    return std::task::Poll::Ready(Next::Settled(outcome));
-                }
-                // A query is answered before the highlight it will replace.
-                if let std::task::Poll::Ready(queried) = queried.as_mut().poll(task) {
-                    return std::task::Poll::Ready(match queried {
-                        Ok(()) => Next::Queried,
-                        Err(_) => Next::Closed,
-                    });
-                }
-                changed.as_mut().poll(task).map(|changed| match changed {
-                    Ok(()) => Next::Changed,
-                    Err(_) => Next::Closed,
-                })
-            })
-            .await
-        }
-    };
-    let next = match next {
-        Next::Closed => Next::Settled((&mut session.completion).await),
-        next => next,
-    };
-    match next {
-        Next::Settled(Ok(outcome)) => Ok(Pulled::Settled(outcome)),
-        Next::Settled(Err(_)) => Err(TransientError::Cancelled),
-        Next::Queried => {
-            let queried = session.queried.as_mut().expect("queried picker");
-            let (query, tab) = queried
-                .queries
-                .borrow_and_update()
-                .clone()
-                .unwrap_or_default();
-            queried.delivered = Some((query.clone(), tab.clone()));
-            let session = context.foreground(|host, _| host.keep_transient_session(session))?;
-            Ok(Pulled::Queried {
-                session,
-                query,
-                tab,
-            })
-        }
-        Next::Changed | Next::Closed => {
-            let value = session.changes.borrow_and_update().clone();
-            session.delivered.clone_from(&value);
-            let session = context.foreground(|host, _| host.keep_transient_session(session))?;
-            Ok(Pulled::Changed { session, value })
-        }
     }
 }
 
@@ -1851,21 +1857,41 @@ pub(crate) async fn show_input(
     }
 }
 
-/// Open an input and settle with its initial value or its outcome.
-#[host_operation("beginInput")]
-pub(crate) async fn begin_input(
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct FollowInputArguments {
+    input: InputArguments,
+    /// The callback session the bootstrap numbered for this input.
+    session: u64,
+}
+impl HostArguments for FollowInputArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self {
+            input: InputArguments::decode(reader)?,
+            session: reader.integer(8)?,
+        })
+    }
+}
+
+/// Open an input whose callback answers each value with a message and
+/// completions, and settle with its outcome.
+#[host_operation("followInput")]
+pub(crate) async fn follow_input(
     context: HostContext,
-    arguments: InputArguments,
-) -> Result<InputUpdate, TransientError> {
+    arguments: FollowInputArguments,
+) -> Result<InputResult, TransientError> {
     let request = context.request;
     let owner = transient_owner(&request);
-    let InputArguments {
-        title,
-        value,
-        prompt,
-        target,
-        history,
-        placeholder,
+    let FollowInputArguments {
+        input:
+            InputArguments {
+                title,
+                value,
+                prompt,
+                target,
+                history,
+                placeholder,
+            },
+        session,
     } = arguments;
     let (sender, changes) = tokio::sync::watch::channel(None);
     let (completion, input) = context.foreground(|host, cx| {
@@ -1889,78 +1915,23 @@ pub(crate) async fn begin_input(
             cx,
         )
     })??;
-    let session = TransientSession {
-        owner: ExtensionKey::new(request.extension, request.lifecycle),
-        completion,
-        changes,
-        input: Some(FeedbackTarget::Input(input)),
-        delivered: None,
-        queried: None,
-    };
-    input_update(next_change(&context, session).await?)
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) struct InputSessionArguments {
-    pub session: u64,
-    pub message: Option<String>,
-    pub items: Vec<InputCompletion>,
-}
-impl HostArguments for InputSessionArguments {
-    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
-        let items = serde_json::to_value(reader.command_arguments(4)?)
-            .ok()
-            .and_then(|value| serde_json::from_value::<Vec<InputCompletion>>(value).ok())
-            .ok_or(DecodeError::Type("invalid input completions"))?;
-        Ok(Self {
-            session: reader.integer(2)?,
-            message: reader.optional_text(3, "input message must be text or null")?,
-            items,
-        })
+    let answered = field_answers(changes, move |context, value, feedback| {
+        let Some(input) = input.upgrade() else { return };
+        let _ = context.foreground(|_, cx| {
+            input.update(cx, |input, cx| {
+                if input.text(cx) == value {
+                    input.set_feedback(feedback.message, feedback.items, cx);
+                }
+            })
+        });
+    });
+    match follow_surface(&context, session, completion, answered, None).await? {
+        TransientOutcome::Input(value, highlighted) => {
+            Ok(InputResult::Accepted { value, highlighted })
+        }
+        TransientOutcome::Dismissed => Ok(InputResult::Dismissed),
+        _ => Err(TransientError::Cancelled),
     }
-}
-
-/// Show the message and completions the caller derived from the last value,
-/// unless the field has changed since, then settle with
-/// the input's next value, or with its outcome once it settles. Only the
-/// latest unread value is kept.
-#[host_operation("nextInputEvent")]
-pub(crate) async fn next_input_event(
-    context: HostContext,
-    arguments: InputSessionArguments,
-) -> Result<InputUpdate, TransientError> {
-    let owner = ExtensionKey::new(context.request.extension, context.request.lifecycle);
-    let InputSessionArguments {
-        session,
-        message,
-        items,
-    } = arguments;
-    let session = context
-        .foreground(|host, cx| {
-            let session = host.take_transient_session(owner, session)?;
-            match &session.input {
-                Some(FeedbackTarget::Input(input)) => {
-                    if let Some(input) = input.upgrade() {
-                        input.update(cx, |input, cx| {
-                            if session.delivered.as_deref() == Some(input.text(cx).as_str()) {
-                                input.set_feedback(message, items, cx);
-                            }
-                        });
-                    }
-                }
-                Some(FeedbackTarget::TreeEdit(tree)) => {
-                    if let Some(tree) = tree.upgrade() {
-                        tree.update(cx, |tree, cx| {
-                            tree.set_edit_feedback(session.delivered.as_deref(), message, cx);
-                        });
-                    }
-                }
-                None => {}
-            }
-            Some(session)
-        })?
-        .ok_or(TransientError::Cancelled)?;
-    input_update(next_change(&context, session).await?)
 }
 
 /// Failures of an inline edit of a tree row.
@@ -2003,8 +1974,8 @@ pub(crate) struct TreeEditArguments {
     /// UTF-16 code unit range of `value` to select; all when omitted.
     pub selection: Option<[usize; 2]>,
     pub icon: Option<knot_protocol::IconRef>,
-    /// Whether the caller validates each value.
-    pub watching: bool,
+    /// The callback session that validates each value, if any.
+    pub session: Option<u64>,
     pub window: Option<String>,
 }
 
@@ -2028,46 +1999,44 @@ impl HostArguments for TreeEditArguments {
                 .unwrap_or_default(),
             selection,
             icon,
-            watching: reader.integer(8)? != 0,
+            session: reader.optional_integer(8)?,
             window: reader.optional_text(9, "window target must be text")?,
         })
     }
 }
 
-/// Start editing a row's label or a new row inline, and settle with the
-/// field's first value to validate, or with the edit's outcome.
-#[host_operation("beginTreeEdit")]
-pub(crate) async fn begin_tree_edit(
+/// Edit a row's label or a new row inline, with a callback that validates
+/// each value, and settle with the edit's outcome.
+#[host_operation("editTreeItem")]
+pub(crate) async fn edit_tree_item(
     context: HostContext,
     arguments: TreeEditArguments,
-) -> Result<InputUpdate, TreeEditError> {
+) -> Result<InputResult, TreeEditError> {
     let request = context.request;
-    let owner = ExtensionKey::new(request.extension, request.lifecycle);
-    let (session, tree) =
+    let session = arguments.session;
+    let (edit, tree) =
         context.foreground(|host, cx| host.begin_tree_edit(&request, arguments, cx))??;
-    let session = TransientSession {
-        owner,
-        completion: session.completion,
-        changes: session.changes,
-        input: Some(FeedbackTarget::TreeEdit(tree)),
-        delivered: None,
-        queried: None,
+    let answered = field_answers(edit.changes, move |context, value, feedback| {
+        let Some(tree) = tree.upgrade() else { return };
+        let _ = context.foreground(|_, cx| {
+            tree.update(cx, |tree, cx| {
+                tree.set_edit_feedback(Some(value), feedback.message, cx)
+            })
+        });
+    });
+    let outcome = match session {
+        Some(session) => follow_surface(&context, session, edit.completion, answered, None).await?,
+        None => edit
+            .completion
+            .await
+            .map_err(|_| TransientError::Cancelled)?,
     };
-    Ok(input_update(next_change(&context, session).await?)?)
-}
-
-fn input_update(pulled: Pulled) -> Result<InputUpdate, TransientError> {
-    match pulled {
-        Pulled::Changed { session, value } => Ok(InputUpdate::Changed {
-            session,
-            value: value.unwrap_or_default(),
-        }),
-        Pulled::Queried { .. } => Err(TransientError::Cancelled),
-        Pulled::Settled(TransientOutcome::Input(value, highlighted)) => {
-            Ok(InputUpdate::Accepted { value, highlighted })
+    match outcome {
+        TransientOutcome::Input(value, highlighted) => {
+            Ok(InputResult::Accepted { value, highlighted })
         }
-        Pulled::Settled(TransientOutcome::Dismissed) => Ok(InputUpdate::Dismissed),
-        Pulled::Settled(_) => Err(TransientError::Cancelled),
+        TransientOutcome::Dismissed => Ok(InputResult::Dismissed),
+        _ => Err(TransientError::Cancelled.into()),
     }
 }
 

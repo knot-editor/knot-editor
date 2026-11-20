@@ -561,7 +561,7 @@ fn native_dispatch_callbacks_are_not_available_to_extension_code() {
             r#"
         ["__knotNativeBindings", "__knotDispatchBufferChange", "__knotInvokeCommand",
          "__knotCancelCommand", "__knotRequestTreeChildren",
-         "__knotCallProvider"]
+         "__knotCallProvider", "__knotSurfaceCallback"]
             .every((name) => !Object.hasOwn(globalThis, name))
     "#,
         )

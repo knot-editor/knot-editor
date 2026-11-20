@@ -2309,10 +2309,11 @@ declare module "knot" {
      * Supplies the rows in place of `items`. Called with the query, first
      * with the empty one and then whenever it changes; the picker does no
      * matching of its own and shows the rows in the order returned, with the
-     * ranges they carry highlighted. Calls are serial; while one runs, later
-     * queries collapse into the latest. An answer applies only while the
-     * field still holds the query it answers. A throw stops further calls
-     * and is rethrown once the picker settles. `tab` is the active tab's ID,
+     * ranges they carry highlighted. Each query is passed as it changes, even
+     * while an earlier call runs; only the answer to the latest call applies,
+     * and answers still pending when the picker settles are dropped. A throw
+     * stops further calls and is rethrown once the picker settles. `tab` is
+     * the active tab's ID,
      * or null without `tabs`; a tab change calls it again, and an answer
      * applies only while the field and the tab still hold what it answers.
      * `onHighlight` works as it does with `items`.
@@ -2335,7 +2336,8 @@ declare module "knot" {
     /**
      * Called with the highlighted item's ID, or null when nothing matches,
      * first for the initial highlight and then whenever it changes. Calls are
-     * serial; while one runs, later changes collapse into the latest. Undoing
+     * serial; while one runs, later changes collapse into the latest, and the
+     * picker's result waits for the call in flight. Undoing
      * a preview after dismissal is the caller's job. A throw stops further
      * calls and is rethrown once the picker settles.
      */
@@ -2395,7 +2397,8 @@ declare module "knot" {
     /**
      * Called with the field's text, first with the initial value and then
      * whenever it changes. Calls are serial; while one runs, later changes
-     * collapse into the latest. A returned string shows as a muted message
+     * collapse into the latest, and the input's result waits for the call in
+     * flight. A returned string shows as a muted message
      * line under the field; null or nothing clears it. An {@link InputFeedback}
      * object carries a message and a completion list. The list shows under
      * the field with its first row highlighted; Up, Down, Ctrl-N and Ctrl-P
