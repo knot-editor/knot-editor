@@ -211,7 +211,22 @@ each invocation promise that reports through a native binding. Listener
 acknowledgements in `bootstrap.js` (`__knotDispatchBufferChange` and the
 selection dispatch) and their foreground counterparts.
 
-### 3. Non-exclusive loading and lifted refusals
+### 3. 🔍 Non-exclusive loading and lifted refusals
+
+Implemented, awaiting review. The scheduler no longer has exclusive
+invocations; a call that reaches a registration before its handler is
+installed still waits in the bootstrap (`registerCallable`). The
+provider-package case is tested as a chain: the provider's command runs a
+consumer's command, which calls the provider back (formerly `ProviderBusy`).
+Removing exclusivity exposed the same race for subscriptions as for
+registrations: a notification could arrive before the reply that installs
+its listener. Buffer-change, setting, file-watch, and workbench
+subscriptions now go through `registerCallable`, and a waiting call or
+notification resumes in a later task (an immediate), so the subscribing code
+has continued past its `await` first. A command started before an unload
+reports it as a cancelled runtime error, as before. The guide and decision
+passages that still mention `ProviderBusy` and exclusive loading are
+rewritten in checkpoint 6.
 
 Deliverables: package and personal-config evaluation no longer exclusive, a
 registration live as soon as it resolves; `ProviderBusy` and
