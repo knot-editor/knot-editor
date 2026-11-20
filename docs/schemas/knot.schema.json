@@ -36,6 +36,15 @@
         "$ref": "#/$defs/packageName"
       }
     },
+    "entitlements": {
+      "type": "array",
+      "default": [],
+      "uniqueItems": true,
+      "description": "Capabilities the package needs. Knot asks the user before loading a package whose entitlements are undecided, and does not load one whose entitlement was denied.",
+      "items": {
+        "enum": ["process"]
+      }
+    },
     "displayName": {
       "$ref": "#/$defs/nonEmpty"
     },

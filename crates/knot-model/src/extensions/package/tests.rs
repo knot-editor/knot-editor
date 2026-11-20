@@ -465,3 +465,30 @@ fn bundled_admission_rejects_missing_sources_and_installed_scope() {
         .contains("@knot scope")
     );
 }
+
+#[test]
+fn entitlements_default_to_empty_and_unknown_or_duplicate_names_are_manifest_errors() {
+    let root = tempfile::tempdir().unwrap();
+    package(root.path(), "@example/tools", VALID);
+    let report = discover(root.path());
+    assert!(report.packages[0].manifest.entitlements.is_empty());
+
+    let declared = |entitlements: &str| {
+        let root = tempfile::tempdir().unwrap();
+        package(
+            root.path(),
+            "@example/tools",
+            &format!(
+                r#"{{"name":"@example/tools","apiVersion":1,"version":"1.0.0","main":"dist/main.js","entitlements":{entitlements}}}"#
+            ),
+        );
+        discover(root.path())
+    };
+    let report = declared(r#"["process"]"#);
+    assert_eq!(report.packages[0].manifest.entitlements, [Entitlement::Process]);
+    let report = declared(r#"["teleport"]"#);
+    assert!(report.packages.is_empty());
+    assert!(report.diagnostics[0].cause.contains("teleport"));
+    let report = declared(r#"["process", "process"]"#);
+    assert!(report.diagnostics[0].cause.contains("duplicate entitlements"));
+}

@@ -6,9 +6,37 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
 use directories::ProjectDirs;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 pub const SUPPORTED_API_VERSION: u32 = 1;
+
+/// A capability a package declares in its manifest and the user decides on
+/// before the package loads.
+#[derive(
+    Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
+)]
+#[serde(rename_all = "camelCase")]
+pub enum Entitlement {
+    /// Spawn processes on the user's machine.
+    Process,
+}
+
+impl Entitlement {
+    /// The name used in manifests and reports.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Process => "process",
+        }
+    }
+
+    /// What holding the entitlement lets a package do, in words for a consent
+    /// prompt.
+    pub fn summary(self) -> &'static str {
+        match self {
+            Self::Process => "run programs on your computer",
+        }
+    }
+}
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -20,6 +48,8 @@ pub struct Manifest {
     pub main: String,
     #[serde(default)]
     pub requires: Vec<String>,
+    #[serde(default)]
+    pub entitlements: Vec<Entitlement>,
     pub display_name: Option<String>,
     pub description: Option<String>,
     pub author: Option<String>,
@@ -335,6 +365,12 @@ fn validate_manifest(manifest: &Manifest, bundled: bool) -> Result<(), String> {
             .map_err(|error| format!("invalid requires entry: {error}"))?;
         if !requires.insert(dependency) {
             return Err(format!("duplicate requires entry {dependency}"));
+        }
+    }
+    let mut entitlements = BTreeSet::new();
+    for entitlement in &manifest.entitlements {
+        if !entitlements.insert(entitlement) {
+            return Err(format!("duplicate entitlements entry {}", entitlement.name()));
         }
     }
     for (field, value) in [

@@ -3499,6 +3499,7 @@ mod tests {
                     version: "1.0.0".into(),
                     main: "main.js".into(),
                     requires: Vec::new(),
+                    entitlements: Vec::new(),
                     display_name: None,
                     description: None,
                     author: None,

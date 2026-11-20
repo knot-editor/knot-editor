@@ -9,6 +9,9 @@ use crate::extensions::package::{DiscoveryReport, InstalledPackage};
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum LoadResult {
     Loaded,
+    /// Deliberately not started, as when an entitlement is denied. The cause is
+    /// not a fault.
+    NotLoaded(String),
     Failed(String),
 }
 
@@ -59,6 +62,7 @@ impl<F: Future<Output = Result<(), String>>, C: FnOnce()> Drop for StartupAttemp
 pub struct DependencyPlan {
     packages: BTreeMap<String, InstalledPackage>,
     failures: BTreeMap<String, String>,
+    not_loaded: BTreeMap<String, String>,
     diagnostics: Vec<LoadEntry>,
 }
 
@@ -111,8 +115,19 @@ impl DependencyPlan {
         Self {
             packages,
             failures,
+            not_loaded: BTreeMap::new(),
             diagnostics,
         }
+    }
+
+    /// Keep the named packages from starting, each with its report cause.
+    /// Their dependents fail as with any package that did not load.
+    pub fn with_not_loaded(mut self, not_loaded: BTreeMap<String, String>) -> Self {
+        self.not_loaded = not_loaded
+            .into_iter()
+            .filter(|(name, _)| self.packages.contains_key(name))
+            .collect();
+        self
     }
 
     #[cfg(any(test, feature = "test-support"))]
@@ -157,6 +172,17 @@ impl DependencyPlan {
                 directory: package.directory.clone(),
                 name: Some(name.clone()),
                 result: LoadResult::Failed(cause.clone()),
+            });
+            outcomes.insert(name, Err(cause));
+        }
+        for (name, cause) in self.not_loaded {
+            if outcomes.contains_key(&name) {
+                continue;
+            }
+            record(LoadEntry {
+                directory: self.packages[&name].directory.clone(),
+                name: Some(name.clone()),
+                result: LoadResult::NotLoaded(cause.clone()),
             });
             outcomes.insert(name, Err(cause));
         }
@@ -291,6 +317,7 @@ mod tests {
                     .iter()
                     .map(|dependency| (*dependency).into())
                     .collect(),
+                entitlements: Vec::new(),
                 display_name: None,
                 description: None,
                 author: None,
@@ -390,6 +417,38 @@ mod tests {
         assert!(
             matches!(result("@test/self"), LoadResult::Failed(cause) if cause.contains("self-dependency"))
         );
+    }
+
+    #[test]
+    fn not_loaded_packages_do_not_start_and_fail_their_dependents() {
+        let plan = plan(vec![
+            package("@test/a", &[]),
+            package("@test/b", &["@test/a"]),
+            package("@test/c", &[]),
+        ])
+        .with_not_loaded(BTreeMap::from([("@test/a".into(), "not loaded: denied".into())]));
+        let mut started = Vec::new();
+        let report = pollster::block_on(plan.execute(|package| {
+            started.push(package.manifest.name.clone());
+            StartupAttempt::new(ready(Ok(())), || {})
+        }));
+        assert_eq!(started, ["@test/c"]);
+        let result = |name| {
+            &report
+                .entries
+                .iter()
+                .find(|entry| entry.name.as_deref() == Some(name))
+                .unwrap()
+                .result
+        };
+        assert_eq!(
+            result("@test/a"),
+            &LoadResult::NotLoaded("not loaded: denied".into())
+        );
+        assert!(
+            matches!(result("@test/b"), LoadResult::Failed(cause) if cause.contains("@test/a") && cause.contains("denied"))
+        );
+        assert_eq!(result("@test/c"), &LoadResult::Loaded);
     }
 
     #[test]
