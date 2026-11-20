@@ -121,17 +121,26 @@ export async function start() {
     await workbench.registerStatusItem("keys", { text: "", side: "right", priority: 40 }),
   );
 
+  // Keys take turns: each waits for the ones before it, so a key that
+  // outlasts the application's key hold still runs before the keys typed
+  // after it. Replays feed keys directly and never invoke these commands.
+  let turn: Promise<unknown> = Promise.resolve();
+  const inTurn = <T>(run: () => Promise<T>): Promise<T> => {
+    const next = turn.then(run);
+    turn = next.catch(() => {});
+    return next;
+  };
   await commands.register("vim.type", async (context) => {
     const text = textArgument(context.arguments);
     if (text === null) return commands.invalidArguments("expected { text }");
-    await vim.keys(context, [...text]);
+    await inTurn(() => vim.keys(context, [...text]));
   }, { palette: false });
   await commands.register("vim.key", async (context) => {
     const key = keyArgument(context.arguments);
     if (key === null) return commands.invalidArguments("expected { key }");
-    await vim.keys(context, [key]);
+    await inTurn(() => vim.keys(context, [key]));
   }, { palette: false });
-  await commands.register("vim.leave-insert", (context) => vim.leaveInsert(context), {
+  await commands.register("vim.leave-insert", (context) => inTurn(() => vim.leaveInsert(context)), {
     palette: false,
   });
   // Starts over from what a fresh start without saved registers has: empty

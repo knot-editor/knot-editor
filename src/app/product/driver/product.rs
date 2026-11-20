@@ -261,6 +261,36 @@ impl TestProduct {
         cx.read(crate::app::extensions::host::memory_report)
     }
 
+    /// Hold every package's clipboard writes until
+    /// [`Self::release_clipboard_writes`].
+    pub fn hold_clipboard_writes(&self, cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            let host = crate::app::extensions::host::entity(cx).unwrap();
+            host.update(cx, |host, _| host.hold_clipboard_writes());
+        });
+    }
+
+    /// Wait until `count` clipboard writes are held.
+    pub fn wait_for_held_clipboard_writes(&self, count: usize, cx: &mut TestAppContext) {
+        crate::test_support::wait_until(cx, |cx| {
+            cx.read(|cx| {
+                crate::app::extensions::host::entity(cx)
+                    .unwrap()
+                    .read(cx)
+                    .pending_view_request_count()
+                    == count
+            })
+        });
+    }
+
+    /// Run the held clipboard writes and stop holding new ones.
+    pub fn release_clipboard_writes(&self, cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            let host = crate::app::extensions::host::entity(cx).unwrap();
+            host.update(cx, |host, cx| host.release_view_requests(cx));
+        });
+    }
+
     /// Restart the package `name`, and require that it loaded again.
     pub fn restart_package(&self, name: &str, cx: &mut TestAppContext) {
         let restarted = Arc::new(Mutex::new(None));

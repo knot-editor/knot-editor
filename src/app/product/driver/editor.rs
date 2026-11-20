@@ -193,6 +193,15 @@ impl TestEditor {
         }
     }
 
+    /// Let the key hold's timeout pass, so keys pressed next reach the
+    /// window although the command that holds them is still running.
+    pub fn outlast_key_hold(&self, cx: &mut TestAppContext) {
+        cx.executor()
+            .advance_clock(super::super::key_hold::KEY_HOLD_TIMEOUT);
+        cx.run_until_parked();
+        assert!(!cx.read(|cx| self.window.read(cx).holds_keys()));
+    }
+
     /// Wait until no command holds the keys and a watched input has
     /// answered its current text.
     fn wait_for_input_feedback(&self, cx: &mut TestAppContext) {

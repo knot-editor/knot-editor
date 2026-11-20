@@ -703,9 +703,9 @@ pub(crate) struct ProductExtensionHost {
     command_targets: HashMap<CommandInvocationId, ProductCommandTarget>,
     view_command_handlers:
         HashMap<CommandInvocationId, (CommandTarget, knot_protocol::CommandName)>,
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     hold_clipboard_writes: bool,
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     deferred_view_requests: Vec<HostRequest>,
     semantics: ExtensionSemanticBridge,
     _event_task: Task<()>,
@@ -785,9 +785,9 @@ impl ProductExtensionHost {
             completion_editors: Vec::new(),
             command_targets: HashMap::new(),
             view_command_handlers: HashMap::new(),
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             hold_clipboard_writes: false,
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             deferred_view_requests: Vec::new(),
             semantics,
             _event_task: event_task,
@@ -1443,7 +1443,7 @@ impl ProductExtensionHost {
     }
 
     fn handle_request(&mut self, request: HostRequest, cx: &mut Context<Self>) {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         if self.hold_clipboard_writes && request.operation.descriptor.name == "writeClipboardText" {
             self.deferred_view_requests.push(request);
             return;
@@ -1465,17 +1465,17 @@ impl ProductExtensionHost {
         .detach();
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn hold_clipboard_writes(&mut self) {
         self.hold_clipboard_writes = true;
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn pending_view_request_count(&self) -> usize {
         self.deferred_view_requests.len()
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn release_view_requests(&mut self, cx: &mut Context<Self>) {
         self.hold_clipboard_writes = false;
         for request in std::mem::take(&mut self.deferred_view_requests) {
