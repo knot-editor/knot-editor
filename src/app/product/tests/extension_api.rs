@@ -732,6 +732,14 @@ await commands.register("test.dispose-view-copy", async () => viewCopy.dispose()
                     .borrow()
                     .resolve_view(tree.read(cx).instance_id(), "copy")
                     .is_some()
+                && cx
+                    .global::<ApplicationProductCommands>()
+                    .0
+                    .read(cx)
+                    .catalog()
+                    .borrow()
+                    .resolve("test.dispose-view-copy")
+                    .is_ok()
         })
     });
 
