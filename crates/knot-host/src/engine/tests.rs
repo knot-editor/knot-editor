@@ -1593,6 +1593,14 @@ fn a_failing_callback_is_logged_with_package_position_and_stack() {
         let runtime = key(301);
         pool.load(runtime, IsolateConfig::named("@scope/failing"))
             .unwrap();
+        // The failure is reported while another invocation awaits.
+        let parked = pool
+            .execute(
+                runtime,
+                "file:///timers/parked.js",
+                "(async () => { await new Promise((resolve) => setTimeout(resolve, 2)); return 'parked'; })()",
+            )
+            .unwrap();
         run(
             &pool,
             runtime,
@@ -1601,6 +1609,8 @@ fn a_failing_callback_is_logged_with_package_position_and_stack() {
         timers.advance(Duration::from_millis(1));
         // A later root queues behind the failed callback.
         run(&pool, runtime, "0");
+        timers.advance(Duration::from_millis(1));
+        assert_eq!(&*parked.wait().unwrap().value, "parked");
         pool.shutdown();
     }
     let text = String::from_utf8(captured.0.lock().unwrap().clone()).unwrap();

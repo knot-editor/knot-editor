@@ -3612,6 +3612,169 @@ fn assert_command_cancellation(cancel_before_publication: bool) {
     pool.shutdown();
 }
 
+fn command_invocation(
+    runtime: ExtensionKey,
+    id: u64,
+    registration: CommandRegistrationId,
+) -> CommandInvocation {
+    CommandInvocation {
+        id: CommandInvocationId::new(id),
+        registration,
+        extension: runtime.extension,
+        lifecycle: runtime.lifecycle,
+        arguments: CommandArgumentValue::Null,
+        capture: None,
+    }
+}
+
+#[test]
+fn cancelling_one_command_leaves_the_others_and_reaches_one_not_started_yet() {
+    let pool = RuntimePool::new(PoolConfig::single_worker());
+    let runtime = key(215);
+    pool.load(runtime, IsolateConfig::default()).unwrap();
+    let registration = CommandRegistrationId::new(86);
+    let setup = pool
+        .execute_fixture_module(
+            runtime,
+            "file:///fixtures/cancel-one.js",
+            r#"
+import { commands, workbench } from "knot";
+globalThis.finished = 0;
+globalThis.started = 0;
+await commands.register("cancel-one", async () => {
+  globalThis.started += 1;
+  await workbench.writeClipboardText("waiting");
+  globalThis.finished += 1;
+});
+"#,
+        )
+        .unwrap();
+    let request = pool.receive_request().unwrap();
+    pool.respond(HostResponse {
+        extension: runtime.extension,
+        lifecycle: runtime.lifecycle,
+        id: request.id,
+        result: Ok(success::<declared::register_command>(registration)),
+    })
+    .unwrap();
+    setup.wait().unwrap();
+
+    // Two commands of the package await their host requests at once.
+    let first = pool
+        .invoke_command(runtime, command_invocation(runtime, 1, registration), None)
+        .unwrap();
+    let first_request = pool.receive_request().unwrap();
+    let second = pool
+        .invoke_command(runtime, command_invocation(runtime, 2, registration), None)
+        .unwrap();
+    let second_request = pool.receive_request().unwrap();
+    assert_eq!(first_request.invocation, Some(CommandInvocationId::new(1)));
+    assert_eq!(second_request.invocation, Some(CommandInvocationId::new(2)));
+
+    // Cancelling the first ends it alone.
+    pool.cancel_command(runtime, CommandInvocationId::new(1))
+        .unwrap();
+    assert_eq!(first.wait().unwrap(), CommandOutcome::Cancelled);
+
+    // A cancellation that finds its command not started yet, while another
+    // runs, holds until the command starts.
+    pool.cancel_command(runtime, CommandInvocationId::new(3))
+        .unwrap();
+    let third = pool
+        .invoke_command(runtime, command_invocation(runtime, 3, registration), None)
+        .unwrap();
+    assert_eq!(third.wait().unwrap(), CommandOutcome::Cancelled);
+
+    pool.respond(HostResponse {
+        extension: runtime.extension,
+        lifecycle: runtime.lifecycle,
+        id: second_request.id,
+        result: Ok(clipboard_written()),
+    })
+    .unwrap();
+    assert_eq!(second.wait().unwrap(), CommandOutcome::Completed);
+    assert_eq!(
+        &*pool
+            .execute(
+                runtime,
+                "verify-cancel-one.js",
+                "`${globalThis.started} ${globalThis.finished}`"
+            )
+            .unwrap()
+            .wait()
+            .unwrap()
+            .value,
+        "2 1"
+    );
+    pool.shutdown();
+}
+
+#[test]
+fn a_command_invoked_before_its_registration_reply_waits_for_its_handler() {
+    let pool = RuntimePool::new(PoolConfig::single_worker());
+    let runtime = key(216);
+    pool.load(runtime, IsolateConfig::default()).unwrap();
+    let outer = CommandRegistrationId::new(87);
+    let inner = CommandRegistrationId::new(88);
+    let setup = pool
+        .execute_fixture_module(
+            runtime,
+            "file:///fixtures/early-call.js",
+            r#"
+import { commands } from "knot";
+await commands.register("early.outer", async () => {
+  await commands.register("early.inner", () => { globalThis.innerRan = true; });
+});
+"#,
+        )
+        .unwrap();
+    let request = pool.receive_request().unwrap();
+    pool.respond(HostResponse {
+        extension: runtime.extension,
+        lifecycle: runtime.lifecycle,
+        id: request.id,
+        result: Ok(success::<declared::register_command>(outer)),
+    })
+    .unwrap();
+    setup.wait().unwrap();
+
+    // The application knows the inner registration once it handles the
+    // request, so it may call it before the reply installs the handler.
+    let registering = pool
+        .invoke_command(runtime, command_invocation(runtime, 1, outer), None)
+        .unwrap();
+    let registration = pool.receive_request().unwrap();
+    assert_eq!(
+        registration.operation,
+        operation::<declared::register_command>(declared::RegisterCommandArguments {
+            name: "early.inner".into(),
+            metadata: "early.inner".into(),
+        })
+    );
+    let early = pool
+        .invoke_command(runtime, command_invocation(runtime, 2, inner), None)
+        .unwrap();
+    wait_for_state(&pool, runtime, ExtensionState::AwaitingHostWork);
+    pool.respond(HostResponse {
+        extension: runtime.extension,
+        lifecycle: runtime.lifecycle,
+        id: registration.id,
+        result: Ok(success::<declared::register_command>(inner)),
+    })
+    .unwrap();
+    assert_eq!(registering.wait().unwrap(), CommandOutcome::Completed);
+    assert_eq!(early.wait().unwrap(), CommandOutcome::Completed);
+    pool.execute(
+        runtime,
+        "verify-early-call.js",
+        "if (!globalThis.innerRan) throw new Error('inner command did not run')",
+    )
+    .unwrap()
+    .wait()
+    .unwrap();
+    pool.shutdown();
+}
+
 #[test]
 fn command_cancellation_consumes_an_already_queued_response_without_ending_the_lifecycle() {
     let pool = RuntimePool::new(PoolConfig::single_worker());
