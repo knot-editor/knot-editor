@@ -2025,16 +2025,18 @@ pub(crate) async fn edit_tree_item(
     let session = arguments.session;
     let (edit, tree) =
         context.foreground(|host, cx| host.begin_tree_edit(&request, arguments, cx))??;
-    let answered = field_answers(edit.changes, move |context, value, feedback| {
-        let Some(tree) = tree.upgrade() else { return };
-        let _ = context.foreground(|_, cx| {
-            tree.update(cx, |tree, cx| {
-                tree.set_edit_feedback(Some(value), feedback.message, cx)
-            })
-        });
-    });
     let outcome = match session {
-        Some(session) => follow_surface(&context, session, edit.completion, answered, None).await?,
+        Some(session) => {
+            let answered = field_answers(edit.changes, move |context, value, feedback| {
+                let Some(tree) = tree.upgrade() else { return };
+                let _ = context.foreground(|_, cx| {
+                    tree.update(cx, |tree, cx| {
+                        tree.set_edit_feedback(Some(value), feedback.message, cx)
+                    })
+                });
+            });
+            follow_surface(&context, session, edit.completion, answered, None).await?
+        }
         None => edit
             .completion
             .await
