@@ -146,7 +146,7 @@ Complete and approved. Frames ride continuation-preserved data (`nativeBindings.
 
 ### 2. ✅ Event-loop scheduler and invocation completion
 
-Implemented, awaiting review. Scope decisions made while implementing:
+Complete and approved. Scope decisions made while implementing:
 
 - Completion is detected by scanning the unsettled invocations after each
   turn's microtask drain, not by a bootstrap reaction; the effect is the same.
