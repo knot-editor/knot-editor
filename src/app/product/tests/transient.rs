@@ -344,40 +344,49 @@ await commands.register("transient.await-picker", async () => {
 fn a_listener_and_a_provider_run_while_a_command_awaits_a_picker(cx: &mut TestAppContext) {
     use knot_protocol::ExtensionKey;
 
-    const SOURCE: &str = r#"
+    // The first document opened while the picker is up reaches the picker's
+    // package; the second reaches a neighbor that calls the package's provider.
+    const PICKER: &str = r#"
 import { commands, providers, workbench } from "knot";
+let opened = 0;
 await providers.register("interleave.echo", { echo: (value) => value });
 await workbench.observe(async (event) => {
-  if (event.type === "documentOpened") await workbench.writeClipboardText("listener ran");
+  if (event.type === "documentOpened" && ++opened === 1) await workbench.writeClipboardText("listener ran");
 });
 await commands.register("interleave.pick", async () => {
   const result = await workbench.showPicker({ title: "Pick", items: [{ id: "a", label: "A" }] });
   await workbench.writeClipboardText(`picked ${result.kind}`);
 });
 "#;
+    const NEIGHBOR: &str = r#"
+import { providers, workbench } from "knot";
+let opened = 0;
+await workbench.observe(async (event) => {
+  if (event.type !== "documentOpened" || ++opened !== 2) return;
+  await workbench.writeClipboardText(await (await providers.get("interleave.echo")).echo("provider ran"));
+});
+"#;
     let documents = install_globals(cx);
-    let host = cx.update(crate::app::extensions::host::install);
-    let key = ExtensionKey::new(ExtensionId::new(712), ExtensionLifecycleId::new(1));
-    host.update(cx, |host, cx| {
-        let execution = host.load_test_source(key, SOURCE).unwrap();
-        cx.spawn(async move |_, _| {
-            execution.await.unwrap();
-        })
-        .detach();
-    });
-    wait_for_api_condition(cx, |cx| {
-        cx.global::<ApplicationProductCommands>()
-            .0
-            .read(cx)
-            .catalog()
-            .borrow()
-            .resolve("interleave.pick")
-            .is_ok()
-    });
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let window = headless_window(document, model, cx);
     let native_window = Headless;
+    let host = cx.update(crate::app::extensions::host::install);
+    let picker = ExtensionKey::new(ExtensionId::new(712), ExtensionLifecycleId::new(1));
+    let neighbor = ExtensionKey::new(ExtensionId::new(713), ExtensionLifecycleId::new(1));
+    let loaded = Arc::new(Mutex::new(0));
+    for (key, source) in [(picker, PICKER), (neighbor, NEIGHBOR)] {
+        let loaded = loaded.clone();
+        host.update(cx, |host, cx| {
+            let execution = host.load_test_source(key, source).unwrap();
+            cx.spawn(async move |_, _| {
+                execution.await.unwrap();
+                *loaded.lock().unwrap() += 1;
+            })
+            .detach();
+        });
+    }
+    wait_for_api_condition(cx, |_| *loaded.lock().unwrap() == 2);
     let pending = dispatch_product_command(&window, native_window, "interleave.pick", cx);
     wait_for_api_condition(cx, |cx| window.read(cx).transient.is_some());
 
@@ -386,9 +395,14 @@ await commands.register("interleave.pick", async () => {
     wait_for_api_condition(cx, |cx| {
         cx.read_from_clipboard().and_then(|item| item.text()) == Some("listener ran".to_owned())
     });
+    // So does its provider, called by another package.
+    cx.update(|cx| create_untitled_document(&documents, cx));
+    wait_for_api_condition(cx, |cx| {
+        cx.read_from_clipboard().and_then(|item| item.text()) == Some("provider ran".to_owned())
+    });
     cx.read(|cx| assert!(window.read(cx).transient.is_some()));
 
-    host.update(cx, |host, cx| host.unload(key, cx).unwrap());
+    host.update(cx, |host, cx| host.unload(picker, cx).unwrap());
     cx.run_until_parked();
     assert_ne!(wait_for_command(pending, cx), CommandOutcome::Completed);
 }

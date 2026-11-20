@@ -1518,6 +1518,62 @@ await commands.register("test.missing", async () => {
 }
 
 #[gpui::test]
+fn a_command_awaits_its_own_timer_and_event(cx: &mut TestAppContext) {
+    use knot_protocol::ExtensionKey;
+    const SOURCE: &str = r#"
+import { commands, documents, workbench } from "knot";
+let opened = null;
+await workbench.observe((event) => { if (event.type === "documentOpened") opened?.(); });
+await commands.register("wait.timer-and-event", async () => {
+  const timer = new Promise((resolve) => setTimeout(resolve, 10));
+  await workbench.writeClipboardText("armed");
+  await timer;
+  const seen = new Promise((resolve) => { opened = resolve; });
+  await documents.createUntitled();
+  await seen;
+  await workbench.writeClipboardText("woke");
+});
+"#;
+    let documents = install_globals(cx);
+    let host = cx.update(crate::app::extensions::host::install);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let window = headless_window(document, model, cx);
+    let native_window = Headless;
+    let key = ExtensionKey::new(ExtensionId::new(972), ExtensionLifecycleId::new(1));
+    let loaded = Arc::new(Mutex::new(None));
+    let result = loaded.clone();
+    host.update(cx, |host, cx| {
+        let execution = host.load_test_source(key, SOURCE).unwrap();
+        cx.spawn(async move |_, _| {
+            *result.lock().unwrap() = Some(execution.await.map(|_| ()));
+        })
+        .detach();
+    });
+    wait_for_api_condition(cx, |_| loaded.lock().unwrap().is_some());
+    loaded.lock().unwrap().take().unwrap().unwrap();
+
+    // The timer's expiry and the listener's event are tasks of the package
+    // that run while its command awaits them.
+    let execution = dispatch_product_command(&window, native_window, "wait.timer-and-event", cx);
+    wait_for_api_condition(cx, |cx| {
+        cx.read_from_clipboard()
+            .and_then(|item| item.text())
+            .as_deref()
+            == Some("armed")
+    });
+    cx.executor()
+        .advance_clock(std::time::Duration::from_millis(10));
+    assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
+    assert_eq!(
+        cx.read_from_clipboard()
+            .and_then(|item| item.text())
+            .as_deref(),
+        Some("woke")
+    );
+}
+
+#[gpui::test]
 fn extension_timers_fire_on_the_executor_clock_and_stop_at_unload(cx: &mut TestAppContext) {
     use knot_protocol::ExtensionKey;
     const SOURCE: &str = r#"
