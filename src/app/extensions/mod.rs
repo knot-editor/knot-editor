@@ -7,5 +7,6 @@ pub(super) mod consent;
 pub(super) mod entitlements;
 pub(super) mod host;
 pub(crate) use knot_model::extensions::{load, package};
+pub(super) mod process;
 pub(super) mod semantics;
 pub(super) mod storage;

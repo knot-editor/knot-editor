@@ -27,6 +27,7 @@ mod observation;
 mod operations;
 mod persistence;
 mod previews;
+mod processes;
 mod providers;
 mod recovery;
 mod reopen;

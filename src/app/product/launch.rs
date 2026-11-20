@@ -653,6 +653,7 @@ pub(crate) fn run(
         .detach();
         let config_root = crate::app::personal_config::user_config_root();
         let extensions_root = crate::app::extensions::package::user_extensions_root();
+        crate::app::extensions::process::start_environment_resolution(cx);
         extension_host.update(cx, |host, cx| {
             host.start_product_startup(config_root, extensions_root, cx)
         });

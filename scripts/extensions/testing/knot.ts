@@ -18,6 +18,7 @@ export const {
   languages,
   menus,
   platform,
+  processes,
   providers,
   recovery,
   settings,

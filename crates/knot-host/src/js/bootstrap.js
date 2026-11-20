@@ -2296,6 +2296,79 @@ globalThis.__knotDispatchWatchChange = async (subscription, uris) => {
   const listener = await callable(watchListeners, subscription);
   if (listener) await listener(Object.freeze([...uris]));
 };
+const processSignals = new Set(["SIGHUP", "SIGINT", "SIGQUIT", "SIGKILL", "SIGTERM", "SIGUSR1", "SIGUSR2"]);
+function processArguments(options, allowStdin) {
+  const value = record(options, "process options must be an object");
+  const command = string(value.command, "process command must be text");
+  const args = value.args === undefined
+    ? []
+    : arrayItems(value.args, (argument) => string(argument, "process arguments must be text"));
+  const cwd = value.cwd === undefined ? null : string(value.cwd, "process cwd must be a file URI");
+  const env = [];
+  const unset = [];
+  if (value.env !== undefined) {
+    for (const [name, entry] of Object.entries(record(value.env, "process env must be an object"))) {
+      if (name === "" || name.includes("=")) throw new TypeError("process env names must be nonempty and without =");
+      if (entry === null) unset.push(name);
+      else env.push(`${name}=${string(entry, "process env values must be text or null")}`);
+    }
+  }
+  let stdin = null;
+  if (allowStdin && value.stdin !== undefined) stdin = string(value.stdin, "process stdin must be text");
+  return [command, args, cwd, env, unset, stdin];
+}
+export async function runProcess(options) {
+  const result = await request("runProcess", ...processArguments(options, true));
+  return Object.freeze({
+    exitCode: result.exitCode,
+    signal: result.signal,
+    stdout: result.stdout,
+    stderr: result.stderr,
+  });
+}
+// A stream reads its next chunk only after every listener finished with the
+// previous one, so a slow listener stalls the child on its pipe. Output that
+// arrives while no listener is attached waits in the application.
+function processStream(id, stream) {
+  const listeners = new Set();
+  let running = false;
+  const pump = () => withFrame(null, async () => {
+    while (listeners.size > 0) {
+      const chunk = await request("readProcessOutput", id, stream);
+      if (chunk === null) break;
+      for (const listener of [...listeners]) {
+        try { await listener(chunk); } catch (error) { void Promise.reject(error); }
+      }
+    }
+    running = false;
+  });
+  return (listener) => {
+    if (typeof listener !== "function") throw new TypeError("process stream requires a listener");
+    listeners.add(listener);
+    if (!running) {
+      running = true;
+      pump();
+    }
+    return Object.freeze({ dispose: () => { listeners.delete(listener); return Promise.resolve(); } });
+  };
+}
+export async function spawnProcess(options) {
+  const id = await request("spawnProcess", ...processArguments(options, false));
+  const exited = withFrame(null, () => request("waitProcess", id))
+    .then((status) => Object.freeze({ exitCode: status.exitCode, signal: status.signal }));
+  exited.catch(() => {});
+  return Object.freeze({
+    onStdout: processStream(id, "stdout"),
+    onStderr: processStream(id, "stderr"),
+    write: (text) => request("writeProcessInput", id, string(text, "process input must be text")),
+    closeStdin: () => request("closeProcessInput", id),
+    kill: (signal) => {
+      if (signal !== undefined && !processSignals.has(signal)) throw new TypeError("unsupported process signal");
+      return request("killProcess", id, signal ?? null);
+    },
+    exited,
+  });
+}
 export async function statFile(uri) {
   const kind = await request("statFile", string(uri, "resource URI must be text"));
   return kind === null ? null : Object.freeze({ kind });

@@ -4453,7 +4453,7 @@ fn public_facade_is_semantic_and_private_bindings_are_hidden() {
             if (typeof globalThis.__knotNativeBindings !== "undefined") {
                 throw new Error("private native bindings are exposed");
             }
-            if (Object.keys(knot).sort().join(",") !== "commands,completion,documents,editor,files,history,homeUri,icons,keymaps,languages,menus,platform,providers,recovery,settings,storage,terminals,themes,windows,workbench,workspaces") {
+            if (Object.keys(knot).sort().join(",") !== "commands,completion,documents,editor,files,history,homeUri,icons,keymaps,languages,menus,platform,processes,providers,recovery,settings,storage,terminals,themes,windows,workbench,workspaces") {
                 throw new Error("unexpected public exports");
             }
             if (!Object.isFrozen(knot.editor) || !Object.isFrozen(knot.commands) || !Object.isFrozen(knot.workbench) || !Object.isFrozen(knot.storage)) {

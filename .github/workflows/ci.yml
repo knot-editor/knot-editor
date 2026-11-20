@@ -89,6 +89,7 @@ jobs:
       - name: Check handler declarations, linked discovery, and the terminal engine
         run: |
           cargo test --locked -p knot-handler-macros
+          cargo test --locked -p knot-process
           cargo test --locked -p knot-protocol
           cargo test --locked -p knot-terminal
           cargo test --locked --lib extensions::host::declaration_tests

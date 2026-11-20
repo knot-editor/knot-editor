@@ -36,8 +36,8 @@ dynamic imports reject. Startup diagnostics report rejected or failed packages
 while independent packages continue.
 
 A package that needs a capability beyond the editor API lists it in
-`"entitlements"`; the only one is `"process"`, which lets the package run
-programs. When Knot starts and an installed package has an entitlement the user
+`"entitlements"`; the only one is `"process"`, which lets the package
+[run programs](application.md#run-programs). When Knot starts and an installed package has an entitlement the user
 has not decided on, because the package is new or an update added it, Knot asks
 before loading any package. A package the user denied does not load, and its
 startup report entry says why. Entitlements are consent, not a sandbox: a

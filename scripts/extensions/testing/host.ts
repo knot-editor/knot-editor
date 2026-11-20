@@ -2473,6 +2473,10 @@ export const api: KnotApi = {
   terminals: {
     open: notFaked("terminals.open"),
   },
+  processes: {
+    run: notFaked("processes.run"),
+    spawn: notFaked("processes.spawn"),
+  },
   menus: {
     add: async (location, item) => {
       if (!["tab", "content", "menubar.file", "menubar.edit", "menubar.view", "menubar.go"].includes(location)) {

@@ -164,28 +164,38 @@ impl Control {
 
     /// Signals the whole process group.
     pub fn kill(&self, signal: i32) {
-        #[cfg(unix)]
-        {
-            // SAFETY: killpg only sends a signal.
-            unsafe { libc::killpg(self.group as libc::pid_t, signal) };
-        }
-        #[cfg(not(unix))]
-        {
-            let _ = signal;
-            let _ = Command::new("taskkill")
-                .args(["/T", "/F", "/PID", &self.group.to_string()])
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status();
-        }
+        signal_group(self.group, signal);
     }
 
     /// Ends the whole process group without a chance to clean up.
     pub fn kill_group(&self) {
+        Self::kill_process_group(self.group);
+    }
+
+    /// Ends the process group led by `group`, which this crate did not
+    /// necessarily start.
+    pub fn kill_process_group(group: u32) {
         #[cfg(unix)]
-        self.kill(libc::SIGKILL);
+        signal_group(group, libc::SIGKILL);
         #[cfg(not(unix))]
-        self.kill(0);
+        signal_group(group, 0);
+    }
+}
+
+fn signal_group(group: u32, signal: i32) {
+    #[cfg(unix)]
+    {
+        // SAFETY: killpg only sends a signal.
+        unsafe { libc::killpg(group as libc::pid_t, signal) };
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = signal;
+        let _ = Command::new("taskkill")
+            .args(["/T", "/F", "/PID", &group.to_string()])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
     }
 }
 
@@ -317,11 +327,7 @@ fn take_text(pending: &mut Vec<u8>) -> String {
 
 /// The executable `command` names, searching `PATH` of `environment` unless
 /// the command is a path.
-fn resolve_command(
-    command: &str,
-    environment: &[(String, String)],
-    cwd: &Path,
-) -> Option<PathBuf> {
+fn resolve_command(command: &str, environment: &[(String, String)], cwd: &Path) -> Option<PathBuf> {
     if command.is_empty() {
         return None;
     }
@@ -389,10 +395,8 @@ mod tests {
 
     #[test]
     fn decodes_output_that_splits_a_code_point() {
-        let process = Process::spawn(&spec(
-            r"printf '\342\202'; sleep 0.2; printf '\254 done'",
-        ))
-        .unwrap();
+        let process =
+            Process::spawn(&spec(r"printf '\342\202'; sleep 0.2; printf '\254 done'")).unwrap();
         assert_eq!(collect(process.stdout), "€ done");
     }
 
@@ -485,10 +489,17 @@ mod tests {
 
     #[test]
     fn merges_environment_overrides() {
-        let base = vec![("A".to_owned(), "1".to_owned()), ("B".to_owned(), "2".to_owned())];
+        let base = vec![
+            ("A".to_owned(), "1".to_owned()),
+            ("B".to_owned(), "2".to_owned()),
+        ];
         let merged = merge_environment(
             &base,
-            &[("A".into(), None), ("B".into(), Some("3".into())), ("C".into(), Some("4".into()))],
+            &[
+                ("A".into(), None),
+                ("B".into(), Some("3".into())),
+                ("C".into(), Some("4".into())),
+            ],
         );
         assert_eq!(
             merged,

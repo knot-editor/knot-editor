@@ -149,6 +149,51 @@ await files.delete(renamed);
 `files.reveal(uri)` shows a local file or folder in the platform's file
 manager.
 
+## Run programs
+
+A package that declares the `process` entitlement runs programs with
+`processes`. One that did not rejects `EntitlementNotDeclared`; the user decides
+on the entitlement before the package loads, so declaring it is enough.
+`processes.run` resolves once the program exits, with its exit code (`null`
+when a signal ended it), the signal, and its output:
+
+```js
+const { exitCode, stdout, stderr } = await processes.run({
+  command: "git",
+  args: ["status", "--short"],
+  cwd: "file:///Users/me/project/",
+  env: { GIT_OPTIONAL_LOCKS: "0", LANG: null },
+  stdin: "",
+});
+```
+
+`command` is looked up on `PATH`. Knot resolves the environment the programs
+inherit from the user's login shell when it starts, so a Finder launch finds
+Homebrew's tools; `env` is merged over it, and `null` unsets a variable. `cwd`
+is a file URI and defaults to the home directory. A missing program rejects
+`ProgramNotFound`, a missing directory `WorkingDirectoryNotFound`.
+
+`processes.spawn` takes the same options without `stdin` and returns a handle
+to stream the output and control the program:
+
+```js
+const child = await processes.spawn({ command: "tail", args: ["-f", log] });
+child.onStdout((text) => append(text));
+await child.write("input");
+await child.kill();
+const { exitCode, signal } = await child.exited;
+```
+
+Output is UTF-8 text. A listener's chunk is acknowledged before the next is
+read, so a slow listener slows the program instead of buffering its output, and
+output that arrives before a listener attaches waits for one. A program that
+writes more than its pipe holds does not exit until its output is read.
+
+Each program starts in its own process group, which `kill` signals and which
+Knot kills when the package unloads or restarts or Knot quits, so helpers a program started die with it. Cancelling a command does
+not kill its programs; abort its `signal` to stop them, as in the
+[processes example](../../scripts/extensions/examples/processes.js).
+
 ## Acknowledge cleanup and handle failures
 
 Await disposal to observe native release. It makes an object locally inactive

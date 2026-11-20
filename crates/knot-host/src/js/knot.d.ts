@@ -1106,6 +1106,69 @@ declare module "knot" {
       options?: { readonly recursive?: boolean },
     ): Promise<Disposable>;
   }>;
+  /** What a process is started with. */
+  export interface ProcessOptions {
+    /** The program to run. A name without a path separator is looked up on the
+     * `PATH` of the environment the process gets. */
+    readonly command: string;
+    readonly args?: readonly string[];
+    /** A file URI; the user's home directory by default. */
+    readonly cwd?: string;
+    /** Merged over the environment Knot inherited from the user's login shell;
+     * `null` unsets a variable. */
+    readonly env?: Readonly<Record<string, string | null>>;
+  }
+  export interface ProcessRunOptions extends ProcessOptions {
+    /** Written to the process's standard input, which is then closed. */
+    readonly stdin?: string;
+  }
+  export type ProcessSignal =
+    "SIGHUP" | "SIGINT" | "SIGQUIT" | "SIGKILL" | "SIGTERM" | "SIGUSR1" | "SIGUSR2";
+  /** How a process ended: `exitCode` is null when a signal ended it. */
+  export interface ProcessExit {
+    readonly exitCode: number | null;
+    readonly signal: string | null;
+  }
+  export interface ProcessResult extends ProcessExit {
+    readonly stdout: string;
+    readonly stderr: string;
+  }
+  /** A running process started with `processes.spawn`. */
+  export interface ProcessHandle {
+    /** Calls `listener` with each chunk of standard output, in order. The
+     * process reads ahead only as listeners finish, so a slow listener stalls
+     * it on its pipe; output that arrives before the first listener attaches
+     * is held until one does. Output is UTF-8 text, invalid bytes replaced.
+     * Listeners attached to the same stream receive the same chunks. */
+    onStdout(listener: (text: string) => void | Promise<void>): Disposable;
+    onStderr(listener: (text: string) => void | Promise<void>): Disposable;
+    /** Queues text for standard input.
+     * @throws HostError with ProcessInputClosed after `closeStdin`. */
+    write(text: string): Promise<void>;
+    closeStdin(): Promise<void>;
+    /** Signals the process's whole group, `SIGTERM` by default. */
+    kill(signal?: ProcessSignal): Promise<void>;
+    /** Resolves when the process exits. A process that writes more than its
+     * pipe holds does not exit until its output is read. */
+    readonly exited: Promise<ProcessExit>;
+  }
+  /**
+   * Runs programs on the user's computer, which a package declares with the
+   * `process` entitlement in `knot.jsonc`. The user decides on the entitlement
+   * before the package loads, so a package that declared it can always use
+   * these. Each process starts in its own process group, and the group is
+   * killed when the package unloads or restarts and when Knot quits. Cancelling a command does not kill its
+   * processes: call `kill` from the command's `signal` abort listener.
+   */
+  export const processes: Readonly<{
+    /** Runs the program to completion and collects its output.
+     * @throws HostError with EntitlementNotDeclared, ProgramNotFound,
+     * WorkingDirectoryNotFound, InvalidUri, or ProcessFailed. */
+    run(options: ProcessRunOptions): Promise<ProcessResult>;
+    /** Starts the program and returns a handle to stream its output and
+     * control it. Rejects like `run`. */
+    spawn(options: ProcessOptions): Promise<ProcessHandle>;
+  }>;
   export const workspaces: Readonly<{
     get(target: WindowTarget): Promise<WorkspaceInfo | null>;
     /** Validates an existing directory and replaces this window's roots. Missing
@@ -1308,7 +1371,9 @@ declare module "knot" {
     | "DuplicateIcon" | "IconRegistrationNotFound"
     | "StatusItemRegistrationNotFound" | "MenuItemRegistrationNotFound"
     | "BarNotFound"
-    | "KeymapPresetRegistrationNotFound";
+    | "KeymapPresetRegistrationNotFound"
+    | "EntitlementNotDeclared" | "ProgramNotFound" | "WorkingDirectoryNotFound"
+    | "ProcessFailed" | "ProcessInputClosed";
   /**
    * Native operation failure. Narrow a caught Error by name === "KnotHostError"
    * and its string code property, then dispatch on code. No error constructor

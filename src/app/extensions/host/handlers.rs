@@ -16,6 +16,8 @@
 use super::*;
 use crate::app::extensions::storage::{OwnerStorage, StorageError};
 use gpui::WeakEntity;
+
+mod process;
 use knot_protocol::declarations::{
     ArgumentReader, DecodeError, EncodedValue, HostArguments, HostError, HostSuccess, encode_json,
     host_operation,

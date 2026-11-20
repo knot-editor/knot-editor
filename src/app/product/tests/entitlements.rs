@@ -47,7 +47,7 @@ fn begin(packages: &[(&str, &[&str], &[&str])], cx: &mut TestAppContext) -> Setu
     setup
 }
 
-fn declare(root: &Path, name: &str, declared: &[&str]) {
+pub(super) fn declare(root: &Path, name: &str, declared: &[&str]) {
     let path = root.join(name).join("knot.jsonc");
     let mut manifest: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();

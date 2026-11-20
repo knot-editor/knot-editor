@@ -283,6 +283,8 @@ pub(crate) fn quit_after_storage(cx: &mut App) {
         cx.quit();
         return;
     };
+    // Each process runs in its own group, so none ends with Knot unless killed.
+    host.update(cx, |host, _| host.kill_processes_for_quit());
     let Some(drain) = host.update(cx, |host, _| host.shutdown_storage()) else {
         return;
     };
@@ -717,6 +719,11 @@ pub(crate) struct ProductExtensionHost {
     personal_config_key: Option<ExtensionKey>,
     /// The live lifecycle of each admitted package, by canonical name.
     package_keys: HashMap<String, ExtensionKey>,
+    /// The entitlements each live package declared. Every loaded package
+    /// holds them all: one the user denied or has not decided on never loads.
+    declared_entitlements: HashMap<ExtensionKey, Vec<knot_model::extensions::package::Entitlement>>,
+    /// The processes extensions spawned, killed with their lifecycle.
+    processes: crate::app::extensions::process::Processes,
     next_extension_id: Arc<AtomicU64>,
 }
 
@@ -796,6 +803,8 @@ impl ProductExtensionHost {
             _personal_startup_task: None,
             personal_config_key: None,
             package_keys: HashMap::new(),
+            declared_entitlements: HashMap::new(),
+            processes: Default::default(),
             next_extension_id: Arc::new(AtomicU64::new(1)),
         }
     }
@@ -923,7 +932,7 @@ impl ProductExtensionHost {
                         let execution = graph.and_then(|graph| {
                             this.update(cx, |host, _| {
                                 let owner = package_owner(package)?;
-                                host.package_keys.insert(package.manifest.name.clone(), key);
+                                host.admit_package(key, package);
                                 host.load_package(key, graph, Some(owner))
                             })
                             .map_err(|error| error.to_string())?
@@ -1142,7 +1151,7 @@ impl ProductExtensionHost {
                             }
                             let graph = graph_for_package(&package)?;
                             let owner = package_owner(&package)?;
-                            host.package_keys.insert(name.clone(), key);
+                            host.admit_package(key, &package);
                             host.load_package(key, graph, Some(owner))
                         })
                         .map_err(|error| error.to_string())
@@ -1298,6 +1307,16 @@ impl ProductExtensionHost {
                         )
                     })?;
                 }
+                // Installed packages may spawn processes as soon as they
+                // load, so the environment they inherit is ready by then.
+                let environment = cx.update(|cx| {
+                    cx.try_global::<crate::app::extensions::process::ApplicationProcessEnvironment>(
+                    )
+                    .map(|environment| environment.0.clone())
+                });
+                if let Some(environment) = environment {
+                    environment.await;
+                }
                 match extensions_root {
                     Ok(root) => {
                         let done = this
@@ -1399,6 +1418,33 @@ impl ProductExtensionHost {
             self.remove_lifecycle(key, cx);
         }
         self.personal_config_key = None;
+    }
+
+    /// Kills every process an extension started: each runs in its own group,
+    /// which Knot's exit does not end.
+    pub(crate) fn kill_processes_for_quit(&mut self) {
+        self.processes.kill_all();
+    }
+
+    /// Records `package` as the live package of `key`, with what it declared.
+    fn admit_package(&mut self, key: ExtensionKey, package: &InstalledPackage) {
+        self.package_keys.insert(package.manifest.name.clone(), key);
+        self.declared_entitlements
+            .insert(key, package.manifest.entitlements.clone());
+    }
+
+    /// Whether the lifecycle may use `entitlement`: the personal config holds
+    /// every one, and a package holds what it declared.
+    pub(crate) fn holds_entitlement(
+        &self,
+        key: ExtensionKey,
+        entitlement: knot_model::extensions::package::Entitlement,
+    ) -> bool {
+        self.personal_config_key == Some(key)
+            || self
+                .declared_entitlements
+                .get(&key)
+                .is_some_and(|declared| declared.contains(&entitlement))
     }
 
     fn load_package(
@@ -3283,6 +3329,8 @@ impl ProductExtensionHost {
             return;
         }
         self.package_keys.retain(|_, live| *live != key);
+        self.declared_entitlements.remove(&key);
+        self.processes.kill_owned_by(key);
         self.cancel_transients(key.extension, key.lifecycle, None, cx);
         self.refresh_storage_callers();
         self.storage_owners.remove(&key);
