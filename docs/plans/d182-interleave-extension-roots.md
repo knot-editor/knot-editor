@@ -250,7 +250,35 @@ Review gate: loading semantics and the remaining refusals.
 `enqueue_child_with_target`; `knot.d.ts` drops `ProviderBusy`; update
 `src/app/product/tests/providers.rs`.
 
-### 4. Overlapping commands and bundled-package audit
+### 4. 🔍 Overlapping commands and bundled-package audit
+
+Implemented; awaiting the review gate. Scope decisions made while
+implementing:
+
+- ✅ The bridge starts every command on enqueue; `InvocationNode.children` is
+  a set, the parent settles after all of them, and cancellation walks them
+  all. A cancelled inline child now reports its outcome
+  (`completeInlineCommand` skips the cancelled-caller check); before, a
+  parent cancelled while awaiting an inline child never settled.
+- ✅ Invocations complete when their promise settles. A settled command is no
+  longer treated as cancelled (`is_cancelled`), so its context-free requests
+  succeed and contextual ones fail authorization. No bundled package relied
+  on the old rule: its only fire-and-forget calls are the ordered storage
+  saves of Vim and Find, which may outlive the command.
+- ✅ Audit: Vim's `vim.type`, `vim.key`, and `vim.leave-insert` take turns in
+  the package (macro and `.` replay feed keys directly, so no nesting). Find
+  shares one pending session per editor; Explorer's paste no longer clears a
+  copy or cut made while it ran. Projects already took turns; Go to File,
+  Notifications, word highlight, Chrome, and Go to Line need nothing.
+- The test driver can hold clipboard writes and let the key hold time out
+  (`hold_clipboard_writes`, `outlast_key_hold`). The Vim test lets the
+  isolate run briefly before releasing, since a key correctly waiting shows
+  nothing to wait for.
+- A pre-existing race in the tree copy test (dispatching commands registered
+  after the one it waited for) is fixed.
+- Left for checkpoint 6: `knot.d.ts` still says settings and file-watch
+  listeners "run serially with other listeners".
+
 
 Deliverables: the bridge's `roots`/`active_root` removed so commands start
 on enqueue; a command's children may run concurrently (`InvocationNode.child`
