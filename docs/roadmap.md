@@ -604,7 +604,7 @@ milestones these items belong to.
 
 The bundled Vim mode is built on generic editor primitives, so a Helix or
 Kakoune mode could use them too. The
-[extensibility report](reports/extensibility.md) maps Vim's needs onto them.
+[extensibility report](reports/extensibility.md) lists the gaps that remain.
 
 - **D201 — Preview replacement results**
   - Depends on: none
