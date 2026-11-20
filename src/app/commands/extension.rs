@@ -101,6 +101,9 @@ pub(crate) struct ExtensionCommandBridge {
     lifecycles: HashSet<Lifecycle>,
     next_invocation: u64,
     invocations: HashMap<CommandInvocationId, InvocationNode>,
+    /// Invocations that settled after a cancel, so work they left in flight
+    /// still sees the cancel once their node is gone.
+    settled_cancelled: HashSet<CommandInvocationId>,
     events: VecDeque<ExtensionCommandEvent>,
     /// Callers waiting for a root invocation, children included, to settle.
     settle_watchers: HashMap<CommandInvocationId, Vec<CommandCompletion>>,
@@ -123,6 +126,7 @@ impl ExtensionCommandBridge {
             lifecycles: HashSet::new(),
             next_invocation: 1,
             invocations: HashMap::new(),
+            settled_cancelled: HashSet::new(),
             events: VecDeque::new(),
             settle_watchers: HashMap::new(),
         }
@@ -414,14 +418,16 @@ impl ExtensionCommandBridge {
         Ok(root)
     }
 
-    /// Whether `invocation` is cancelled and still unsettled. A settled
-    /// command's requests run like any other: contextual ones fail their
-    /// authorization, the rest succeed.
+    /// Whether `invocation` was cancelled, before or after it settled. A
+    /// command that settled without a cancel leaves its requests running like
+    /// any other: contextual ones fail their authorization, the rest succeed.
     pub(crate) fn is_cancelled(&self, invocation: Option<CommandInvocationId>) -> bool {
         invocation.is_some_and(|invocation| {
-            self.invocations
-                .get(&invocation)
-                .is_some_and(|node| node.cancelled)
+            self.settled_cancelled.contains(&invocation)
+                || self
+                    .invocations
+                    .get(&invocation)
+                    .is_some_and(|node| node.cancelled)
         })
     }
 
@@ -610,6 +616,9 @@ impl ExtensionCommandBridge {
         let Some(node) = self.invocations.remove(&invocation) else {
             return;
         };
+        if node.cancelled {
+            self.settled_cancelled.insert(invocation);
+        }
         let outcome = node.handler_outcome.unwrap_or(if node.cancelled {
             CommandOutcome::Cancelled
         } else {

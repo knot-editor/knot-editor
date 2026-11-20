@@ -766,9 +766,18 @@ await commands.register("operations.target-loss", async () => {
             "cancel" => host.update(cx, |host, cx| host.cancel_active_test_commands(cx)),
             _ => unreachable!(),
         }
-        release.send(()).unwrap();
+        // A cancelled command settles before its read finishes, so the open
+        // must still see the cancel once the invocation is gone.
+        let outcome = if scenario == "cancel" {
+            let outcome = wait_for_command(pending, cx);
+            release.send(()).unwrap();
+            outcome
+        } else {
+            release.send(()).unwrap();
+            wait_for_command(pending, cx)
+        };
         assert_eq!(
-            wait_for_command(pending, cx),
+            outcome,
             if scenario == "cancel" {
                 CommandOutcome::Cancelled
             } else {
