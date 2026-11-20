@@ -391,13 +391,13 @@ function request(operation, ...arguments_) {
 // A registration or subscription is live once its host reply has installed
 // the handler, but the application may call or notify it the moment it has
 // handled the request. A call or notification that finds no handler waits
-// for the registrations in flight, and resumes in a later task, so the code
-// that registered has continued past its `await` first.
+// until a registration in flight settles, and resumes in a later task, so the
+// code that registered has continued past its `await` first; it waits again
+// if its handler is still missing and other registrations are in flight.
 let registrationsInFlight = 0;
 let registrationWaiters = [];
 
 function wakeRegistrationWaiters() {
-  if (registrationsInFlight > 0) return;
   const waiters = registrationWaiters;
   registrationWaiters = [];
   for (const resolve of waiters) resolve();
@@ -410,7 +410,8 @@ async function registerCallable(install, send) {
     install(registration);
     return registration;
   } finally {
-    if (--registrationsInFlight === 0 && registrationWaiters.length > 0) {
+    registrationsInFlight--;
+    if (registrationWaiters.length > 0) {
       new Immediate(wakeRegistrationWaiters, []);
     }
   }

@@ -3776,6 +3776,73 @@ await commands.register("early.outer", async () => {
 }
 
 #[test]
+fn an_early_call_runs_once_its_handler_is_installed_while_later_registrations_wait() {
+    let pool = RuntimePool::new(PoolConfig::single_worker());
+    let runtime = key(217);
+    pool.load(runtime, IsolateConfig::default()).unwrap();
+    let outer = CommandRegistrationId::new(89);
+    let inner = CommandRegistrationId::new(90);
+    let later = CommandRegistrationId::new(91);
+    let setup = pool
+        .execute_fixture_module(
+            runtime,
+            "file:///fixtures/early-call-chain.js",
+            r#"
+import { commands } from "knot";
+await commands.register("early.outer", async () => {
+  await commands.register("early.inner", () => { globalThis.innerRan = true; });
+  await commands.register("early.later", () => {});
+});
+"#,
+        )
+        .unwrap();
+    let request = pool.receive_request().unwrap();
+    pool.respond(HostResponse {
+        extension: runtime.extension,
+        lifecycle: runtime.lifecycle,
+        id: request.id,
+        result: Ok(success::<declared::register_command>(outer)),
+    })
+    .unwrap();
+    setup.wait().unwrap();
+
+    let registering = pool
+        .invoke_command(runtime, command_invocation(runtime, 1, outer), None)
+        .unwrap();
+    let registration = pool.receive_request().unwrap();
+    let early = pool
+        .invoke_command(runtime, command_invocation(runtime, 2, inner), None)
+        .unwrap();
+    wait_for_state(&pool, runtime, ExtensionState::AwaitingHostWork);
+    pool.respond(HostResponse {
+        extension: runtime.extension,
+        lifecycle: runtime.lifecycle,
+        id: registration.id,
+        result: Ok(success::<declared::register_command>(inner)),
+    })
+    .unwrap();
+    // The next registration is in flight; the early call runs anyway.
+    let next = pool.receive_request().unwrap();
+    assert_eq!(
+        next.operation,
+        operation::<declared::register_command>(declared::RegisterCommandArguments {
+            name: "early.later".into(),
+            metadata: "early.later".into(),
+        })
+    );
+    assert_eq!(early.wait().unwrap(), CommandOutcome::Completed);
+    pool.respond(HostResponse {
+        extension: runtime.extension,
+        lifecycle: runtime.lifecycle,
+        id: next.id,
+        result: Ok(success::<declared::register_command>(later)),
+    })
+    .unwrap();
+    assert_eq!(registering.wait().unwrap(), CommandOutcome::Completed);
+    pool.shutdown();
+}
+
+#[test]
 fn command_cancellation_consumes_an_already_queued_response_without_ending_the_lifecycle() {
     let pool = RuntimePool::new(PoolConfig::single_worker());
     let runtime = key(213);
