@@ -30,7 +30,6 @@ point.
 
 The [version control plan](plans/vcs.md) comes first, in its milestone order:
 
-- D087 — Extension entitlements.
 - D199 — Typed contracts between packages.
 - D209 — Diff function for extensions.
 - D210 — Richer gutter contributions.
@@ -105,18 +104,8 @@ hold the analyses that support some items.
 
 ### Workspace, projects, and files
 
-- **D087 — Extension entitlements** 🚧
-  - Depends on: none
-  - Description: Packages declare entitlements in `knot.jsonc`, starting with
-    process spawning, and the user decides on them before an installed package
-    loads; bundled packages and personal config are granted. Extensions gain a
-    process API. This provides consent and visibility, not a sandbox. Process
-    spawning is built complete, with entitlements, as part of the
-    [version control plan](plans/vcs.md), whose Git package is its first
-    consumer. Plan: [d087-extension-entitlements](plans/d087-extension-entitlements.md).
-
 - **D222 — HTTP client for extensions**
-  - Depends on: D087
+  - Depends on: none
   - Description: Extensions have no network access. Do it when a package needs
     one: a `fetch`-shaped HTTP client gated by a `network` entitlement through
     D087's declarations and startup consent.
@@ -147,7 +136,7 @@ hold the analyses that support some items.
     explorer, or restore the sidebar state from before the tool was opened.
 
 - **D085 — Cross-file search**
-  - Depends on: D087
+  - Depends on: none
   - Description: A bundled extension that wraps ripgrep through process
     spawning and parses its `--json` output, passing the effective ignore
     rules. It provides a query input with case, regex, whole-word, and glob
@@ -337,7 +326,7 @@ hold the analyses that support some items.
     current line's text to the request if reading the buffer costs too much.
 
 - **D067 — Language servers and semantic tokens**
-  - Depends on: D087, D145, D220, D200, D115, D022
+  - Depends on: D145, D220, D200, D115, D022
   - Description: No language client exists. The syntax highlighting work
     prepared for one: LSP language IDs, `Send` text snapshots, a highlight
     vocabulary that semantic token types and modifiers map onto, and a
@@ -351,7 +340,7 @@ hold the analyses that support some items.
     save builds on D115.
 
 - **D125 — Tasks and run configurations**
-  - Depends on: D087, D089, D124
+  - Depends on: D089, D124
   - Description: No investigation yet. VS Code and Zed read `tasks.json`, Emacs
     has `compile` and `project-compile`, and Neovim has `:make` and plugins. Do
     it when running builds, tests, or scripts from a terminal becomes friction
@@ -391,7 +380,7 @@ hold the analyses that support some items.
     can affect responsiveness or resource use.
 
 - **D224 — Improve entitlement management window**
-  - Depends on: D087
+  - Depends on: none
   - Description: Managing entitlements is a transient picker with one row per
     installed package: a state word, no per-entitlement detail, an immediate
     toggle with no confirmation, and no view of bundled grants. Revisit it
@@ -418,7 +407,7 @@ The [version control plan](plans/vcs.md) holds the agreed architecture and the
 milestones these items belong to.
 
 - **D211 — VCS foundation and Git change gutter** 🚧
-  - Depends on: D087, D199, D209, D210
+  - Depends on: D199, D209, D210
   - Description: No version control integration exists. Add `@knot/vcs`, which
     defines the provider contract and owns the shared surfaces, and `@knot/git`,
     its first backend over the `git` command line: find repositories per root,
@@ -484,7 +473,7 @@ milestones these items belong to.
 ### Package manager
 
 - **D101 — Package manager** 🚧
-  - Depends on: D087
+  - Depends on: none
   - Description: Extension installation becomes an inspectable
     application-owned lifecycle: a lockfile, local archives, installs from git
     links, version-constrained dependencies, a manager surface, and updates

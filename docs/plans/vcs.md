@@ -71,8 +71,9 @@ Items in a milestone are listed in dependency order.
 
 ### 1. Change gutter
 
-- **D087 — Extension entitlements.** 🚧 Process spawning, complete with
-  entitlements. Plan: [d087-extension-entitlements](d087-extension-entitlements.md).
+- **D087 — Extension entitlements.** Done: packages declare entitlements,
+  the user decides before an installed package loads, and extensions spawn
+  processes through the gated API.
 - **D199 — Typed contracts between packages.** Code-defined schemas, inferred
   types, host-enforced validation.
 - **D209 — Diff function for extensions.**
