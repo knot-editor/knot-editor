@@ -235,7 +235,7 @@ hold the analyses that support some items.
 
 ### Extension platform and language tooling
 
-- **D199 — Typed contracts between packages** 🚧
+- **D199 — Typed contracts between packages** 🚧 [plan](plans/d199-typed-contracts.md)
   - Depends on: none
   - Description: A package reuses another only through named providers, with
     JSON calls and a contract each consumer declares locally; nothing checks

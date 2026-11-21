@@ -74,8 +74,9 @@ Items in a milestone are listed in dependency order.
 - **D087 — Extension entitlements.** Done: packages declare entitlements,
   the user decides before an installed package loads, and extensions spawn
   processes through the gated API.
-- **D199 — Typed contracts between packages.** Code-defined schemas, inferred
-  types, host-enforced validation.
+- **D199 — Typed contracts between packages.** 🚧
+  [Plan](d199-typed-contracts.md): code-defined schemas, inferred types,
+  host-enforced validation.
 - **D209 — Diff function for extensions.**
 - **D210 — Richer gutter contributions.**
 - **D211 — VCS foundation and Git change gutter.** `@knot/vcs` and `@knot/git`:
