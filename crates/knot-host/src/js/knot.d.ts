@@ -1150,6 +1150,9 @@ declare module "knot" {
     closeStdin(): Promise<void>;
     /** Signals the process's whole group, `SIGTERM` by default. */
     kill(signal?: ProcessSignal): Promise<void>;
+    /** Releases the handle, killing the process group when it still runs.
+     * Later calls with the handle reject with InvalidTarget. */
+    dispose(): Promise<void>;
     /** Resolves when the process exits. A process that writes more than its
      * pipe holds does not exit until its output is read. */
     readonly exited: Promise<ProcessExit>;

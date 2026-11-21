@@ -21,7 +21,8 @@ export async function gitStatus(uri) {
  */
 export async function followLines(command, args, onLine, signal) {
   const child = await processes.spawn({ command, args });
-  signal.addEventListener("abort", () => { void child.kill(); });
+  // Best effort: the process may already have exited and been released.
+  signal.addEventListener("abort", () => { void child.kill().catch(() => {}); });
   let partial = "";
   child.onStdout((text) => {
     const lines = (partial + text).split("\n");
@@ -30,5 +31,6 @@ export async function followLines(command, args, onLine, signal) {
   });
   const exit = await child.exited;
   if (partial !== "") onLine(partial);
+  await child.dispose();
   return exit;
 }

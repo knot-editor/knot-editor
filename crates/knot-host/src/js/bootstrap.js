@@ -2374,6 +2374,7 @@ export async function spawnProcess(options) {
       if (signal !== undefined && !processSignals.has(signal)) throw new TypeError("unsupported process signal");
       return request("killProcess", id, signal ?? null);
     },
+    dispose: () => request("disposeProcess", id),
     exited,
   });
 }

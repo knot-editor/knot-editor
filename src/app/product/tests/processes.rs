@@ -215,6 +215,49 @@ await workbench.writeClipboardText(JSON.stringify({ out, err }));
 }
 
 #[gpui::test]
+fn disposing_a_handle_kills_its_running_process(cx: &mut TestAppContext) {
+    let marker = tempfile::tempdir().unwrap();
+    let pid_file = marker.path().join("pid");
+    let main = format!(
+        r#"import {{ processes, workbench }} from "knot";
+const child = await processes.spawn({{ command: "sh", args: ["-c", "echo $$ > {}; sleep 300 & wait"] }});
+// Wait until the shell recorded its pid, so disposing cannot win the race
+// against its first command.
+await processes.run({{ command: "sh", args: ["-c", "while [ ! -f {} ]; do sleep 0.05; done"] }});
+await child.dispose();
+let late = null;
+try {{ await child.kill(); }} catch (error) {{ late = error.code; }}
+await workbench.writeClipboardText(late);
+"#,
+        pid_file.display(),
+        pid_file.display()
+    );
+    let loaded = load(&main, &["process"], cx);
+    assert_eq!(answer(cx), "InvalidTarget");
+    let shell = recorded_pid(&pid_file, cx);
+    crate::test_support::wait_until(cx, |_| !is_alive(shell));
+    assert!(!unsafe_group_alive(shell));
+    let count = cx.read(|cx| loaded.host.read(cx).live_process_count_for_test());
+    assert_eq!(count, 0);
+}
+
+#[gpui::test]
+fn disposing_a_released_handle_is_rejected(cx: &mut TestAppContext) {
+    let written = run_package(
+        r#"
+const child = await processes.spawn({ command: "sleep", args: ["300"] });
+await child.dispose();
+let code = null;
+try { await child.dispose(); } catch (error) { code = error.code; }
+await answer(code);
+"#,
+        &["process"],
+        cx,
+    );
+    assert_eq!(written, r#""InvalidTarget""#);
+}
+
+#[gpui::test]
 fn a_flood_reaches_a_slow_listener_in_full(cx: &mut TestAppContext) {
     let written = run_package(
         r#"

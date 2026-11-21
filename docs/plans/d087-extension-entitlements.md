@@ -165,7 +165,8 @@ and quit, and the author guide
 Output streams are pull-based, so a listener's pace is the child's, and a child
 that writes more than its pipe holds does not exit until its output is read.
 A finished spawn leaves the registry once its exit is in and both streams are
-drained; anything unread stays until unload. Product tests in
+drained; anything unread stays until unload. A `disposeProcess` operation
+releases a handle early, killing its group when it still runs. Product tests in
 `src/app/product/tests/processes.rs` run real programs through installed,
 bundled, and personal-config packages.
 

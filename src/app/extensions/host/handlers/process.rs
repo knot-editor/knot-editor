@@ -386,6 +386,20 @@ async fn kill_process(
     Ok(())
 }
 
+/// Releases the handle, killing the group when it still runs. Later calls
+/// with the id reject with `InvalidTarget`, as after unload.
+#[host_operation("disposeProcess")]
+async fn dispose_process(
+    context: HostContext,
+    arguments: ProcessReference,
+) -> Result<(), ProcessError> {
+    let process = owned(&context, arguments.process)?;
+    process.control.kill_group();
+    let id = ProcessId(arguments.process);
+    let _ = context.foreground(|host, _| host.processes.remove(id));
+    Ok(())
+}
+
 #[host_operation("waitProcess")]
 async fn wait_process(
     context: HostContext,
