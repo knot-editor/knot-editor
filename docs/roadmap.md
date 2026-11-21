@@ -13,7 +13,7 @@ Every item has the same shape:
 - **Description** says what is missing today and when it becomes worth doing,
   then what to build.
 
-The next unused ID is **D224**; take it for a new item and bump this line.
+The next unused ID is **D225**; take it for a new item and bump this line.
 
 Each section is ordered so that an item comes after the items it depends on,
 wherever the sections allow it. Items with no dependencies are ordered by
@@ -389,6 +389,14 @@ hold the analyses that support some items.
   - Description: Correct policy depends on observed extension workloads. Do it
     with or before D067, whose language servers are the first workload that
     can affect responsiveness or resource use.
+
+- **D224 — Improve entitlement management window**
+  - Depends on: D087
+  - Description: Managing entitlements is a transient picker with one row per
+    installed package: a state word, no per-entitlement detail, an immediate
+    toggle with no confirmation, and no view of bundled grants. Revisit it
+    when more entitlement kinds (D222) make the decision heavier or real users
+    hit it: per-entitlement states, confirmations, and a persistent surface.
 
 - **D065 — Runtime grammar loading**
   - Depends on: none
