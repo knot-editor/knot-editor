@@ -1,6 +1,6 @@
 # D087 — Extension entitlements
 
-Status: 🚧 checkpoints 1 and 2 done; checkpoint 3 implemented, awaiting review. Source: [roadmap D087](../roadmap.md), first
+Status: ✅ all checkpoints done. Source: [roadmap D087](../roadmap.md), first
 item of the [version control plan](vcs.md), whose `@knot/git` package is the
 first consumer of process spawning.
 
@@ -170,31 +170,16 @@ releases a handle early, killing its group when it still runs. Product tests in
 `src/app/product/tests/processes.rs` run real programs through installed,
 bundled, and personal-config packages.
 
-### 3. Manage Entitlements and documentation 🚧 implemented, awaiting review
+### 3. Manage Entitlements and documentation ✅ approved
 
-Deliverables:
-
-- Extensions: Manage Entitlements… with grant (activating a not-loaded package)
-  and revoke (terminating unload, report entry updated).
-- The decision record in `docs/decisions/extension-host.md` and its index:
-  entitlements as consent and not a sandbox, coarse entitlements, asking at
-  startup after pre-init, denial meaning not loaded, native grant management,
-  text-only streams, and the resolved shell environment, each with its rejected
-  alternatives. The startup order and entitlements go in
-  `docs/architecture/extension-host.md`, and process ownership in
-  `docs/architecture.md` if it changes boundaries. Remove "ungated until D087"
-  wording in the file-access decisions.
-
-Validation: application tests for revoking a running package (its processes
-die and its report entry changes), and for granting a denied package (it
-activates and its dependents are unaffected). `just check`.
-
-Review gate: revoking and granting in the real app through `Try:` commands.
-
-**Implementation context:**
-
-- Picker and command: mirror `src/app/product/extension_restart.rs` (native
-  command over the transient picker), registered in
-  `src/app/product/commands.rs`.
-- Activation and unload: `ProductExtensionHost::restart_package` and
-  `unload_package_for_test`'s terminating-unload path in `host.rs`.
+Extensions: Manage Entitlements… lists installed packages declaring
+entitlements with their state (`src/app/product/extension_entitlements.rs`,
+`ProductExtensionHost::{entitlement_candidates, toggle_entitlement}`).
+Granting activates a not-loaded package through the restart machinery;
+revoking records a denial, performs a terminating unload that kills its
+processes, and updates its report entry. Product tests in
+`src/app/product/tests/entitlements.rs` cover revoking a running package and
+granting a denied one. The decision record, the startup order and
+entitlements in [extension host](../architecture/extension-host.md), process
+ownership in [architecture](../architecture.md), and the file-access wording
+are in place.
