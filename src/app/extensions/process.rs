@@ -1,7 +1,14 @@
 //! The environment extension processes inherit, and the processes a lifecycle
 //! owns.
 
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{
+    collections::HashMap,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::Duration,
+};
 
 use futures::{FutureExt as _, future::Shared};
 use gpui::{App, Global};
@@ -164,6 +171,9 @@ pub(crate) struct OwnedProcess {
     pub stdout: Stream,
     pub stderr: Stream,
     pub exit: Shared<futures::future::BoxFuture<'static, ExitStatus>>,
+    /// Whether each output stream was read to its end, shared by every clone.
+    pub stdout_ended: Arc<AtomicBool>,
+    pub stderr_ended: Arc<AtomicBool>,
 }
 
 /// Every live process, by identity. Dropping the registry's entries for a
@@ -203,6 +213,8 @@ impl Processes {
             stdout: Arc::new(futures::lock::Mutex::new(stdout)),
             stderr: Arc::new(futures::lock::Mutex::new(stderr)),
             exit,
+            stdout_ended: Arc::new(AtomicBool::new(false)),
+            stderr_ended: Arc::new(AtomicBool::new(false)),
         };
         self.live.insert(id, owned.clone());
         (id, owned)
@@ -218,6 +230,25 @@ impl Processes {
 
     pub(crate) fn remove(&mut self, id: ProcessId) {
         self.live.remove(&id);
+    }
+
+    /// Drops `id` once nothing remains to read: its exit is in and both
+    /// streams were read to their ends, so no listener, present or future,
+    /// could read more. Anything unread keeps the entry until the lifecycle
+    /// ends, since output that arrived before a listener attaches is held
+    /// until one does.
+    pub(crate) fn reap_if_finished(&mut self, id: ProcessId, process: &OwnedProcess) {
+        let drained = process.stdout_ended.load(Ordering::Acquire)
+            && process.stderr_ended.load(Ordering::Acquire);
+        let exited = process.exit.clone().now_or_never().is_some();
+        if drained && exited {
+            self.live.remove(&id);
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn len(&self) -> usize {
+        self.live.len()
     }
 
     /// Kills every process, with their helpers.

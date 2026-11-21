@@ -1426,6 +1426,12 @@ impl ProductExtensionHost {
         self.processes.kill_all();
     }
 
+    /// How many spawned processes still hold a registry entry.
+    #[cfg(test)]
+    pub(crate) fn live_process_count_for_test(&self) -> usize {
+        self.processes.len()
+    }
+
     /// Records `package` as the live package of `key`, with what it declared.
     fn admit_package(&mut self, key: ExtensionKey, package: &InstalledPackage) {
         self.package_keys.insert(package.manifest.name.clone(), key);

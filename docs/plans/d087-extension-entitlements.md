@@ -164,8 +164,10 @@ and quit, and the author guide
 ([run programs](../extension-api/application.md#run-programs)) are in place.
 Output streams are pull-based, so a listener's pace is the child's, and a child
 that writes more than its pipe holds does not exit until its output is read.
-Product tests in `src/app/product/tests/processes.rs` run real programs through
-installed, bundled, and personal-config packages.
+A finished spawn leaves the registry once its exit is in and both streams are
+drained; anything unread stays until unload. Product tests in
+`src/app/product/tests/processes.rs` run real programs through installed,
+bundled, and personal-config packages.
 
 ### 3. Manage Entitlements and documentation
 

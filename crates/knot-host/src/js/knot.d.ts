@@ -1133,7 +1133,9 @@ declare module "knot" {
     readonly stdout: string;
     readonly stderr: string;
   }
-  /** A running process started with `processes.spawn`. */
+  /** A running process started with `processes.spawn`. Once the process has
+   * exited and both streams have been read to their ends, Knot releases the
+   * handle and later calls reject with InvalidTarget. */
   export interface ProcessHandle {
     /** Calls `listener` with each chunk of standard output, in order. The
      * process reads ahead only as listeners finish, so a slow listener stalls

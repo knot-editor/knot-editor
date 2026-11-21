@@ -1,6 +1,7 @@
 //! Running programs for packages that declare the `process` entitlement.
 
 use std::path::PathBuf;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use futures::{FutureExt as _, StreamExt as _, select_biased};
@@ -328,12 +329,19 @@ async fn read_process_output(
     arguments: ProcessStreamArguments,
 ) -> Result<Option<String>, ProcessError> {
     let process = owned(&context, arguments.process)?;
-    let stream = match arguments.stream.as_str() {
-        "stdout" => process.stdout,
-        "stderr" => process.stderr,
+    let (stream, ended) = match arguments.stream.as_str() {
+        "stdout" => (process.stdout.clone(), process.stdout_ended.clone()),
+        "stderr" => (process.stderr.clone(), process.stderr_ended.clone()),
         _ => return Err(AccessError::InvalidTarget.into()),
     };
     let chunk = stream.lock().await.next().await;
+    if chunk.is_none() {
+        // A stream read to its end after the exit may be the last thing the
+        // entry is kept for; `wait_process` covers the other order.
+        ended.store(true, Ordering::Release);
+        let id = ProcessId(arguments.process);
+        let _ = context.foreground(|host, _| host.processes.reap_if_finished(id, &process));
+    }
     Ok(chunk)
 }
 
@@ -379,5 +387,9 @@ async fn wait_process(
     let process = owned(&context, arguments.process)?;
     let status = process.exit.clone().await;
     process.control.close_input();
+    // An exit delivered after both streams drained may be the last thing the
+    // entry is kept for; `read_process_output` covers the other order.
+    let id = ProcessId(arguments.process);
+    let _ = context.foreground(|host, _| host.processes.reap_if_finished(id, &process));
     Ok(status.into())
 }

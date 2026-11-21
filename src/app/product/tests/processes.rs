@@ -195,6 +195,26 @@ await answer({ out, err });
 }
 
 #[gpui::test]
+fn a_finished_spawn_leaves_the_registry_once_drained(cx: &mut TestAppContext) {
+    let main = r#"import { processes, workbench } from "knot";
+const child = await processes.spawn({ command: "sh", args: ["-c", "printf out; printf err >&2"] });
+let out = "";
+let err = "";
+child.onStdout((chunk) => { out += chunk; });
+child.onStderr((chunk) => { err += chunk; });
+await child.exited;
+await workbench.writeClipboardText(JSON.stringify({ out, err }));
+"#;
+    let loaded = load(main, &["process"], cx);
+    assert_eq!(answer(cx), r#"{"out":"out","err":"err"}"#);
+    // The pumps read both streams to their ends after the exit, so the host
+    // releases the entry instead of holding it until unload.
+    crate::test_support::wait_until(cx, |cx| {
+        cx.read(|cx| loaded.host.read(cx).live_process_count_for_test()) == 0
+    });
+}
+
+#[gpui::test]
 fn a_flood_reaches_a_slow_listener_in_full(cx: &mut TestAppContext) {
     let written = run_package(
         r#"

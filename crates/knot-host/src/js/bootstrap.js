@@ -2334,7 +2334,15 @@ function processStream(id, stream) {
   let running = false;
   const pump = () => withFrame(null, async () => {
     while (listeners.size > 0) {
-      const chunk = await request("readProcessOutput", id, stream);
+      let chunk;
+      try {
+        chunk = await request("readProcessOutput", id, stream);
+      } catch (error) {
+        // The handle is gone: its process finished and drained, or its
+        // lifecycle ended. Either way the stream is over.
+        if (error?.code === "InvalidTarget") break;
+        throw error;
+      }
       if (chunk === null) break;
       for (const listener of [...listeners]) {
         try { await listener(chunk); } catch (error) { void Promise.reject(error); }
