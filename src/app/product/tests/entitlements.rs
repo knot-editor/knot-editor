@@ -2,10 +2,13 @@
 
 use super::extension_restart::resolves;
 use super::operations::empty_product_window;
+use super::processes::{is_alive, recorded_pid, unsafe_group_alive};
 use super::*;
 use crate::app::extensions::consent::EntitlementConsentView;
 use crate::app::extensions::entitlements;
-use crate::app::extensions::host::ProductExtensionHost;
+use crate::app::extensions::host::{
+    EntitlementCandidate, EntitlementCandidateState, ProductExtensionHost,
+};
 use crate::app::extensions::load::LoadResult;
 use knot_model::extensions::entitlements::Decision;
 use knot_model::extensions::package::Entitlement;
@@ -25,6 +28,25 @@ struct Setup {
 /// Installs `packages` (name, requirements, declared entitlements) and starts
 /// loading them beside an empty product window.
 fn begin(packages: &[(&str, &[&str], &[&str])], cx: &mut TestAppContext) -> Setup {
+    begin_with(packages, &[], cx)
+}
+
+static CANDIDATE_BUNDLED: &[knot_bundled::BundledSource] = &[knot_bundled::BundledSource {
+    manifest: r#"{ "name": "@knot/runner", "apiVersion": 1, "version": "1.0.0", "main": "dist/main.js", "entitlements": ["process"] }"#,
+    sources: &[(
+        "dist/main.js",
+        r#"import { commands } from "knot";
+await commands.register("bundled.ping", async () => {});"#,
+    )],
+}];
+
+/// Installs `packages` with `bundled` compiled in, and starts loading them
+/// beside an empty product window.
+fn begin_with(
+    packages: &[(&str, &[&str], &[&str])],
+    bundled: &'static [knot_bundled::BundledSource],
+    cx: &mut TestAppContext,
+) -> Setup {
     let extensions = tempfile::tempdir().unwrap();
     for (name, requires, declared) in packages {
         install_extension(extensions.path(), name, requires, &[("main.js", PLAIN)]);
@@ -34,7 +56,8 @@ fn begin(packages: &[(&str, &[&str], &[&str])], cx: &mut TestAppContext) -> Setu
     let host = cx.update(crate::app::extensions::host::install);
     let storage = tempfile::tempdir().unwrap();
     host.update(cx, |host, cx| {
-        host.set_test_storage_root(storage.path().to_owned(), cx)
+        host.set_test_storage_root(storage.path().to_owned(), cx);
+        host.set_bundled_packages(bundled);
     });
     let (window, _) = empty_product_window(&documents, cx);
     let setup = Setup {
@@ -88,6 +111,39 @@ impl Setup {
             .collect()
     }
 
+    /// Flip `name`'s entitlement decision through the managing picker
+    /// machinery, without a window. Returns whether it is allowed now and the
+    /// outcome.
+    fn toggle(&self, name: &str, cx: &mut TestAppContext) -> (bool, LoadResult) {
+        let result = Arc::new(std::sync::Mutex::new(None));
+        let sink = result.clone();
+        cx.update(|cx| {
+            self.host.update(cx, |host, cx| {
+                let task = host.toggle_entitlement(name.into(), None, cx);
+                cx.spawn(async move |_, _| *sink.lock().unwrap() = Some(task.await))
+                    .detach();
+            })
+        });
+        crate::test_support::wait_until(cx, |_| result.lock().unwrap().is_some());
+        let outcome = result.lock().unwrap().take().unwrap();
+        (outcome.granted, outcome.entry.result)
+    }
+
+    /// The installed packages declaring entitlements, with their states.
+    fn candidates(&self, cx: &mut TestAppContext) -> Vec<EntitlementCandidate> {
+        let result = Arc::new(std::sync::Mutex::new(None));
+        let sink = result.clone();
+        cx.update(|cx| {
+            self.host.update(cx, |host, cx| {
+                let task = host.entitlement_candidates(cx);
+                cx.spawn(async move |_, _| *sink.lock().unwrap() = Some(task.await))
+                    .detach();
+            })
+        });
+        crate::test_support::wait_until(cx, |_| result.lock().unwrap().is_some());
+        result.lock().unwrap().take().unwrap()
+    }
+
     /// Restart `name` from `window`, answering a confirmation, if one opens,
     /// with `answer`. Returns the entry and whether a prompt was shown.
     fn restart(&self, name: &str, answer: &str, cx: &mut TestAppContext) -> (LoadResult, bool) {
@@ -120,6 +176,19 @@ fn decision(name: &str, cx: &mut TestAppContext) -> Option<Decision> {
 
 fn result<'a>(report: &'a [(String, LoadResult)], name: &str) -> &'a LoadResult {
     &report.iter().find(|(entry, _)| entry == name).unwrap().1
+}
+
+fn report_entry(cx: &mut TestAppContext, name: &str) -> LoadResult {
+    cx.read(|cx| {
+        crate::app::extensions::host::startup_report(cx)
+            .unwrap()
+            .report
+            .entries
+            .into_iter()
+            .find(|entry| entry.name.as_deref() == Some(name))
+            .unwrap()
+            .result
+    })
 }
 
 #[gpui::test]
@@ -303,6 +372,118 @@ fn restart_does_not_override_a_denial(cx: &mut TestAppContext) {
     );
     assert_eq!(decision("@example/git", cx), Some(Decision::Denied));
     assert!(!resolves("entitled.ping", cx));
+}
+
+#[gpui::test]
+fn manage_lists_only_installed_packages_that_declare_entitlements(cx: &mut TestAppContext) {
+    cx.update(|cx| {
+        entitlements::decide(
+            "@example/git",
+            &[Entitlement::Process],
+            Decision::Granted,
+            cx,
+        );
+        entitlements::decide("@example/old", &[Entitlement::Process], Decision::Denied, cx);
+    });
+    let setup = begin_with(
+        &[
+            ("@example/git", &[], &["process"]),
+            ("@example/plain", &[], &[]),
+            ("@example/old", &[], &["process"]),
+        ],
+        CANDIDATE_BUNDLED,
+        cx,
+    );
+    setup.finish(cx);
+    let candidates = setup.candidates(cx);
+    assert_eq!(candidates.len(), 2);
+    assert_eq!(candidates[0].name, "@example/git");
+    assert_eq!(candidates[0].state, EntitlementCandidateState::Allowed);
+    assert_eq!(candidates[1].name, "@example/old");
+    assert_eq!(candidates[1].state, EntitlementCandidateState::Denied);
+}
+
+#[gpui::test]
+fn revoking_a_running_package_kills_its_processes_and_updates_its_report(
+    cx: &mut TestAppContext,
+) {
+    cx.update(|cx| {
+        entitlements::decide(
+            "@example/git",
+            &[Entitlement::Process],
+            Decision::Granted,
+            cx,
+        )
+    });
+    let setup = begin(&[("@example/git", &[], &["process"])], cx);
+    assert_eq!(
+        result(&setup.finish(cx), "@example/git"),
+        &LoadResult::Loaded
+    );
+    let marker = tempfile::tempdir().unwrap();
+    let pid_file = marker.path().join("pid");
+    std::fs::write(
+        setup.extensions.path().join("@example/git").join("main.js"),
+        format!(
+            r#"import {{ processes }} from "knot";
+await processes.spawn({{ command: "sh", args: ["-c", "echo $$ > {}; sleep 300 & wait"] }});"#,
+            pid_file.display()
+        ),
+    )
+    .unwrap();
+    let (outcome, prompted) = setup.restart("@example/git", "Allow", cx);
+    assert!(!prompted);
+    assert_eq!(outcome, LoadResult::Loaded);
+    let shell = recorded_pid(&pid_file, cx);
+    assert!(is_alive(shell));
+
+    let (granted, outcome) = setup.toggle("@example/git", cx);
+    assert!(!granted);
+    assert_eq!(
+        outcome,
+        LoadResult::NotLoaded("not loaded: entitlement `process` denied".into())
+    );
+    crate::test_support::wait_until(cx, |_| !is_alive(shell));
+    assert!(!unsafe_group_alive(shell));
+    assert_eq!(decision("@example/git", cx), Some(Decision::Denied));
+    assert!(!resolves("entitled.ping", cx));
+    assert_eq!(
+        report_entry(cx, "@example/git"),
+        LoadResult::NotLoaded("not loaded: entitlement `process` denied".into())
+    );
+}
+
+#[gpui::test]
+fn granting_a_denied_package_activates_it_without_touching_dependents(cx: &mut TestAppContext) {
+    cx.update(|cx| {
+        entitlements::decide(
+            "@example/git",
+            &[Entitlement::Process],
+            Decision::Denied,
+            cx,
+        )
+    });
+    let setup = begin(
+        &[
+            ("@example/git", &[], &["process"]),
+            ("@example/dependent", &["@example/git"], &[]),
+        ],
+        cx,
+    );
+    let before = setup.finish(cx);
+    assert_eq!(
+        result(&before, "@example/git"),
+        &LoadResult::NotLoaded("not loaded: entitlement `process` denied".into())
+    );
+    let dependent_before = result(&before, "@example/dependent").clone();
+    assert!(matches!(dependent_before, LoadResult::Failed(_)));
+
+    let (granted, outcome) = setup.toggle("@example/git", cx);
+    assert!(granted);
+    assert_eq!(outcome, LoadResult::Loaded);
+    assert_eq!(decision("@example/git", cx), Some(Decision::Granted));
+    assert!(resolves("entitled.ping", cx));
+    assert_eq!(report_entry(cx, "@example/dependent"), dependent_before);
 }
 
 #[gpui::test]

@@ -666,6 +666,19 @@ pub(crate) async fn restart_extension(
         .await
 }
 
+#[command("extensions.manage-entitlements", title = "Extensions: Manage Entitlements…", description = "Review and change which entitlements installed extensions hold.", id = MANAGE_ENTITLEMENTS_COMMAND, participant = Workbench)]
+pub(crate) async fn manage_entitlements(
+    context: CommandContext,
+    (): (),
+) -> Result<(), CommandOutcome> {
+    context
+        .window(|window, _, cx| {
+            window.start_extension_entitlements(cx);
+            Ok(())
+        })
+        .await
+}
+
 #[command("app.about", title = "Knot: About", description = "Show the Knot version and commit.", id = ABOUT_COMMAND, participant = Workbench)]
 pub(crate) async fn about(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
     context

@@ -317,7 +317,7 @@ await processes.spawn({{ command: "sh", args: ["-c", "echo $$ > {}; sleep 300 & 
     (loaded, pid_file, marker)
 }
 
-fn recorded_pid(pid_file: &Path, cx: &mut TestAppContext) -> i32 {
+pub(super) fn recorded_pid(pid_file: &Path, cx: &mut TestAppContext) -> i32 {
     let mut pid = None;
     crate::test_support::wait_until(cx, |_| {
         pid = std::fs::read_to_string(pid_file)
@@ -328,7 +328,7 @@ fn recorded_pid(pid_file: &Path, cx: &mut TestAppContext) -> i32 {
     pid.unwrap()
 }
 
-fn is_alive(pid: i32) -> bool {
+pub(super) fn is_alive(pid: i32) -> bool {
     // SAFETY: signal 0 only probes for the process.
     unsafe { libc::kill(pid, 0) == 0 }
 }
@@ -347,7 +347,7 @@ fn unloading_a_package_kills_its_processes_and_their_helpers(cx: &mut TestAppCon
     assert!(!unsafe_group_alive(shell));
 }
 
-fn unsafe_group_alive(group: i32) -> bool {
+pub(super) fn unsafe_group_alive(group: i32) -> bool {
     // SAFETY: signal 0 only probes for the group.
     unsafe { libc::killpg(group, 0) == 0 }
 }

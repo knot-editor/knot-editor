@@ -22,6 +22,7 @@ mod application_log;
 mod closure;
 pub(super) mod commands;
 mod document_watch;
+mod extension_entitlements;
 mod extension_restart;
 mod key_hold;
 mod key_routing;

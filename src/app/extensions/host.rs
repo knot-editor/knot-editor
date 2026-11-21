@@ -1215,19 +1215,274 @@ impl ProductExtensionHost {
                 ),
             }
             let _ = this.update(cx, |host, cx| {
-                if let Some(snapshot) = &mut host.startup_report {
-                    let entries = &mut snapshot.report.entries;
-                    match entries
-                        .iter_mut()
-                        .find(|existing| existing.name == entry.name)
-                    {
-                        Some(existing) => *existing = entry.clone(),
-                        None => entries.push(entry.clone()),
-                    }
-                }
-                cx.notify();
+                host.replace_report_entry(entry.clone(), cx);
             });
             entry
+        })
+    }
+
+    /// Replace the startup report entry of `entry.name`, or push it when the
+    /// report has none, so a later restart or toggle shows what last happened.
+    fn replace_report_entry(&mut self, entry: LoadEntry, cx: &mut Context<Self>) {
+        if let Some(snapshot) = &mut self.startup_report {
+            match snapshot
+                .report
+                .entries
+                .iter_mut()
+                .find(|existing| existing.name == entry.name)
+            {
+                Some(existing) => *existing = entry,
+                None => snapshot.report.entries.push(entry),
+            }
+        }
+        cx.notify();
+    }
+
+}
+
+/// An installed package declaring entitlements, with the user's decision state.
+pub(crate) struct EntitlementCandidate {
+    pub name: String,
+    pub display_name: String,
+    pub version: String,
+    pub entitlements: Vec<crate::app::extensions::package::Entitlement>,
+    pub state: EntitlementCandidateState,
+}
+
+/// Whether a candidate's declared entitlements are allowed, denied, or undecided.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum EntitlementCandidateState {
+    Allowed,
+    Denied,
+    NotDecided,
+}
+
+impl EntitlementCandidateState {
+    /// The decision state of `package`'s declared entitlements: allowed when
+    /// every one is granted, denied when any one is, and undecided otherwise.
+    fn of(
+        name: &str,
+        package: &InstalledPackage,
+        grants: &entitlement_policy::EntitlementGrants,
+    ) -> Self {
+        let mut undecided = false;
+        for entitlement in &package.manifest.entitlements {
+            match grants.decision(name, *entitlement) {
+                Some(entitlement_policy::Decision::Granted) => {}
+                Some(entitlement_policy::Decision::Denied) => return Self::Denied,
+                None => undecided = true,
+            }
+        }
+        if undecided {
+            Self::NotDecided
+        } else {
+            Self::Allowed
+        }
+    }
+
+    pub(crate) fn describe(self) -> &'static str {
+        match self {
+            Self::Allowed => "allowed",
+            Self::Denied => "denied",
+            Self::NotDecided => "not decided",
+        }
+    }
+}
+
+/// What flipping a package's entitlement decision did.
+pub(crate) struct ToggleEntitlements {
+    pub granted: bool,
+    pub entry: LoadEntry,
+}
+
+impl ProductExtensionHost {
+    /// Every installed package declaring entitlements, with the user's decision
+    /// state, in identity order. Bundled packages and personal config are not
+    /// listed: shipping grants the former, and the latter holds everything.
+    pub(in crate::app) fn entitlement_candidates(
+        &self,
+        cx: &mut Context<Self>,
+    ) -> Task<Vec<EntitlementCandidate>> {
+        let Some(root) = self
+            .startup_report
+            .as_ref()
+            .filter(|snapshot| snapshot.state == StartupState::Complete)
+            .map(|snapshot| snapshot.root.clone())
+        else {
+            return Task::ready(Vec::new());
+        };
+        let bundled = self.bundled;
+        let discovery = cx.background_executor().spawn(async move {
+            crate::app::extensions::package::discover_all(
+                &root,
+                crate::app::extensions::bundled::report(bundled),
+            )
+        });
+        cx.spawn(async move |this, cx| {
+            let discovered = discovery.await;
+            let grants = this
+                .update(cx, |_, cx| entitlements::grants(cx))
+                .unwrap_or_default();
+            let mut candidates = discovered
+                .packages
+                .into_iter()
+                .filter(|package| {
+                    package.origin
+                        == crate::app::extensions::package::PackageOrigin::Installed
+                        && !package.manifest.entitlements.is_empty()
+                })
+                .map(|package| {
+                    let state =
+                        EntitlementCandidateState::of(&package.manifest.name, &package, &grants);
+                    EntitlementCandidate {
+                        name: package.manifest.name.clone(),
+                        display_name: package
+                            .manifest
+                            .display_name
+                            .clone()
+                            .unwrap_or_else(|| package.manifest.name.clone()),
+                        version: package.manifest.version.clone(),
+                        entitlements: package.manifest.entitlements.clone(),
+                        state,
+                    }
+                })
+                .collect::<Vec<_>>();
+            candidates.sort_by(|left, right| left.name.cmp(&right.name));
+            candidates
+        })
+    }
+
+    /// Flip a package's entitlement decision. Granting records a grant and
+    /// activates a not-loaded package through the restart machinery; revoking
+    /// records a denial and performs a terminating unload, which kills its
+    /// processes. Unlike restart, granting applies even to a denied package,
+    /// because the user chose it in the managing picker.
+    pub(in crate::app) fn toggle_entitlement(
+        &mut self,
+        name: String,
+        window: Option<gpui::WeakEntity<KnotWindow>>,
+        cx: &mut Context<Self>,
+    ) -> Task<ToggleEntitlements> {
+        let ready = self
+            .startup_report
+            .as_ref()
+            .filter(|snapshot| snapshot.state == StartupState::Complete)
+            .map(|snapshot| snapshot.root.clone());
+        let Some(root) = ready else {
+            return Task::ready(ToggleEntitlements {
+                granted: false,
+                entry: LoadEntry {
+                    directory: PathBuf::new(),
+                    name: Some(name),
+                    result: LoadResult::Failed("extension startup is still running".into()),
+                },
+            });
+        };
+        let bundled = self.bundled;
+        let discovery = cx.background_executor().spawn(async move {
+            crate::app::extensions::package::discover_all(
+                &root,
+                crate::app::extensions::bundled::report(bundled),
+            )
+        });
+        cx.spawn(async move |this, cx| {
+            let discovered = discovery.await;
+            let found = discovered.packages.into_iter().find(|package| {
+                package.manifest.name == name
+                    && package.origin
+                        == crate::app::extensions::package::PackageOrigin::Installed
+                    && !package.manifest.entitlements.is_empty()
+            });
+            let Some(package) = found else {
+                return ToggleEntitlements {
+                    granted: false,
+                    entry: LoadEntry {
+                        directory: PathBuf::new(),
+                        name: Some(name),
+                        result: LoadResult::Failed(
+                            "the package is no longer installed or declares no entitlements".into(),
+                        ),
+                    },
+                };
+            };
+            let grants = this
+                .update(cx, |_, cx| entitlements::grants(cx))
+                .unwrap_or_default();
+            let allowed = package
+                .manifest
+                .entitlements
+                .iter()
+                .all(|entitlement| {
+                    grants.decision(&package.manifest.name, *entitlement)
+                        == Some(entitlement_policy::Decision::Granted)
+                });
+            if !allowed {
+                let grant = this.update(cx, |host, cx| {
+                    entitlements::decide(
+                        &package.manifest.name,
+                        &package.manifest.entitlements,
+                        entitlement_policy::Decision::Granted,
+                        cx,
+                    );
+                    host.restart_package(package.manifest.name.clone(), window, cx)
+                });
+                return match grant {
+                    Ok(task) => ToggleEntitlements {
+                        granted: true,
+                        entry: task.await,
+                    },
+                    Err(_) => ToggleEntitlements {
+                        granted: true,
+                        entry: LoadEntry {
+                            directory: package.directory,
+                            name: Some(name),
+                            result: LoadResult::Failed("the extension host is gone".into()),
+                        },
+                    },
+                };
+            }
+            let entry = this.update(cx, |host, cx| {
+                entitlements::decide(
+                    &package.manifest.name,
+                    &package.manifest.entitlements,
+                    entitlement_policy::Decision::Denied,
+                    cx,
+                );
+                if let Some(key) = host.package_keys.get(&name).copied() {
+                    let _ = host.pool.unload(key);
+                    host.remove_lifecycle(key, cx);
+                }
+                let cause = entitlement_policy::not_loaded_cause(
+                    &package,
+                    &entitlements::grants(cx),
+                )
+                .unwrap_or_else(|| "not loaded: entitlement denied".into());
+                let entry = LoadEntry {
+                    directory: package.directory.clone(),
+                    name: Some(name.clone()),
+                    result: LoadResult::NotLoaded(cause.clone()),
+                };
+                tracing::info!(
+                    target: "knot::extensions",
+                    "extension entitlement denied: {name}: {cause}",
+                );
+                host.replace_report_entry(entry.clone(), cx);
+                entry
+            });
+            match entry {
+                Ok(entry) => ToggleEntitlements {
+                    granted: false,
+                    entry,
+                },
+                Err(_) => ToggleEntitlements {
+                    granted: false,
+                    entry: LoadEntry {
+                        directory: package.directory,
+                        name: Some(name),
+                        result: LoadResult::Failed("the extension host is gone".into()),
+                    },
+                },
+            }
         })
     }
 
