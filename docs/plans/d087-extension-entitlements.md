@@ -1,6 +1,6 @@
 # D087 — Extension entitlements
 
-Status: 🚧 checkpoints 1 and 2 done; checkpoint 3 not started. Source: [roadmap D087](../roadmap.md), first
+Status: 🚧 checkpoints 1 and 2 done; checkpoint 3 implemented, awaiting review. Source: [roadmap D087](../roadmap.md), first
 item of the [version control plan](vcs.md), whose `@knot/git` package is the
 first consumer of process spawning.
 
@@ -170,7 +170,7 @@ releases a handle early, killing its group when it still runs. Product tests in
 `src/app/product/tests/processes.rs` run real programs through installed,
 bundled, and personal-config packages.
 
-### 3. Manage Entitlements and documentation
+### 3. Manage Entitlements and documentation 🚧 implemented, awaiting review
 
 Deliverables:
 

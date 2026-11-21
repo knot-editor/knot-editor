@@ -72,10 +72,66 @@ symlinked root and validates source containment. Pre-init cannot import post-ini
 even indirectly. Post-init capture/validation errors are retained until that
 phase rather than preventing valid pre-init work.
 
-Startup awaits pre-init, installed extensions, then post-init. A config failure
+Startup awaits pre-init, installed discovery, entitlement consent, and installed
+loading, then post-init. A config failure
 unloads every startup lifecycle; installed-package failures do not stop post-init.
 Window admission and fatal diagnostics belong to
 [product launch](workbench-and-lifecycle.md#product-application-launch).
+
+### Extension entitlements
+
+A manifest lists the capabilities a package needs beyond the editor API in
+`entitlements`, starting with `process`. Bundled packages declare them the
+same way and ship granted; personal config has no manifest and holds every
+entitlement. Grants live per canonical package identity and entitlement as
+granted or denied in one versioned record of the application state database,
+independent of version, so an update declaring a new entitlement asks only
+about it.
+
+When a discovered installed package has an undecided entitlement, Knot opens
+a dedicated consent window before any workbench window, modeled on the
+fatal-config diagnostic window: each package with its display name, identity,
+version, and undecided entitlements, with Allow and Deny per package, and
+Continue. Startup waits for it; with nothing undecided no window opens.
+Allow stores a grant and Deny a denial for that package's undecided
+entitlements; closing the window, or continuing without deciding a package,
+stores nothing, so the package does not load and Knot asks again at the next
+launch. A package with any denied or undecided entitlement does not load, and
+its startup report entry says why; denied packages do not open the report,
+and dependents fail as with any dependency failure.
+
+Extensions: Manage Entitlements… lists installed packages that declare
+entitlements with their state, and choosing one toggles between allowed and
+denied. Granting a not-loaded package activates it through the restart
+machinery; revoking performs a terminating unload, which kills its processes,
+and records the denial in the report. Developer: Restart Extension…
+re-reads the manifest and asks about a newly undecided entitlement with the
+native confirmation before activating; a denial is never overridden there.
+
+### Extension processes
+
+`processes.run` resolves once the program exits, with its exit code, signal,
+and output; `processes.spawn` returns a handle that streams output and
+controls the program. Output is UTF-8 text, decoded with replacement and
+carrying split code points across chunks. Streams are pull-based: a
+listener's acknowledgement releases the next chunk, so a slow listener
+stalls the child on its pipe instead of growing memory, and output that
+arrives before a listener attaches waits for one. A finished handle leaves
+the registry once its exit is in and both streams are drained; anything else
+stays until unload, and `disposeProcess` releases a handle early, killing its
+group when it still runs. `command` resolves through `PATH` in the inherited
+environment; `cwd` is a file URI defaulting to the home directory; `env` is
+merged over inheritance with `null` unsetting; a missing program or
+directory rejects with a typed code.
+
+Each child starts in its own process group. Lifecycle teardown (unload,
+restart, revoke, startup rollback, quit) kills the group, so helpers a
+program started die with it, and `kill` signals the group. Cancelling a
+command does not kill its processes. On macOS and Linux, startup resolves
+the inherited environment once by running the user's shell as a login
+interactive shell that prints its environment, with a timeout, falling back
+to Knot's own environment; Windows inherits Knot's environment. The resolved
+environment is the base for spawned processes only.
 
 ### Restarting a package
 

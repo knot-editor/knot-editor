@@ -130,6 +130,9 @@ touches.
 - [Editor handles](decisions/extension-host.md#editor-handles): bound to one tab
   presentation; coalesced notifications carrying the current selection; one-request reads
   of the caret's lines; open/close undo groups.
+- [Extension entitlements](decisions/extension-host.md#extension-entitlements):
+  consent, not a sandbox; coarse declarations asked at startup; denial means
+  not loaded; native grant management.
 - [Extension restart](decisions/extension-host.md#extension-restart): a minimal
   escape hatch reusing terminating unload.
 - [Personal configuration](decisions/extension-host.md#personal-configuration):

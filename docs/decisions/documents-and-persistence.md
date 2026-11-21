@@ -98,7 +98,7 @@ that vanishes and one that appears in the same watch batch is a guess that can
 attach a document to an unrelated file, so external renames stay deletions.
 Deleting never closes a document or asks: the text stays in an open document, so
 protected closure and recovery keep working, and prompting belongs to the
-caller. Mutations are ungated like reads until D087.
+caller. Mutations are ungated like reads.
 
 Reference: [URI providers](../architecture/documents-and-persistence.md#uri-providers).
 

@@ -58,6 +58,8 @@ gpui application and native views
 - `knot-handler-macros` generates adapters for annotated native host handlers
   and commands, without depending on V8, gpui, or editor models. Application
   owners expose semantic operations; declaration adapters own transport.
+- `knot-process` owns child processes with piped, text-only stdio, without
+  gpui: spawning in a process group, dedicated threads, and group kill.
 
 The `knot` binary lives in `knot-app`, which joins the group crates' packages,
 creates the platform application, and enters the product through `knot::run`.
@@ -100,6 +102,8 @@ enter one turn at a time and yield while awaiting native work. The application
 owns foreground protocol routing and resource cleanup; the host owns scheduling
 and runtime disposal. Lifecycle teardown and host release share foreground
 cleanup so registrations and contributions cannot outlive their host.
+Extension-spawned child processes are owned per lifecycle the same way:
+teardown kills their process groups, so no child outlives its package.
 
 Application queries derive metadata from existing document and window owners.
 Observation retains a comparison baseline and lifecycle-scoped subscriptions,

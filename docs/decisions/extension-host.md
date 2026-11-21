@@ -225,6 +225,31 @@ needed the column.
 References: [commands](../architecture/commands.md#extension-execution) and
 [extension host](../architecture/extension-host.md#editor-handle-notifications).
 
+## Extension entitlements
+
+Entitlements are user consent, not a sandbox: a granted package runs with
+the whole public API, files included, and the decision record says a denied
+or undecided package simply does not load. A sandbox without a boundary was
+rejected, and so were per-program allow lists: anything that can run `git`
+can run `sh -c`, so a list would be theater. Entitlements stay coarse for
+the same reason, and `network` arrives with `fetch` (D222).
+
+Startup asks after pre-init and before loading any installed package, so a
+future pre-init API that removes a package never gets asked about a disabled
+one. Denial means not loaded: there is no runtime denied state and no
+`EntitlementDenied` code, because every loaded package holds what it
+declared; a gated call from a package that did not declare the entitlement
+rejects `EntitlementNotDeclared`, which signals an author bug.
+
+Grant management stays native: a JavaScript API that edits grants would
+itself need a privileged entitlement. Process output is text-only, pulled at
+the listener's pace so a slow consumer stalls the child instead of growing
+memory; byte streams wait for a consumer. The inherited environment is
+resolved once from the user's login shell, falling back to Knot's own,
+because a Finder launch lacks the shell setup that finds Homebrew's tools.
+
+Reference: [extension host](../architecture/extension-host.md#extension-entitlements).
+
 ## Extension restart
 
 Restart Extension is the minimal escape hatch for a stuck turn without adopting
