@@ -51,8 +51,15 @@ impl From<SpawnError> for ProcessError {
             SpawnError::CommandNotFound(_) => Self::ProgramNotFound,
             SpawnError::DirectoryNotFound(_) => Self::WorkingDirectoryNotFound,
             SpawnError::Io(error) => {
-                tracing::warn!(target: "knot::process", "cannot start a process: {error}");
-                Self::ProcessFailed
+                // `resolve_command` screens for this on Unix, but the program
+                // can vanish between the check and the spawn, and other
+                // platforms search `PATH` in the spawn itself.
+                if error.kind() == std::io::ErrorKind::NotFound {
+                    Self::ProgramNotFound
+                } else {
+                    tracing::warn!(target: "knot::process", "cannot start a process: {error}");
+                    Self::ProcessFailed
+                }
             }
         }
     }
@@ -392,4 +399,23 @@ async fn wait_process(
     let id = ProcessId(arguments.process);
     let _ = context.foreground(|host, _| host.processes.reap_if_finished(id, &process));
     Ok(status.into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_spawn_failure_to_find_the_program_reports_program_not_found() {
+        let missing = ProcessError::from(SpawnError::Io(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "gone",
+        )));
+        assert!(matches!(missing, ProcessError::ProgramNotFound));
+        let failed = ProcessError::from(SpawnError::Io(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "denied",
+        )));
+        assert!(matches!(failed, ProcessError::ProcessFailed));
+    }
 }
