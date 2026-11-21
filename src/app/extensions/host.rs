@@ -1237,7 +1237,6 @@ impl ProductExtensionHost {
         }
         cx.notify();
     }
-
 }
 
 /// An installed package declaring entitlements, with the user's decision state.
@@ -1327,8 +1326,7 @@ impl ProductExtensionHost {
                 .packages
                 .into_iter()
                 .filter(|package| {
-                    package.origin
-                        == crate::app::extensions::package::PackageOrigin::Installed
+                    package.origin == crate::app::extensions::package::PackageOrigin::Installed
                         && !package.manifest.entitlements.is_empty()
                 })
                 .map(|package| {
@@ -1389,8 +1387,7 @@ impl ProductExtensionHost {
             let discovered = discovery.await;
             let found = discovered.packages.into_iter().find(|package| {
                 package.manifest.name == name
-                    && package.origin
-                        == crate::app::extensions::package::PackageOrigin::Installed
+                    && package.origin == crate::app::extensions::package::PackageOrigin::Installed
                     && !package.manifest.entitlements.is_empty()
             });
             let Some(package) = found else {
@@ -1408,14 +1405,10 @@ impl ProductExtensionHost {
             let grants = this
                 .update(cx, |_, cx| entitlements::grants(cx))
                 .unwrap_or_default();
-            let allowed = package
-                .manifest
-                .entitlements
-                .iter()
-                .all(|entitlement| {
-                    grants.decision(&package.manifest.name, *entitlement)
-                        == Some(entitlement_policy::Decision::Granted)
-                });
+            let allowed = package.manifest.entitlements.iter().all(|entitlement| {
+                grants.decision(&package.manifest.name, *entitlement)
+                    == Some(entitlement_policy::Decision::Granted)
+            });
             if !allowed {
                 let grant = this.update(cx, |host, cx| {
                     entitlements::decide(
@@ -1452,11 +1445,9 @@ impl ProductExtensionHost {
                     let _ = host.pool.unload(key);
                     host.remove_lifecycle(key, cx);
                 }
-                let cause = entitlement_policy::not_loaded_cause(
-                    &package,
-                    &entitlements::grants(cx),
-                )
-                .unwrap_or_else(|| "not loaded: entitlement denied".into());
+                let cause =
+                    entitlement_policy::not_loaded_cause(&package, &entitlements::grants(cx))
+                        .unwrap_or_else(|| "not loaded: entitlement denied".into());
                 let entry = LoadEntry {
                     directory: package.directory.clone(),
                     name: Some(name.clone()),

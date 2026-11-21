@@ -90,11 +90,9 @@ impl KnotWindow {
                     },
                     Some(cause),
                 ),
-                crate::app::extensions::load::LoadResult::Failed(cause) => (
-                    Severity::Error,
-                    format!("{name} failed"),
-                    Some(cause),
-                ),
+                crate::app::extensions::load::LoadResult::Failed(cause) => {
+                    (Severity::Error, format!("{name} failed"), Some(cause))
+                }
             };
             Self::notice(&this, severity, &title, message, cx);
         });

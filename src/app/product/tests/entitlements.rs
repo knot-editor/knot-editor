@@ -383,7 +383,12 @@ fn manage_lists_only_installed_packages_that_declare_entitlements(cx: &mut TestA
             Decision::Granted,
             cx,
         );
-        entitlements::decide("@example/old", &[Entitlement::Process], Decision::Denied, cx);
+        entitlements::decide(
+            "@example/old",
+            &[Entitlement::Process],
+            Decision::Denied,
+            cx,
+        );
     });
     let setup = begin_with(
         &[
@@ -404,9 +409,7 @@ fn manage_lists_only_installed_packages_that_declare_entitlements(cx: &mut TestA
 }
 
 #[gpui::test]
-fn revoking_a_running_package_kills_its_processes_and_updates_its_report(
-    cx: &mut TestAppContext,
-) {
+fn revoking_a_running_package_kills_its_processes_and_updates_its_report(cx: &mut TestAppContext) {
     cx.update(|cx| {
         entitlements::decide(
             "@example/git",
