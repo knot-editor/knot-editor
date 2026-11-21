@@ -1,6 +1,6 @@
 # D087 — Extension entitlements
 
-Status: 🚧 checkpoints 1 done; checkpoint 2 awaiting review; checkpoint 3 not started. Source: [roadmap D087](../roadmap.md), first
+Status: 🚧 checkpoints 1 and 2 done; checkpoint 3 not started. Source: [roadmap D087](../roadmap.md), first
 item of the [version control plan](vcs.md), whose `@knot/git` package is the
 first consumer of process spawning.
 
@@ -154,58 +154,18 @@ back by an entitlement does not open the startup report on launch; its
 dependents fail normally. The author guide covers `entitlements` in
 [packages](../extension-api/README.md#package-and-check-your-code).
 
-### 2. Process API 🔎 awaiting review
+### 2. Process API ✅ approved
 
-✅ All deliverables are in. Decisions made on the way: output streams are
-pull-based (a listener loop in the bootstrap requests each next chunk after
-its listeners finish, so acknowledgement needs no new engine notification),
-and a child that writes more than its pipe holds does not exit until its
-output is read. New codes: `EntitlementNotDeclared`, `ProgramNotFound`,
-`WorkingDirectoryNotFound`, `ProcessFailed`, `ProcessInputClosed`. Product
-tests in `src/app/product/tests/processes.rs` run real programs through
-installed, bundled, and personal-config packages. The review gate is the
-`Try:` commands of the `@try/git` package and the personal config.
-
-Deliverables:
-
-- The inherited-environment resolution at startup, available as a global.
-- Process primitives: spawn in a new process group, piped stdio, chunked UTF-8
-  reading with acknowledgement-driven backpressure, stdin writes and close,
-  exit status, and group kill.
-- Host operations behind the `process` gate, `EntitlementNotDeclared`, and the
-  typed failures for a missing command or `cwd`. Lifecycle cleanup kills every
-  process of the lifecycle.
-- `processes.run` and `processes.spawn` in `knot.d.ts`, the bootstrap, the
-  extension guide, and an example.
-
-Validation: primitive tests (output that splits a code point, a large output
-under backpressure, stdin round trip, exit codes and signals, group kill that
-reaches a grandchild). Host tests for the gate (undeclared rejects, bundled
-declared succeeds, personal config succeeds) and for teardown killing processes
-on unload, restart, and quit. A TypeScript extension test through the real
-editor (`scripts/extensions/testing`) that runs and streams a real program.
-`just check`.
-
-Review gate: a `Try:` command that runs `git status` from a package and shows
-the output, launched from Finder, so `PATH` resolution is checked.
-
-**Implementation context:**
-
-- Pattern for children and threads without gpui: `crates/knot-terminal/src/pty.rs`
-  (process lifecycle, kill, reader threads).
-- Login-shell lookup: `src/app/terminal/session.rs` (`$SHELL` resolution).
-  Startup hook: `start_product_startup`, so the environment is resolved before
-  installed packages load.
-- Handlers: annotate in `src/app/extensions/host/handlers.rs`. Mirror the
-  `watchFiles`/`unwatchFiles` subscription (`ProductExtensionHost::watch_files`)
-  for stream listeners and their ordered, acknowledged notifications, and the
-  lifecycle-owned registry it uses for teardown in `remove_lifecycle`.
-- Error codes: `HostErrorCode` in `crates/knot-protocol/src/` and
-  `crates/knot-host/src/js/knot.d.ts`, plus descriptor checks in
-  `src/app/extensions/host/declaration_tests.rs`.
-- Entitlement lookup: the caller's `ExtensionKey` maps to its package identity
-  through `package_keys` and `storage_owners` in `host.rs`. Keep the declared
-  entitlements next to them when a package loads.
+The `knot-process` crate (children, threads, group kill), the login-shell
+environment resolved at startup (`src/app/extensions/process.rs`), the gated
+`processes.run` and `processes.spawn` operations
+(`src/app/extensions/host/handlers/process.rs`), teardown on unload, restart,
+and quit, and the author guide
+([run programs](../extension-api/application.md#run-programs)) are in place.
+Output streams are pull-based, so a listener's pace is the child's, and a child
+that writes more than its pipe holds does not exit until its output is read.
+Product tests in `src/app/product/tests/processes.rs` run real programs through
+installed, bundled, and personal-config packages.
 
 ### 3. Manage Entitlements and documentation
 
