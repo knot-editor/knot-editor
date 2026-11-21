@@ -164,7 +164,7 @@ jobs:
           HOMEBREW_GITHUB_API_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          brew style --cask "$(brew --repository "$TAP")/Casks/knot@nightly.rb"
+          brew style --cask "$TAP/knot@nightly"
           brew audit --cask --online --except github_prerelease_version "$TAP/knot@nightly"
       - name: Push the cask
         env:
