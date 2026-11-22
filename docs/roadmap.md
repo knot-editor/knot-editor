@@ -250,7 +250,8 @@ hold the analyses that support some items.
     stateless native diff in the API, between two texts or a buffer and a
     text, returning line hunks, with the policy of when and what to compare
     left to packages as with `buffer.find`. The change gutter (D211) and the
-    diff view (D197) use it. Part of the [version control plan](plans/vcs.md).
+    diff view (D197) use it. Part of the [version control plan](plans/vcs.md);
+    see the [D209 plan](plans/d209-diff-function.md).
 
 - **D210 — Richer gutter contributions** 🚧
   - Depends on: none

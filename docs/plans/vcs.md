@@ -77,7 +77,7 @@ Items in a milestone are listed in dependency order.
 - **D199 — Typed contracts between packages.** Done: code-defined schemas,
   inferred types, host-enforced validation; see
   [packages](../extension-api/packages.md).
-- **D209 — Diff function for extensions.**
+- **D209 — Diff function for extensions.** 🚧 [Plan](d209-diff-function.md).
 - **D210 — Richer gutter contributions.**
 - **D211 — VCS foundation and Git change gutter.** `@knot/vcs` and `@knot/git`:
   repositories per root, baselines, the change gutter, and next and previous
