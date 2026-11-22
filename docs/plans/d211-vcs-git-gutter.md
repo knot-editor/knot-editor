@@ -126,34 +126,15 @@ A backend that stops is dropped when its contract no longer binds, since the
 host has no unload signal (D227); checkpoint 3 handles `ContractNotFound` from
 a backend by dropping it and clearing its marks.
 
-### 3. Gutter against the test backend 🚧 awaiting review
+### 3. Gutter against the test backend ✅
 
-Deliverables: in `@knot/vcs`, document tracking through `documents.track`,
-discovery (roots, then the file's directory, deepest repository wins), the
-baseline cache, the debounced diff on edits, and the gutter contributions.
-
-Validation: behavior tests with the test backend for added, modified, and
-removed hunks; typing updates marks; a document outside every root;
-competing nested repositories from two backends; a document with no baseline
-shows nothing; `RevisionConflict` retries; closing releases state.
-
-Review gate: the complete backend-agnostic gutter.
-
-Implemented: `@knot/vcs` follows documents with `documents.track`, finds the
-repository from the roots of every window and then the file's directory, caches
-baselines per document, and paints with `diff`. Behavior tests are in
-`extensions/@knot/vcs/test/gutter.test.ts` (fake host) and
-`crates/knot-ext-vcs/tests/gutter.rs` (real host, through
-`TestWindow::gutter_bars`). Roots are the union over windows, so a document
-shown in two windows is resolved once.
-
-**Implementation context:**
-- `diff` and `buffer.contributions.replace` with `ifRevision`, as in
-  `docs/extension-api/application.md#compare-texts` and the gutter example in
-  `docs/extension-api/languages-and-themes.md`.
-- Window roots through `workspaces.get` and `workspaceChanged` events.
-- Debounce and revision-retry pattern from
-  `extensions/@knot/word-highlight/src/extension.ts`.
+Complete. `@knot/vcs` follows documents with `documents.track`, finds each
+file's repository (roots of every window, then the file's directory, deepest
+wins), caches baselines, and paints `diff` hunks with a fixed 150 ms debounce
+and no setting. A backend whose contract stops binding is dropped and its marks
+cleared. Tests: `extensions/@knot/vcs/test/gutter.test.ts` (fake host) and
+`crates/knot-ext-vcs/tests/gutter.rs` (real host, `TestWindow::gutter_bars`).
+A removal after the last line of a text without a final newline is not covered.
 
 ### 4. `@knot/git` baselines
 
