@@ -225,12 +225,17 @@ fn current_directory_prefers_the_directory_the_shell_reports(cx: &mut TestAppCon
     let current = |cx: &mut TestAppContext| {
         session.read_with(cx, |session, _| session.current_directory().unwrap())
     };
-    let report = |uri: String, n: u32, cx: &mut TestAppContext| {
+    // The output can show before the foreground drains the report's event, so
+    // wait for the directory the report should leave in effect.
+    let report = |uri: String, n: u32, expected: &Path, cx: &mut TestAppContext| {
         session.update(cx, |session, _| {
             session.send(format!("{uri}\r").into_bytes())
         });
         wait_for(cx, &session, |session| {
             output(session).contains(&format!("reported-{n}"))
+                && session
+                    .current_directory()
+                    .is_some_and(|dir| canonical(&dir) == canonical(expected))
         });
     };
 
@@ -239,16 +244,21 @@ fn current_directory_prefers_the_directory_the_shell_reports(cx: &mut TestAppCon
         .unwrap()
         .to_string();
     assert!(uri.contains("%20"));
-    report(uri.clone(), 1, cx);
-    assert_eq!(current(cx), reported);
+    report(uri.clone(), 1, &reported, cx);
+    assert_eq!(canonical(&current(cx)), canonical(&reported));
 
     // A directory on another machine leaves the process query in charge.
-    report("file://elsewhere.example/tmp".to_owned(), 2, cx);
+    report(
+        "file://elsewhere.example/tmp".to_owned(),
+        2,
+        temp.path(),
+        cx,
+    );
     assert_eq!(canonical(&current(cx)), canonical(temp.path()));
 
     // A restarted shell has reported nothing yet.
-    report(uri, 3, cx);
-    assert_eq!(current(cx), reported);
+    report(uri, 3, &reported, cx);
+    assert_eq!(canonical(&current(cx)), canonical(&reported));
     session.update(cx, |session, cx| session.restart(cx));
     // The restart carries the old screen, so the new shell is up once
     // "started" appears a second time; before that its process may not have
