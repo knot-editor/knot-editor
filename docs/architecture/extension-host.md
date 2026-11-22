@@ -390,6 +390,12 @@ callback path. Commits never await listeners, and a listener may await host work
 or its own disposal. Queries can see newer state than an event. No separate replay,
 recovery, or backpressure mechanism is introduced.
 
+`documents.track` is built in the host's JavaScript on a private workbench
+observation, so native code is unchanged. It buffers events until the snapshot's
+documents are delivered, drops those at or before the watermark, and delivers
+the rest through one queue per tracker. It is a separate subscription, so its
+callbacks are not ordered against another observation's for the same event.
+
 ### Editor handle notifications
 
 A long-lived [editor handle](commands.md#extension-execution) is notified

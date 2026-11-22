@@ -2188,6 +2188,42 @@ export const api: KnotApi = {
     return knotContract(`paste.${languageId}`, ["providePaste"]);
   },
   documents: {
+    track: async (listener) => {
+      type Entry = { info: Knot.DocumentInfo; changed: Set<(...args: any[]) => unknown>; closed: Set<() => unknown> };
+      const entries = new Map<string, Entry>();
+      const open = async (info: Knot.DocumentInfo) => {
+        const entry: Entry = { info, changed: new Set(), closed: new Set() };
+        entries.set(info.id, entry);
+        const subscribe = <F>(set: Set<F>) => (callback: F) => {
+          set.add(callback);
+          return disposers(async () => void set.delete(callback));
+        };
+        await listener(info, { onDidChange: subscribe(entry.changed), onDidClose: subscribe(entry.closed) } as Knot.TrackedDocument);
+      };
+      const close = async (id: string) => {
+        const entry = entries.get(id);
+        entries.delete(id);
+        for (const callback of entry?.closed ?? []) await callback();
+      };
+      const handle = async (event: Knot.ApplicationEvent) => {
+        if (event.type === "documentOpened" && !entries.has(event.document.id)) await open(event.document);
+        else if (event.type === "documentChanged") {
+          const entry = entries.get(event.document.id);
+          if (entry === undefined) return open(event.document);
+          const before = entry.info;
+          entry.info = event.document;
+          const same = before.kind === event.document.kind && before.resourceUri === event.document.resourceUri &&
+            before.dirty === event.document.dirty && before.language === event.document.language;
+          if (!same) for (const callback of entry.changed) await callback(event.document, before);
+        } else if (event.type === "documentClosed") await close(event.document);
+      };
+      state.listeners.push(handle);
+      for (const document of [...state.documents.values()]) await open(documentInfo(document));
+      return disposers(async () => {
+        state.listeners = state.listeners.filter((candidate) => candidate !== handle);
+        for (const id of [...entries.keys()]) await close(id);
+      });
+    },
     list: async () => [...state.documents.values()].map(documentInfo),
     get: async (id) => {
       const document = state.documents.get(id);

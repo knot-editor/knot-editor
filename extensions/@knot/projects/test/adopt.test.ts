@@ -21,9 +21,9 @@ async function opened(id: DocumentId) {
 }
 
 test("a file opened alone in a rootless window adopts its new repository in place", async () => {
+  await startLaunched();
   const file = host.addDocument({ uri: `${ALPHA}src/main.rs` });
   const window = host.openWindow({ documents: [file] });
-  await startLaunched();
   await opened(file);
 
   assert.deepEqual(host.windowTargets(), [window]);
@@ -37,9 +37,9 @@ test("a file opened alone in a rootless window adopts its new repository in plac
 test("a known project restores its session with the file and releases the stray window", async () => {
   seedProject("a", "Alpha", [ALPHA]);
   seedSession("a", "suspended", [{ entries: [{ uri: `${ALPHA}notes.md` }], selected: 0 }]);
+  await startLaunched();
   const file = host.addDocument({ uri: `${ALPHA}src/main.rs`, dirty: true, text: "edited" });
   const stray = host.openWindow({ documents: [file] });
-  await startLaunched();
   await opened(file);
 
   const [window, ...rest] = host.windowTargets();

@@ -16,8 +16,6 @@ import { describe, report } from "./report.js";
 import { capturesOf, sessionFromJson, sessionKey, type Session } from "./session.js";
 import { windowRoots } from "./layout.js";
 
-export type TrackedDocument = Pick<DocumentInfo, "kind" | "resourceUri" | "dirty">;
-
 export type ProjectsState = {
   registry: Registry;
   /** Why the registry could not be read, while the last good state is kept. */
@@ -33,8 +31,6 @@ export type ProjectsState = {
   restoreTried: Set<WindowTarget>;
   /** Whether startup windows are committed; tracking waits for them. */
   launched: boolean;
-  /** Membership-relevant metadata per document; revision-only changes are ignored. */
-  tracked: Map<string, TrackedDocument>;
   /** The toolbar widget, once registered. */
   toolbar: { sync(): Promise<void> } | null;
 };
@@ -49,7 +45,6 @@ export function createState(): ProjectsState {
     bindings: new Map(),
     restoreTried: new Set(),
     launched: false,
-    tracked: new Map(),
     toolbar: null,
   };
 }

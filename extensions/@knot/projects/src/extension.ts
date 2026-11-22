@@ -36,7 +36,7 @@ import { registerCommands } from "./commands.js";
 import { defineSettings } from "./prune.js";
 import { describe } from "./report.js";
 import { createState, exclusive, loadSessions, reload } from "./state.js";
-import { afterLaunch, onApplicationEvent } from "./tracking.js";
+import { afterLaunch, onApplicationEvent, trackDocuments } from "./tracking.js";
 import { registerToolbar } from "./toolbar.js";
 import { registerTree } from "./tree.js";
 
@@ -56,6 +56,7 @@ export async function start() {
   const observation = await workbench.observe((event) => {
     return exclusive(state, () => onApplicationEvent(state, event));
   });
+  await trackDocuments(state);
   // A package restarted after launch sees it in the snapshot instead of an event.
   if (observation.snapshot.launched) await afterLaunch(state);
 }

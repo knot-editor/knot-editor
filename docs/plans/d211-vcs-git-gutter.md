@@ -95,9 +95,11 @@ Alt+F5 and Shift+Alt+F5 as in VS Code.
 
 ## Deferred decisions
 
-- Whether `documents.track` replaces `@knot/projects`' document handling
-  entirely or only its change comparison, decided by checkpoint 1's ordering
-  result.
+- ✅ `documents.track` replaced `@knot/projects`' document handling entirely.
+  Checkpoint 1's ordering result: a tracker is a separate subscription, so its
+  callbacks are in order among themselves but interleave arbitrarily with a
+  separate `workbench.observe`'s for the same event. Projects tolerates this
+  because each handler ends in a live `track(state)` query.
 - Whether `files.watch` reports changes inside `.git`, which is hidden; if
   not, checkpoint 5 decides between a generic watch option and polling on
   window focus.
@@ -105,7 +107,7 @@ Alt+F5 and Shift+Alt+F5 as in VS Code.
 
 ## Checkpoints
 
-### 1. `documents.track` and `@knot/projects`
+### 1. `documents.track` and `@knot/projects` ✅ pending review
 
 Deliverables: `documents.track` in the `knot` module with its declaration;
 `@knot/projects` migrated to it for documents opening, changing file, and

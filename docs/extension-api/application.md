@@ -84,8 +84,19 @@ Listeners can await host work or their own disposal because commits do not wait
 for listeners. A query may already see newer state than the event. Dispose and
 observe again when a fresh baseline is needed.
 
+To follow every open document, use `documents.track` instead of filtering
+`workbench.observe`. Its listener runs for each document already open, then
+for each one opened later, and registers `onDidChange` and `onDidClose` on the
+tracked document. `onDidChange` reports a change of kind, file, dirty state, or
+language with the document now and before; revision-only changes are silent, so
+read text through the buffer. Disposing the tracker ends tracking and fires
+`onDidClose` for what was still followed. Callbacks arrive in observation order,
+one at a time, but are not ordered against a separate `workbench.observe` of
+the same package, so reconcile against live queries, not event order. Tracking
+does not wait for `launched`.
+
 The bundled [project registry](../../extensions/@knot/projects/src/) is a
-complete observer: it waits for `launched`, then tracks windows and documents.
+complete observer: it waits for `launched`, then tracks windows with `workbench.observe` and documents with `documents.track`.
 
 ## Compare texts
 
