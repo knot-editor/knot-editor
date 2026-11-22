@@ -1,4 +1,4 @@
-import { commands, editor, workbench, keymaps, platform, providers } from "knot";
+import { commands, editor, workbench, keymaps, platform, providers, completionContract, pasteContract } from "knot";
 import type { Buffer, CommandInfo, CommandTarget, Disposable, HostError, HostErrorCode } from "knot";
 
 void commands.register("described", async () => {}, {
@@ -142,7 +142,8 @@ const checkCompletion: import("knot").CompletionProvider = {
     return [{ label: request.prefix, insertText: request.prefix }];
   },
 };
-await providers.register("editor.completion", checkCompletion);
+await completionContract.serve(checkCompletion);
+await pasteContract("markdown").serve({ providePaste: (request) => (request.text === "" ? null : request.selectedText) });
 const keyResult: void = keymaps.bind("cmd-k", { name: "check", arguments: null }, { view: "editor" });
 keymaps.unbind("cmd-k", null);
 void keyResult;

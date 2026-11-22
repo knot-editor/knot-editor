@@ -1,5 +1,5 @@
 // API version 1 authoring example.
-import { commands, documents, editor, workbench, keymaps, providers } from "knot";
+import { commands, documents, editor, workbench, keymaps, completionContract } from "knot";
 
 /** @type {Set<import("knot").Disposable>} */
 const bufferOwnership = new Set();
@@ -88,7 +88,7 @@ const guideCompletion = {
     return [{ label: `${request.prefix}Guide`, insertText: `${request.prefix}Guide` }];
   },
 };
-const completion = await providers.register("editor.completion", guideCompletion);
+const completion = await completionContract.serve(guideCompletion);
 
 // These mutations commit together at the end of this V8 turn.
 keymaps.bind("cmd-g", { name: "guide.compose", arguments: { source: "key" } });

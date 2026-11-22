@@ -2083,7 +2083,39 @@ const LAYOUT: Knot.WindowLayout = {
   focused: null,
 };
 
+// The fake serves Knot's contracts as providers named `knot:completion` and
+// `knot:paste.<languageId>`, which a test calls through `providers.get`; it
+// validates nothing and never asks them itself.
+function knotContract(name: string, methods: string[]): any {
+  return Object.freeze({
+    name,
+    methods: Object.freeze({}),
+    serve: async (implementation: object) => {
+      if (implementation === null || typeof implementation !== "object") {
+        throw new TypeError(`serve requires an object with the methods of ${name}`);
+      }
+      for (const method of methods) {
+        if (typeof (implementation as any)[method] !== "function") {
+          throw new TypeError(`serve requires a ${method} method for ${name}`);
+        }
+      }
+      const provider = { name: `knot:${name}`, implementation, methods };
+      state.providers.push(provider);
+      return {
+        ...disposers(async () => {
+          state.providers = state.providers.filter((candidate) => candidate !== provider);
+        }),
+      };
+    },
+  });
+}
+
 export const api: KnotApi = {
+  completionContract: knotContract("completion", ["provideCompletions"]),
+  pasteContract: (languageId) => {
+    if (typeof languageId !== "string" || languageId === "") throw new TypeError("pasteContract requires a language ID");
+    return knotContract(`paste.${languageId}`, ["providePaste"]);
+  },
   documents: {
     list: async () => [...state.documents.values()].map(documentInfo),
     get: async (id) => {

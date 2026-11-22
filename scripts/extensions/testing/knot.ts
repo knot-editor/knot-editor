@@ -9,6 +9,7 @@ export { homeUri };
 export const {
   commands,
   completion,
+  completionContract,
   documents,
   editor,
   files,
@@ -17,6 +18,7 @@ export const {
   keymaps,
   languages,
   menus,
+  pasteContract,
   platform,
   processes,
   providers,

@@ -35,3 +35,17 @@ test("a provider sees the caller's window", async () => {
   });
   assert.equal(await (await providers.get<{ same(): Promise<boolean> }>("sample.window"))!.same(), true);
 });
+
+test("Knot's contracts are served as providers the test calls by name", async () => {
+  const { completionContract, pasteContract } = await import("knot");
+  await completionContract.serve({ provideCompletions: (request) => [{ label: request.prefix, insertText: request.prefix }] });
+  const served = await pasteContract("markdown").serve({ providePaste: () => "answer" });
+  const completion = (await providers.get<{ provideCompletions(request: unknown): Promise<unknown> }>("knot:completion"))!;
+  assert.deepEqual(await completion.provideCompletions({ prefix: "a" }), [{ label: "a", insertText: "a" }]);
+  const paste = (await providers.get<{ providePaste(request: unknown): Promise<unknown> }>("knot:paste.markdown"))!;
+  assert.equal(await paste.providePaste({}), "answer");
+  await served[Symbol.asyncDispose]();
+  assert.equal(await providers.get("knot:paste.markdown"), null);
+  assert.throws(() => pasteContract(""), TypeError);
+  await assert.rejects(completionContract.serve({} as never), TypeError);
+});
