@@ -169,6 +169,10 @@ declare module "knot" {
     readonly document: DocumentInfo;
     readonly presentation: PresentationInfo;
   }
+  export interface TrackedDocument {
+    onDidChange(listener: (now: DocumentInfo, before: DocumentInfo) => void | Promise<void>): Disposable;
+    onDidClose(listener: () => void | Promise<void>): Disposable;
+  }
   export const documents: Readonly<{
     list(): Promise<readonly DocumentInfo[]>;
     get(id: DocumentId): Promise<DocumentInfo | null>;
@@ -182,6 +186,17 @@ declare module "knot" {
     /** Presents a shared live document, reusing its tab in the destination window.
      * Rejects DocumentNotFound after final closure. */
     present(id: DocumentId, options?: DocumentDestinationOptions): Promise<DocumentPresentation>;
+    /**
+     * Follows every open document. The listener runs for each document already
+     * open, then for each one opened later, and may register `onDidChange` and
+     * `onDidClose` on the tracked document. Callbacks are delivered in
+     * workbench-observation order, one at a time. `onDidChange` reports a
+     * change of kind, resource, dirty state, or language with the document
+     * now and before; revision-only changes are silent, so read text through
+     * the buffer. `onDidClose` fires when the document closes or when the
+     * returned disposable ends tracking. Does not wait for `launched`.
+     */
+    track(listener: (document: DocumentInfo, tracked: TrackedDocument) => void | Promise<void>): Promise<Disposable>;
     /** Replaces the text of a document that has a file with the file's, as one
      * line-diff edit that Undo takes back, and marks it clean. Resolves once the
      * reload commits.

@@ -1474,3 +1474,162 @@ await commands.register("indentation.write", async () => {
     assert_eq!(tab_size(&model, cx), Some(8.into()));
     host.update(cx, |host, cx| host.unload(key, cx).unwrap());
 }
+
+fn load_tracking_fixture(
+    host: &Entity<ProductExtensionHost>,
+    id: u64,
+    source: &'static str,
+    ready: &'static str,
+    cx: &mut TestAppContext,
+) -> knot_protocol::ExtensionKey {
+    use knot_protocol::ExtensionKey;
+    let key = ExtensionKey::new(ExtensionId::new(id), ExtensionLifecycleId::new(1));
+    host.update(cx, |host, cx| {
+        let execution = host.load_test_source(key, source).unwrap();
+        cx.spawn(async move |_, _| {
+            execution.await.unwrap();
+        })
+        .detach();
+    });
+    wait_for_api_condition(cx, |cx| {
+        cx.global::<ApplicationProductCommands>()
+            .0
+            .read(cx)
+            .catalog()
+            .borrow()
+            .resolve(ready)
+            .is_ok()
+    });
+    key
+}
+
+#[gpui::test]
+fn tracked_documents_deliver_a_snapshot_then_new_documents_and_filter_changes(
+    cx: &mut TestAppContext,
+) {
+    let documents = install_globals(cx);
+    let host = cx.update(extensions::host::install);
+    let before = cx.update(|cx| create_untitled_document(&documents, cx));
+    let before_model = cx.read(|cx| documents.read(cx).get(before).unwrap().model().clone());
+    let window = headless_window(before, before_model.clone(), cx);
+    let native_window = Headless;
+    let key = load_tracking_fixture(
+        &host,
+        720,
+        r#"
+import { commands, documents, workbench } from "knot";
+const log = [], order = [];
+await workbench.observe(event => {
+  if (event.type === "documentOpened" || event.type === "documentChanged" || event.type === "documentClosed") order.push(`observe:${event.type}`);
+});
+const tracker = await documents.track(async (document, tracked) => {
+  order.push("track:open");
+  log.push(`open:${document.kind}`);
+  await tracked.onDidChange((now, was) => { order.push("track:change"); log.push(`change:${was.dirty}>${now.dirty}`); });
+  const gone = await tracked.onDidClose(() => { order.push("track:close"); log.push("close"); });
+});
+const steps = [
+  ["open:untitled"],
+  ["open:untitled", "open:untitled"],
+  ["open:untitled", "open:untitled", "change:false>true"],
+  ["open:untitled", "open:untitled", "change:false>true", "change:true>false"],
+  ["open:untitled", "open:untitled", "change:false>true", "change:true>false", "close"],
+  ["open:untitled", "open:untitled", "change:false>true", "change:true>false", "close", "close"],
+  ["open:untitled", "open:untitled", "change:false>true", "change:true>false", "close", "close"],
+];
+let next = 0;
+await commands.register("track.step", () => {
+  const expected = JSON.stringify(steps[next++]);
+  if (JSON.stringify(log) !== expected) throw new Error(`step ${next - 1}: ${JSON.stringify(log)}`);
+});
+// Each subscription keeps its own order; the two are not ordered against each other.
+await commands.register("track.streams", () => {
+  const stream = (prefix) => order.filter((entry) => entry.startsWith(prefix)).map((entry) => entry.slice(prefix.length));
+  const observed = JSON.stringify(stream("observe:"));
+  const tracked = JSON.stringify(stream("track:"));
+  if (observed !== JSON.stringify(["documentOpened", "documentChanged", "documentChanged", "documentChanged", "documentClosed"])) throw new Error(`observe ${observed}`);
+  if (tracked !== JSON.stringify(["open", "open", "change", "change", "close"])) throw new Error(`track ${tracked}`);
+});
+await commands.register("track.dispose", async () => { await tracker[Symbol.asyncDispose](); });
+"#,
+        "track.dispose",
+        cx,
+    );
+    let run = |name: &'static str, cx: &mut TestAppContext| {
+        wait_for_command(
+            dispatch_product_command(&window, native_window, name, cx),
+            cx,
+        )
+    };
+    let step = |cx: &mut TestAppContext| {
+        assert_eq!(run("track.step", cx), CommandOutcome::Completed);
+    };
+    // Documents open before tracking start are delivered first. The
+    // fixture's own `workbench.observe` and the tracker's make two.
+    step(cx);
+    cx.read(|cx| assert_eq!(host.read(cx).application_observer_count(), 2));
+    let second = cx.update(|cx| create_untitled_document(&documents, cx));
+    let second_model = cx.read(|cx| documents.read(cx).get(second).unwrap().model().clone());
+    step(cx);
+    // Only the first edit changes the dirty state; later edits are revision-only.
+    second_model.update(cx, |model, cx| {
+        model.replace(0..0, "edit").unwrap();
+        cx.notify();
+    });
+    second_model.update(cx, |model, cx| {
+        model.replace(0..0, "more").unwrap();
+        cx.notify();
+    });
+    step(cx);
+    second_model.update(cx, |model, cx| {
+        model.undo().unwrap();
+        model.undo().unwrap();
+        cx.notify();
+    });
+    step(cx);
+    cx.update(|cx| documents.update(cx, |documents, cx| documents.remove(second, cx)));
+    step(cx);
+    cx.run_until_parked();
+    assert_eq!(run("track.streams", cx), CommandOutcome::Completed);
+    // Disposal ends tracking and releases what is still followed.
+    assert_eq!(run("track.dispose", cx), CommandOutcome::Completed);
+    step(cx);
+    cx.run_until_parked();
+    cx.read(|cx| assert_eq!(host.read(cx).application_observer_count(), 1));
+    cx.update(|cx| create_untitled_document(&documents, cx));
+    step(cx);
+    host.update(cx, |host, cx| host.unload(key, cx).unwrap());
+}
+
+#[gpui::test]
+fn unloading_an_extension_ends_its_document_tracking(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    let host = cx.update(extensions::host::install);
+    let first = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(first).unwrap().model().clone());
+    let window = headless_window(first, model, cx);
+    let native_window = Headless;
+    let key = load_tracking_fixture(
+        &host,
+        721,
+        r#"
+import { commands, documents } from "knot";
+await documents.track(() => {});
+await commands.register("track.ready", () => {});
+"#,
+        "track.ready",
+        cx,
+    );
+    assert_eq!(
+        wait_for_command(
+            dispatch_product_command(&window, native_window, "track.ready", cx),
+            cx
+        ),
+        CommandOutcome::Completed
+    );
+    cx.run_until_parked();
+    cx.read(|cx| assert_eq!(host.read(cx).application_observer_count(), 1));
+    host.update(cx, |host, cx| host.unload(key, cx).unwrap());
+    cx.run_until_parked();
+    cx.read(|cx| assert_eq!(host.read(cx).application_observer_count(), 0));
+}

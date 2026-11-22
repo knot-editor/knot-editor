@@ -4,7 +4,7 @@ import {
   storageRead, storageWrite, storageDelete, storageList,
   historyRecent, historyRecord, historyForget, historyOrder,
   recoveryList, recoveryRetain, recoveryRelease, recoveryRestore,
-  observeWorkbench, closePresentation, openEditor, replaceWindows, captureLayout,
+  observeWorkbench, trackDocuments, closePresentation, openEditor, replaceWindows, captureLayout,
   openDocument, createUntitled, presentDocument, reloadDocument, saveDocument, listDocuments, getDocument, setDocumentLanguage, listWindows, getWindow, openWindow, focusWindow, getWorkspace, openFolder, replaceWorkspaceRoots, pickFolder, readFileText, listFiles, searchFiles, isFileIgnored, statFile, writeFileText, createFile, createDirectory, renameFile, copyFile, revealFile, deleteFile, watchFiles, runProcess, spawnProcess, openTerminal,
   invalidCommandArguments,
   unavailableCommand,
@@ -100,7 +100,7 @@ export const workbench = Object.freeze({
 export const menus = Object.freeze({ add: addMenuItem }) satisfies typeof Declared.menus;
 export const completion = Object.freeze({ match: matchCandidates }) satisfies typeof Declared.completion;
 export { completionContract, pasteContract };
-export const documents = Object.freeze({ list: listDocuments, get: getDocument, open: openDocument, createUntitled, present: presentDocument, reload: reloadDocument, save: saveDocument, setLanguage: setDocumentLanguage }) satisfies typeof Declared.documents;
+export const documents = Object.freeze({ list: listDocuments, get: getDocument, open: openDocument, createUntitled, present: presentDocument, reload: reloadDocument, save: saveDocument, setLanguage: setDocumentLanguage, track: trackDocuments }) satisfies typeof Declared.documents;
 export const languages = Object.freeze({ register: registerLanguage, associate: associateLanguage, get: getLanguage, list: listLanguages, grammars: listGrammars }) satisfies typeof Declared.languages;
 export const settings = Object.freeze({ define: defineSetting, set: setSettings, get: getSetting, reset: resetSetting, observe: observeSetting }) satisfies typeof Declared.settings;
 export const terminals = Object.freeze({ open: openTerminal }) satisfies typeof Declared.terminals;

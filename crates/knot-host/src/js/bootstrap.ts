@@ -2758,6 +2758,79 @@ globalThis.__knotDispatchApplicationChange = async (subscription, value) => {
   await listener(Object.freeze({ type: value.type, sequence: value.sequence, ...payload }));
 };
 
+// Follows every open document over one private workbench observation. A
+// document's callbacks take turns with the listener, in observation order.
+export async function trackDocuments(listener: unknown) {
+  expectFunction(listener, "documents.track requires a listener");
+  type Entry = { info: Native; changed: Set<Fn>; closed: Set<Fn> };
+  const entries = new Map<string, Entry>();
+  const turn: { last?: Promise<unknown> } = {};
+  let active = true;
+  let watermark = 0;
+  let release!: () => void;
+  const ready = new Promise<void>((resolve) => { release = resolve; });
+  const guarded = async (callback: Fn, ...args: unknown[]) => {
+    try { await callback(...args); } catch (error) { console.error(error); }
+  };
+  const open = async (info: Native) => {
+    const entry: Entry = { info, changed: new Set(), closed: new Set() };
+    entries.set(info.id, entry);
+    const subscription = (set: Set<Fn>) => (callback: unknown) => {
+      expectFunction(callback, "tracked document requires a listener");
+      const registered = callback as Fn;
+      set.add(registered);
+      return disposableHandle({ dispose: async () => { set.delete(registered); } });
+    };
+    await guarded(listener as Fn, info, Object.freeze({
+      onDidChange: subscription(entry.changed),
+      onDidClose: subscription(entry.closed),
+    }));
+  };
+  const same = (a: Native, b: Native) => a.kind === b.kind && a.resourceUri === b.resourceUri
+    && a.dirty === b.dirty && a.language === b.language;
+  const close = async (id: string) => {
+    const entry = entries.get(id);
+    if (!entry) return;
+    entries.delete(id);
+    for (const callback of [...entry.closed]) await guarded(callback);
+  };
+  const deliver = (event: Native) => inTurn(turn, "last", async () => {
+    await ready;
+    if (!active || event.sequence <= watermark) return;
+    if (event.type === "documentOpened") {
+      if (!entries.has(event.document.id)) await open(event.document);
+    } else if (event.type === "documentChanged") {
+      const entry = entries.get(event.document.id);
+      if (!entry) { await open(event.document); return; }
+      const before = entry.info;
+      entry.info = event.document;
+      if (same(before, event.document)) return;
+      for (const callback of [...entry.changed]) await guarded(callback, event.document, before);
+    } else if (event.type === "documentClosed") {
+      await close(event.document);
+    }
+  });
+  const observation = await observeWorkbench(deliver);
+  watermark = observation.watermark;
+  const owned = ownership(() => { active = false; }, () => observation[Symbol.asyncDispose]());
+  const handle = disposableHandle({
+    async dispose() {
+      await owned.dispose();
+      // The lifecycle ended: every document still followed is released.
+      await inTurn(turn, "last", async () => {
+        for (const id of [...entries.keys()]) await close(id);
+      });
+    },
+  });
+  // Events that arrived meanwhile wait behind the snapshot's delivery.
+  void (async () => {
+    for (const info of observation.snapshot.documents) {
+      if (active) await open(info);
+    }
+  })().finally(release);
+  return handle;
+}
+
 export async function storageRead(key: unknown) {
   const result = await request("storageRead", string(key, "storage key must be text"));
   return Object.freeze(result.found ? { found: true, value: validateJsonValue(result.value) } : { found: false });
