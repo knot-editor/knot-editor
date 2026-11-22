@@ -116,14 +116,14 @@ value is its own frozen descriptor; `s.void()` marks a missing argument or
 result and carries null; `s.optional(x)` is only an object field and means
 absent; `s.nullable(x)` is `union([x, null()])`; a violation reads
 `files: result[1].label: expected string, found number 2 (the provider's schema)`.
-Checkpoint 3 adds `serve`/`client`, the call-context parameter of
+Checkpoint 4 adds `serve`/`client`, the call-context parameter of
 `ContractImplementation`, and the package/contract prefix on violations.
 
 ### 2. Host JavaScript in TypeScript, with unit tests
 
 Write the host's own modules in TypeScript, type-checked against the public
 declarations, and unit-test them in Node before the transport work grows
-them. Not specific to contracts; done here because checkpoints 3–5 change
+them. Not specific to contracts; done here because checkpoints 4–6 change
 these files heavily.
 
 - **Deliverables:** `bootstrap.js`, `knot.js`, and `contract.js` become
@@ -131,7 +131,8 @@ these files heavily.
   lockfile-pinned `tsc` and embeds, as the bundled packages are today;
   `knot.d.ts` stays the hand-written public contract, and the build fails
   when the `"knot"` and `"knot/contract"` implementations stop matching what
-  it declares; the private native bindings get a typed declaration; `node:test`
+  it declares; the private native bindings get a typed declaration, the only
+  place host sources may use `any`; `node:test`
   unit tests for the host modules with the native bindings stubbed, starting
   with the schema builder (moved from `scripts/extensions/testing/schemas.test.ts`)
   and the boundary helpers such as `validateJsonValue`, argument
@@ -144,8 +145,15 @@ these files heavily.
   V8 module specifiers, error locations, and the
   private-bootstrap import rule in
   [modules.rs](../../crates/knot-host/src/engine/modules.rs) keep working.
-  The Node tests' `register.mjs` maps `"knot/contract"` to the compiled
-  builder. Update [development](../development.md) where it describes what
+  Conformance follows the fake host's `api: KnotApi` in
+  [host.ts](../../scripts/extensions/testing/host.ts): each exported group is
+  written with `satisfies` against `typeof import("knot")`, so handler
+  parameters are inferred from the declaration (its method syntax would
+  otherwise accept a narrower handler), plus a type-level check that the
+  facade's export names equal the declaration's in both directions, applied
+  to the real and the fake host alike. A `just check` step rejects `any` in
+  host sources outside the bindings declaration. The Node tests'
+  `register.mjs` maps `"knot/contract"` to the compiled builder. Update [development](../development.md) where it describes what
   `tsc` builds and the `knot.d.ts` rebuild trigger.
 - **Validation:** existing V8 engine and product tests pass unchanged; an
   intentional mismatch between an implementation and `knot.d.ts` fails the
@@ -155,7 +163,26 @@ these files heavily.
 - **Review gate:** the conformance approach (how an implementation is tied to
   `knot.d.ts`) and the unit-test harness shape agreed; no behavior change.
 
-### 3. Cross-isolate transport: manifest, import resolution, serve/client
+### 3. Run the declared API against the real host
+
+Prove at runtime that the real host accepts what `knot.d.ts` declares, the
+drift types cannot catch (an option declared but rejected or ignored).
+
+- **Deliverables:** grow the authoring examples under
+  `scripts/extensions/examples/` (or add one) so each API group is called
+  with its declared option shapes, run by the existing installed-package
+  startup test.
+- **Implementation context:** the examples are type-checked by
+  `node tasks.mjs check` and already run in the real app by
+  [startup.rs](../../src/app/product/tests/startup.rs:468); keep each
+  example a readable authoring sample, so exhaustive cases go in a separate
+  example file rather than into the guide's samples. Later checkpoints extend
+  it as they add API.
+- **Validation:** the startup test passes; a deliberately rejected declared
+  option fails it (checked once by hand).
+- **Review gate:** coverage of the API groups agreed.
+
+### 4. Cross-isolate transport: manifest, import resolution, serve/client
 
 Make a fixture consumer call a fixture provider through a contract, with
 validation on the boundary.
@@ -188,13 +215,13 @@ validation on the boundary.
 - **Review gate:** a two-package fixture calling through a contract in a
   product test; API wording in `knot.d.ts` reviewed.
 
-### 4. Migrate the native-interpreted providers
+### 5. Migrate the native-interpreted providers
 
 Move `editor.completion` and `editor.paste.<languageId>` onto Knot-defined
 contracts; native aggregation and failure isolation stay as they are.
 
 - **Implementation context:** Knot exports the two contract values from
-  `"knot"`; serve-side registration feeds the same registry checkpoint 3
+  `"knot"`; serve-side registration feeds the same registry checkpoint 4
   built; native callers in
   [semantics.rs](../../src/app/extensions/semantics.rs) (completion) and
   the paste path in `src/app/editor/` switch from name/method strings to
@@ -208,7 +235,7 @@ contracts; native aggregation and failure isolation stay as they are.
   new path; a provider returning malformed items fails only its own part.
 - **Review gate:** no behavior change visible in completion or paste.
 
-### 5. Migrate `workspace.*` and remove `providers.*`
+### 6. Migrate `workspace.*` and remove `providers.*`
 
 Move the bundled package-to-package providers onto a published contract
 and delete the old mechanism.
@@ -229,7 +256,7 @@ and delete the old mechanism.
   cases, full `just check`.
 - **Review gate:** `providers.*` gone from the public API.
 
-### 6. Document
+### 7. Document
 
 - **Deliverables:** a contract example under
   `scripts/extensions/examples/`; update
@@ -244,9 +271,9 @@ and delete the old mechanism.
 
 - Contract-graph purity is enforced by import restriction, not by
   sandboxing the evaluated module; a contract module with side effects
-  would run them in every consumer. The checkpoint-3 tests pin the
+  would run them in every consumer. The checkpoint-4 tests pin the
   restriction; the guide states the rule.
-- Validation sits on the completion path while typing; checkpoint 4
+- Validation sits on the completion path while typing; checkpoint 5
   measures completion latency before and after.
 - Native-interpreted contracts invert the dependency direction (Knot is
   the consumer). Keep their aggregation in native code rather than
