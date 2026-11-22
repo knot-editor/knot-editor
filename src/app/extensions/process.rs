@@ -300,7 +300,7 @@ mod tests {
         let shell = directory.path().join("shell");
         std::fs::write(
             &shell,
-            "#!/bin/sh\nshift 3\nKNOT_FROM_SHELL=yes eval \"$1\"\n",
+            "#!/bin/sh\nshift 3\nKNOT_FROM_SHELL=yes\nexport KNOT_FROM_SHELL\neval \"$1\"\n",
         )
         .unwrap();
         use std::os::unix::fs::PermissionsExt as _;
