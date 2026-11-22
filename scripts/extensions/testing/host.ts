@@ -194,6 +194,7 @@ function emptyState() {
     colors: new Map<string, Knot.ColorDefinition>(),
     statusItems: [] as FakeStatusItem[],
     menuItems: [] as FakeMenuItem[],
+    decorationSources: [] as Map<string, Knot.ResourceDecoration>[],
     served: [] as FakeProvider[],
   };
 }
@@ -1253,6 +1254,12 @@ export function statusItems(target: Knot.WindowTarget): (Knot.StatusItemOptions 
 }
 
 /** The items added to a menu location, in registration order. */
+/** The decorations the packages under test hold on `uri`, oldest source first. */
+export function decorationsOf(uri: string): Knot.ResourceDecoration[] {
+  const key = checkedFileUri(uri);
+  return state.decorationSources.flatMap((source) => source.get(key) ?? []);
+}
+
 export function menuItems(location: Knot.MenuLocation): Knot.MenuItemOptions[] {
   return state.menuItems.filter((entry) => entry.location === location).map((entry) => entry.item);
 }
@@ -2620,6 +2627,47 @@ export const api: KnotApi = {
   processes: {
     run: notFaked("processes.run"),
     spawn: notFaked("processes.spawn"),
+  },
+  decorations: {
+    createSource: async () => {
+      const entries = new Map<string, Knot.ResourceDecoration>();
+      state.decorationSources.push(entries);
+      let live = true;
+      const assertLive = () => {
+        if (!live) throw hostError("OwnershipDisposed");
+      };
+      return {
+        set: async (decorations) => {
+          assertLive();
+          if (decorations === null || typeof decorations !== "object" || Array.isArray(decorations)) {
+            throw new TypeError("decorations must be an object of URIs");
+          }
+          const checked = Object.entries(decorations).map(([uri, decoration]) => {
+            const key = checkedFileUri(uri);
+            if (decoration === null) return [key, null] as const;
+            const badge = decoration.badge;
+            if (badge !== undefined) {
+              if ("icon" in badge ? badge.icon.length === 0 : [...new Intl.Segmenter().segment(badge.text)].length > 2 || badge.text.length === 0) {
+                throw new TypeError("invalid decoration badge");
+              }
+            }
+            return [key, { ...decoration }] as const;
+          });
+          for (const [key, decoration] of checked) {
+            if (decoration === null) entries.delete(key);
+            else entries.set(key, decoration);
+          }
+        },
+        clear: async () => {
+          assertLive();
+          entries.clear();
+        },
+        ...disposers(async () => {
+          live = false;
+          state.decorationSources = state.decorationSources.filter((source) => source !== entries);
+        }),
+      };
+    },
   },
   menus: {
     add: async (location, item) => {

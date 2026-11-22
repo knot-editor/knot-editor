@@ -1405,7 +1405,7 @@ declare module "knot" {
     | "DuplicateSetting" | "SettingTypeMismatch"
     | "UnknownCapture" | "DuplicateColor" | "ThemeRegistrationNotFound"
     | "DuplicateIcon" | "IconRegistrationNotFound"
-    | "StatusItemRegistrationNotFound" | "MenuItemRegistrationNotFound"
+    | "StatusItemRegistrationNotFound" | "DecorationSourceNotFound" | "MenuItemRegistrationNotFound"
     | "BarNotFound"
     | "KeymapPresetRegistrationNotFound"
     | "EntitlementNotDeclared" | "ProgramNotFound" | "WorkingDirectoryNotFound"
@@ -2649,6 +2649,45 @@ declare module "knot" {
      * needs `view`. Not for menu bar locations. */
     readonly context?: string;
   }
+  /** What one source paints on a resource. */
+  export interface ResourceDecoration {
+    /** A theme color key that tints the label in trees and the title of a
+     * document tab. */
+    readonly color?: string;
+    /** Painted at the right of a tree row, in `color`, as an icon named in
+     * the icon registry or as one or two characters such as "M". */
+    readonly badge?: { readonly icon: string } | { readonly text: string };
+    /** Shown while the pointer rests on the row or tab. */
+    readonly tooltip?: string;
+    /** Also tint the ancestors of the resource with `color`, which only
+     * colors them. Defaults to false. */
+    readonly propagate?: boolean;
+  }
+  /**
+   * One source of resource decorations, which Knot paints wherever it shows a
+   * resource. The source keeps its own map from URI to decoration, and
+   * disposing it or tearing down the lifecycle removes all of them.
+   *
+   * When several sources decorate a URI, the color and the badge are each
+   * taken from the `error`, `warning`, or `info` decoration first, then from
+   * the most recently created source; tooltips are joined, one per line. A
+   * propagated color ranks below a color set directly on the ancestor.
+   */
+  export interface DecorationSource extends Disposable {
+    /** Change the named URIs, leaving the others as they are; null removes a
+     * URI's decoration. URIs are normalized as elsewhere, and decorations
+     * apply in every window.
+     * @throws TypeError for a malformed decoration, an unknown field, an
+     * empty icon name, or badge text that is not one or two characters;
+     * HostError with InvalidUri or Cancelled. */
+    set(decorations: Readonly<Record<string, ResourceDecoration | null>>): Promise<void>;
+    /** Remove every decoration of this source. */
+    clear(): Promise<void>;
+  }
+  export const decorations: Readonly<{
+    /** Create a source owned by this lifecycle. */
+    createSource(): Promise<DecorationSource>;
+  }>;
   export const menus: Readonly<{
     /** Adds a command to a menu until the returned handle or the owning
      * lifecycle is disposed.

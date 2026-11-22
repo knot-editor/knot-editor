@@ -1433,6 +1433,53 @@ export async function registerStatusItem(id: unknown, options: unknown) {
   });
 }
 
+const DECORATION_FIELDS = ["color", "badge", "tooltip", "propagate"];
+function decorationValue(uri: string, value: unknown) {
+  if (value === null) return null;
+  const entry = record(value, `decoration of ${uri} must be an object or null`);
+  for (const field of Object.keys(entry)) {
+    if (!DECORATION_FIELDS.includes(field)) throw new TypeError(`unknown decoration field: ${field}`);
+  }
+  let badge: Rec | null = null;
+  if (entry.badge != null) {
+    const given = record(entry.badge, "decoration badge must be { icon } or { text }");
+    const keys = Object.keys(given);
+    if (keys.length !== 1 || (keys[0] !== "icon" && keys[0] !== "text")) {
+      throw new TypeError("decoration badge must be { icon } or { text }");
+    }
+    const name = string(given[keys[0]], `decoration badge ${keys[0]} must be text`);
+    if (keys[0] === "icon") {
+      if (name.length === 0) throw new TypeError("decoration badge icon must be nonempty");
+    } else {
+      const length = [...new Intl.Segmenter().segment(name)].length;
+      if (length < 1 || length > 2) throw new TypeError("decoration badge text must be one or two characters");
+    }
+    badge = { [keys[0]]: name };
+  }
+  const propagate = entry.propagate ?? false;
+  if (typeof propagate !== "boolean") throw new TypeError("decoration propagate must be a boolean");
+  return { color: optionalText(entry.color), badge, tooltip: optionalText(entry.tooltip), propagate };
+}
+function decorationChanges(decorations: unknown) {
+  const entries = record(decorations, "decorations must be an object of URIs");
+  return Object.fromEntries(Object.entries(entries).map(([uri, value]) => [uri, decorationValue(uri, value)]));
+}
+export async function createDecorationSource() {
+  const source = await request("createDecorationSource");
+  const owned = ownership(() => {}, () => request("removeDecorationSource", source));
+  return Object.freeze({
+    async set(decorations: unknown) {
+      owned.assertActive();
+      await owned.track(request("setDecorations", source, decorationChanges(decorations)));
+    },
+    async clear() {
+      owned.assertActive();
+      await owned.track(request("clearDecorations", source));
+    },
+    [Symbol.asyncDispose]: () => owned.dispose(),
+  });
+}
+
 const MENU_LOCATIONS = ["tab", "content", "menubar.file", "menubar.edit", "menubar.view", "menubar.go"];
 export async function addMenuItem(location: unknown, item: unknown) {
   if (typeof location !== "string" || !MENU_LOCATIONS.includes(location)) throw new TypeError(`unknown menu location: ${String(location)}`);

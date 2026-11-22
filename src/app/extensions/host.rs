@@ -3787,6 +3787,7 @@ impl ProductExtensionHost {
         crate::app::themes::remove_lifecycle(key.extension, key.lifecycle, cx);
         crate::app::icons::remove_lifecycle(key.extension, key.lifecycle, cx);
         crate::app::status_bar::remove_lifecycle(key.extension, key.lifecycle, cx);
+        crate::app::resource_decorations::remove_lifecycle(key.extension, key.lifecycle, cx);
         crate::app::menus::remove_lifecycle(key.extension, key.lifecycle, cx);
         crate::app::commands::keymaps::remove_lifecycle(key.extension, key.lifecycle, cx);
         self.command_targets

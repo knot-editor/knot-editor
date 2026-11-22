@@ -33,6 +33,7 @@ mod processes;
 mod providers;
 mod recovery;
 mod reopen;
+mod resource_decorations;
 mod resource_drop;
 mod save_hygiene;
 mod sessions;

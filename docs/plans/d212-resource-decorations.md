@@ -1,6 +1,6 @@
 # D212 — Resource decorations
 
-Status: 🚧 approved, not started. Source: [roadmap D212](../roadmap.md), part
+Status: 🚧 in progress; checkpoint 1 is implemented and awaits its review gate. Source: [roadmap D212](../roadmap.md), part
 of the [version control plan](vcs.md), whose architecture section this plan
 refines without reopening.
 
@@ -110,7 +110,7 @@ text. D213 chooses between letters and icons.
 
 ## Checkpoints
 
-### 1. Registry and extension API
+### 1. Registry and extension API ✅
 
 Deliverables: a `knot-model` registry of decoration sources owned per
 lifecycle, with the merge and propagation rules and a lookup by URI; the
@@ -128,6 +128,13 @@ two characters, URI normalization, partial `set`, `clear`, dispose, and
 teardown.
 
 Review gate: the API shape and the merge rules before anything paints.
+Pending the user's review.
+
+Scope decisions: a propagated color fills in on an ancestor whose direct
+decoration has no color; a badge ranks by the severity of the decoration that
+carries it; the model keeps a resolved map rebuilt on each change, so a lookup
+per painted row is one hash probe; the in-memory `knot/testing` host fakes the
+API with `decorationsOf(uri)`.
 
 **Implementation context:**
 - Mirror `crates/knot-model/src/status_bar.rs` (lifecycle-owned registry,

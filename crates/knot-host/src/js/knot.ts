@@ -31,6 +31,7 @@ import {
   clearNotifications,
   registerStatusItem,
   addMenuItem,
+  createDecorationSource,
   matchCandidates,
   completionContract, pasteContract,
   registerView,
@@ -97,6 +98,7 @@ export const workbench = Object.freeze({
   registerStatusItem,
 }) satisfies typeof Declared.workbench;
 
+export const decorations = Object.freeze({ createSource: createDecorationSource }) satisfies typeof Declared.decorations;
 export const menus = Object.freeze({ add: addMenuItem }) satisfies typeof Declared.menus;
 export const completion = Object.freeze({ match: matchCandidates }) satisfies typeof Declared.completion;
 export { completionContract, pasteContract };

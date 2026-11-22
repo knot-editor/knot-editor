@@ -39,6 +39,7 @@ mod menus;
 mod notifications;
 mod record_store;
 mod recovery;
+mod resource_decorations;
 mod scrollbar;
 mod settings;
 mod status_bar;

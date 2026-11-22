@@ -10,6 +10,7 @@ export const {
   commands,
   completion,
   completionContract,
+  decorations,
   diff,
   documents,
   editor,

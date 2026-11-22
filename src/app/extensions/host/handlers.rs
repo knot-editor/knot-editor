@@ -6218,6 +6218,167 @@ async fn unregister_status_item(
     })?
 }
 
+use crate::app::resource_decorations::{
+    ApplicationResourceDecorations, Decoration, DecorationOwner,
+};
+
+/// Failures of a resource decoration operation.
+#[derive(Debug, HostError)]
+pub(crate) enum DecorationError {
+    #[error(transparent)]
+    Open(OpenError),
+    #[error(
+        code = "DecorationSourceNotFound",
+        message = "DecorationSourceNotFound"
+    )]
+    SourceNotFound,
+}
+
+impl From<AccessError> for DecorationError {
+    fn from(error: AccessError) -> Self {
+        Self::Open(error.into())
+    }
+}
+
+impl From<OpenError> for DecorationError {
+    fn from(error: OpenError) -> Self {
+        Self::Open(error)
+    }
+}
+
+fn decoration_owner(context: &HostContext) -> DecorationOwner {
+    DecorationOwner {
+        extension: context.request.extension,
+        lifecycle: context.request.lifecycle,
+    }
+}
+
+#[host_operation("createDecorationSource")]
+async fn create_decoration_source(context: HostContext, _: ()) -> Result<u64, DecorationError> {
+    let owner = decoration_owner(&context);
+    Ok(context.foreground(|_, cx| {
+        cx.default_global::<ApplicationResourceDecorations>()
+            .0
+            .create_source(owner)
+    })?)
+}
+
+/// The changes one `set` makes to a source: URIs mapped to a decoration, or
+/// to null to remove it.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct DecorationChanges {
+    source: u64,
+    changes: Vec<(String, Option<Decoration>)>,
+}
+
+impl HostArguments for DecorationChanges {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        let source = reader.integer(2)?;
+        let serde_json::Value::Object(entries) = setting_value(reader.command_arguments(3)?) else {
+            return Err(DecodeError::Type("decorations must be an object"));
+        };
+        let changes = entries
+            .into_iter()
+            .map(|(uri, value)| {
+                let decoration = match value {
+                    serde_json::Value::Null => None,
+                    value => {
+                        let decoration: Decoration = serde_json::from_value(value)
+                            .map_err(|_| DecodeError::Type("invalid decoration"))?;
+                        if !decoration.is_valid() {
+                            return Err(DecodeError::Type("invalid decoration badge"));
+                        }
+                        Some(decoration)
+                    }
+                };
+                Ok((uri, decoration))
+            })
+            .collect::<Result<_, DecodeError>>()?;
+        Ok(Self { source, changes })
+    }
+}
+
+#[host_operation("setDecorations")]
+async fn set_decorations(
+    context: HostContext,
+    arguments: DecorationChanges,
+) -> Result<(), DecorationError> {
+    let owner = decoration_owner(&context);
+    let providers = context.foreground(|_, cx| KnotWindow::filesystems(cx))?;
+    let mut changes = Vec::with_capacity(arguments.changes.len());
+    for (uri, decoration) in arguments.changes {
+        let uri = knot_model::files::normalize(&providers, &uri)
+            .await
+            .map_err(|error| product::operations::resource_error(error.into()))?;
+        changes.push((uri, decoration));
+    }
+    context.foreground(|_, cx| {
+        match cx.default_global::<ApplicationResourceDecorations>().0.set(
+            owner,
+            arguments.source,
+            changes,
+        ) {
+            Some(true) => {
+                crate::app::resource_decorations::refresh(cx);
+                Ok(())
+            }
+            Some(false) => Ok(()),
+            None => Err(DecorationError::SourceNotFound),
+        }
+    })?
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct DecorationSourceId(u64);
+
+impl HostArguments for DecorationSourceId {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self(reader.integer(2)?))
+    }
+}
+
+#[host_operation("clearDecorations")]
+async fn clear_decorations(
+    context: HostContext,
+    arguments: DecorationSourceId,
+) -> Result<(), DecorationError> {
+    let owner = decoration_owner(&context);
+    context.foreground(|_, cx| {
+        match cx
+            .default_global::<ApplicationResourceDecorations>()
+            .0
+            .clear(owner, arguments.0)
+        {
+            Some(true) => {
+                crate::app::resource_decorations::refresh(cx);
+                Ok(())
+            }
+            Some(false) => Ok(()),
+            None => Err(DecorationError::SourceNotFound),
+        }
+    })?
+}
+
+#[host_operation("removeDecorationSource")]
+async fn remove_decoration_source(
+    context: HostContext,
+    arguments: DecorationSourceId,
+) -> Result<(), DecorationError> {
+    let owner = decoration_owner(&context);
+    context.foreground(|_, cx| {
+        if cx
+            .default_global::<ApplicationResourceDecorations>()
+            .0
+            .remove_source(owner, arguments.0)
+        {
+            crate::app::resource_decorations::refresh(cx);
+            Ok(())
+        } else {
+            Err(DecorationError::SourceNotFound)
+        }
+    })?
+}
+
 use crate::app::menus::{ApplicationMenus, MenuItem, MenuLocation, MenuOwner};
 
 /// Failures of a menu item operation.
