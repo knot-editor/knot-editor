@@ -1,6 +1,6 @@
 # D199 — Typed contracts between packages
 
-Status: 🚧 checkpoints 1–3 done; checkpoint 4 implemented, awaiting review. Item: [D199](../roadmap.md#extension-platform-and-language-tooling),
+Status: 🚧 checkpoints 1–4 done. Item: [D199](../roadmap.md#extension-platform-and-language-tooling),
 part of the [version control plan](vcs.md) (milestone 1, before D211).
 
 ## Outcome
@@ -146,66 +146,28 @@ pickers, input and confirmation prompts, `windows.open`/`focus`, the
 retain/restore/release, `terminals.open`, and `files.reveal`. Later
 checkpoints extend the example as they add API.
 
-### 4. Cross-isolate transport: manifest, import resolution, serve/client 🔍
+### 4. Cross-isolate transport: manifest, import resolution, serve/client ✅
 
-Make a fixture consumer call a fixture provider through a contract, with
-validation on the boundary.
-
-**Implemented, awaiting review.** ✅ manifest `contract` field (and
-`knot.schema.json`); ✅ bare-specifier resolution gated by `requires`, with
-the dependency's sources keyed under its own root in the consumer's graph;
-✅ contract-graph purity, the own contract graph compiled first so it is
-checked even when `main` does not import it; ✅ `serve`/`client`/`callContract`
-over the provider registry, which stores each registration's compiled schema
-and each consumer's binding. Decisions made while building it:
-
-- Each package's `"knot/contract"` resolves to its own small module that
-  wraps the shared builder with the package ID (`contractModule` in the
-  bootstrap), so ownership comes from module resolution; a second
-  `defineContract` of one name in a package throws when the module evaluates.
-- A self-call rejects at call time with `UnsupportedOperation`, as providers
-  did. New codes: `ContractNotFound` (nothing serves it at `client()`, or the
-  bound registration is gone) and `ContractViolation`, read as
-  `@example/provider greeter: greet: argument: expected string, found number 1 (the provider's schema)`;
-  a throwing method stays `ProviderFailure`.
-- `providers.*` and `callProvider` stay until checkpoint 6. The contract
-  cases live in [contracts.rs](../../src/app/product/tests/contracts.rs);
-  [providers.rs](../../src/app/product/tests/providers.rs) keeps the
-  completion and paste cases for checkpoint 5 and the personal-config
-  override for checkpoint 6.
-- ⏭️ Personal config importing a loaded package's contract moves to
-  checkpoint 6: its graph is captured before packages load, so it needs the
-  loaded packages' contract sources added when post-init runs.
-- The coverage example gains a contracts group (every schema kind, serve,
-  client, disposal).
-
-- **Deliverables:** `contract` field on the manifest; bare-specifier
-  resolution gated by `requires`; `serve`/`client` over a registry that
-  stores the schema descriptor per registration; validated dispatch
-  replacing the `callProvider` JSON passthrough.
-- **Implementation context:** manifest and capture in
-  [package.rs](../../crates/knot-model/src/extensions/package.rs:41)
-  (`Manifest`, `deny_unknown_fields` — update its tests); module
-  resolution in
-  [modules.rs](../../crates/knot-host/src/engine/modules.rs:301)
-  (`resolve_module_specifier` today allows only relative or `knot`);
-  contract sources come from the dependency's captured
-  `InstalledPackage.sources`, keyed under the consumer's graph without
-  evaluating the dependency's `main`; registry extends
-  [providers.rs](../../crates/knot-model/src/providers.rs); handlers
-  replace `registerProvider`/`getProvider`/`listProviders`/`callProvider`
-  in [handlers.rs](../../src/app/extensions/host/handlers.rs:2815),
-  keeping the `ProviderNotFound` / own-package / window-context behavior.
-  Startup ordering already follows `requires`
-  ([load.rs](../../crates/knot-model/src/extensions/load.rs)).
-- **Validation:** host engine tests for resolution gating, contract-graph
-  purity, and disposal; product tests in
-  [providers.rs tests](../../src/app/product/tests/providers.rs) rewritten
-  as contract cases: happy path, invalid argument, invalid result,
-  provider throw, disposed client, self-call rejection, stale-consumer
-  schema mismatch.
-- **Review gate:** a two-package fixture calling through a contract in a
-  product test; API wording in `knot.d.ts` reviewed.
+Done. A package declares `contract` in its manifest
+([package.rs](../../crates/knot-model/src/extensions/package.rs),
+`knot.schema.json`); a bare specifier naming a required package resolves to
+that package's contract module, keyed under its own root in the consumer's
+graph, without running its `main`
+([modules.rs](../../crates/knot-host/src/engine/modules.rs)). A contract graph
+imports only `"knot/contract"` and its own package's modules; the own contract
+graph is compiled first, so it is checked even when `main` does not import it.
+Each package's `"knot/contract"` is its own wrapper around the builder carrying
+the package ID, so ownership comes from module resolution, and a name defined
+twice in one package throws. `serve`/`client` go through the provider registry
+([providers.rs](../../crates/knot-model/src/providers.rs)), which keeps each
+registration's schema and each consumer's binding; a call validates against
+both schemas. New codes `ContractNotFound` and `ContractViolation` (read as
+`@example/provider greeter: greet: argument: expected string, found number 1 (the provider's schema)`);
+a throwing method stays `ProviderFailure` and a self-call rejects at call time
+with `UnsupportedOperation`. Product cases are in
+[contracts.rs](../../src/app/product/tests/contracts.rs); `providers.*` and
+its tests stay until checkpoints 5 and 6. Personal config importing contracts
+moved to checkpoint 6.
 
 ### 5. Migrate the native-interpreted providers
 
