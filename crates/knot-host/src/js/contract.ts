@@ -1,6 +1,8 @@
-// The "knot/contract" module: the schema builder `s` and `defineContract`.
-// A schema value is its own descriptor, frozen plain data the host compiles
-// and validates calls against; nothing here validates values.
+// The schema builder `s` and `defineContract`. A schema value is its own
+// descriptor, frozen plain data the host compiles and validates calls
+// against; nothing here validates values. Extensions import it through the
+// bootstrap's `contractModule`, which qualifies each contract with the
+// package defining it and adds `serve` and `client`.
 
 import type * as Declared from "knot/contract";
 
@@ -121,7 +123,7 @@ export const s = Object.freeze({
 export function defineContract<const M extends Declared.ContractMethods>(
   name: string,
   methods: M,
-): Declared.Contract<M> {
+): Pick<Declared.Contract<M>, "name" | "methods"> {
   if (typeof name !== "string" || name === "") throw new TypeError("defineContract requires a contract name");
   const input = plainObject(methods, "defineContract");
   const copy: Record<string, FnDescriptor> = Object.create(null);
@@ -131,7 +133,7 @@ export function defineContract<const M extends Declared.ContractMethods>(
     copy[method] = descriptor;
   }
   if (Object.keys(copy).length === 0) throw new TypeError("defineContract requires at least one method");
-  return Object.freeze({ name, methods: Object.freeze(copy) }) as unknown as Declared.Contract<M>;
+  return Object.freeze({ name, methods: Object.freeze(copy) as unknown as M });
 }
 
 // Fails the build when this module's exports and the public declaration

@@ -66,7 +66,7 @@ pub(super) fn evaluate_fixture_module(
     };
     let compiled = {
         let mut modules = state.modules.lock().unwrap();
-        compile_module_graph(try_catch, &mut modules, specifier, None)
+        compile_module_graph(try_catch, &mut modules, specifier, None, false)
     };
     let compiled = match compiled {
         Ok(compiled) => compiled,
@@ -191,7 +191,7 @@ pub fn validate_module_graph_entry(graph: &ModuleGraph, entry: &str) -> Result<(
     v8::tc_scope!(let try_catch, scope);
     let mut modules = ModuleRegistry::new(Some(graph));
     let blocked = blocked_post_init_import(&modules, entry);
-    compile_module_graph(try_catch, &mut modules, entry, blocked.as_deref())
+    compile_module_graph(try_catch, &mut modules, entry, blocked.as_deref(), false)
         .map(|_| ())
         .map_err(|failure| failure.report(try_catch, entry))
 }
@@ -206,11 +206,31 @@ pub(super) fn blocked_post_init_import(registry: &ModuleRegistry, entry: &str) -
     .flatten()
 }
 
+/// Compiles the package's own contract module before anything else, so every
+/// module it reaches is checked against the contract import rules.
+pub(super) fn compile_package_contract(
+    scope: &mut v8::PinScope<'_, '_>,
+    registry: &mut ModuleRegistry,
+) -> Result<(), ModuleCompileFailure> {
+    match registry
+        .package
+        .as_ref()
+        .and_then(|package| package.contract.clone())
+    {
+        Some(contract) => compile_module_graph(scope, registry, &contract, None, true).map(drop),
+        None => Ok(()),
+    }
+}
+
+/// Compiles `specifier` and the modules it imports. A module in a contract
+/// graph, which a required package's modules always are, may import only
+/// `"knot/contract"` and its package's modules other than the main one.
 pub(super) fn compile_module_graph(
     scope: &mut v8::PinScope<'_, '_>,
     registry: &mut ModuleRegistry,
     specifier: &str,
     blocked_import: Option<&str>,
+    contract: bool,
 ) -> Result<v8::Global<v8::Module>, ModuleCompileFailure> {
     if let Some(record) = registry
         .modules
@@ -261,18 +281,17 @@ pub(super) fn compile_module_graph(
             .map_err(|_| RuntimeErrorKind::Engine)?;
         let location = module.source_offset_to_location(request.get_source_offset());
         let request = request.get_specifier().to_rust_string_lossy(scope);
-        let resolved =
-            match resolve_module_specifier(&request, specifier, registry.package_root.as_deref()) {
-                Ok(resolved) => resolved,
-                Err(message) => {
-                    throw_module_error(scope, &message);
-                    return Err(ModuleCompileFailure::at_import(
-                        RuntimeErrorKind::ModuleResolution,
-                        specifier,
-                        location,
-                    ));
-                }
-            };
+        let resolved = match resolve_module_specifier(&request, specifier, registry, contract) {
+            Ok(resolved) => resolved,
+            Err(message) => {
+                throw_module_error(scope, &message);
+                return Err(ModuleCompileFailure::at_import(
+                    RuntimeErrorKind::ModuleResolution,
+                    specifier,
+                    location,
+                ));
+            }
+        };
         if blocked_import == Some(resolved.as_str()) {
             throw_module_error(scope, "pre-init cannot import post-init.js");
             return Err(ModuleCompileFailure::at_import(
@@ -280,6 +299,13 @@ pub(super) fn compile_module_graph(
                 specifier,
                 location,
             ));
+        }
+        if let Some(owner) = resolved.strip_prefix(OWNED_CONTRACT_PREFIX) {
+            let source = owned_contract_source(owner);
+            registry
+                .sources
+                .entry(resolved.clone())
+                .or_insert_with(|| source.into());
         }
         if !registry.sources.contains_key(&resolved) {
             let kind = if registry.package_root.is_some() {
@@ -299,45 +325,110 @@ pub(super) fn compile_module_graph(
             request,
             resolved: resolved.clone(),
         });
-        compile_module_graph(scope, registry, &resolved, blocked_import)?;
+        let contract = contract || registry.dependency_at(&resolved).is_some();
+        compile_module_graph(scope, registry, &resolved, blocked_import, contract)?;
     }
     Ok(global)
 }
 
+/// The `"knot/contract"` module of one owner: the shared builder, with
+/// contracts qualified by the owner.
+fn owned_contract_source(owner: &str) -> String {
+    format!(
+        "import {{ contractModule }} from {bootstrap};\nexport const {{ s, defineContract }} = contractModule({owner});\n",
+        bootstrap = serde_json::Value::from(PRIVATE_BOOTSTRAP_SPECIFIER),
+        owner = serde_json::Value::from(owner),
+    )
+}
+
+/// Who owns the contracts the module at `referrer` defines: the required
+/// package whose root holds it, else the graph's own package.
+fn contract_owner(registry: &ModuleRegistry, referrer: &str) -> String {
+    registry
+        .dependency_at(referrer)
+        .or(registry.package.as_ref())
+        .map(|package| package.package.to_string())
+        .or_else(|| registry.package_root.as_deref().map(str::to_owned))
+        .unwrap_or_else(|| "fixture".into())
+}
+
+const CONTRACT_IMPORTS: &str =
+    "a contract module may import only knot/contract and its own package's modules";
+
 pub(super) fn resolve_module_specifier(
     request: &str,
     referrer: &str,
-    package_root: Option<&str>,
+    registry: &ModuleRegistry,
+    contract: bool,
 ) -> Result<String, String> {
-    if request == PRIVATE_BOOTSTRAP_SPECIFIER && referrer != PUBLIC_FACADE_SPECIFIER {
-        return Err("Knot private bootstrap bindings are not importable by extensions".into());
+    let owned_contract = referrer.starts_with(OWNED_CONTRACT_PREFIX);
+    if request == PRIVATE_BOOTSTRAP_SPECIFIER {
+        return if referrer == PUBLIC_FACADE_SPECIFIER || owned_contract {
+            Ok(request.to_owned())
+        } else {
+            Err("Knot private bootstrap bindings are not importable by extensions".into())
+        };
     }
-    if [
-        PRIVATE_BOOTSTRAP_SPECIFIER,
-        PUBLIC_FACADE_SPECIFIER,
-        CONTRACT_SPECIFIER,
-    ]
-    .contains(&request)
-    {
-        return Ok(request.to_owned());
+    if request == CONTRACT_SPECIFIER {
+        return Ok(if referrer == PRIVATE_BOOTSTRAP_SPECIFIER {
+            request.to_owned()
+        } else {
+            format!(
+                "{OWNED_CONTRACT_PREFIX}{}",
+                contract_owner(registry, referrer)
+            )
+        });
     }
-    if let Some(package_root) = package_root {
-        if referrer == PUBLIC_FACADE_SPECIFIER
-            || referrer == CONTRACT_SPECIFIER
-            || (!request.starts_with("./") && !request.starts_with("../"))
-        {
+    if request == PUBLIC_FACADE_SPECIFIER {
+        return if contract {
+            Err(format!("{CONTRACT_IMPORTS}: {request}"))
+        } else {
+            Ok(request.to_owned())
+        };
+    }
+    let built_in = owned_contract
+        || [
+            PRIVATE_BOOTSTRAP_SPECIFIER,
+            PUBLIC_FACADE_SPECIFIER,
+            CONTRACT_SPECIFIER,
+        ]
+        .contains(&referrer);
+    if let Some(package_root) = registry.package_root.as_deref() {
+        if built_in || (!request.starts_with("./") && !request.starts_with("../")) {
+            if contract {
+                return Err(format!("{CONTRACT_IMPORTS}: {request}"));
+            }
+            if let Some(contract) = registry
+                .dependencies
+                .iter()
+                .filter(|_| !built_in)
+                .find(|dependency| &*dependency.package == request)
+                .and_then(|dependency| dependency.contract.as_deref())
+            {
+                return Ok(contract.to_owned());
+            }
             return Err(format!(
-                "extension import must be relative or knot: {request}"
+                "extension import must be relative, knot, knot/contract, or a required package: {request}"
             ));
         }
+        let dependency = registry.dependency_at(referrer);
+        let root = dependency.map_or(package_root, |dependency| &*dependency.root);
         let resolved = Url::parse(referrer)
             .and_then(|base| base.join(request))
             .map_err(|_| format!("invalid extension import: {request}"))?;
-        if !resolved.as_str().starts_with(package_root)
+        if !resolved.as_str().starts_with(root)
             || resolved.query().is_some()
             || resolved.fragment().is_some()
         {
             return Err(format!("extension import escapes package: {request}"));
+        }
+        let main = dependency
+            .or(registry.package.as_ref())
+            .map(|package| &*package.main);
+        if contract && main == Some(resolved.as_str()) {
+            return Err(format!(
+                "a contract module cannot import its package's main module: {request}"
+            ));
         }
         return Ok(resolved.to_string());
     }

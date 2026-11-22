@@ -26,7 +26,7 @@ use std::sync::mpsc;
 
 use super::{
     lifecycle::Failure,
-    module_graph::{ConfigPhase, ModuleGraph},
+    module_graph::{ConfigPhase, ModuleGraph, PackageModules},
     scheduler::{
         CompletionOutcome, CompletionReceiver, PoolConfig, RootId, SchedulerError, SchedulerHandle,
         SchedulerPool, Turn, TurnOutcome,
@@ -58,6 +58,10 @@ const LONG_TURN: Duration = Duration::from_millis(100);
 const PRIVATE_BOOTSTRAP_SPECIFIER: &str = "knot:bootstrap";
 const PUBLIC_FACADE_SPECIFIER: &str = "knot";
 const CONTRACT_SPECIFIER: &str = "knot/contract";
+/// The `"knot/contract"` a package's modules import resolves to this prefix
+/// followed by the package ID, so its contracts are qualified by the package
+/// that defines them.
+const OWNED_CONTRACT_PREFIX: &str = "knot/contract#";
 const NATIVE_BINDINGS_GLOBAL: &str = "__knotNativeBindings";
 // The host's own modules, compiled from `src/js/*.ts` by the build script.
 const PRIVATE_BOOTSTRAP_SOURCE: &str =
@@ -527,6 +531,8 @@ struct ModuleRegistry {
     resolutions: Vec<ModuleResolution>,
     package_root: Option<Arc<str>>,
     entries: HashMap<String, Arc<str>>,
+    package: Option<PackageModules>,
+    dependencies: Vec<PackageModules>,
 }
 
 impl ModuleRegistry {
@@ -564,7 +570,18 @@ impl ModuleRegistry {
                         .collect()
                 })
                 .unwrap_or_default(),
+            package: graph.and_then(|graph| graph.package().cloned()),
+            dependencies: graph
+                .map(|graph| graph.dependencies().to_vec())
+                .unwrap_or_default(),
         }
+    }
+
+    /// The required package whose root holds `url`.
+    fn dependency_at(&self, url: &str) -> Option<&PackageModules> {
+        self.dependencies
+            .iter()
+            .find(|dependency| url.starts_with(&*dependency.root))
     }
 }
 

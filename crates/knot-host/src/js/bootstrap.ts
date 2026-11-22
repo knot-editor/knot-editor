@@ -1,4 +1,6 @@
 import type { PaneTarget, ViewTarget, WindowTarget } from "knot";
+import type * as DeclaredContract from "knot/contract";
+import { defineContract as defineSchemaContract, s } from "knot/contract";
 
 type Rec = Record<string, unknown>;
 /** Options an extension passes; their fields are validated where read. */
@@ -1836,6 +1838,68 @@ globalThis.__knotCallProvider = async (registration: number, method: string, arg
     return { error: errorMessage(error) };
   }
 };
+
+// The "knot/contract" module of one owner, the package whose modules import
+// it: the shared builder, whose contracts carry the owner and bind through
+// the host.
+export function contractModule(owner: string): Pick<typeof DeclaredContract, "s" | "defineContract"> {
+  const names = new Set<string>();
+  function defineContract<const M extends DeclaredContract.ContractMethods>(
+    name: string,
+    methods: M,
+  ): DeclaredContract.Contract<M> {
+    const contract = defineSchemaContract(name, methods);
+    if (names.has(contract.name)) throw new TypeError(`contract ${contract.name} is defined twice in ${owner}`);
+    names.add(contract.name);
+    const descriptor = JSON.stringify(contract.methods);
+    return Object.freeze({
+      name: contract.name,
+      methods: contract.methods,
+      serve: (implementation: unknown) => serveContract(owner, contract.name, descriptor, contract.methods, implementation),
+      client: () => contractClient(owner, contract.name, descriptor, contract.methods),
+    }) as unknown as DeclaredContract.Contract<M>;
+  }
+  return Object.freeze({ s, defineContract });
+}
+
+// A served contract dispatches like a provider: the host validates each call
+// and runs the method through `__knotCallProvider`.
+async function serveContract(
+  owner: string, name: string, descriptor: string, methods: DeclaredContract.ContractMethods, implementation: unknown,
+) {
+  if (implementation === null || typeof implementation !== "object") {
+    throw new TypeError(`serve requires an object with the methods of ${name}`);
+  }
+  for (const method of Object.keys(methods)) {
+    if (typeof (implementation as Rec)[method] !== "function") {
+      throw new TypeError(`serve requires a ${method} method for ${name}`);
+    }
+  }
+  const registration = await registerCallable(
+    (registration: number) => providerImplementations.set(registration, implementation as Rec),
+    () => request("serveContract", owner, name, descriptor));
+  const owned = ownership(() => providerImplementations.delete(registration),
+    () => request("unregisterProvider", registration));
+  return Object.freeze({ dispose: () => owned.dispose() });
+}
+
+// A client calls the registration the host bound it to; each call carries the
+// window of the command it runs in.
+async function contractClient(owner: string, name: string, descriptor: string, methods: DeclaredContract.ContractMethods) {
+  const client = await request("contractClient", owner, name, descriptor);
+  const handle: Record<string, (...arguments_: unknown[]) => Promise<unknown>> = Object.create(null);
+  for (const [method, schema] of Object.entries(methods)) {
+    const returnsVoid = schema.result.kind === "void";
+    handle[method] = async (...arguments_: unknown[]) => {
+      if (arguments_.length > 1) throw new TypeError("contract methods take at most one argument");
+      const argument = JSON.stringify(validateJsonValue(arguments_[0] ?? null));
+      const window = currentFrame()?.capture?.window ?? null;
+      const result = JSON.parse(await request("callContract", client, method, argument, window));
+      return returnsVoid ? undefined : result;
+    };
+  }
+  return Object.freeze(handle);
+}
 
 const liveWindows = new WeakMap<object, Native>();
 const livePanes = new WeakMap<object, Native>();

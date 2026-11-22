@@ -256,15 +256,15 @@ fn package_module_sources_are_isolated_per_lifecycle() {
 fn package_module_imports_stay_within_the_supplied_graph() {
     let pool = RuntimePool::new(PoolConfig::single_worker());
     for (index, (source, expected)) in [
-        ("import 'bare-package';", "relative or knot"),
+        ("import 'bare-package';", "must be relative"),
         ("import '../other/secret.js';", "escapes package"),
         (
             "import 'file:///extensions/%40example/other/secret.js';",
-            "relative or knot",
+            "must be relative",
         ),
         ("import './missing.js';", "package module not found"),
         ("import 'knot:bootstrap';", "not importable"),
-        ("import 'knot:editor';", "relative or knot"),
+        ("import 'knot:editor';", "must be relative"),
     ]
     .into_iter()
     .enumerate()
@@ -324,6 +324,205 @@ fn package_modules_import_the_contract_builder() {
         .unwrap()
         .wait()
         .unwrap();
+    pool.shutdown();
+}
+
+const PROVIDER_ROOT: &str = "file:///extensions/%40example/provider/";
+const CONSUMER_ROOT: &str = "file:///extensions/%40example/consumer/";
+
+/// A consumer graph whose package requires `@example/provider`, which has
+/// `files` and the contract module `contract.js`.
+fn consumer_graph(main: &str, provider: &[(&str, &str)]) -> ModuleGraph {
+    let files = provider
+        .iter()
+        .map(|(path, source)| ((*path).into(), Arc::from(*source)))
+        .collect();
+    package_graph(CONSUMER_ROOT, "main.js", &[("main.js", main)])
+        .owned_by("@example/consumer", None)
+        .unwrap()
+        .with_dependency(
+            "@example/provider",
+            PROVIDER_ROOT,
+            "main.js",
+            "contract.js",
+            &files,
+        )
+        .unwrap()
+}
+
+const GREETER: &str = r#"
+    import { defineContract, s } from "knot/contract";
+    import { name } from "./name.js";
+    export const greeter = defineContract(name, { greet: s.fn(s.string(), s.string()) });
+"#;
+
+#[test]
+fn a_required_package_is_imported_as_its_contract_module_without_its_main() {
+    let pool = RuntimePool::new(PoolConfig::single_worker());
+    let graph = consumer_graph(
+        r#"
+            import { greeter } from "@example/provider";
+            if (greeter.name !== "greeter" || typeof greeter.serve !== "function"
+                || typeof greeter.client !== "function") {
+              throw new Error("unexpected contract");
+            }
+            if (globalThis.providerMainRan) throw new Error("the provider's main ran");
+        "#,
+        &[
+            ("main.js", "globalThis.providerMainRan = true;"),
+            ("contract.js", GREETER),
+            ("name.js", "export const name = 'greeter';"),
+        ],
+    );
+    pool.load_package(key(310), IsolateConfig::default(), graph)
+        .unwrap()
+        .wait()
+        .unwrap();
+    pool.shutdown();
+}
+
+#[test]
+fn contracts_are_qualified_by_the_package_whose_module_defines_them() {
+    let pool = RuntimePool::new(PoolConfig::single_worker());
+    // The consumer's own definition of the same name is a different contract;
+    // a second one under the provider's identity is a duplicate.
+    let graph = consumer_graph(
+        r#"
+            import { defineContract, s } from "knot/contract";
+            import { greeter, again } from "@example/provider";
+            defineContract("greeter", { greet: s.fn(s.string(), s.string()) });
+        "#,
+        &[
+            ("main.js", ""),
+            (
+                "contract.js",
+                r#"
+                    import { defineContract, s } from "knot/contract";
+                    export const greeter = defineContract("greeter", { greet: s.fn(s.void(), s.void()) });
+                    export const again = defineContract("greeter", { greet: s.fn(s.void(), s.void()) });
+                "#,
+            ),
+        ],
+    );
+    let failure = pool
+        .load_package(key(311), IsolateConfig::default(), graph)
+        .unwrap()
+        .wait()
+        .unwrap_err();
+    assert!(
+        failure
+            .message()
+            .contains("contract greeter is defined twice in @example/provider"),
+        "{failure}"
+    );
+    pool.shutdown();
+}
+
+#[test]
+fn only_required_packages_are_importable() {
+    let pool = RuntimePool::new(PoolConfig::single_worker());
+    for (index, import) in ["@example/other", "@example/consumer"]
+        .into_iter()
+        .enumerate()
+    {
+        let graph = consumer_graph(
+            &format!("import {{ greeter }} from {import:?};"),
+            &[
+                ("main.js", ""),
+                ("contract.js", GREETER),
+                ("name.js", "export const name = 'greeter';"),
+            ],
+        );
+        let failure = pool
+            .load_package(key(320 + index as u64), IsolateConfig::default(), graph)
+            .unwrap()
+            .wait()
+            .unwrap_err();
+        assert_eq!(failure.kind(), RuntimeErrorKind::ModuleResolution);
+        assert!(
+            failure.message().contains("or a required package"),
+            "{failure}"
+        );
+        assert_eq!(
+            failure.source(),
+            Some("file:///extensions/%40example/consumer/main.js")
+        );
+    }
+    pool.shutdown();
+}
+
+#[test]
+fn a_contract_graph_imports_only_the_builder_and_its_own_modules() {
+    let pool = RuntimePool::new(PoolConfig::single_worker());
+    for (index, (helper, expected)) in [
+        ("import 'knot';", "may import only knot/contract"),
+        (
+            "import './main.js';",
+            "cannot import its package's main module",
+        ),
+        (
+            "import '@example/consumer';",
+            "may import only knot/contract",
+        ),
+        ("import '../consumer/main.js';", "escapes package"),
+        ("import 'knot:bootstrap';", "not importable"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let graph = consumer_graph(
+            "import { greeter } from '@example/provider';",
+            &[
+                ("main.js", ""),
+                ("contract.js", GREETER),
+                ("name.js", helper),
+            ],
+        );
+        let failure = pool
+            .load_package(key(330 + index as u64), IsolateConfig::default(), graph)
+            .unwrap()
+            .wait()
+            .unwrap_err();
+        assert_eq!(
+            failure.kind(),
+            RuntimeErrorKind::ModuleResolution,
+            "{helper}"
+        );
+        assert!(failure.message().contains(expected), "{helper}: {failure}");
+        assert_eq!(
+            failure.source(),
+            Some("file:///extensions/%40example/provider/name.js")
+        );
+    }
+    pool.shutdown();
+}
+
+#[test]
+fn a_packages_own_contract_graph_is_checked_even_when_main_does_not_import_it() {
+    let pool = RuntimePool::new(PoolConfig::single_worker());
+    let graph = package_graph(
+        PROVIDER_ROOT,
+        "main.js",
+        &[
+            ("main.js", "import { commands } from 'knot'; void commands;"),
+            ("contract.js", "import { commands } from 'knot'; export {};"),
+        ],
+    )
+    .owned_by("@example/provider", Some("contract.js"))
+    .unwrap();
+    let failure = pool
+        .load_package(key(340), IsolateConfig::default(), graph)
+        .unwrap()
+        .wait()
+        .unwrap_err();
+    assert!(
+        failure.message().contains("may import only knot/contract"),
+        "{failure}"
+    );
+    assert_eq!(
+        failure.source(),
+        Some("file:///extensions/%40example/provider/contract.js")
+    );
     pool.shutdown();
 }
 

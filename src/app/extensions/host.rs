@@ -107,13 +107,45 @@ fn package_owner(
     }
 }
 
-fn graph_for_package(package: &InstalledPackage) -> Result<ModuleGraph, String> {
+/// The module graph of `package`, with the contract modules of the packages
+/// it requires among `contracts`, the discovered packages that publish one.
+fn graph_for_package(
+    package: &InstalledPackage,
+    contracts: &std::collections::BTreeMap<String, InstalledPackage>,
+) -> Result<ModuleGraph, String> {
     crate::app::extensions::package::validate_package_api(&package.manifest)?;
-    ModuleGraph::new(
+    let mut graph = ModuleGraph::new(
         &package.module_root()?,
         &package.manifest.main,
         package.sources.clone(),
-    )
+    )?
+    .owned_by(&package.manifest.name, package.manifest.contract.as_deref())?;
+    for dependency in &package.manifest.requires {
+        let Some(provider) = contracts.get(dependency) else {
+            continue;
+        };
+        if let Some(contract) = &provider.manifest.contract {
+            graph = graph.with_dependency(
+                dependency,
+                &provider.module_root()?,
+                &provider.manifest.main,
+                contract,
+                &provider.sources,
+            )?;
+        }
+    }
+    Ok(graph)
+}
+
+/// The discovered packages that publish a contract module, by name.
+fn contract_packages(
+    packages: &[InstalledPackage],
+) -> std::collections::BTreeMap<String, InstalledPackage> {
+    packages
+        .iter()
+        .filter(|package| package.manifest.contract.is_some())
+        .map(|package| (package.manifest.name.clone(), package.clone()))
+        .collect()
 }
 
 pub(crate) struct ApplicationExtensionHost {
@@ -920,6 +952,7 @@ impl ProductExtensionHost {
             });
             let report_host = this.clone();
             let mut report_cx = cx.clone();
+            let contracts = contract_packages(&discovered.packages);
             let report = DependencyPlan::new(discovered)
                 .with_not_loaded(not_loaded)
                 .execute_with_progress(
@@ -928,7 +961,7 @@ impl ProductExtensionHost {
                         assert_ne!(id, u64::MAX, "extension identity exhausted");
                         let key =
                             ExtensionKey::new(ExtensionId::new(id), ExtensionLifecycleId::new(1));
-                        let graph = graph_for_package(package);
+                        let graph = graph_for_package(package, &contracts);
                         let execution = graph.and_then(|graph| {
                             this.update(cx, |host, _| {
                                 let owner = package_owner(package)?;
@@ -1121,6 +1154,7 @@ impl ProductExtensionHost {
         let next_extension_id = self.next_extension_id.clone();
         cx.spawn(async move |this, cx| {
             let discovered = discovery.await;
+            let contracts = contract_packages(&discovered.packages);
             let found = discovered
                 .packages
                 .into_iter()
@@ -1149,7 +1183,7 @@ impl ProductExtensionHost {
                             {
                                 return Err(format!("missing required extension {missing}"));
                             }
-                            let graph = graph_for_package(&package)?;
+                            let graph = graph_for_package(&package, &contracts)?;
                             let owner = package_owner(&package)?;
                             host.admit_package(key, &package);
                             host.load_package(key, graph, Some(owner))
@@ -3731,7 +3765,7 @@ mod tests {
                 manifest: manifest.clone(),
                 sources: BTreeMap::new(),
             };
-            let cause = graph_for_package(&package).unwrap_err();
+            let cause = graph_for_package(&package, &BTreeMap::new()).unwrap_err();
             assert!(
                 cause.contains("apiVersion")
                     && cause.contains("expected")

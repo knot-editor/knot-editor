@@ -893,7 +893,15 @@ impl RuntimeCapsule {
                 let compiled = {
                     let mut modules = self.local_state.modules.lock().unwrap();
                     let blocked = blocked_post_init_import(&modules, &source);
-                    compile_module_graph(try_catch, &mut modules, &source, blocked.as_deref())
+                    compile_package_contract(try_catch, &mut modules).and_then(|()| {
+                        compile_module_graph(
+                            try_catch,
+                            &mut modules,
+                            &source,
+                            blocked.as_deref(),
+                            false,
+                        )
+                    })
                 };
                 let compiled = match compiled {
                     Ok(compiled) => compiled,

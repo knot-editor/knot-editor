@@ -1367,6 +1367,7 @@ declare module "knot" {
     | "ViewNotFound" | "ViewIdInUse" | "InvalidViewId"
     | "ViewRegistrationNotFound" | "ContentKindMismatch" | "TreeItemNotFound"
     | "ProviderRegistrationNotFound" | "ProviderNotFound"
+    | "ContractNotFound" | "ContractViolation"
     | "CommandNameInUse" | "CommandNotFound"
     | "InvalidUri" | "DocumentNotFound" | "OperationInProgress" | "PersistenceFailed" | "ResourceNotFound" | "ResourceWrongKind" | "ResourceAlreadyExists" | "InvalidUtf8" | "ProviderFailure" | "StorageUnavailable"
     | "CaptureNotFound" | "RecoveryUnavailable" | "SessionConflict"
@@ -3170,7 +3171,7 @@ declare module "knot" {
  * of a contract's types and its runtime checks.
  */
 declare module "knot/contract" {
-  import type { JsonValue } from "knot";
+  import type { Disposable, JsonValue, WindowTarget } from "knot";
 
   const inferred: unique symbol;
   /** A schema for values of type `T`. Build it with `s`. */
@@ -3238,30 +3239,60 @@ declare module "knot/contract" {
   }>;
 
   export type ContractMethods = Readonly<Record<string, FnSchema<any, any>>>;
-  /** A contract: its name, unique within the package whose contract module
-   * defines it, and its methods. */
+  /**
+   * A contract: its name, unique within the package whose contract module
+   * defines it, and its methods. The host identifies it by that package and
+   * name, and validates every call against the schemas of both sides.
+   */
   export interface Contract<M extends ContractMethods> {
     readonly name: string;
     readonly methods: M;
+    /**
+     * Serves the contract from this package. Any package may serve any
+     * contract; a client binds to the latest live registration, and disposing
+     * it uncovers the previous one.
+     * @throws TypeError when `implementation` lacks one of the methods.
+     */
+    serve(implementation: ContractImplementation<M>): Promise<Disposable>;
+    /**
+     * Binds to the latest registration serving the contract. The client stays
+     * bound to it: once that registration is disposed or its package stops,
+     * calls reject with ContractNotFound, and a new client binds to whatever
+     * serves the contract then.
+     * @throws HostError ContractNotFound when no package serves the contract.
+     */
+    client(): Promise<ContractClient<M>>;
   }
 
-  /** What a consumer calls: each method resolves with the validated result. */
+  /**
+   * What a consumer calls: each method runs in the serving package and
+   * resolves with its result.
+   * @throws HostError ContractViolation when the argument or result does not
+   * match the consumer's or the provider's schema, naming the method and the
+   * path of the offending value; ProviderFailure when the method throws;
+   * ContractNotFound when the registration is gone; UnsupportedOperation when
+   * the package calls a registration it serves itself.
+   */
   export type ContractClient<M extends ContractMethods> = {
     readonly [K in keyof M]: M[K] extends FnSchema<infer A, infer R>
       ? [A] extends [void] ? () => Promise<R> : (argument: A) => Promise<R>
       : never;
   };
+  /** The command a call runs in: its window, or null outside a window. */
+  export interface ContractCallContext {
+    readonly window: WindowTarget | null;
+  }
   /** What a provider serves: each method receives the validated argument. */
   export type ContractImplementation<M extends ContractMethods> = {
     readonly [K in keyof M]: M[K] extends FnSchema<infer A, infer R>
-      ? (argument: A) => R | Promise<R>
+      ? (argument: A, context: ContractCallContext) => R | Promise<R>
       : never;
   };
 
   /**
    * Defines a contract from `s.fn` method schemas.
-   * @throws TypeError for an empty name, no methods, or a method that is not
-   * an `s.fn` schema.
+   * @throws TypeError for an empty name, no methods, a method that is not
+   * an `s.fn` schema, or a name the package already defined.
    */
   export function defineContract<const M extends ContractMethods>(name: string, methods: M): Contract<M>;
 }

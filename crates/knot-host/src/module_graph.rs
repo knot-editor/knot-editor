@@ -20,12 +20,25 @@ impl ConfigPhase {
     }
 }
 
+/// A package's modules within a graph, as URLs: where its root is, its main
+/// module, and the module defining its contracts.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PackageModules {
+    pub package: Arc<str>,
+    pub root: Arc<str>,
+    pub main: Arc<str>,
+    pub contract: Option<Arc<str>>,
+}
+
 #[derive(Clone, Debug)]
 pub struct ModuleGraph {
     root: Arc<str>,
     entry: Arc<str>,
     entries: Arc<BTreeMap<String, Arc<str>>>,
     sources: Arc<BTreeMap<String, Arc<str>>>,
+    package: Option<PackageModules>,
+    /// The required packages whose contract modules this graph may import.
+    dependencies: Arc<Vec<PackageModules>>,
 }
 
 impl ModuleGraph {
@@ -42,14 +55,7 @@ impl ModuleGraph {
         if entries.is_empty() {
             return Err("module graph needs an entry".into());
         }
-        let root_url = Url::parse(root).map_err(|error| format!("invalid package URL: {error}"))?;
-        if root_url.scheme() != "file"
-            || !root_url.as_str().ends_with('/')
-            || root_url.query().is_some()
-            || root_url.fragment().is_some()
-        {
-            return Err("package root must be a directory file URL".into());
-        }
+        let root_url = directory_url(root)?;
         let mut sources = BTreeMap::new();
         for (path, source) in files {
             validate_path(&path)?;
@@ -81,7 +87,78 @@ impl ModuleGraph {
             entry,
             entries: Arc::new(entry_urls),
             sources: Arc::new(sources),
+            package: None,
+            dependencies: Arc::default(),
         })
+    }
+
+    /// Names the package the graph belongs to, which owns the contracts its
+    /// modules define, and the module, relative to the root, that defines the
+    /// ones it publishes.
+    pub fn owned_by(mut self, package: &str, contract: Option<&str>) -> Result<Self, String> {
+        let contract = contract.map(|path| self.module_url(path)).transpose()?;
+        self.package = Some(PackageModules {
+            package: package.into(),
+            root: self.root.clone(),
+            main: self.entry.clone(),
+            contract,
+        });
+        Ok(self)
+    }
+
+    /// Adds a required package's sources under its own `root`, so this graph
+    /// can import the contract module at `contract`, relative to that root.
+    pub fn with_dependency(
+        mut self,
+        package: &str,
+        root: &str,
+        main: &str,
+        contract: &str,
+        files: &BTreeMap<String, Arc<str>>,
+    ) -> Result<Self, String> {
+        let root_url = directory_url(root)?;
+        if self.root.starts_with(root_url.as_str()) || root_url.as_str().starts_with(&*self.root) {
+            return Err(format!("dependency {package} shares the package root"));
+        }
+        let sources = Arc::make_mut(&mut self.sources);
+        for (path, source) in files {
+            validate_path(path)?;
+            sources.insert(file_url(&root_url, path)?.to_string(), source.clone());
+        }
+        let url = |path: &str| -> Result<Arc<str>, String> {
+            validate_path(path)?;
+            Ok(file_url(&root_url, path)?.to_string().into())
+        };
+        let contract = url(contract)?;
+        if !sources.contains_key(&*contract) {
+            return Err(format!(
+                "contract module of {package} is unavailable: {contract}"
+            ));
+        }
+        Arc::make_mut(&mut self.dependencies).push(PackageModules {
+            package: package.into(),
+            root: root_url.to_string().into(),
+            main: url(main)?,
+            contract: Some(contract),
+        });
+        Ok(self)
+    }
+
+    fn module_url(&self, path: &str) -> Result<Arc<str>, String> {
+        validate_path(path)?;
+        let url = file_url(&directory_url(&self.root)?, path)?.to_string();
+        if !self.sources.contains_key(&url) {
+            return Err(format!("contract module is unavailable: {url}"));
+        }
+        Ok(url.into())
+    }
+
+    pub fn package(&self) -> Option<&PackageModules> {
+        self.package.as_ref()
+    }
+
+    pub fn dependencies(&self) -> &[PackageModules] {
+        &self.dependencies
     }
 
     pub fn root(&self) -> &str {
@@ -103,6 +180,18 @@ impl ModuleGraph {
     pub fn sources(&self) -> &BTreeMap<String, Arc<str>> {
         &self.sources
     }
+}
+
+fn directory_url(root: &str) -> Result<Url, String> {
+    let url = Url::parse(root).map_err(|error| format!("invalid package URL: {error}"))?;
+    if url.scheme() != "file"
+        || !url.as_str().ends_with('/')
+        || url.query().is_some()
+        || url.fragment().is_some()
+    {
+        return Err("package root must be a directory file URL".into());
+    }
+    Ok(url)
 }
 
 fn validate_path(path: &str) -> Result<(), String> {
@@ -208,5 +297,75 @@ mod tests {
             .is_err()
         );
         assert!(ModuleGraph::with_entries("file:///config/knot/", &["missing.js"], files).is_err());
+    }
+
+    #[test]
+    fn dependencies_add_their_sources_under_their_own_root() {
+        let own = BTreeMap::from([
+            ("main.js".into(), Arc::from("")),
+            ("contract.js".into(), Arc::from("")),
+        ]);
+        let dependency = BTreeMap::from([
+            ("dist/main.js".into(), Arc::from("")),
+            ("dist/contract.js".into(), Arc::from("")),
+        ]);
+        let graph = ModuleGraph::new("file:///extensions/consumer/", "main.js", own.clone())
+            .unwrap()
+            .owned_by("@example/consumer", Some("contract.js"))
+            .unwrap()
+            .with_dependency(
+                "@example/provider",
+                "file:///extensions/provider/",
+                "dist/main.js",
+                "dist/contract.js",
+                &dependency,
+            )
+            .unwrap();
+        let package = graph.package().unwrap();
+        assert_eq!(&*package.main, "file:///extensions/consumer/main.js");
+        assert_eq!(
+            package.contract.as_deref(),
+            Some("file:///extensions/consumer/contract.js")
+        );
+        let provider = &graph.dependencies()[0];
+        assert_eq!(&*provider.main, "file:///extensions/provider/dist/main.js");
+        assert!(
+            graph
+                .sources()
+                .contains_key("file:///extensions/provider/dist/contract.js")
+        );
+        assert_eq!(graph.sources().len(), 4);
+
+        let base = || ModuleGraph::new("file:///extensions/consumer/", "main.js", own.clone());
+        assert!(
+            base()
+                .unwrap()
+                .owned_by("@example/consumer", Some("missing.js"))
+                .is_err()
+        );
+        assert!(
+            base()
+                .unwrap()
+                .with_dependency(
+                    "@example/provider",
+                    "file:///extensions/provider/",
+                    "dist/main.js",
+                    "dist/missing.js",
+                    &dependency,
+                )
+                .is_err()
+        );
+        assert!(
+            base()
+                .unwrap()
+                .with_dependency(
+                    "@example/inner",
+                    "file:///extensions/consumer/inner/",
+                    "dist/main.js",
+                    "dist/contract.js",
+                    &dependency,
+                )
+                .is_err()
+        );
     }
 }
