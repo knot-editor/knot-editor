@@ -13,7 +13,7 @@ Every item has the same shape:
 - **Description** says what is missing today and when it becomes worth doing,
   then what to build.
 
-The next unused ID is **D225**; take it for a new item and bump this line.
+The next unused ID is **D227**; take it for a new item and bump this line.
 
 Each section is ordered so that an item comes after the items it depends on,
 wherever the sections allow it. Items with no dependencies are ordered by
@@ -43,6 +43,7 @@ The [version control plan](plans/vcs.md) comes first, in its milestone order:
 
 Then:
 
+- D225 — Gutter mark tooltips.
 - D174 — Show Difference for files changed on disk.
 - D022 — Editor autocompletion.
 - D129 — Refactor builtin language extensions.
@@ -248,7 +249,16 @@ hold the analyses that support some items.
     gutter needs bars spanning lines, a marker for deleted lines, and click
     actions that can open a popup, and language-server diagnostics (D067) need
     the same. Extend gutter contributions for them, with native painting and
-    theme color keys. Part of the [version control plan](plans/vcs.md).
+    theme color keys. Part of the [version control plan](plans/vcs.md);
+    planned in [D210](plans/d210-richer-gutter-contributions.md).
+
+- **D225 — Gutter mark tooltips**
+  - Depends on: D210
+  - Description: Gutter marks show a color but not why they are there, so a
+    diagnostic's message or a change's summary needs a click. Do it after the
+    [version control plan](plans/vcs.md), before language-server diagnostics
+    (D067) rely on it: let a gutter contribution carry a hover message that
+    the gutter shows on hover.
 
 - **D212 — Resource decorations** 🚧
   - Depends on: none

@@ -78,7 +78,8 @@ Items in a milestone are listed in dependency order.
   inferred types, host-enforced validation; see
   [packages](../extension-api/packages.md).
 - **D209 — Diff function for extensions.** Done: `diff` in the `knot` module; see [application state](../extension-api/application.md#compare-texts).
-- **D210 — Richer gutter contributions.**
+- **D210 — Richer gutter contributions.** 🚧 Planned in
+  [d210-richer-gutter-contributions.md](d210-richer-gutter-contributions.md).
 - **D211 — VCS foundation and Git change gutter.** `@knot/vcs` and `@knot/git`:
   repositories per root, baselines, the change gutter, and next and previous
   change. Depends on D087, D199, D210.
