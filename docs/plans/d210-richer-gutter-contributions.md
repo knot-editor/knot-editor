@@ -1,6 +1,6 @@
 # D210 — Richer gutter contributions
 
-Status: 🚧 in progress; checkpoint 1 awaits its review gate. Source: [roadmap D210](../roadmap.md), part
+Status: 🚧 in progress; checkpoint 1 is done. Source: [roadmap D210](../roadmap.md), part
 of the [version control plan](vcs.md).
 
 ## Outcome
@@ -71,45 +71,13 @@ defines generic `diff.*` color keys, never version control semantics.
 
 ### 1. Marks in the model and the extension API ✅
 
-Implemented; awaiting the review gate. Projection keeps one `Vec` per lane in
-`EditorState` (`gutter_markers`, `gutter_bars`); a deletion records `below`
-when its range starts at the end of a text whose last line has content.
-
-Deliverables: the new `gutter` and `command` shapes in the protocol, the host
-binding and declarations, and the buffer's contribution store; projection of
-contributions into per-lane rendered marks (dots by first line, bars and
-deletions by line) with per-lane severity and latest-wins selection; dots keep
-painting as today.
-
-Validation: model tests for projection (multi-line bars, column-0 ends,
-deletions at a line start and at the end of the text, competition within and
-across lanes, edits moving and consuming ranges); marshal and binding
-rejection of malformed `gutter` and `command` values; `knot.d.ts` type checks.
-
-Review gate: the API declaration and the projection rules.
-
-**Implementation context.**
-- Protocol: replace `EditorContribution.gutter: Option<String>` with
-  `Option<GutterMark { color, style: GutterStyle }>` and `command` with a
-  `{ name, arguments }` value beside `Decoration` in
-  `crates/knot-protocol/src/lib.rs`; reuse `Command`'s argument value type.
-- Host: decode in `crates/knot-host/src/engine/marshal.rs` (around the
-  `gutter` property, line ~730) and validate in
-  `crates/knot-host/src/js/bootstrap.ts` (the contribution validator near line
-  381), normalizing a string command to `{ name, arguments: {} }`; declare
-  `GutterMark`, `GutterStyle`, and the command form on `EditorContribution`
-  in `crates/knot-host/src/js/knot.d.ts`.
-- Model: carry the new fields through `ContributionMetadata`,
-  `replace_contributions`, and `ResolvedEditorContribution` in
-  `crates/knot-model/src/buffer.rs`. In `project_contributions`
-  (`crates/knot-model/src/editor.rs`), split `RenderedGutterMarker` into lane
-  marks (a `style` and line), reusing the `line` decoration's column-0 rule
-  for bars and `decoration_precedence` for selection; update
-  `EditorState::gutter_marker` in `crates/knot-model/src/editor/gutter.rs` to
-  look up by lane. Tests go in
-  `crates/knot-model/src/editor/tests/decorations.rs`.
-- Fix existing callers in `src/app/extensions/buffers.rs` and the extension
-  test harness in `scripts/extensions/testing/`.
+Done and approved. Contributions carry `gutter: { color, style }` and
+`command: { name, arguments }` (`knot.d.ts`); the editor projects dots into the
+marker lane and bars and deletions into a bar lane
+(`project_contributions` in `crates/knot-model/src/editor.rs`, read through
+`gutter_markers()` and `gutter_bars()`). A deletion carries `below` when its
+range starts at the end of a text whose last line has content, so checkpoint 2
+paints it under that line.
 
 ### 2. The bar lane and its painting
 
