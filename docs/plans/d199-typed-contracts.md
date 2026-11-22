@@ -16,12 +16,19 @@ and the bundled `workspace.*` providers) move onto contracts.
 ## Agreed design
 
 - **Contract module.** A package declares `contract: "<relative .js path>"`
-  in its manifest (`knot.jsonc`), next to `main`. That module's only job is
-  to build and export one contract value with the schema builder from
-  `"knot"` (working title `defineContract`). It is pure schema code: it may
-  import `"knot"` and its own relative modules, nothing else, and the host
-  rejects a contract graph that reaches the package's `main` or any other
+  in its manifest (`knot.jsonc`), next to `main`. That module builds and
+  exports contract values with `defineContract(name, methods)` and the schema
+  builder `s`, both from the narrow `"knot/contract"` specifier. It is pure
+  schema code: it may import `"knot/contract"` and its own relative modules,
+  nothing else, so purity is structural, not a convention. The host rejects a
+  contract graph that reaches `"knot"`, the package's `main`, or any other
   package.
+- **Identity.** A contract is keyed by the owning package plus its short
+  name, e.g. `("@knot/go-to-file", "workspace")`. The author writes only the
+  name; the host qualifies it with the package the contract module resolved
+  from, not with whoever calls `serve`, so names cannot collide across
+  packages or be claimed by another. Two contracts with one name in a package
+  fail startup validation. One contract module may export several contracts.
 - **Static import, gated by `requires`.** A consumer writes
   `import { vcs } from "@knot/vcs"`. The bare specifier is the dependency's
   canonical package ID; the host resolves it to that package's contract
@@ -33,36 +40,50 @@ and the bundled `workspace.*` providers) move onto contracts.
 - **Binding through the contract value.** The contract object carries
   `serve(implementation)` (provider side; returns the usual `Disposable`)
   and `client()` (consumer side; async, resolves the live client whose
-  methods are the contract's functions). A client call rejects once the
+  methods are the contract's functions). Any package may `serve` a contract;
+  `client()` resolves the latest live registration, so personal config can
+  override a bundled provider and disposal falls back to the previous one.
+  A consumer that must tolerate a missing or restarting provider catches the
+  rejection, as Vim does for its file list. A client call rejects once the
   registration is disposed or its lifecycle ends — look the client up
   again — mirroring today's `ProviderNotFound`. Calling a contract you
   serve yourself rejects, as with providers today; use the code directly.
   Method context (the caller's command window) crosses out of band as
   today, never as a schema value.
-- **Schema builder.** Small and JSON-shaped: string, number (safe
-  integers only, as elsewhere on the boundary), boolean, null, literal /
-  string enum, array, record, strict object with optional fields,
-  union, nullable, and a `json` escape hatch for genuinely free-form
-  values. Functions are async, take at most one argument, and return one
-  result (`void` allowed). No callbacks, handles, targets, buffers, or
+- **Schema builder.** Small and JSON-shaped: string, int (safe integers
+  only, as elsewhere on the boundary), number, boolean, null, literal /
+  string enum, array, tuple, record, strict object with optional fields,
+  union, nullable, and a `json` escape hatch for genuinely free-form values
+  that follows the `validateJsonValue` rules. `s.fn(argument, result)` is the
+  one method kind: async, at most one argument, one result (`void`
+  allowed). It is our own builder, not a library: the descriptor must be
+  plain data the Rust validator reads, and contract modules stay small. No callbacks, handles, targets, buffers, or
   events cross in this item; subscriptions are deferred (see Exclusions).
   TypeScript types are inferred from the builder value, so the contract
   module is the single source for types, runtime schema, and docs.
-- **Validation against the provider's schema only.** `serve` registers a
-  serialized schema descriptor with the host. The host validates the
-  argument before dispatching into the provider isolate and the result
-  before answering the caller, using that descriptor — a consumer built
-  against a different contract revision fails per call with a contract
-  error naming the package, method, and offending path, rather than
-  failing to load. There is no contract version field and no hash check.
-  Implementation bugs on either side surface the same way instead of
-  delivering malformed JSON.
-- **Native-interpreted contracts are Knot-defined.** `editor.completion`
-  and `editor.paste.<languageId>` are contracts Knot itself defines and
-  exports from `"knot"`; any package may `serve` them, and native code
-  keeps its current aggregation (every completion registration, latest
-  paste registration) by calling the registrations itself. They do not go
-  through `client()` and need no `requires` entry.
+- **Host-side validation against both schemas.** `serve` registers the
+  provider's serialized descriptor and `client()` sends the consumer's; the
+  host compiles each once. A call validates the argument against the
+  consumer's then the provider's schema before dispatch, and the result
+  against the provider's then the consumer's before answering. When the two
+  descriptors are structurally equal, compared once at `client()` time to
+  pick the mode and never to fail the lookup, each value is checked once.
+  Nothing validates in JavaScript. A consumer built against a different
+  revision fails per call with a contract error naming the package, method,
+  and offending path, rather than failing to load. There is no contract
+  version field and no hash check. Implementation bugs on either side surface
+  the same way instead of delivering malformed JSON.
+- **Native-interpreted contracts are Knot-defined.** `completion` and
+  `paste(languageId)` are exported from `"knot"` with owner `knot`; any
+  package may `serve` them, and native code keeps its current aggregation
+  (every completion registration, latest paste registration) by calling the
+  registrations itself. They do not go through `client()` and need no
+  `requires` entry. `paste` is a memoized factory, one contract per language
+  with one shared schema, so a paste allocates nothing: native looks up
+  registrations by qualified name and validates only the provider's result
+  against a descriptor compiled when it was served. Knot is the consumer
+  and trusts its own descriptor, so completion validates each result item
+  once.
 - **Bundled `workspace.*` contracts.** `@knot/go-to-file` publishes its
   `rows(query)` lists as contracts; consumers (Vim's `:…` completion)
   declare it in `requires` and import it. This is the in-repo proof that
@@ -76,6 +97,9 @@ and the bundled `workspace.*` providers) move onto contracts.
 - No contract versioning, negotiation, or compatibility ranges.
 - No change to entitlement, storage, or command mechanisms; contracts do
   not widen what a loaded package may do.
+- No optional dependencies: a package that imports a contract must list it
+  in `requires`, and a tolerant consumer such as Vim catches the `client()`
+  rejection. Optional dependencies are D226.
 - `@knot/vcs` itself is D211; this item proves the mechanism on fixture
   packages and the migrated bundled providers only.
 
@@ -86,12 +110,15 @@ and the bundled `workspace.*` providers) move onto contracts.
 Define the contract value in the public API and validate descriptors
 without any cross-isolate call.
 
-- **Deliverables:** schema builder + `defineContract` in
+- **Deliverables:** schema builder + `defineContract` (the `"knot/contract"`
+  facade) in
   [knot.js](../../crates/knot-host/src/js/knot.js) /
   [bootstrap.js](../../crates/knot-host/src/js/bootstrap.js), inferred
   types in [knot.d.ts](../../crates/knot-host/src/js/knot.d.ts); a
   serializable schema descriptor; a validator for that descriptor in
-  `knot-model` (plain data in, path-ful errors out).
+  `knot-model` (plain data in, path-ful errors out) that compiles a
+  descriptor once and walks a parsed value, validating a call against up to
+  two descriptors.
 - **Implementation context:** mirror how `providers` types are declared in
   [knot.d.ts](../../crates/knot-host/src/js/knot.d.ts:2617) and how
   `validateJsonValue` guards values in
@@ -158,29 +185,37 @@ contracts; native aggregation and failure isolation stay as they are.
   new path; a provider returning malformed items fails only its own part.
 - **Review gate:** no behavior change visible in completion or paste.
 
-### 4. Migrate `workspace.*`, remove `providers.*`, document
+### 4. Migrate `workspace.*` and remove `providers.*`
 
 Move the bundled package-to-package providers onto a published contract
 and delete the old mechanism.
 
 - **Implementation context:** `@knot/go-to-file` adds a contract module +
-  manifest `contract` field and serves its three lists
+  manifest `contract` field and serves one `workspace` contract with
+  `files`, `buffers`, and `actions`
   ([extension.ts](../../extensions/@knot/go-to-file/src/extension.ts:40));
-  Vim imports it under a new `requires` entry and drops its local
-  redeclaration ([command-line.ts](../../extensions/@knot/vim/src/command-line.ts:32));
+  Vim imports it under a new `requires` entry, keeps its try/catch
+  tolerance, and drops its local redeclaration
+  ([command-line.ts](../../extensions/@knot/vim/src/command-line.ts:32));
   remove `providers` from
   [knot.js](../../crates/knot-host/src/js/knot.js:96),
   [knot.d.ts](../../crates/knot-host/src/js/knot.d.ts:2621), bootstrap, the
-  model registry's old shape, and handlers. Add a contract example under
-  `scripts/extensions/examples/`. Record the decision in
-  `docs/decisions/extension-host.md` (replacing the providers entry),
-  update [extension-host.md](../architecture/extension-host.md#providers)
-  and the [extension guide](../extension-api/README.md); keep
+  model registry's old shape, and handlers; keep
   `docs/schemas/knot.schema.json` in sync with the manifest field.
 - **Validation:** extension `check`/`test`, Vim and go-to-file behavior
   cases, full `just check`.
-- **Review gate:** `providers.*` gone from the public API; D211 can now be
-  planned against the contract API as documented.
+- **Review gate:** `providers.*` gone from the public API.
+
+### 5. Document
+
+- **Deliverables:** a contract example under
+  `scripts/extensions/examples/`; update
+  [extension-host.md](../architecture/extension-host.md#providers) and the
+  [extension guide](../extension-api/README.md), including the purity rule;
+  check the decision entry in `docs/decisions/extension-host.md` still
+  matches what was built.
+- **Review gate:** D211 can now be planned against the contract API as
+  documented.
 
 ## Risks
 
@@ -188,6 +223,8 @@ and delete the old mechanism.
   sandboxing the evaluated module; a contract module with side effects
   would run them in every consumer. The checkpoint-2 tests pin the
   restriction; the guide states the rule.
+- Validation sits on the completion path while typing; checkpoint 3
+  measures completion latency before and after.
 - Native-interpreted contracts invert the dependency direction (Knot is
   the consumer). Keep their aggregation in native code rather than
   forcing it through `client()` semantics.

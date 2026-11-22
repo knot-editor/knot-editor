@@ -248,6 +248,15 @@ hold the analyses that support some items.
     the host validates calls and results against it. Part of the
     [version control plan](plans/vcs.md).
 
+- **D226 — Optional package dependencies**
+  - Depends on: D199
+  - Description: A package that imports another's contract must list it in
+    `requires`, so the dependency loads first and a missing one blocks the
+    consumer. Some consumers only enhance themselves when a provider exists,
+    such as Vim's file completion or a feature that uses `@knot/vcs` when
+    present. Add an optional dependency kind whose import still resolves, with
+    a client that rejects while no provider is served.
+
 - **D209 — Diff function for extensions** 🚧
   - Depends on: none
   - Description: Extensions cannot compare texts, and a diff written in

@@ -271,25 +271,57 @@ installed-package failures stay independent.
 References: [extension host](../architecture/extension-host.md#package-admission-and-startup)
 and [product launch](../architecture/workbench-and-lifecycle.md#product-application-launch).
 
-## Extension providers
+## Extension contracts
 
-A package reuses another's feature through named providers that packages
-register and others call by name, rather than through commands, which return no
-data, or shared modules. Names are free strings the packages agree on; the
-application interprets only `editor.completion`, so completion registers
-through the same registry instead of a separate one. One or many is the
-consumer's choice (`get` the latest, `all` in order). A `declare("single" |
-"multiple")` step was rejected: a second registration of a single provider must
-still be accepted so personal config can override one, so a declaration would
-only document intent while adding questions of who declares and in what order.
+A package reuses another's feature through a contract defined once in code:
+the provider serves it, a consumer imports the provider as a module and calls
+typed functions that run in the provider's isolate, and the host validates
+every argument and result. Commands return no data and shared modules would run
+provider code in the consumer, so neither fits. The earlier untyped named
+providers with a locally redeclared JSON shape were removed because nothing
+checked either side, and `@knot/vcs` and its backends (D211) are large enough
+for that to cause mistakes.
 
-Calls cross isolates as a task in the provider's package with a JSON argument
-and result and the caller's window, so a provider sees the window a command
-there would. Callbacks, handles, and targets do not cross as values, which
-keeps contracts declarable locally by each consumer and typed imports for
-later (D199). Tasks interleave at awaits, so a call needs no refusal for a
-provider whose package is waiting on the caller; only a call to the caller's own
-package is rejected, since its code is reachable directly.
+- **Schema builder of our own, not a library.** The descriptor must be plain
+  data the Rust validator reads, and contract modules are evaluated in every
+  consumer's isolate, so they stay small. Zod schemas are closures, so a
+  converter and a JSON Schema validator in Rust would be needed, and the
+  library would load in each consumer. TypeBox, which builds serializable
+  JSON Schema, was the closest alternative; we keep our own for the
+  safe-integer, strict-object, error-path, and `validateJsonValue` semantics.
+  The vocabulary stays tiny: no refinements, transforms, or coercion, which
+  make no sense across an isolate. The descriptor being plain JSON keeps a
+  later switch cheap.
+- **Contracts import from a narrow `"knot/contract"`.** Importing `"knot"`
+  would let a contract module call the whole API at module scope inside the
+  consumer, so "no provider code runs in the consumer" would hold only by
+  convention. The narrow specifier makes it structural.
+- **Identity is the owning package plus a short name.** The host qualifies the
+  name with the package the contract module resolved from, not with whoever
+  serves it, so names cannot collide or be claimed across packages.
+- **Validation is host-side, in Rust, against both schemas, compiled once.**
+  Validating only the provider's schema left a stale consumer unchecked, and
+  validating in JavaScript meant two implementations. One compiled walk over an
+  already-parsed value costs little next to the cross-isolate hop; equal
+  descriptors, compared once at lookup, skip the second pass. There is no
+  contract version or hash: a mismatch fails per call with a path-ful error,
+  not at load, so most revision differences keep working.
+- **Several registrations: the latest wins.** Any package may serve a
+  contract, so personal config overrides a bundled provider and disposal falls
+  back to the previous one, as the earlier providers did. A `declare`
+  single-or-multiple step was rejected for the same reason: a second
+  registration must still be accepted.
+- **Knot-defined contracts native code interprets** (completion, paste) keep
+  native aggregation and failure isolation instead of `client()` semantics,
+  since Knot is the consumer. Paste is a memoized per-language factory so a
+  paste allocates nothing.
+- **No optional dependencies yet.** An import requires a `requires` entry, and
+  a tolerant consumer catches the `client()` rejection. Optional dependencies
+  are wanted and tracked as D226.
+- **No subscriptions, callbacks, or handles cross a contract.** Tasks
+  interleave at awaits, so a call needs no refusal for a provider waiting on
+  the caller; only a call to the caller's own package is rejected, since its
+  code is reachable directly. Streaming designs later if D213 needs it.
 
 Reference: [extension host](../architecture/extension-host.md#providers).
 
