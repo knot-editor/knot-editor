@@ -1,7 +1,8 @@
 // Runs the Ex line `:` opens in one followed editor, over native commands
 // and document-scoped settings, and returns the message it leaves.
-import { commands, completion, documents, files, providers, settings, windows, workbench, workspaces } from "knot";
-import type { IconRef, InputCompletion, ViewTarget } from "knot";
+import { type FileRow, workspace } from "@knot/go-to-file";
+import { commands, completion, documents, files, settings, windows, workbench, workspaces } from "knot";
+import type { InputCompletion, ViewTarget } from "knot";
 import {
   type Address, type BooleanOption, bufferCompletionTarget, completeEx, directoryOf, type ExCommand, fileCompletionTarget, parseEx, pathOfUri, resolvePath,
   type ExRange, type SetArgument,
@@ -13,24 +14,11 @@ import { sortLines } from "./sort.js";
 import { compile, IGNORE_CASE, invalidPattern, searchSettings, SMART_CASE } from "./search.js";
 import { firstNonBlank } from "./text.js";
 
-/** A row of the `workspace.files` provider's list, the contract Vim expects
- * of it; the row's ID is the file's URI. */
-interface FileRow {
-  readonly id: string;
-  readonly label: string;
-  readonly description?: string | null;
-  readonly hint?: string | null;
-  readonly icon?: IconRef | null;
-  readonly labelMatches?: readonly (readonly [number, number])[] | null;
-  readonly descriptionMatches?: readonly (readonly [number, number])[] | null;
-}
-
-/** The files `query` lists, or none when no package provides the list or its
+/** The files `query` lists, or none when no package serves the list or its
  * call fails, as when it is restarting. */
 async function fileRows(query: string): Promise<readonly FileRow[]> {
   try {
-    const provider = await providers.get<{ rows(query: string): Promise<FileRow[]> }>("workspace.files");
-    return provider === null ? [] : await provider.rows(query);
+    return await (await workspace.client()).files(query);
   } catch {
     return [];
   }

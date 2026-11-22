@@ -194,45 +194,69 @@ function emptyState() {
     colors: new Map<string, Knot.ColorDefinition>(),
     statusItems: [] as FakeStatusItem[],
     menuItems: [] as FakeMenuItem[],
-    providers: [] as FakeProvider[],
+    served: [] as FakeProvider[],
   };
 }
 
-type FakeProvider = { name: string; implementation: object; methods: string[] };
+type FakeProvider = { key: string; implementation: object; methods: string[] };
 
-// As the native host: own and inherited functions, not Object's.
-function providerMethods(implementation: object): string[] {
-  const names = new Set<string>();
-  for (let object: object | null = implementation; object !== null && object !== Object.prototype;
-    object = Object.getPrototypeOf(object)) {
-    for (const name of Object.getOwnPropertyNames(object)) {
-      if (name !== "constructor" && typeof (implementation as any)[name] === "function") names.add(name);
-    }
-  }
-  return [...names].sort();
-}
-
+// The fake cannot tell packages apart, so a contract is keyed by its name, or
+// by `knot:<name>` for the contracts Knot defines. It validates no schema.
 // Calls run in the same module world, with arguments and results passed
 // through JSON as across isolates, and the focused window (or the first) as
-// the caller's window. The fake cannot tell packages apart, so it never
-// rejects a package calling its own provider.
-function providerHandle(provider: FakeProvider): any {
-  const handle: Record<string, (argument?: Knot.JsonValue) => Promise<Knot.JsonValue>> = {};
+// the caller's window. A client stays bound to the registration it found, and
+// the fake never rejects a package calling a contract it serves itself.
+function clientHandle(provider: FakeProvider): any {
+  const handle: Record<string, (argument?: Knot.JsonValue) => Promise<Knot.JsonValue | undefined>> = {};
   for (const method of provider.methods) {
     handle[method] = async (...args: (Knot.JsonValue | undefined)[]) => {
-      if (args.length > 1) throw new TypeError("provider methods take at most one argument");
-      if (!state.providers.includes(provider)) throw hostError("ProviderNotFound");
+      if (args.length > 1) throw new TypeError("contract methods take at most one argument");
+      if (!state.served.includes(provider)) throw hostError("ContractNotFound");
       const argument = JSON.parse(JSON.stringify(args[0] ?? null));
       const window = state.focused ?? state.windows[0]?.target ?? null;
       try {
         const result = await (provider.implementation as any)[method](argument, Object.freeze({ window }));
-        return JSON.parse(JSON.stringify(result ?? null));
+        return result === undefined ? undefined : JSON.parse(JSON.stringify(result));
       } catch (error) {
         throw hostError("ProviderFailure", error instanceof Error ? error.message : String(error));
       }
     };
   }
   return Object.freeze(handle);
+}
+
+/** The serve and client of the contract `key` whose methods are `methods`. */
+export function bindContract(key: string, methods: string[]) {
+  return {
+    serve: async (implementation: object) => {
+      if (implementation === null || typeof implementation !== "object") {
+        throw new TypeError(`serve requires an object with the methods of ${key}`);
+      }
+      for (const method of methods) {
+        if (typeof (implementation as any)[method] !== "function") {
+          throw new TypeError(`serve requires a ${method} method for ${key}`);
+        }
+      }
+      const provider = { key, implementation, methods };
+      state.served.push(provider);
+      return {
+        ...disposers(async () => {
+          state.served = state.served.filter((candidate) => candidate !== provider);
+        }),
+      };
+    },
+    client: async () => {
+      const provider = [...state.served].reverse().find((candidate) => candidate.key === key);
+      if (provider === undefined) throw hostError("ContractNotFound", `no package serves ${key}`);
+      return clientHandle(provider);
+    },
+  };
+}
+
+/** A client of the contract `key`, as the consuming package's `client()` binds
+ * it: Knot's own contracts are `knot:completion` and `knot:paste.<languageId>`. */
+export function contractClient(key: string): Promise<any> {
+  return bindContract(key, []).client();
 }
 
 type FakeMenuItem = { location: Knot.MenuLocation; item: Knot.MenuItemOptions };
@@ -2083,31 +2107,11 @@ const LAYOUT: Knot.WindowLayout = {
   focused: null,
 };
 
-// The fake serves Knot's contracts as providers named `knot:completion` and
-// `knot:paste.<languageId>`, which a test calls through `providers.get`; it
+// The fake serves Knot's contracts under `knot:completion` and
+// `knot:paste.<languageId>`, which a test calls through `contractClient`; it
 // validates nothing and never asks them itself.
 function knotContract(name: string, methods: string[]): any {
-  return Object.freeze({
-    name,
-    methods: Object.freeze({}),
-    serve: async (implementation: object) => {
-      if (implementation === null || typeof implementation !== "object") {
-        throw new TypeError(`serve requires an object with the methods of ${name}`);
-      }
-      for (const method of methods) {
-        if (typeof (implementation as any)[method] !== "function") {
-          throw new TypeError(`serve requires a ${method} method for ${name}`);
-        }
-      }
-      const provider = { name: `knot:${name}`, implementation, methods };
-      state.providers.push(provider);
-      return {
-        ...disposers(async () => {
-          state.providers = state.providers.filter((candidate) => candidate !== provider);
-        }),
-      };
-    },
-  });
+  return Object.freeze({ name, methods: Object.freeze({}), serve: bindContract(`knot:${name}`, methods).serve });
 }
 
 export const api: KnotApi = {
@@ -2826,28 +2830,6 @@ export const api: KnotApi = {
     unavailable: () => {
       throw new Unavailable("command unavailable");
     },
-  },
-  providers: {
-    register: async (name, implementation) => {
-      if (typeof name !== "string" || name === "") throw new TypeError("providers.register requires a provider name");
-      if (implementation === null || typeof implementation !== "object") {
-        throw new TypeError("providers.register requires an object of methods");
-      }
-      const methods = providerMethods(implementation);
-      if (methods.length === 0) throw new TypeError("providers.register requires at least one method");
-      const provider = { name, implementation, methods };
-      state.providers.push(provider);
-      return {
-        ...disposers(async () => {
-          state.providers = state.providers.filter((candidate) => candidate !== provider);
-        }),
-      };
-    },
-    get: async (name) => {
-      const provider = [...state.providers].reverse().find((candidate) => candidate.name === name);
-      return provider === undefined ? null : providerHandle(provider);
-    },
-    all: async (name) => state.providers.filter((candidate) => candidate.name === name).map(providerHandle),
   },
   editor: {
     activeBuffer: notFaked("editor.activeBuffer"),

@@ -136,18 +136,20 @@ fn with_consumer() -> &'static [knot_bundled::BundledSource] {
   "apiVersion": 1,
   "version": "0.1.0",
   "main": "dist/main.js",
+  "requires": ["@knot/go-to-file"],
 }"#;
     const MAIN: &str = r#"
-import { commands, providers, workbench } from "knot";
-const call = async (name, query) => (await providers.get(name)).rows(query);
+import { workspace } from "@knot/go-to-file";
+import { commands, workbench } from "knot";
+const call = async (list, query) => (await workspace.client())[list](query);
 await commands.register("lists.files", async () => {
-  await workbench.writeClipboardText(JSON.stringify(await call("workspace.files", "butt")));
+  await workbench.writeClipboardText(JSON.stringify(await call("files", "butt")));
 });
 await commands.register("lists.buffers", async () => {
-  await workbench.writeClipboardText(JSON.stringify(await call("workspace.buffers", "")));
+  await workbench.writeClipboardText(JSON.stringify(await call("buffers", "")));
 });
 await commands.register("lists.actions", async () => {
-  await workbench.writeClipboardText(JSON.stringify(await call("workspace.actions", "open rec")));
+  await workbench.writeClipboardText(JSON.stringify(await call("actions", "open rec")));
 });
 "#;
     let mut packages = only(&["@knot/go-to-file"]).to_vec();

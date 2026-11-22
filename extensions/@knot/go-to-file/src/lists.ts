@@ -1,8 +1,8 @@
 // The three lists of Search Everywhere's tabs for one window: files, open
-// buffers, and actions. The picker and the `workspace.files`,
-// `workspace.buffers`, and `workspace.actions` providers build their rows
-// here, with plain row IDs: a file URI, a document ID, a command name.
+// buffers, and actions. The picker and the `workspace` contract build their
+// rows here, with plain row IDs: a file URI, a document ID, a command name.
 import { commands, completion, documents, history, windows, workspaces } from "knot";
+import type { ContractCallContext } from "knot/contract";
 import type { Buffer, CommandInfo, DocumentInfo, PickerRow, ViewTarget, WindowTarget } from "knot";
 import { fileRows } from "./fileRows.js";
 import { ACTION_HISTORY, BUFFER_HISTORY, documentOf } from "./recent.js";
@@ -101,12 +101,11 @@ export async function actionRows(all: readonly CommandInfo[], query: string): Pr
   return rows;
 }
 
-/** A provider of one list: the rows for a query in the caller's window. */
-export function listProvider(rows: (lists: WindowLists, query: string) => Promise<PickerRow[]>) {
-  return {
-    async rows(query: string, context: { readonly window: WindowTarget | null }): Promise<PickerRow[]> {
-      if (context.window === null) return [];
-      return rows(await windowLists(context.window), query);
-    },
-  };
+/** The `workspace` contract's methods: each answers the rows of one list for a
+ * query, in the caller's window. */
+export function listProvider(lists: Record<"files" | "buffers" | "actions", (lists: WindowLists, query: string) => Promise<PickerRow[]>>) {
+  const answer = (rows: (lists: WindowLists, query: string) => Promise<PickerRow[]>) =>
+    async (query: string, context: ContractCallContext): Promise<PickerRow[]> =>
+      context.window === null ? [] : rows(await windowLists(context.window), query);
+  return { files: answer(lists.files), buffers: answer(lists.buffers), actions: answer(lists.actions) };
 }

@@ -1249,7 +1249,7 @@ fn registration_response_racing_unload_cannot_publish_late_ownership() {
         let runtime = key(196);
         pool.load(runtime, IsolateConfig::default()).unwrap();
         let source = format!(
-            "import * as knot from 'knot'; const {{commands, editor, providers, workbench}} = knot; await {operation}; globalThis.published = true;"
+            "import * as knot from 'knot'; const {{commands, editor, workbench}} = knot; await {operation}; globalThis.published = true;"
         );
         let registration = pool
             .execute_fixture_module(runtime, "file:///fixtures/late-registration.js", source)
@@ -4516,7 +4516,7 @@ fn public_facade_is_semantic_and_private_bindings_are_hidden() {
             if (typeof globalThis.__knotNativeBindings !== "undefined") {
                 throw new Error("private native bindings are exposed");
             }
-            if (Object.keys(knot).sort().join(",") !== "commands,completion,completionContract,documents,editor,files,history,homeUri,icons,keymaps,languages,menus,pasteContract,platform,processes,providers,recovery,settings,storage,terminals,themes,windows,workbench,workspaces") {
+            if (Object.keys(knot).sort().join(",") !== "commands,completion,completionContract,documents,editor,files,history,homeUri,icons,keymaps,languages,menus,pasteContract,platform,processes,recovery,settings,storage,terminals,themes,windows,workbench,workspaces") {
                 throw new Error("unexpected public exports");
             }
             if (!Object.isFrozen(knot.editor) || !Object.isFrozen(knot.commands) || !Object.isFrozen(knot.workbench) || !Object.isFrozen(knot.storage)) {
@@ -4542,9 +4542,6 @@ fn public_facade_is_semantic_and_private_bindings_are_hidden() {
             }
             if (!Object.isFrozen(knot.menus) || Object.keys(knot.menus).join(",") !== "add") {
                 throw new Error("menus facade is incomplete");
-            }
-            if (!Object.isFrozen(knot.providers) || Object.keys(knot.providers).sort().join(",") !== "all,get,register") {
-                throw new Error("providers facade is incomplete");
             }
             if (!Object.isFrozen(knot.keymaps) || Object.keys(knot.keymaps).sort().join(",") !== "bind,bindText,getPreset,listPresets,registerPreset,unbind,unbindText") {
                 throw new Error("keymaps facade is incomplete");

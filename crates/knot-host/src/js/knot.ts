@@ -32,7 +32,6 @@ import {
   registerStatusItem,
   addMenuItem,
   matchCandidates,
-  registerProvider, getProvider, listProviders,
   completionContract, pasteContract,
   registerView,
   lastFocusedDocument,
@@ -97,7 +96,6 @@ export const workbench = Object.freeze({
 }) satisfies typeof Declared.workbench;
 
 export const menus = Object.freeze({ add: addMenuItem }) satisfies typeof Declared.menus;
-export const providers = Object.freeze({ register: registerProvider, get: getProvider, all: listProviders }) satisfies typeof Declared.providers;
 export const completion = Object.freeze({ match: matchCandidates }) satisfies typeof Declared.completion;
 export { completionContract, pasteContract };
 export const documents = Object.freeze({ list: listDocuments, get: getDocument, open: openDocument, createUntitled, present: presentDocument, reload: reloadDocument, save: saveDocument, setLanguage: setDocumentLanguage }) satisfies typeof Declared.documents;

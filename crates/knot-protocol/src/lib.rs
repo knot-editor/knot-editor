@@ -160,14 +160,6 @@ impl ContractClientId {
     }
 }
 
-/// A live provider registration as `providers.get` and `providers.all` report
-/// it: the identity a call addresses and the method names it offers.
-#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize)]
-pub struct ProviderInfo {
-    pub registration: ProviderRegistrationId,
-    pub methods: Vec<String>,
-}
-
 /// An opaque reference to an editor buffer.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, serde::Serialize)]
 pub struct BufferHandle(u64);

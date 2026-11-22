@@ -1771,62 +1771,6 @@ globalThis.__knotRequestTreeChildren = async (registration, window, instance, pa
   }
 };
 
-// The method names a provider offers: its own and inherited functions, not
-// Object's.
-function providerMethods(implementation: Record<string, unknown>) {
-  const names = new Set<string>();
-  for (let object: object | null = implementation; object !== null && object !== Object.prototype;
-    object = Object.getPrototypeOf(object)) {
-    for (const name of Object.getOwnPropertyNames(object)) {
-      if (name !== "constructor" && typeof implementation[name] === "function") names.add(name);
-    }
-  }
-  return [...names].sort();
-}
-
-export async function registerProvider(name: unknown, implementation: unknown) {
-  if (typeof name !== "string" || name === "") {
-    throw new TypeError("providers.register requires a provider name");
-  }
-  if (implementation === null || typeof implementation !== "object") {
-    throw new TypeError("providers.register requires an object of methods");
-  }
-  const methods = providerMethods(implementation as Record<string, unknown>);
-  if (methods.length === 0) throw new TypeError("providers.register requires at least one method");
-  const registration = await registerCallable(
-    (registration: number) => providerImplementations.set(registration, implementation as Record<string, unknown>),
-    () => request("registerProvider", name, methods));
-  const owned = ownership(() => providerImplementations.delete(registration),
-    () => request("unregisterProvider", registration));
-  return disposableHandle(owned);
-}
-
-// A handle calls one registration's methods in the provider's package; each
-// call carries the window of the command it runs in.
-function providerHandle(info: Native) {
-  const handle: Record<string, (...arguments_: unknown[]) => Promise<unknown>> = {};
-  for (const method of info.methods) {
-    handle[method] = async (...arguments_: unknown[]) => {
-      if (arguments_.length > 1) throw new TypeError("provider methods take at most one argument");
-      const argument = JSON.stringify(validateJsonValue(arguments_[0] ?? null));
-      const window = currentFrame()?.capture?.window ?? null;
-      return JSON.parse(await request("callProvider", info.registration, method, argument, window));
-    };
-  }
-  return Object.freeze(handle) as Native;
-}
-
-export async function getProvider(name: unknown) {
-  if (typeof name !== "string") throw new TypeError("providers.get requires a provider name");
-  const info = await request("getProvider", name);
-  return info === null ? null : providerHandle(info);
-}
-
-export async function listProviders(name: unknown) {
-  if (typeof name !== "string") throw new TypeError("providers.all requires a provider name");
-  return Object.freeze((await request("listProviders", name)).map(providerHandle));
-}
-
 globalThis.__knotCallProvider = async (registration: number, method: string, argument: string, window: Native) => {
   const implementation = providerImplementations.get(registration)
     ?? await callable(providerImplementations, registration);

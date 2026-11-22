@@ -10,7 +10,7 @@ use std::collections::{HashMap, HashSet};
 use gpui::{App, Entity, WeakEntity};
 
 use knot_model::contracts::ContractSchema;
-use knot_model::providers::{ProviderRegistration, ProviderRegistry, ServedContract};
+use knot_model::providers::{ProviderRegistry, ServedContract};
 use knot_protocol::{ContractClientId, ProviderRegistrationId};
 use knot_protocol::{
     ExtensionId, ExtensionLifecycleId, RequestContext, TreeAction, TreeChildrenResponse,
@@ -468,18 +468,6 @@ impl ExtensionSemanticBridge {
         Ok(entry.definition.id.clone())
     }
 
-    pub(crate) fn register_provider(
-        &mut self,
-        request: &RequestContext,
-        name: String,
-        methods: Vec<String>,
-    ) -> Result<ProviderRegistrationId, SemanticError> {
-        self.validate(request)?;
-        Ok(self
-            .providers
-            .register(request.extension, request.lifecycle, name, methods))
-    }
-
     pub(crate) fn serve_contract(
         &mut self,
         request: &RequestContext,
@@ -530,10 +518,6 @@ impl ExtensionSemanticBridge {
 
     pub(crate) fn providers(&self) -> &ProviderRegistry {
         &self.providers
-    }
-
-    pub(crate) fn provider(&self, id: ProviderRegistrationId) -> Option<&ProviderRegistration> {
-        self.providers.registration(id)
     }
 
     fn owned_tree_kind(
@@ -741,17 +725,25 @@ mod tests {
             ));
 
             let provider = bridge
-                .register_provider(
+                .serve_contract(
                     &request(extension, lifecycle, 2),
-                    "editor.completion".into(),
-                    vec!["provideCompletions".into()],
+                    ServedContract {
+                        owner: "knot".into(),
+                        name: "completion".into(),
+                        schema: std::sync::Arc::new(
+                            knot_model::contracts::ContractSchema::parse(
+                                r#"{"provideCompletions":{"kind":"fn","argument":{"kind":"void"},"result":{"kind":"void"}}}"#,
+                            )
+                            .unwrap(),
+                        ),
+                    },
                 )
                 .unwrap();
-            assert!(bridge.provider(provider).is_some());
+            assert!(bridge.providers().registration(provider).is_some());
 
             bridge.remove_lifecycle(extension, lifecycle, cx);
             assert_eq!(tree.read(cx).lifecycle_state(), (false, 0, false, 0));
-            assert!(bridge.provider(provider).is_none());
+            assert!(bridge.providers().registration(provider).is_none());
             assert!(bridge.definitions().is_empty());
             assert!(!bridge.apply_tree_response(
                 TreeChildrenResponse {

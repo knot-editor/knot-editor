@@ -1,14 +1,11 @@
-//! Named extension providers and served contracts: registrations in
-//! registration order, owned by the lifecycle that registered them. A name may
-//! have several registrations; lookups by name return the latest one or all of
-//! them, oldest first. A contract client binds one consumer to one contract
-//! registration and lives as long as both.
+//! Served contracts: registrations in registration order, owned by the
+//! lifecycle that registered them. A contract may have several registrations;
+//! lookups return the latest one or all of them, oldest first. A contract
+//! client binds one consumer to one registration and lives as long as both.
 
 use std::sync::Arc;
 
-use knot_protocol::{
-    ContractClientId, ExtensionId, ExtensionLifecycleId, ProviderInfo, ProviderRegistrationId,
-};
+use knot_protocol::{ContractClientId, ExtensionId, ExtensionLifecycleId, ProviderRegistrationId};
 
 use crate::contracts::{ContractBinding, ContractSchema};
 
@@ -31,21 +28,9 @@ impl ServedContract {
 #[derive(Clone, Debug, PartialEq)]
 pub struct ProviderRegistration {
     pub id: ProviderRegistrationId,
-    pub name: String,
     pub extension: ExtensionId,
     pub lifecycle: ExtensionLifecycleId,
-    pub methods: Vec<String>,
-    /// Set for a served contract, which name lookups never return.
-    pub contract: Option<ServedContract>,
-}
-
-impl ProviderRegistration {
-    pub fn info(&self) -> ProviderInfo {
-        ProviderInfo {
-            registration: self.id,
-            methods: self.methods.clone(),
-        }
-    }
+    pub contract: ServedContract,
 }
 
 /// One consumer's binding to a contract registration, with the schemas its
@@ -74,48 +59,18 @@ impl ProviderRegistry {
         Self::default()
     }
 
-    pub fn register(
-        &mut self,
-        extension: ExtensionId,
-        lifecycle: ExtensionLifecycleId,
-        name: String,
-        methods: Vec<String>,
-    ) -> ProviderRegistrationId {
-        self.push(extension, lifecycle, name, methods, None)
-    }
-
     pub fn serve(
         &mut self,
         extension: ExtensionId,
         lifecycle: ExtensionLifecycleId,
         contract: ServedContract,
     ) -> ProviderRegistrationId {
-        let methods = contract.schema.methods().map(str::to_owned).collect();
-        self.push(
-            extension,
-            lifecycle,
-            contract.name.clone(),
-            methods,
-            Some(contract),
-        )
-    }
-
-    fn push(
-        &mut self,
-        extension: ExtensionId,
-        lifecycle: ExtensionLifecycleId,
-        name: String,
-        methods: Vec<String>,
-        contract: Option<ServedContract>,
-    ) -> ProviderRegistrationId {
         self.next_registration += 1;
         let id = ProviderRegistrationId::new(self.next_registration);
         self.registrations.push(ProviderRegistration {
             id,
-            name,
             extension,
             lifecycle,
-            methods,
             contract,
         });
         id
@@ -145,28 +100,10 @@ impl ProviderRegistry {
             .find(|registration| registration.id == id)
     }
 
-    /// The most recent provider registration under `name`.
-    pub fn get(&self, name: &str) -> Option<&ProviderRegistration> {
-        self.registrations
-            .iter()
-            .rev()
-            .find(|registration| registration.contract.is_none() && registration.name == name)
-    }
-
-    /// Every provider registration under `name`, oldest first.
-    pub fn all<'a>(&'a self, name: &'a str) -> impl Iterator<Item = &'a ProviderRegistration> {
-        self.registrations.iter().filter(move |registration| {
-            registration.contract.is_none() && registration.name == name
-        })
-    }
-
     /// The most recent registration serving `owner`'s contract `name`.
     pub fn latest_contract(&self, owner: &str, name: &str) -> Option<&ProviderRegistration> {
         self.registrations.iter().rev().find(|registration| {
-            registration
-                .contract
-                .as_ref()
-                .is_some_and(|contract| contract.owner == owner && contract.name == name)
+            registration.contract.owner == owner && registration.contract.name == name
         })
     }
 
@@ -177,16 +114,13 @@ impl ProviderRegistry {
         name: &'a str,
     ) -> impl Iterator<Item = &'a ProviderRegistration> {
         self.registrations.iter().filter(move |registration| {
-            registration
-                .contract
-                .as_ref()
-                .is_some_and(|contract| contract.owner == owner && contract.name == name)
+            registration.contract.owner == owner && registration.contract.name == name
         })
     }
 
     /// Binds a consumer with schema `consumer` to a contract registration,
     /// reusing its binding with the same schema. None when the registration
-    /// serves no contract.
+    /// is gone.
     pub fn bind(
         &mut self,
         extension: ExtensionId,
@@ -194,7 +128,7 @@ impl ProviderRegistry {
         registration: ProviderRegistrationId,
         consumer: ContractSchema,
     ) -> Option<ContractClientId> {
-        let provider = self.registration(registration)?.contract.as_ref()?;
+        let provider = &self.registration(registration)?.contract;
         if let Some(existing) = self.clients.iter().find(|client| {
             (client.extension, client.lifecycle, client.registration)
                 == (extension, lifecycle, registration)
@@ -253,14 +187,6 @@ mod tests {
         (ExtensionId::new(value), ExtensionLifecycleId::new(1))
     }
 
-    fn register(
-        registry: &mut ProviderRegistry,
-        owner: (ExtensionId, ExtensionLifecycleId),
-        name: &str,
-    ) -> ProviderRegistrationId {
-        registry.register(owner.0, owner.1, name.into(), vec!["rows".into()])
-    }
-
     fn schema(result: &str) -> ContractSchema {
         ContractSchema::parse(&format!(
             r#"{{"rows":{{"kind":"fn","argument":{{"kind":"void"}},"result":{{"kind":"{result}"}}}}}}"#
@@ -285,36 +211,10 @@ mod tests {
     }
 
     #[test]
-    fn get_returns_the_latest_registration_and_all_keeps_registration_order() {
-        let mut registry = ProviderRegistry::new();
-        let first = register(&mut registry, owner(1), "workspace.files");
-        let other = register(&mut registry, owner(2), "editor.completion");
-        let second = register(&mut registry, owner(2), "workspace.files");
-
-        assert_eq!(
-            registry.get("workspace.files").map(|found| found.id),
-            Some(second)
-        );
-        assert_eq!(
-            registry
-                .all("workspace.files")
-                .map(|found| found.id)
-                .collect::<Vec<_>>(),
-            vec![first, second]
-        );
-        assert_eq!(
-            registry.get("editor.completion").map(|found| found.id),
-            Some(other)
-        );
-        assert!(registry.get("missing").is_none());
-        assert_eq!(registry.all("missing").count(), 0);
-    }
-
-    #[test]
     fn disposing_the_latest_registration_uncovers_the_previous_one() {
         let mut registry = ProviderRegistry::new();
-        let first = register(&mut registry, owner(1), "workspace.files");
-        let second = register(&mut registry, owner(2), "workspace.files");
+        let first = serve(&mut registry, owner(1), "rows");
+        let second = serve(&mut registry, owner(2), "rows");
 
         let (extension, lifecycle) = owner(1);
         assert!(
@@ -326,7 +226,9 @@ mod tests {
         assert!(!registry.unregister(second, extension, lifecycle));
 
         assert_eq!(
-            registry.get("workspace.files").map(|found| found.id),
+            registry
+                .latest_contract("@example/provider", "rows")
+                .map(|found| found.id),
             Some(first)
         );
         assert!(registry.registration(second).is_none());
@@ -335,23 +237,32 @@ mod tests {
     #[test]
     fn removing_a_lifecycle_drops_only_its_registrations() {
         let mut registry = ProviderRegistry::new();
-        let kept = register(&mut registry, owner(1), "workspace.files");
-        register(&mut registry, owner(2), "workspace.files");
-        register(&mut registry, owner(2), "workspace.buffers");
+        let kept = serve(&mut registry, owner(1), "rows");
+        serve(&mut registry, owner(2), "rows");
+        serve(&mut registry, owner(2), "other");
 
         let (extension, lifecycle) = owner(2);
         registry.remove_lifecycle(extension, lifecycle);
 
         assert_eq!(
-            registry.get("workspace.files").map(|found| found.id),
+            registry
+                .latest_contract("@example/provider", "rows")
+                .map(|found| found.id),
             Some(kept)
         );
-        assert!(registry.get("workspace.buffers").is_none());
-        let restarted = registry.register(
+        assert!(
+            registry
+                .latest_contract("@example/provider", "other")
+                .is_none()
+        );
+        let restarted = registry.serve(
             extension,
             ExtensionLifecycleId::new(2),
-            "workspace.files".into(),
-            Vec::new(),
+            ServedContract {
+                owner: "@example/provider".into(),
+                name: "rows".into(),
+                schema: Arc::new(schema("string")),
+            },
         );
         assert!(
             restarted.value() > kept.value(),
@@ -360,14 +271,11 @@ mod tests {
     }
 
     #[test]
-    fn contracts_are_found_by_owner_and_name_and_never_by_provider_name() {
+    fn contracts_are_found_by_owner_and_name() {
         let mut registry = ProviderRegistry::new();
         let first = serve(&mut registry, owner(1), "rows");
         let second = serve(&mut registry, owner(2), "rows");
-        let provider = register(&mut registry, owner(1), "rows");
 
-        assert_eq!(registry.get("rows").map(|found| found.id), Some(provider));
-        assert_eq!(registry.all("rows").count(), 1);
         assert_eq!(
             registry
                 .latest_contract("@example/provider", "rows")
@@ -398,11 +306,16 @@ mod tests {
         let (provider, provider_lifecycle) = owner(1);
         let (consumer, consumer_lifecycle) = owner(2);
         let served = serve(&mut registry, owner(1), "rows");
-        let named = register(&mut registry, owner(1), "rows");
         assert!(
             registry
-                .bind(consumer, consumer_lifecycle, named, schema("string"))
-                .is_none()
+                .bind(
+                    consumer,
+                    consumer_lifecycle,
+                    ProviderRegistrationId::new(99),
+                    schema("string")
+                )
+                .is_none(),
+            "a registration that is gone binds no client"
         );
 
         let client = registry

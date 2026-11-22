@@ -453,7 +453,7 @@ impl ProductExtensionHost {
             .semantics
             .providers()
             .latest_contract(KNOT_CONTRACTS, &name)?;
-        let contract = provider.contract.as_ref()?;
+        let contract = &provider.contract;
         let method = "providePaste";
         let execution = self
             .pool
@@ -789,6 +789,11 @@ pub(crate) struct ProductExtensionHost {
     _startup_task: Option<Task<()>>,
     _personal_startup_task: Option<Task<()>>,
     personal_config_key: Option<ExtensionKey>,
+    /// The discovered packages that publish a contract module, which personal
+    /// config may import.
+    contract_packages: std::collections::BTreeMap<String, InstalledPackage>,
+    /// The directory URL of the loaded personal config.
+    personal_config_root: String,
     /// The live lifecycle of each admitted package, by canonical name.
     package_keys: HashMap<String, ExtensionKey>,
     /// The entitlements each live package declared. Every loaded package
@@ -874,6 +879,8 @@ impl ProductExtensionHost {
             _startup_task: None,
             _personal_startup_task: None,
             personal_config_key: None,
+            contract_packages: Default::default(),
+            personal_config_root: String::new(),
             package_keys: HashMap::new(),
             declared_entitlements: HashMap::new(),
             processes: Default::default(),
@@ -993,6 +1000,7 @@ impl ProductExtensionHost {
             let report_host = this.clone();
             let mut report_cx = cx.clone();
             let contracts = contract_packages(&discovered.packages);
+            let _ = this.update(cx, |host, _| host.contract_packages = contracts.clone());
             let report = DependencyPlan::new(discovered)
                 .with_not_loaded(not_loaded)
                 .execute_with_progress(
@@ -1669,6 +1677,7 @@ impl ProductExtensionHost {
                     let key = config_key.expect("post-init has a loaded config graph");
                     let execution = this
                         .update(cx, |host, _| {
+                            host.share_contracts_with_personal_config(key)?;
                             host.evaluate_personal_config_phase(key, HostConfigPhase::PostInit)
                         })
                         .map_err(|error| {
@@ -1704,11 +1713,38 @@ impl ProductExtensionHost {
         }));
     }
 
+    /// Lets the personal config import the contract module of every
+    /// discovered package, which it may do from post-init on.
+    fn share_contracts_with_personal_config(&self, key: ExtensionKey) -> Result<(), String> {
+        let dependencies = self
+            .contract_packages
+            .values()
+            .filter_map(|package| {
+                let contract = package.manifest.contract.as_deref()?;
+                let modules = package.module_root().and_then(|root| {
+                    ModuleGraph::dependency(
+                        &self.personal_config_root,
+                        &package.manifest.name,
+                        &root,
+                        &package.manifest.main,
+                        contract,
+                        &package.sources,
+                    )
+                });
+                Some(modules)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        self.pool
+            .add_personal_config_dependencies(key, dependencies)
+            .map_err(|error| error.to_string())
+    }
+
     fn load_personal_config(
         &mut self,
         key: ExtensionKey,
         graph: ModuleGraph,
     ) -> Result<(), String> {
+        self.personal_config_root = graph.root().to_owned();
         self.pool
             .load_personal_config(key, ExtensionConfig::named("personal-config"), graph)
             .map_err(|error| error.to_string())?;
@@ -1807,6 +1843,36 @@ impl ProductExtensionHost {
             BTreeMap::from([("main.js".into(), Arc::from(source))]),
         )
         .map_err(|error| error.to_string())?;
+        self.load_package(key, graph, None)
+    }
+
+    /// Loads the package `name` from `main`, publishing `contract` when given,
+    /// that requires the package whose name and contract module are `required`.
+    #[cfg(test)]
+    pub(crate) fn load_test_contract_package(
+        &mut self,
+        key: ExtensionKey,
+        name: &str,
+        main: &str,
+        contract: Option<&str>,
+        required: Option<(&str, &str)>,
+    ) -> Result<ExtensionExecution, String> {
+        let root = |name: &str| format!("file:///fixtures/{}/", name.replace(['@', '/'], "-"));
+        let mut files = BTreeMap::from([("main.js".to_owned(), Arc::from(main))]);
+        if let Some(contract) = contract {
+            files.insert("contract.js".into(), Arc::from(contract));
+        }
+        let mut graph = ModuleGraph::new(&root(name), "main.js", files)?
+            .owned_by(name, contract.map(|_| "contract.js"))?;
+        if let Some((required, contract)) = required {
+            graph = graph.with_dependency(
+                required,
+                &root(required),
+                "main.js",
+                "contract.js",
+                &BTreeMap::from([("contract.js".to_owned(), Arc::from(contract))]),
+            )?;
+        }
         self.load_package(key, graph, None)
     }
 
@@ -2925,7 +2991,7 @@ impl ProductExtensionHost {
                 .semantics
                 .providers()
                 .registration(provider.id)
-                .and_then(|registration| registration.contract.as_ref())
+                .map(|registration| &registration.contract)
                 .ok_or_else(|| "the completion provider is no longer served".to_owned())
                 .and_then(|contract| {
                     let execution = self
@@ -2992,7 +3058,7 @@ impl ProductExtensionHost {
                     lifecycle: provider.lifecycle,
                     label: self
                         .lifecycle_label(ExtensionKey::new(provider.extension, provider.lifecycle))
-                        .unwrap_or_else(|| provider.name.clone()),
+                        .unwrap_or_else(|| provider.contract.name.clone()),
                 },
             )
             .collect()

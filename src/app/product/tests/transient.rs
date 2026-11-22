@@ -346,10 +346,15 @@ fn a_listener_and_a_provider_run_while_a_command_awaits_a_picker(cx: &mut TestAp
 
     // The first document opened while the picker is up reaches the picker's
     // package; the second reaches a neighbor that calls the package's provider.
+    const ECHO: &str = r#"
+import { defineContract, s } from "knot/contract";
+export const echo = defineContract("echo", { echo: s.fn(s.string(), s.string()) });
+"#;
     const PICKER: &str = r#"
-import { commands, providers, workbench } from "knot";
+import { commands, workbench } from "knot";
+import { echo } from "./contract.js";
 let opened = 0;
-await providers.register("interleave.echo", { echo: (value) => value });
+await echo.serve({ echo: (value) => value });
 await workbench.observe(async (event) => {
   if (event.type === "documentOpened" && ++opened === 1) await workbench.writeClipboardText("listener ran");
 });
@@ -359,11 +364,12 @@ await commands.register("interleave.pick", async () => {
 });
 "#;
     const NEIGHBOR: &str = r#"
-import { providers, workbench } from "knot";
+import { workbench } from "knot";
+import { echo } from "@example/picker";
 let opened = 0;
 await workbench.observe(async (event) => {
   if (event.type !== "documentOpened" || ++opened !== 2) return;
-  await workbench.writeClipboardText(await (await providers.get("interleave.echo")).echo("provider ran"));
+  await workbench.writeClipboardText(await (await echo.client()).echo("provider ran"));
 });
 "#;
     let documents = install_globals(cx);
@@ -375,10 +381,21 @@ await workbench.observe(async (event) => {
     let picker = ExtensionKey::new(ExtensionId::new(712), ExtensionLifecycleId::new(1));
     let neighbor = ExtensionKey::new(ExtensionId::new(713), ExtensionLifecycleId::new(1));
     let loaded = Arc::new(Mutex::new(0));
-    for (key, source) in [(picker, PICKER), (neighbor, NEIGHBOR)] {
+    for (key, name, source, contract, required) in [
+        (picker, "@example/picker", PICKER, Some(ECHO), None),
+        (
+            neighbor,
+            "@example/neighbor",
+            NEIGHBOR,
+            None,
+            Some(("@example/picker", ECHO)),
+        ),
+    ] {
         let loaded = loaded.clone();
         host.update(cx, |host, cx| {
-            let execution = host.load_test_source(key, source).unwrap();
+            let execution = host
+                .load_test_contract_package(key, name, source, contract, required)
+                .unwrap();
             cx.spawn(async move |_, _| {
                 execution.await.unwrap();
                 *loaded.lock().unwrap() += 1;

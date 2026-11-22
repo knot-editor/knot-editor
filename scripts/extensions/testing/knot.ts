@@ -21,7 +21,6 @@ export const {
   pasteContract,
   platform,
   processes,
-  providers,
   recovery,
   settings,
   storage,

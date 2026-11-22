@@ -3,11 +3,11 @@
 // pane the command ran from. Open Recent lists every recently active file. A
 // search button at the toolbar's right runs Go to File. Go to File and Search
 // Everywhere are one picker over buffers, files, and commands, started on its
-// Files and All tabs, and Go to Buffer (cmd-alt-p) on Buffers. The providers
-// `workspace.files`, `workspace.buffers`, and `workspace.actions` offer the
-// rows of those tabs to other packages as `rows(query)`.
-import { commands, documents, icons, providers, workbench, workspaces } from "knot";
+// Files and All tabs, and Go to Buffer (cmd-alt-p) on Buffers. The `workspace`
+// contract offers the rows of those tabs to other packages.
+import { commands, documents, icons, workbench, workspaces } from "knot";
 import type { CommandContext } from "knot";
+import { workspace } from "./contract.js";
 import { actionRows, buffersRows, filesRows, listProvider } from "./lists.js";
 import { recordActive } from "./recent.js";
 import { searchEverywhere } from "./searchEverywhere.js";
@@ -37,9 +37,11 @@ async function openRecent({ target }: CommandContext) {
 
 export async function start() {
   await workbench.observe(recordActive);
-  await providers.register("workspace.files", listProvider(filesRows));
-  await providers.register("workspace.buffers", listProvider(buffersRows));
-  await providers.register("workspace.actions", listProvider((lists, query) => actionRows(lists.available, query)));
+  await workspace.serve(listProvider({
+    files: filesRows,
+    buffers: buffersRows,
+    actions: (lists, query) => actionRows(lists.available, query),
+  }));
   await commands.register(COMMAND, goToFile, {
     title: "Go to File…",
     description: "Open a file by typing part of its path.",

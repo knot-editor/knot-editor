@@ -1,4 +1,4 @@
-import { commands, editor, workbench, keymaps, platform, providers, completionContract, pasteContract } from "knot";
+import { commands, editor, workbench, keymaps, platform, completionContract, pasteContract } from "knot";
 import type { Buffer, CommandInfo, CommandTarget, Disposable, HostError, HostErrorCode } from "knot";
 
 void commands.register("described", async () => {}, {
@@ -636,25 +636,6 @@ const association: Disposable = await languages.associate("markdown", { fileExte
 await association[Symbol.asyncDispose]();
 // @ts-expect-error patterns are lists
 await languages.associate("markdown", { fileExtensions: "mdx" });
-
-import type { ProviderCallContext, ProviderHandle } from "knot";
-interface Rows { rows(query: string): Promise<readonly { id: string; label: string }[]> }
-const rowsRegistration: Disposable = await providers.register("check.rows", {
-  rows(query: string, context: ProviderCallContext) {
-    void context.window;
-    return [{ id: query, label: query }];
-  },
-});
-const rowsProvider: ProviderHandle<Rows> | null = await providers.get<Rows>("check.rows");
-const firstRows: readonly { id: string; label: string }[] | undefined = await rowsProvider?.rows("q");
-void firstRows;
-const everyRows: readonly ProviderHandle<Rows>[] = await providers.all<Rows>("check.rows");
-void everyRows;
-const untyped = await providers.get("check.rows");
-void untyped?.rows("q");
-await rowsRegistration[Symbol.asyncDispose]();
-// @ts-expect-error the name is text
-await providers.register(1, {});
 
 import { defineContract, s } from "knot/contract";
 import type { ContractClient, ContractImplementation, Infer } from "knot/contract";

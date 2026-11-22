@@ -479,7 +479,7 @@ await languages.register({
 
 /// Vim with the Markdown package, whose paste provider links a URL.
 fn packages_with_markdown() -> &'static [knot_bundled::BundledSource] {
-    let mut packages = knot_ext_vim::PACKAGES.to_vec();
+    let mut packages = vim_and_go_to_file();
     packages.extend(knot_ext_languages::PACKAGES.iter().filter(|package| {
         package
             .manifest
@@ -866,7 +866,7 @@ fn a_key_costs_few_draws_and_requests(cx: &mut TestAppContext) {
 /// Vim with the status bar and word highlight packages, the extensions that
 /// also answer every selection change.
 fn packages_with_chrome() -> &'static [knot_bundled::BundledSource] {
-    let mut packages = knot_ext_vim::PACKAGES.to_vec();
+    let mut packages = vim_and_go_to_file();
     packages.extend(knot_ext_workbench::PACKAGES.iter().filter(|package| {
         ["chrome", "word-highlight"].iter().any(|name| {
             package
@@ -1313,7 +1313,18 @@ fn ctrl_w_counts_repeat_resizing(cx: &mut TestAppContext) {
 
 /// The bundled Vim package.
 fn packages() -> &'static [knot_bundled::BundledSource] {
-    knot_ext_vim::PACKAGES
+    Box::leak(vim_and_go_to_file().into_boxed_slice())
+}
+
+/// Vim and Go to File, whose file list it requires.
+fn vim_and_go_to_file() -> Vec<knot_bundled::BundledSource> {
+    let mut packages = knot_ext_vim::PACKAGES.to_vec();
+    packages.extend(
+        knot_ext_workbench::PACKAGES
+            .iter()
+            .filter(|package| package.manifest.contains("\"name\": \"@knot/go-to-file\"")),
+    );
+    packages
 }
 
 /// The directory of the bundled package `@knot/<name>`.

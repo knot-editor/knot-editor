@@ -240,3 +240,72 @@ fn importing_a_package_that_is_not_required_fails_to_load(cx: &mut TestAppContex
         result => panic!("the consumer loaded: {result:?}"),
     }
 }
+
+#[gpui::test]
+fn a_package_requiring_a_provider_that_failed_to_start_does_not_load(cx: &mut TestAppContext) {
+    let broken = format!("{SERVES_GREETER}\nthrow new Error('broken provider');");
+    let fixture = start_with_contracts(
+        &[
+            (PROVIDER, &[], &broken, Some(GREETER)),
+            (CONSUMER, &[PROVIDER], CONSUMES_GREETER, None),
+        ],
+        cx,
+    );
+    use crate::app::extensions::load::LoadResult;
+    assert!(matches!(
+        fixture.report_entry(PROVIDER, cx),
+        LoadResult::Failed(_)
+    ));
+    assert!(!matches!(
+        fixture.report_entry(CONSUMER, cx),
+        LoadResult::Loaded
+    ));
+}
+
+/// Personal config serves a contract of an installed package from post-init,
+/// without a manifest to require it, so every consumer reaches the override.
+#[gpui::test]
+fn personal_config_replaces_an_installed_provider_for_every_consumer(cx: &mut TestAppContext) {
+    let config = tempfile::tempdir().unwrap();
+    let extensions = tempfile::tempdir().unwrap();
+    std::fs::write(config.path().join("post-init.js"), OVERRIDES_GREETER).unwrap();
+    install_package(
+        extensions.path(),
+        PROVIDER,
+        &[],
+        Some("contract.js"),
+        &[("main.js", SERVES_GREETER), ("contract.js", GREETER)],
+    );
+    install_extension(
+        extensions.path(),
+        CONSUMER,
+        &[PROVIDER],
+        &[("main.js", CONSUMES_GREETER)],
+    );
+    install_globals(cx);
+    install_launch_gate(cx);
+    let host = cx.update(crate::app::extensions::host::install);
+    cx.update(|cx| super::super::dispatch_launch_request(None, cx));
+    host.update(cx, |host, cx| {
+        host.start_product_startup(
+            Ok(config.path().to_path_buf()),
+            Ok(extensions.path().to_path_buf()),
+            cx,
+        )
+    });
+    assert!(wait_for_product_startup(cx));
+    let native_window = cx.windows()[0];
+    let window = cx.read(|cx| {
+        native_window
+            .downcast::<KnotWindow>()
+            .unwrap()
+            .entity(cx)
+            .unwrap()
+    });
+    let execution = dispatch_product_command(&window, native_window, "consumer.greet", cx);
+    assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
+    assert_eq!(
+        cx.read(|cx| cx.read_from_clipboard().unwrap().text().unwrap()),
+        r#"{"greeting":"hi knot","window":false}"#
+    );
+}

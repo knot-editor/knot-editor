@@ -2730,20 +2730,6 @@ pub(crate) async fn toggle_view(
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct RegisterProviderArguments {
-    pub name: String,
-    pub methods: Vec<String>,
-}
-impl HostArguments for RegisterProviderArguments {
-    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
-        Ok(Self {
-            name: reader.text(2, "provider name must be text")?,
-            methods: reader.text_list(3)?,
-        })
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
 pub(crate) struct ProviderRegistrationArguments {
     pub registration: knot_protocol::ProviderRegistrationId,
 }
@@ -2758,72 +2744,6 @@ impl HostArguments for ProviderRegistrationArguments {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) struct ProviderNameArguments {
-    pub name: String,
-}
-impl HostArguments for ProviderNameArguments {
-    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
-        Ok(Self {
-            name: reader.text(2, "provider name must be text")?,
-        })
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) struct CallProviderArguments {
-    pub registration: knot_protocol::ProviderRegistrationId,
-    pub method: String,
-    pub argument: String,
-    pub window: Option<String>,
-}
-impl HostArguments for CallProviderArguments {
-    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
-        Ok(Self {
-            registration: knot_protocol::ProviderRegistrationId::new(reader.integer(2)?),
-            method: reader.text(3, "provider method must be text")?,
-            argument: reader.text(4, "provider argument must be JSON text")?,
-            window: reader.optional_text(5, "window target must be text")?,
-        })
-    }
-}
-
-/// Failures of a call through a provider handle.
-#[derive(Debug, HostError)]
-pub(crate) enum ProviderCallError {
-    #[error(transparent)]
-    Access(AccessError),
-    #[error(
-        code = "ProviderNotFound",
-        message = "the provider is no longer registered"
-    )]
-    NotFound,
-    #[error(
-        code = "UnsupportedOperation",
-        message = "a package calls its own providers directly, not through the registry"
-    )]
-    OwnProvider,
-    #[error(code = "ProviderFailure", message = "{message}")]
-    Failure { message: String },
-}
-impl From<AccessError> for ProviderCallError {
-    fn from(error: AccessError) -> Self {
-        Self::Access(error)
-    }
-}
-
-#[host_operation("registerProvider")]
-pub(crate) async fn register_provider(
-    context: HostContext,
-    arguments: RegisterProviderArguments,
-) -> Result<knot_protocol::ProviderRegistrationId, SemanticError> {
-    let request = context.request;
-    context.foreground(|host, _| {
-        host.semantics
-            .register_provider(&request, arguments.name, arguments.methods)
-    })?
-}
-
 #[host_operation("unregisterProvider")]
 pub(crate) async fn unregister_provider(
     context: HostContext,
@@ -2836,71 +2756,6 @@ pub(crate) async fn unregister_provider(
         host.cancel_completion_provider(arguments.registration, cx);
         Ok(())
     })?
-}
-
-#[host_operation("getProvider")]
-pub(crate) async fn get_provider(
-    context: HostContext,
-    arguments: ProviderNameArguments,
-) -> Result<Option<knot_protocol::ProviderInfo>, AccessError> {
-    context.foreground(|host, _| {
-        host.semantics
-            .providers()
-            .get(&arguments.name)
-            .map(|registration| registration.info())
-    })
-}
-
-#[host_operation("listProviders")]
-pub(crate) async fn list_providers(
-    context: HostContext,
-    arguments: ProviderNameArguments,
-) -> Result<Vec<knot_protocol::ProviderInfo>, AccessError> {
-    context.foreground(|host, _| {
-        host.semantics
-            .providers()
-            .all(&arguments.name)
-            .map(|registration| registration.info())
-            .collect()
-    })
-}
-
-/// Runs a method of another package's provider and answers with its JSON
-/// result as text; the caller's own root waits while the provider's runs.
-#[host_operation("callProvider")]
-pub(crate) async fn call_provider(
-    context: HostContext,
-    arguments: CallProviderArguments,
-) -> Result<String, ProviderCallError> {
-    let caller = context.request.extension;
-    let execution = context.foreground(move |host, _| {
-        let provider = host
-            .semantics
-            .provider(arguments.registration)
-            .ok_or(ProviderCallError::NotFound)?;
-        if provider.extension == caller {
-            return Err(ProviderCallError::OwnProvider);
-        }
-        let key = ExtensionKey::new(provider.extension, provider.lifecycle);
-        host.pool
-            .call_provider(
-                key,
-                knot_protocol::ProviderCallRequest {
-                    registration: arguments.registration,
-                    method: arguments.method,
-                    argument: arguments.argument,
-                    window: arguments.window,
-                },
-            )
-            .map_err(|_| ProviderCallError::NotFound)
-    })??;
-    match execution.await {
-        Ok(Ok(result)) => Ok(result),
-        Ok(Err(message)) => Err(ProviderCallError::Failure { message }),
-        Err(error) => Err(ProviderCallError::Failure {
-            message: error.to_string(),
-        }),
-    }
 }
 
 /// A contract as a package's `serve` or `client` describes it: the package
@@ -3049,11 +2904,7 @@ pub(crate) async fn call_contract(
         if provider.extension == caller {
             return Err(ContractCallError::OwnContract);
         }
-        let label = provider
-            .contract
-            .as_ref()
-            .map(knot_model::providers::ServedContract::label)
-            .unwrap_or_default();
+        let label = provider.contract.label();
         let argument = serde_json::from_str(&arguments.argument).map_err(|error| {
             ContractCallError::Failure {
                 message: error.to_string(),

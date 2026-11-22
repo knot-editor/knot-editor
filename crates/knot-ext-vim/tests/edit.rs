@@ -7,7 +7,30 @@ const ENABLE: &str = r#"import { settings } from "knot";
 await settings.set("vim.enabled", true);
 "#;
 
-/// Vim plus the packages providing its lists.
+/// A Go to File that publishes the `workspace` contract and serves nothing, as
+/// when it is restarting.
+const INERT_GO_TO_FILE: knot_bundled::BundledSource = knot_bundled::BundledSource {
+    manifest: r#"{
+  "name": "@knot/go-to-file",
+  "apiVersion": 1,
+  "version": "0.1.0",
+  "main": "dist/main.js",
+  "contract": "dist/contract.js",
+}"#,
+    sources: &[
+        ("dist/main.js", "export {};"),
+        (
+            "dist/contract.js",
+            r#"import { defineContract, s } from "knot/contract";
+export const workspace = defineContract("workspace", {
+  files: s.fn(s.string(), s.array(s.json())),
+});"#,
+        ),
+    ],
+};
+
+/// Vim plus the package providing its file list: Go to File, or one that
+/// serves nothing.
 fn packages(with_files: bool) -> &'static [knot_bundled::BundledSource] {
     let mut packages = knot_ext_vim::PACKAGES.to_vec();
     if with_files {
@@ -16,6 +39,8 @@ fn packages(with_files: bool) -> &'static [knot_bundled::BundledSource] {
                 .iter()
                 .filter(|package| package.manifest.contains("\"name\": \"@knot/go-to-file\"")),
         );
+    } else {
+        packages.push(INERT_GO_TO_FILE);
     }
     Box::leak(packages.into_boxed_slice())
 }
@@ -85,7 +110,7 @@ fn with_no_match_enter_opens_the_typed_path(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn without_a_files_provider_the_path_still_opens(cx: &mut TestAppContext) {
+fn without_a_served_file_list_the_path_still_opens(cx: &mut TestAppContext) {
     let fixture = fixture(false, cx);
     let keys = format!(":e {}/src/main.rs<cr>", fixture.directory.display());
     fixture.editor.press_unsettled(&keys, cx);

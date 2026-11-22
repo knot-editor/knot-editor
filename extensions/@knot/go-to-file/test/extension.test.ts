@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
-import { commands, documents, history, providers, windows } from "knot";
+import { commands, documents, history, windows } from "knot";
 import * as host from "knot/testing";
+import { workspace } from "../src/contract.js";
 import { COMMAND, GO_TO_BUFFER_COMMAND, SEARCH_EVERYWHERE_COMMAND, SEARCH_ICON, start } from "../src/extension.js";
 
 const ROOT = "file:///work/app";
@@ -279,37 +280,34 @@ test("choosing a buffer or file with a line goes there, clamped to the text", as
   assert.equal(host.editorView().caret, 6);
 });
 
-type Lists = { rows(query: string): Promise<PickerRowLike[]> };
-type PickerRowLike = { id: string; label: string; description?: string | null; labelMatches?: unknown };
-
-async function providerRows(name: string, query: string): Promise<PickerRowLike[]> {
-  return (await providers.get<Lists>(name))!.rows(query);
+async function providerRows(list: "files" | "buffers" | "actions", query: string) {
+  return (await workspace.client())[list](query);
 }
 
-test("workspace.files lists the rows of the Files tab with file URIs as IDs", async () => {
+test("the workspace contract's files lists the rows of the Files tab with file URIs as IDs", async () => {
   host.query("butt");
   host.answer("showPicker", { kind: "dismissed" });
   await host.run(COMMAND);
   const [, tab] = host.pickerRows();
 
-  const rows = await providerRows("workspace.files", "butt");
+  const rows = await providerRows("files", "butt");
   assert.deepEqual(rows, tab?.map((row) => ({ ...row, id: row.id.replace(/^file::/, "") })));
   assert.deepEqual(rows.map((row) => row.id), [`${ROOT}/src/ui/button.ts`]);
 });
 
-test("workspace.files puts recent files first and labels several roots", async () => {
+test("the workspace contract's files puts recent files first and labels several roots", async () => {
   host.seedFile("file:///work/lib/util.ts", "util");
   host.setRoots(host.windowTargets()[0]!, [ROOT, "file:///work/lib"]);
   const recent = `${ROOT}/README.md`;
   await history.record("recent-files", recent);
 
-  const rows = await providerRows("workspace.files", "");
+  const rows = await providerRows("files", "");
   assert.equal(rows[0]?.id, recent);
   assert.equal(rows[0]?.description, "app");
   assert.ok(rows.some((row) => row.id === "file:///work/lib/util.ts" && row.description === "lib"));
 });
 
-test("workspace.buffers matches the picker's tab with document IDs", async () => {
+test("the workspace contract's buffers matches the picker's tab with document IDs", async () => {
   await documents.open(`${ROOT}/src/main.ts`);
   host.selectTab("buffers");
   host.query("main");
@@ -317,20 +315,20 @@ test("workspace.buffers matches the picker's tab with document IDs", async () =>
   await host.run(SEARCH_EVERYWHERE_COMMAND);
   const tab = host.pickerRows().at(-1);
 
-  const rows = await providerRows("workspace.buffers", "main");
+  const rows = await providerRows("buffers", "main");
   const [document] = host.documentIds();
   assert.deepEqual(rows.map((row) => [row.id, row.label]), [[document, "main.ts"]]);
   assert.deepEqual(rows, tab?.map((row) => ({ ...row, id: row.id.replace(/^buffer::/, "") })));
 });
 
-test("workspace.actions matches the picker's tab with command names", async () => {
+test("the workspace contract's actions matches the picker's tab with command names", async () => {
   host.selectTab("actions");
   host.query("open rec");
   host.answer("showPicker", { kind: "dismissed" });
   await host.run(SEARCH_EVERYWHERE_COMMAND);
   const tab = host.pickerRows().at(-1);
 
-  const rows = await providerRows("workspace.actions", "open rec");
+  const rows = await providerRows("actions", "open rec");
   assert.equal(rows[0]?.id, "workspace.open-recent");
   assert.deepEqual(rows, tab?.map((row) => ({ ...row, id: row.id.replace(/^command::/, "") })));
 });
