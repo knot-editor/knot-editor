@@ -87,9 +87,12 @@ fn the_number_lane_widens_with_the_line_count(cx: &mut TestAppContext) {
     cx.run_until_parked();
     let three_digits = gutter(cx, &editor);
     assert!(three_digits.width > two_digits.width);
-    assert_eq!(
-        three_digits.width - two_digits.width,
-        three_digits.numbers_end - two_digits.numbers_end
+    assert!(
+        (three_digits.width
+            - two_digits.width
+            - (three_digits.numbers_end - two_digits.numbers_end))
+            .abs()
+            < 1e-3
     );
 }
 
@@ -166,6 +169,7 @@ fn lane_point(
         let x = match lane {
             GutterLane::Markers => 4.,
             GutterLane::Numbers => view.gutter.markers_width + 2.,
+            GutterLane::Bars => view.gutter.bars_start + 2.,
             GutterLane::Folds => view.gutter.folds_start + 2.,
         };
         point(
@@ -424,7 +428,7 @@ fn folding_settings_shape_the_fold_lane(cx: &mut TestAppContext) {
     let off = gutter(cx, &view);
     assert_eq!(off.folding, Folding::Off);
     assert!(off.width < with_lane);
-    assert_eq!(off.lane_at(off.numbers_end), Some(GutterLane::Numbers));
+    assert_eq!(off.lane_at(off.numbers_end), Some(GutterLane::Bars));
 }
 
 #[gpui::test]
@@ -452,4 +456,167 @@ fn the_pointer_over_the_gutter_is_tracked(cx: &mut TestAppContext) {
     assert!(hover(cx, in_gutter));
     let in_text = cx.read(|cx| view.read(cx).text_bounds().center());
     assert!(!hover(cx, in_text));
+}
+
+fn bar(start: usize, end: usize, style: GutterStyle, command: Option<&str>) -> EditorContribution {
+    EditorContribution {
+        range: ByteRange {
+            start_byte_offset: start,
+            end_byte_offset: end,
+        },
+        decoration: None,
+        gutter: Some(GutterMark::new("diff.added", style)),
+        command: command.map(Into::into),
+    }
+}
+
+fn marked_model(text: &str, marks: &[EditorContribution]) -> BufferModel {
+    let mut model = BufferModel::from_text(text);
+    model
+        .replace_contributions(ContributionSource::fixture(), marks, 0)
+        .unwrap();
+    model
+}
+
+/// The rows each bar-lane mark paints in, for the rows `visible`.
+fn bar_spans(
+    cx: &mut VisualTestContext,
+    editor: &Entity<EditorView>,
+    visible: Option<std::ops::Range<usize>>,
+) -> Vec<(std::ops::Range<usize>, GutterStyle, bool)> {
+    cx.read(|cx| {
+        let state = editor.read(cx).editor().read(cx);
+        let visible = visible.unwrap_or(0..state.wrap().row_count());
+        super::super::gutter::bar_marks(state, &visible)
+            .into_iter()
+            .map(|(span, mark)| (span, mark.style, mark.below))
+            .collect()
+    })
+}
+
+#[gpui::test]
+fn bars_cover_wrapped_rows_and_wedges_land_on_boundaries(cx: &mut TestAppContext) {
+    cx.update(|cx| {
+        let mut settings = ApplicationSettings::default();
+        settings
+            .0
+            .set(
+                crate::app::settings::EDITOR_SOFT_WRAP,
+                true.into(),
+                SettingsScope::default(),
+            )
+            .unwrap();
+        cx.set_global(settings);
+    });
+    let long = (0..60)
+        .map(|word| format!("w{word:02}"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let text = format!("{long}\nshort\nlast");
+    let (long_end, last) = (long.len(), long.len() + 7);
+    let model = cx.new(|_| {
+        Buffer::new(marked_model(
+            &text,
+            &[
+                bar(0, long_end + 1 + 5, GutterStyle::Bar, None),
+                bar(last, last, GutterStyle::Deletion, None),
+                bar(text.len(), text.len(), GutterStyle::Deletion, None),
+            ],
+        ))
+    });
+    let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
+    cx.simulate_resize(gpui::size(px(400.), px(300.)));
+    cx.run_until_parked();
+    let rows = cx.read(|cx| editor.read(cx).editor().read(cx).wrap().rows(0).len());
+    assert!(rows > 2);
+
+    // The bar paints every wrapped row of its lines. The wedge on "last"
+    // shares that line with the wedge below the text, and the later one wins.
+    let all = bar_spans(cx, &editor, None);
+    let bars = all
+        .iter()
+        .filter(|(_, style, _)| *style == GutterStyle::Bar)
+        .map(|(span, ..)| span.clone())
+        .collect::<Vec<_>>();
+    assert_eq!(bars, [0..rows, rows..rows + 1]);
+    let wedges = all
+        .iter()
+        .filter(|(_, style, _)| *style == GutterStyle::Deletion)
+        .cloned()
+        .collect::<Vec<_>>();
+    assert_eq!(wedges, [(rows + 1..rows + 2, GutterStyle::Deletion, true)]);
+
+    // Rows outside the viewport paint nothing.
+    let scrolled = bar_spans(cx, &editor, Some(1..rows));
+    assert_eq!(scrolled.len(), 1);
+    assert_eq!(scrolled[0].0, 1..rows);
+}
+
+#[gpui::test]
+fn bars_skip_hidden_lines(cx: &mut TestAppContext) {
+    cx.update(|cx| cx.set_global(ApplicationSettings::default()));
+    let model = cx.new(|_| {
+        Buffer::new(marked_model(
+            NESTED,
+            &[bar(0, NESTED.len(), GutterStyle::Bar, None)],
+        ))
+    });
+    let (view, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
+    cx.refresh().unwrap();
+    assert_eq!(bar_spans(cx, &view, None).len(), 7);
+    let at = lane_point(cx, &view, GutterLane::Folds, 0);
+    press_with(cx, &view, at, Modifiers::default());
+    cx.refresh().unwrap();
+    let spans = bar_spans(cx, &view, None)
+        .into_iter()
+        .map(|(span, ..)| span)
+        .collect::<Vec<_>>();
+    // The folded lines take no rows and paint nothing.
+    assert_eq!(spans, [0..1, 1..2]);
+}
+
+#[gpui::test]
+fn the_bar_lane_runs_a_mark_command_and_selects_nothing(cx: &mut TestAppContext) {
+    cx.update(|cx| cx.set_global(ApplicationSettings::default()));
+    let model = cx.new(|_| {
+        Buffer::new(marked_model(
+            "one\ntwo\nthree",
+            &[
+                bar(0, 7, GutterStyle::Bar, Some("fixture.bar")),
+                bar(8, 8, GutterStyle::Deletion, Some("fixture.wedge")),
+            ],
+        ))
+    });
+    let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
+    cx.refresh().unwrap();
+    let commands = Rc::new(RefCell::new(Vec::new()));
+    let seen = commands.clone();
+    cx.update(|_, cx| {
+        cx.subscribe(&editor, move |_, action: &EditorContributionAction, _| {
+            seen.borrow_mut()
+                .push((action.command.name.clone(), action.range));
+        })
+        .detach();
+    });
+    for line in [1, 2] {
+        let at = lane_point(cx, &editor, GutterLane::Bars, line);
+        assert_eq!(press(cx, &editor, at, false), None);
+        cx.run_until_parked();
+    }
+    let range = |start, end| ByteRange {
+        start_byte_offset: start,
+        end_byte_offset: end,
+    };
+    assert_eq!(
+        *commands.borrow(),
+        [
+            ("fixture.bar".to_string(), range(0, 7)),
+            ("fixture.wedge".to_string(), range(8, 8)),
+        ]
+    );
+
+    // A line without a mark leaves the selection alone.
+    let at = lane_point(cx, &editor, GutterLane::Numbers, 2);
+    assert_eq!(press(cx, &editor, at, false), Some(8..13));
+    assert_eq!(commands.borrow().len(), 2);
 }

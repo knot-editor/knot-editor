@@ -30,7 +30,9 @@ use layout::*;
 use gpui::{prelude::*, *};
 use unicode_segmentation::UnicodeSegmentation;
 
-use knot_protocol::{ByteRange, ContributionCommand, DecorationStyle, ProviderRegistrationId};
+use knot_protocol::{
+    ByteRange, ContributionCommand, DecorationStyle, GutterStyle, ProviderRegistrationId,
+};
 
 pub(crate) use knot_model::editor::*;
 

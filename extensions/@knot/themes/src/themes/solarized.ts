@@ -43,6 +43,9 @@ const ansi = {
 const accents = {
   "border.hover": blue,
   "card.focusedBorder": blue,
+  "diff.added": green,
+  "diff.modified": blue,
+  "diff.removed": red,
   "error": red,
   "info": blue,
   "notification.error": red,

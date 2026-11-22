@@ -598,6 +598,12 @@ declare module "knot" {
     readonly "card.background"?: string;
     /** The outline of the focused pane. */
     readonly "card.focusedBorder"?: string;
+    /** Lines a text added, in the gutter and in diffs. */
+    readonly "diff.added"?: string;
+    /** Lines a text changed, in the gutter and in diffs. */
+    readonly "diff.modified"?: string;
+    /** Lines a text removed, in the gutter and in diffs. */
+    readonly "diff.removed"?: string;
     /** Where a dragged tab would land. */
     readonly "dropTarget.background"?: string;
     /** Text editor background. */

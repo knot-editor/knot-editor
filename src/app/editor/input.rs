@@ -37,6 +37,9 @@ impl EditorView {
             Some(GutterLane::Markers) => editor
                 .gutter_marker(line)
                 .and_then(|marker| Some((marker.command.clone()?, marker.source, marker.range))),
+            Some(GutterLane::Bars) => editor
+                .gutter_bar(line)
+                .and_then(|bar| Some((bar.command.clone()?, bar.source, bar.range))),
             Some(GutterLane::Folds) => {
                 self.suppress_drag_selection = true;
                 self.editor.update(cx, |editor, cx| {
@@ -75,8 +78,11 @@ impl EditorView {
             cx.stop_propagation();
             return;
         }
-        if self.gutter_lane_at(ev.position) == Some(GutterLane::Markers) {
-            // The marker lane selects nothing.
+        if matches!(
+            self.gutter_lane_at(ev.position),
+            Some(GutterLane::Markers | GutterLane::Bars)
+        ) {
+            // The mark lanes select nothing.
             self.suppress_drag_selection = true;
             return;
         }

@@ -144,20 +144,29 @@ impl Element for EditorElement {
             let editor = view.editor.read(cx);
             let rows = editor.visible_rows();
             let line_height = view.metrics.line_height;
-            let markers = editor
+            let row_bounds = |rows: Range<usize>, x: f32, width: f32| Bounds {
+                origin: point(
+                    bounds.origin.x + px(x),
+                    bounds.origin.y + px((rows.start as f32 - editor.scroll_top()) * line_height),
+                ),
+                size: size(px(width), px(rows.len() as f32 * line_height)),
+            };
+            let mut markers = editor
                 .gutter_markers()
                 .iter()
-                .filter(|marker| marker.command.is_some() && !editor.wrap().is_hidden(marker.line))
+                .filter(|marker| marker.command.is_some())
                 .map(|marker| editor.wrap().first_row(marker.line))
                 .filter(|row| rows.contains(row))
-                .map(|row| Bounds {
-                    origin: point(
-                        bounds.origin.x,
-                        bounds.origin.y + px((row as f32 - editor.scroll_top()) * line_height),
-                    ),
-                    size: size(px(view.gutter.markers_width), px(line_height)),
-                })
+                .map(|row| row_bounds(row..row + 1, 0., view.gutter.markers_width))
                 .collect::<Vec<_>>();
+            markers.extend(
+                gutter::bar_marks(editor, &rows)
+                    .into_iter()
+                    .filter(|(_, bar)| bar.command.is_some())
+                    .map(|(span, _)| {
+                        row_bounds(span, view.gutter.bars_start, view.gutter.bars_width)
+                    }),
+            );
             (view.gutter, markers)
         });
         let gutter_width = px(gutter.width).min(bounds.size.width);
@@ -319,6 +328,11 @@ impl Element for EditorElement {
                         .collect()
                 }
             };
+            let bar_marks = if view.rendering.show_gutter {
+                gutter::bar_marks(editor, &rows)
+            } else {
+                Vec::new()
+            };
             let gutter = GutterPaint {
                 layout: view.gutter,
                 folds,
@@ -338,6 +352,16 @@ impl Element for EditorElement {
                 } else {
                     Vec::new()
                 },
+                bars: bar_marks
+                    .iter()
+                    .filter(|(_, bar)| bar.style == GutterStyle::Bar)
+                    .map(|(span, bar)| (span.clone(), theme.paint_color(&bar.key)))
+                    .collect(),
+                wedges: bar_marks
+                    .iter()
+                    .filter(|(_, bar)| bar.style == GutterStyle::Deletion)
+                    .map(|(span, bar)| (span.start, bar.below, theme.paint_color(&bar.key)))
+                    .collect(),
                 background: theme.paint_color(color::EDITOR_GUTTER_BACKGROUND),
                 number: theme.paint_color(color::EDITOR_LINE_NUMBER),
                 active_number: theme.paint_color(color::EDITOR_LINE_NUMBER_ACTIVE),
@@ -669,6 +693,29 @@ impl Element for EditorElement {
                         };
                         window.paint_quad(fill(marker_bounds, *color));
                     }
+                    let bar_x = gutter_bounds.origin.x
+                        + px((gutter.layout.bars_start + 3. * metrics.scale()).max(0.));
+                    for (span, color) in &gutter.bars {
+                        let bar_bounds = Bounds {
+                            origin: point(bar_x, top(span.start)),
+                            size: size(px(3. * metrics.scale()), line_height * span.len() as f32),
+                        };
+                        window.paint_quad(fill(bar_bounds, *color));
+                    }
+                    for (row, below, color) in &gutter.wedges {
+                        // A wedge points at the boundary above its row, or at
+                        // the end of the text below it.
+                        let edge = top(*row) + if *below { line_height } else { px(0.) };
+                        let half = px(3. * metrics.scale());
+                        let mut path = PathBuilder::fill();
+                        path.move_to(point(bar_x, edge - half));
+                        path.line_to(point(bar_x + px(5. * metrics.scale()), edge));
+                        path.line_to(point(bar_x, edge + half));
+                        path.close();
+                        if let Ok(path) = path.build() {
+                            window.paint_path(path, *color);
+                        }
+                    }
                     for (row, collapsed) in &gutter.folds {
                         let half = px(3. * metrics.scale());
                         let center = point(
@@ -788,6 +835,11 @@ pub(super) struct GutterPaint {
     folds: Vec<(usize, bool)>,
     /// The row and color of each visible marker.
     markers: Vec<(usize, Hsla)>,
+    /// The visible rows and color of each change bar.
+    bars: Vec<(Range<usize>, Hsla)>,
+    /// The row, whether it points below the row, and color of each visible
+    /// deletion wedge.
+    wedges: Vec<(usize, bool, Hsla)>,
     background: Hsla,
     number: Hsla,
     active_number: Hsla,

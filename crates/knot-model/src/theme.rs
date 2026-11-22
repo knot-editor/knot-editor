@@ -224,6 +224,9 @@ native_colors! {
     BORDER_HOVER = "border.hover", "A resizable divider under the pointer.", Rgb(0x3574f0), Rgb(0x3574f0);
     BUTTON_BACKGROUND = "button.background", "Inline action buttons.", Rgb(0x393b40), Rgb(0xebecf0);
     BUTTON_HOVER_BACKGROUND = "button.hover.background", "An inline action button under the pointer.", Rgb(0x43454a), Rgb(0xdfe1e5);
+    DIFF_ADDED = "diff.added", "Lines a text added, in the gutter and in diffs.", Key(SUCCESS), Key(SUCCESS);
+    DIFF_MODIFIED = "diff.modified", "Lines a text changed, in the gutter and in diffs.", Key(INFO), Key(INFO);
+    DIFF_REMOVED = "diff.removed", "Lines a text removed, in the gutter and in diffs.", Key(ERROR), Key(ERROR);
     DROP_TARGET_BACKGROUND = "dropTarget.background", "Where a dragged tab would land.", Rgba(0x3574f055), Rgba(0x3574f040);
     EDITOR_BRACKET_MATCH = "editor.bracketMatch", "Background of the bracket at the cursor and its partner.", Rgba(0x3574f040), Rgba(0x3574f033);
     EDITOR_BACKGROUND = "editor.background", "Text editor background.", Key(BACKGROUND), Key(BACKGROUND);
@@ -737,6 +740,21 @@ mod tests {
             ],
         );
         assert!(colors.is_empty());
+    }
+
+    #[test]
+    fn diff_colors_follow_the_status_colors_until_a_theme_sets_them() {
+        let definitions = native_color_definitions();
+        for appearance in [Appearance::Dark, Appearance::Light] {
+            let theme = Theme::defaults(appearance, &definitions);
+            assert_eq!(theme.color(color::DIFF_ADDED), theme.color(color::SUCCESS));
+            assert_eq!(theme.color(color::DIFF_MODIFIED), theme.color(color::INFO));
+            assert_eq!(theme.color(color::DIFF_REMOVED), theme.color(color::ERROR));
+        }
+        let values = HashMap::from([(color::DIFF_ADDED.to_owned(), Color::rgb(0x123456))]);
+        let theme = Theme::new(Appearance::Dark, &values, &definitions, &[]);
+        assert_eq!(theme.color(color::DIFF_ADDED), Color::rgb(0x123456));
+        assert_eq!(theme.color(color::DIFF_MODIFIED), theme.color(color::INFO));
     }
 
     #[test]
