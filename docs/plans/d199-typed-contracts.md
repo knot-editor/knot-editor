@@ -1,6 +1,6 @@
 # D199 — Typed contracts between packages
 
-Status: 🚧 checkpoint 1 awaiting review. Item: [D199](../roadmap.md#extension-platform-and-language-tooling),
+Status: 🚧 checkpoint 1 done; checkpoint 2 next. Item: [D199](../roadmap.md#extension-platform-and-language-tooling),
 part of the [version control plan](vcs.md) (milestone 1, before D211).
 
 ## Outcome
@@ -105,54 +105,19 @@ and the bundled `workspace.*` providers) move onto contracts.
 
 ## Checkpoints
 
-### 1. Schema builder, descriptor, and host validator — 🔍 awaiting review
+### 1. Schema builder, descriptor, and host validator ✅
 
-Define the contract value in the public API and validate descriptors
-without any cross-isolate call.
-
-- ✅ Built: the builder lives in its own built-in module,
-  [contract.js](../../crates/knot-host/src/js/contract.js), served as
-  `"knot/contract"` (not inside `bootstrap.js`, so the Node tests import the
-  real builder and the module stays pure); types in
-  [knot.d.ts](../../crates/knot-host/src/js/knot.d.ts) (`Infer`,
-  `ContractClient`, `ContractImplementation`); the validator is
-  [contracts.rs](../../crates/knot-model/src/contracts.rs)
-  (`ContractSchema`, `ContractBinding`, `ContractViolation`).
-- ✅ Scope decisions: a schema value is its own descriptor (frozen plain
-  data); `s.void()` marks a method without argument or result and carries
-  null; `s.optional(x)` is only an object field and means absent, not null;
-  `s.nullable(x)` is `union([x, null()])`. A contract value is
-  `{ name, methods }`; `serve`/`client` come with checkpoint 2, as does the
-  call-context parameter of `ContractImplementation`.
-- 🔍 Error wording for review: a violation reads
-  `files: result[1].label: expected string, found number 2 (the provider's schema)`
-  (checkpoint 2 prefixes the package and contract name); objects report
-  `unexpected field` and `missing field "label"`, unions
-  `expected string or null`, an absent method
-  `extra: the provider's contract has no such method`. Descriptor errors read
-  `invalid contract descriptor at m.argument.items: void is only a method argument or result`.
-
-- **Deliverables:** schema builder + `defineContract` (the `"knot/contract"`
-  facade) in
-  [knot.js](../../crates/knot-host/src/js/knot.js) /
-  [bootstrap.js](../../crates/knot-host/src/js/bootstrap.js), inferred
-  types in [knot.d.ts](../../crates/knot-host/src/js/knot.d.ts); a
-  serializable schema descriptor; a validator for that descriptor in
-  `knot-model` (plain data in, path-ful errors out) that compiles a
-  descriptor once and walks a parsed value, validating a call against up to
-  two descriptors.
-- **Implementation context:** mirror how `providers` types are declared in
-  [knot.d.ts](../../crates/knot-host/src/js/knot.d.ts:2617) and how
-  `validateJsonValue` guards values in
-  [bootstrap.js](../../crates/knot-host/src/js/bootstrap.js:1694). The
-  validator sits beside [providers.rs](../../crates/knot-model/src/providers.rs)
-  in `knot-model`, not in the host crate, so it is testable without V8.
-- **Validation:** `node:test` cases for builder inference and descriptor
-  shape under `scripts/extensions/` (`node tasks.mjs check` / `test`);
-  Rust unit tests for every schema kind, strict-object rejection, unsafe
-  numbers, and error paths.
-- **Review gate:** schema vocabulary and error wording agreed before any
-  transport work builds on them.
+Done. The builder is the built-in `"knot/contract"` module,
+[contract.js](../../crates/knot-host/src/js/contract.js) (its own file, not
+in `bootstrap.js`, so the Node tests import the real builder); types in
+[knot.d.ts](../../crates/knot-host/src/js/knot.d.ts); the validator is
+[contracts.rs](../../crates/knot-model/src/contracts.rs). Agreed: a schema
+value is its own frozen descriptor; `s.void()` marks a missing argument or
+result and carries null; `s.optional(x)` is only an object field and means
+absent; `s.nullable(x)` is `union([x, null()])`; a violation reads
+`files: result[1].label: expected string, found number 2 (the provider's schema)`.
+Checkpoint 2 adds `serve`/`client`, the call-context parameter of
+`ContractImplementation`, and the package/contract prefix on violations.
 
 ### 2. Cross-isolate transport: manifest, import resolution, serve/client
 
