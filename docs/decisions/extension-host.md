@@ -277,10 +277,10 @@ A package reuses another's feature through a contract defined once in code:
 the provider serves it, a consumer imports the provider as a module and calls
 typed functions that run in the provider's isolate, and the host validates
 every argument and result. Commands return no data and shared modules would run
-provider code in the consumer, so neither fits. The earlier untyped named
-providers with a locally redeclared JSON shape were removed because nothing
-checked either side, and `@knot/vcs` and its backends (D211) are large enough
-for that to cause mistakes.
+provider code in the consumer, so neither fits. Untyped named providers with a
+JSON shape each consumer redeclares were rejected because nothing checks either
+side, and `@knot/vcs` and its backends (D211) are large enough for that to
+cause mistakes.
 
 - **Schema builder of our own, not a library.** The descriptor must be plain
   data the Rust validator reads, and contract modules are evaluated in every
@@ -308,7 +308,7 @@ for that to cause mistakes.
   not at load, so most revision differences keep working.
 - **Several registrations: the latest wins.** Any package may serve a
   contract, so personal config overrides a bundled provider and disposal falls
-  back to the previous one, as the earlier providers did. A `declare`
+  back to the previous one. A `declare`
   single-or-multiple step was rejected for the same reason: a second
   registration must still be accepted.
 - **Knot-defined contracts native code interprets** (completion, paste) keep

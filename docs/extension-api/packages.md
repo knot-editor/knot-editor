@@ -32,7 +32,8 @@ import { greeter } from "@example/greeter";
 const text = await (await greeter.client()).greet("knot");
 ```
 
-A contract is identified by its package and name, so the author writes only the
+A runnable version is in [`contract.js`](../../scripts/extensions/examples/contract.js)
+and [`serve.js`](../../scripts/extensions/examples/serve.js). A contract is identified by its package and name, so the author writes only the
 name. Types are inferred from the schemas, which accept JSON-shaped values
 (`s` in [`knot.d.ts`](../../crates/knot-host/src/js/knot.d.ts)). `client()`
 binds the latest registration, so a later package, or personal config from

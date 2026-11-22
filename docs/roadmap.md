@@ -30,7 +30,6 @@ point.
 
 The [version control plan](plans/vcs.md) comes first, in its milestone order:
 
-- D199 — Typed contracts between packages.
 - D209 — Diff function for extensions.
 - D210 — Richer gutter contributions.
 - D211 — VCS foundation and Git change gutter.
@@ -235,21 +234,8 @@ hold the analyses that support some items.
 
 ### Extension platform and language tooling
 
-- **D199 — Typed contracts between packages** 🚧 [plan](plans/d199-typed-contracts.md)
-  - Depends on: none
-  - Description: A package reuses another only through named providers, with
-    JSON calls and a contract each consumer declares locally; nothing checks
-    either side at runtime. `@knot/vcs` and its backends (D211) are the first
-    contract large enough for this to cause mistakes. Let a package import a
-    dependency's exports as a module whose functions call into the dependency's
-    isolate, with the contract defined once in code through a small schema
-    builder in Knot's API: types are inferred from it, it ships in built
-    JavaScript so packages built outside the repository need no extra step, and
-    the host validates calls and results against it. Part of the
-    [version control plan](plans/vcs.md).
-
 - **D226 — Optional package dependencies**
-  - Depends on: D199
+  - Depends on: none
   - Description: A package that imports another's contract must list it in
     `requires`, so the dependency loads first and a missing one blocks the
     consumer. Some consumers only enhance themselves when a provider exists,
@@ -416,7 +402,7 @@ The [version control plan](plans/vcs.md) holds the agreed architecture and the
 milestones these items belong to.
 
 - **D211 — VCS foundation and Git change gutter** 🚧
-  - Depends on: D199, D209, D210
+  - Depends on: D209, D210
   - Description: No version control integration exists. Add `@knot/vcs`, which
     defines the provider contract and owns the shared surfaces, and `@knot/git`,
     its first backend over the `git` command line: find repositories per root,
