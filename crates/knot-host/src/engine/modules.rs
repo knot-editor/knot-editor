@@ -423,6 +423,11 @@ pub(super) fn resolve_module_specifier(
                 // known only once packages load: check the import then.
                 return Ok(format!("{PACKAGE_STAND_IN}{request}"));
             }
+            if !built_in && registry.contractless.iter().any(|package| &**package == request) {
+                return Err(format!(
+                    "required package {request} publishes no contract module to import"
+                ));
+            }
             return Err(format!(
                 "extension import must be relative, knot, knot/contract, or a required package: {request}"
             ));

@@ -43,6 +43,9 @@ pub struct ModuleGraph {
     package: Option<PackageModules>,
     /// The required packages whose contract modules this graph may import.
     dependencies: Arc<Vec<PackageModules>>,
+    /// The required packages that publish no contract module, so an import of
+    /// one can say so.
+    contractless: Arc<Vec<Arc<str>>>,
 }
 
 impl ModuleGraph {
@@ -93,6 +96,7 @@ impl ModuleGraph {
             sources: Arc::new(sources),
             package: None,
             dependencies: Arc::default(),
+            contractless: Arc::default(),
         })
     }
 
@@ -176,6 +180,16 @@ impl ModuleGraph {
 
     pub fn package(&self) -> Option<&PackageModules> {
         self.package.as_ref()
+    }
+
+    /// Notes a required package that publishes no contract module.
+    pub fn with_contractless_dependency(mut self, package: &str) -> Self {
+        Arc::make_mut(&mut self.contractless).push(package.into());
+        self
+    }
+
+    pub fn contractless_dependencies(&self) -> &[Arc<str>] {
+        &self.contractless
     }
 
     pub fn dependencies(&self) -> &[PackageModules] {

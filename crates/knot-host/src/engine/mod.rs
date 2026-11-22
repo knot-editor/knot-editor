@@ -533,6 +533,7 @@ struct ModuleRegistry {
     entries: HashMap<String, Arc<str>>,
     package: Option<PackageModules>,
     dependencies: Vec<PackageModules>,
+    contractless: Vec<Arc<str>>,
     /// Only checking syntax and imports: a package import names a module that
     /// is not known yet, so it resolves to an empty stand-in.
     validating: bool,
@@ -576,6 +577,9 @@ impl ModuleRegistry {
             package: graph.and_then(|graph| graph.package().cloned()),
             dependencies: graph
                 .map(|graph| graph.dependencies().to_vec())
+                .unwrap_or_default(),
+            contractless: graph
+                .map(|graph| graph.contractless_dependencies().to_vec())
                 .unwrap_or_default(),
             validating: false,
         }

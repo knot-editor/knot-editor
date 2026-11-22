@@ -509,6 +509,32 @@ fn only_required_packages_are_importable() {
 }
 
 #[test]
+fn importing_a_required_package_without_a_contract_says_so() {
+    let pool = RuntimePool::new(PoolConfig::single_worker());
+    let graph = package_graph(
+        CONSUMER_ROOT,
+        "main.js",
+        &[("main.js", "import { greeter } from \"@example/plain\";")],
+    )
+    .owned_by("@example/consumer", None)
+    .unwrap()
+    .with_contractless_dependency("@example/plain");
+    let failure = pool
+        .load_package(key(330), IsolateConfig::default(), graph)
+        .unwrap()
+        .wait()
+        .unwrap_err();
+    assert_eq!(failure.kind(), RuntimeErrorKind::ModuleResolution);
+    assert!(
+        failure
+            .message()
+            .contains("@example/plain publishes no contract module"),
+        "{failure}"
+    );
+    pool.shutdown();
+}
+
+#[test]
 fn a_contract_graph_imports_only_the_builder_and_its_own_modules() {
     let pool = RuntimePool::new(PoolConfig::single_worker());
     for (index, (helper, expected)) in [

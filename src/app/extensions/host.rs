@@ -122,6 +122,7 @@ fn graph_for_package(
     .owned_by(&package.manifest.name, package.manifest.contract.as_deref())?;
     for dependency in &package.manifest.requires {
         let Some(provider) = contracts.get(dependency) else {
+            graph = graph.with_contractless_dependency(dependency);
             continue;
         };
         if let Some(contract) = &provider.manifest.contract {
