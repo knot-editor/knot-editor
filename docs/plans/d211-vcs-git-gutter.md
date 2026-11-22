@@ -116,39 +116,15 @@ Complete. `documents.track` is documented in
 windows and `launched`. A tracker is ordered within itself but not against a
 separate `workbench.observe`.
 
-### 2. Skeleton and contracts 🚧 awaiting review
+### 2. Skeleton and contracts ✅
 
-Deliverables: the `knot-ext-vcs` crate with `@knot/vcs` and `@knot/git`
-packages; the `vcs` contract and the `backendContract(id)` factory; backend
-registration; a test backend in the crate's tests that registers and answers
-calls, with two test backends active at once.
-
-Validation: behavior tests proving a factory-defined contract is owned by
-`@knot/vcs` when a backend serves it and `@knot/vcs` calls it, that two
-backends coexist, and that a backend unloading drops its registration.
-
-Review gate: the contract shape and the factory's identity; if the factory
-cannot work, redesign here before anything builds on it. Record the
-two-direction contract and per-backend factory in `docs/decisions/` if
-validated.
-
-**Built:** `@knot/vcs` serves `vcs` (`register`, `unregister`, `changed`,
-`backends`); `backendContract(id)` is in its contract module; `@knot/git` is a
-skeleton that registers and finds no repositories. `backends` drops a backend
-whose contract no longer binds. Tests are in `crates/knot-ext-vcs/tests/` and
-`extensions/@knot/vcs/test/`. The decision is in
-[version control backends](../decisions/bundled-packages.md#version-control-backends).
-
-**Implementation context:**
-- Mirror `crates/knot-ext-workbench` (`build.rs` with
-  `knot_bundled::build::compile_packages`, `src/lib.rs`, `tests/` with a
-  `bundled::only` helper); add to the workspace `Cargo.toml` and to
-  `crates/knot-app/src/lib.rs` and its `Cargo.toml`.
-- Package layout and manifest as `extensions/@knot/word-highlight`; `contract`
-  in the manifest as in `docs/extension-api/packages.md`.
-- The factory mirrors `pasteContract` in `crates/knot-host/src/js/contract.ts`;
-  contract examples in `scripts/extensions/examples/contract.js` and
-  `serve.js`; host-side contract tests in `src/app/product/tests/contracts.rs`.
+Complete. `@knot/vcs` serves `vcs` and defines `backendContract(id)`; `@knot/git`
+is a skeleton that registers and finds no repositories. The contract shape is in
+[version control backends](../decisions/bundled-packages.md#version-control-backends)
+and [sharing between packages](../extension-api/packages.md#share-a-feature-with-other-packages).
+A backend that stops is dropped when its contract no longer binds, since the
+host has no unload signal (D227); checkpoint 3 handles `ContractNotFound` from
+a backend by dropping it and clearing its marks.
 
 ### 3. Gutter against the test backend
 
