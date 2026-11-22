@@ -103,7 +103,7 @@ Alt+F5 and Shift+Alt+F5 as in VS Code.
 - Whether `files.watch` reports changes inside `.git`, which is hidden; if
   not, checkpoint 5 decides between a generic watch option and polling on
   window focus.
-- Debounce interval and whether the gutter has an enable setting.
+- Whether the gutter has an enable setting. The debounce is a fixed 150 ms; checkpoint 3 adds no setting.
 
 ## Checkpoints
 
@@ -126,7 +126,7 @@ A backend that stops is dropped when its contract no longer binds, since the
 host has no unload signal (D227); checkpoint 3 handles `ContractNotFound` from
 a backend by dropping it and clearing its marks.
 
-### 3. Gutter against the test backend
+### 3. Gutter against the test backend 🚧 awaiting review
 
 Deliverables: in `@knot/vcs`, document tracking through `documents.track`,
 discovery (roots, then the file's directory, deepest repository wins), the
@@ -138,6 +138,14 @@ competing nested repositories from two backends; a document with no baseline
 shows nothing; `RevisionConflict` retries; closing releases state.
 
 Review gate: the complete backend-agnostic gutter.
+
+Implemented: `@knot/vcs` follows documents with `documents.track`, finds the
+repository from the roots of every window and then the file's directory, caches
+baselines per document, and paints with `diff`. Behavior tests are in
+`extensions/@knot/vcs/test/gutter.test.ts` (fake host) and
+`crates/knot-ext-vcs/tests/gutter.rs` (real host, through
+`TestWindow::gutter_bars`). Roots are the union over windows, so a document
+shown in two windows is resolved once.
 
 **Implementation context:**
 - `diff` and `buffer.contributions.replace` with `ifRevision`, as in
