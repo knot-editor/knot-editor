@@ -57,8 +57,8 @@ touches.
   queries, evaluated after the commit on the reparsed tree.
 - [Brackets](decisions/editing.md#brackets): native matching and auto-closing
   inside the opener's undo step; matching within one syntax node.
-- [Editor gutter](decisions/editing.md#editor-gutter): fixed native lanes and
-  one shared, always-reserved marker lane.
+- [Editor gutter](decisions/editing.md#editor-gutter): fixed native lanes; a marker lane and
+  a bar lane, both always reserved; native `diff.*` color keys.
 - [Editing commands](decisions/editing.md#editing-commands): VS Code behavior
   and bindings; detected indentation becomes a document-scoped setting.
 - [Zoom, text size, and soft wrap](decisions/editing.md#zoom-text-size-and-soft-wrap):

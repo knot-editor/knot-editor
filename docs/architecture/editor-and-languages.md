@@ -171,18 +171,24 @@ ordinary text. Composition never closes or wraps. `editor.autoClosingBrackets`
 and `editor.autoSurround`, resolved for the view's scope, turn the two off.
 
 The gutter left of the text is an ordered row of native lanes: extension
-markers, line numbers, then folds. The view lays the lanes out before each paint, so
-text bounds, hit testing, and painting read one layout. The marker lane has a
-fixed width that stays reserved, so text never shifts when a marker appears;
-the number lane fits the digits of the line count and is absent when
+markers, line numbers, a bar lane, then folds. The view lays the lanes out before
+each paint, so text bounds, hit testing, and painting read one layout. The
+marker lane and the narrow bar lane have fixed widths that stay reserved, so
+text never shifts when a mark appears; the marker lane shows `dot` marks, and
+the bar lane shows `bar` marks over every row of their lines and `deletion`
+wedges on the boundary above a line, or below the last line at the end of a
+text. Each lane shows one mark per line and hidden lines paint nothing. The number lane fits the digits of the line count and is absent when
 `editor.lineNumbers`, resolved for the view's scope, is `"off"`. Relative
 numbers count from the caret's line, which shows its absolute number, and the
 caret line's number paints in `editor.lineNumber.active`. As VS Code's default
 does, the caret's line paints `editor.lineHighlight` across the text area
 while nothing is selected, focused or not. Each lane handles its own pointer:
 a number click selects its line with the line break, shift-click extends from
-the selection's anchor, and dragging extends by lines; a marker click runs
-the command of the marker painted there and never selects; a fold-lane click
+the selection's anchor, and dragging extends by lines; a click on a marker or bar
+runs the command of the mark painted there, an inline contribution's text click
+does too, and none of them selects. The click reaches the product as
+`EditorContributionAction`, which runs the command against the clicked tab with
+the contribution's current `range` added to its arguments; a fold-lane click
 toggles the fold or region starting on that line, Alt-click also its nested
 ones, and never selects. The fold lane draws chevrons on foldable lines while
 the pointer is over the gutter, or always when `editor.showFoldingControls` is

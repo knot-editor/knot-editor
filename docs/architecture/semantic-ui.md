@@ -29,7 +29,7 @@ stable anchors and model notification
 The request envelope supplies source identity. Replacement, explicit disposal,
 buffer closure, and extension teardown remove the complete source set.
 Built-ins and extensions use the same application-owned contribution registry.
-Editor contributions include anchored decorations, gutter markers, and
+Editor contributions include anchored decorations, gutter marks, and
 command-backed actions.
 
 Decorations may instead belong to one view. `EditorState` keeps one set per
@@ -38,7 +38,7 @@ same buffer store, so edits move it and a deletion that consumes a range
 removes it. Only that editor paints it: projection merges it with the
 buffer's contributions in the same severity order, above buffer decorations
 of equal precedence. Replacement, the view's closing, and lifecycle teardown
-remove the set, as they remove key contexts. Gutter markers and click actions
+remove the set, as they remove key contexts. Gutter marks and click actions
 stay buffer-wide. The bundled `@knot/word-highlight` package uses view sets to
 paint the caret word's whole-word occurrences, or a single-line selection's
 other occurrences, on each window's active editor after a settings-driven
@@ -48,7 +48,7 @@ Views paint styled text by composing each line's runs from ordered highlight
 layers of line-relative `(byte range, style)` spans; a later layer overrides an
 earlier one's color and font and adds its underline. Syntax sources resolve
 into nvim-treesitter's standard capture names by longest dotted prefix, and the
-`Theme` global maps each capture to a style. A decoration or gutter marker
+`Theme` global maps each capture to a style. A decoration or gutter mark
 names a color key instead, so a query can never draw one.
 
 A decoration also names one style, which picks its paint path. `underline`
@@ -61,9 +61,9 @@ the lines it covers, blank ones included, leaving out a final line its range
 only reaches at column 0. Behind the text, the cursor-line highlight paints
 first, then line bands, backgrounds in the same severity order, the
 selection, and the bracket match, so the selection stays readable over match
-highlights. Gutter markers share one lane, which shows the most severe marker of each line, the
-latest among equals, and runs that contribution's command when clicked
-([editor views](editor-and-languages.md#editor-views)).
+highlights. Gutter marks fill two native lanes, markers and bars, each showing the most
+severe mark of a line, the latest among equals, and a click runs that
+contribution's command ([editor views](editor-and-languages.md#editor-views)).
 
 ## Themes and color keys
 
@@ -73,7 +73,9 @@ either a color or another key; native keys are defined in one table beside the
 code that paints them, because native surfaces paint before packages start and
 when they fail, and extensions define more through `themes.defineColor`. A
 registered theme sets values for any keys, including ones nobody has defined
-yet, and styles capture names or their dotted prefixes.
+yet, and styles capture names or their dotted prefixes. The native table
+includes `diff.added`, `diff.modified`, and `diff.removed`, which the change
+gutter and diff views share.
 
 `ApplicationThemes` owns lifecycle-owned registrations, where the latest
 registration of a name wins, and extension color definitions. The

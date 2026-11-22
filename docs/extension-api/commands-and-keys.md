@@ -50,6 +50,12 @@ await commands.register("example.go-to-start", async ({ editor, buffer }) => {
 });
 ```
 
+A click on an editor contribution's gutter mark or text runs the
+contribution's `command` in the clicked editor, so `context.editor` and
+`context.buffer` are that editor and its buffer. Its `arguments`, an object,
+gain `range`, the contribution's current range after edits. A click in a text
+frame runs the command with a null editor and buffer.
+
 `commands.unavailable()` ends a handler with the `unavailable` outcome, as
 native commands report a target they do not apply to. Like `context.target`,
 the handle works only while its command runs and rejects `InvalidTarget` once

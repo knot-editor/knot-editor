@@ -84,13 +84,20 @@ and [languages](../architecture/editor-and-languages.md#syntax-highlighting-and-
 
 ## Editor gutter
 
-The gutter is a fixed order of native lanes, and extensions share one marker
-lane rather than defining lanes, because nothing yet needs a second one and
-every lane would need its own width, order, and input rules. The marker lane is
-always reserved, as VS Code's glyph margin and Zed's gutter are, so text never
-shifts sideways when a diagnostic appears or clears. Showing one marker per line
-keeps a click unambiguous: it runs the command of what is painted. Multi-line
-bars and marker tooltips wait for a consumer.
+The gutter is a fixed order of native lanes, and extensions fill two mark lanes
+rather than defining lanes, because every lane would need its own width, order,
+and input rules. Dots go in the marker lane and bars and deletion wedges in a
+separate bar lane right of the numbers, where VS Code, IntelliJ, and Zed put
+change bars. Bars in the shared marker lane were rejected: a change would hide
+a diagnostic on the same line. Both lanes are always reserved, as VS Code's
+glyph margin and Zed's gutter are, so text never shifts sideways when a mark
+appears or clears. Showing one mark per line in each lane keeps a click
+unambiguous: it runs the command of what is painted. Marker tooltips wait for
+a consumer.
+
+The change colors are native `diff.added`, `diff.modified`, and `diff.removed`
+keys rather than keys of the version control package, because comparing texts
+is an editor feature shared by the change gutter and the diff view.
 
 Relative line numbers exist because they cost one subtraction and a Vim mode
 needs them. The cursor-line highlight has no setting because a theme can make

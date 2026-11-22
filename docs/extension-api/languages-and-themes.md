@@ -203,26 +203,39 @@ and keys stay open, so a theme can style a package that loads after it:
 
 ```js
 await themes.defineColor({
-  key: "diff.add",
-  description: "Added lines in diffs",
-  defaults: { dark: "success", light: "#2ea04340" },
+  key: "review.pending",
+  description: "Lines awaiting review",
+  defaults: { dark: "warning", light: "#9a670040" },
 });
 ```
 
 A key defined by native code or a live lifecycle rejects `DuplicateColor`;
 teardown removes your definitions.
 
-Editor decorations, gutter markers, and tree badges name the color key they
+Editor decorations, gutter marks, and tree badges name the color key they
 paint with, native or defined, so a contribution looks right under every
 theme. A decoration's style is `background`, `line`, or a straight or `wavy`
-underline, and a range that wants two styles is two contributions:
+underline, and a range that wants two styles is two contributions. A gutter
+mark is `{ color, style }`: a `dot` beside the range's first line, a `bar`
+along every line it spans, or a `deletion` wedge on the boundary above its
+start line, for a zero-width range where lines were removed. Each of the two
+mark lanes shows one mark per line, the most severe and then the latest.
+Native `diff.added`, `diff.modified`, and `diff.removed` are there for packages
+that compare texts:
 
 ```js
 await buffer.contributions.replace([
-  { range, decoration: { color: "diff.add", style: "line" }, gutter: "diff.add" },
-  { range: problem, decoration: { color: "error", style: "wavy" } },
+  { range, decoration: { color: "review.pending", style: "line" },
+    gutter: { color: "diff.added", style: "bar" } },
+  { range: problem, decoration: { color: "error", style: "wavy" },
+    gutter: { color: "error", style: "dot" } },
+  { range: removedAt, gutter: { color: "diff.removed", style: "deletion" },
+    command: { name: "example.show-removed", arguments: { id: 3 } } },
 ], { ifRevision: revision });
 ```
+
+A `command`, a name or `{ name, arguments }`, runs when a mark or the range's
+text is clicked; see [commands](commands-and-keys.md#register-a-command).
 
 Those belong to the buffer, so every view of it paints them. Highlights that
 follow one view, such as matches around its caret, go through
