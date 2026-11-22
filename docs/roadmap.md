@@ -693,6 +693,27 @@ Kakoune mode could use them too. The
 Items worth having that no current workflow needs. They follow the same shape
 and may move into a section above when daily use asks for them.
 
+- **D107 — Package signing and verified publishers**
+  - Depends on: D101
+  - Description: Installs from a git link trust the URL alone. Add keys, a
+    signature format, verified publishers, and a way for a source to vouch for
+    content. Do it when installs are common enough that "trust this URL" is not
+    a sufficient story.
+
+- **D108 — Hosted package registry**
+  - Depends on: D101
+  - Description: Packages are discovered on a website and installed from git
+    links. Add an artifact index, upload and publication, accounts, and
+    in-editor search. Do it if git installs prove too risky or awkward, or if
+    discoverability in the editor is worth owning a server.
+
+- **D116 — Private package sources and per-project package sets**
+  - Depends on: D101, D089
+  - Description: Installs cover public git links only. Add private
+    repositories, SSH or token credentials in a platform keychain,
+    filesystem-path sources, and per-project package sets. Each is a separate
+    consent and storage problem. Do it when installs outgrow public links.
+
 - **D206 — Remaining Ex commands**
   - Depends on: none
   - Description: The Ex line covers files, buffers, windows, line ranges, and
