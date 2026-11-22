@@ -925,6 +925,72 @@ fn invalidation_cleanup_waits_for_earlier_native_acknowledgements() {
 }
 
 #[test]
+fn await_using_releases_a_handle_when_its_scope_exits() {
+    let pool = RuntimePool::new(PoolConfig::single_worker());
+    let runtime = key(194);
+    pool.load(runtime, IsolateConfig::default()).unwrap();
+    let setup = pool.execute_fixture_module(runtime, "file:///fixtures/using.js", r#"
+      import { workbench } from "knot";
+      globalThis.api = workbench;
+      globalThis.tree = await workbench.registerView({ id: "example.outline", title: "Outline", content: { kind: "tree", provider: { getChildren() { return []; } } } });
+    "#).unwrap();
+    let request = pool.receive_request().unwrap();
+    pool.respond(HostResponse {
+        extension: runtime.extension,
+        lifecycle: runtime.lifecycle,
+        id: request.id,
+        result: Ok(success::<declared::register_tree_provider>(
+            TreeProviderRegistrationId::new(906),
+        )),
+    })
+    .unwrap();
+    setup.wait().unwrap();
+    let work = pool
+        .execute(
+            runtime,
+            "using-scope.js",
+            r#"
+      (async () => {
+        {
+          await using scoped = tree;
+          if (typeof SuppressedError !== "function") throw new Error("no SuppressedError");
+        }
+        await api.writeClipboardText("released at scope exit");
+      })()
+    "#,
+        )
+        .unwrap();
+    let release = pool.receive_request().unwrap();
+    assert!(
+        release
+            .operation
+            .arguments::<declared::unregister_tree_provider>()
+            .is_some()
+    );
+    pool.respond(HostResponse {
+        extension: runtime.extension,
+        lifecycle: runtime.lifecycle,
+        id: release.id,
+        result: Ok(success::<declared::unregister_tree_provider>(())),
+    })
+    .unwrap();
+    let after = pool.receive_request().unwrap();
+    assert_eq!(
+        after.operation,
+        clipboard_operation("released at scope exit")
+    );
+    pool.respond(HostResponse {
+        extension: runtime.extension,
+        lifecycle: runtime.lifecycle,
+        id: after.id,
+        result: Ok(clipboard_written()),
+    })
+    .unwrap();
+    work.wait().unwrap();
+    pool.shutdown();
+}
+
+#[test]
 fn native_integers_are_checked_before_v8_conversion() {
     let pool = RuntimePool::new(PoolConfig::single_worker());
     let runtime = key(193);
