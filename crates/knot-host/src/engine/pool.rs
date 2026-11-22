@@ -246,6 +246,21 @@ impl RuntimePool {
         self.load_with_graph(key, config, Some(&graph))
     }
 
+    /// Lets the loaded personal config import the contract modules of
+    /// `packages`, each with its sources, from now on.
+    pub fn add_personal_config_dependencies(
+        &self,
+        key: ExtensionKey,
+        packages: Vec<crate::module_graph::PackageDependency>,
+    ) -> Result<(), RuntimePoolError> {
+        let capsule = self.capsule(key)?;
+        let mut modules = capsule.local_state.modules.lock().unwrap();
+        for (package, sources) in packages {
+            modules.add_dependency(package, sources);
+        }
+        Ok(())
+    }
+
     pub fn evaluate_personal_config_phase(
         &self,
         key: ExtensionKey,

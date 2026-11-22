@@ -30,6 +30,10 @@ pub struct PackageModules {
     pub contract: Option<Arc<str>>,
 }
 
+/// A package whose contract module a graph may import, with its sources keyed
+/// by URL.
+pub type PackageDependency = (PackageModules, Vec<(String, Arc<str>)>);
+
 #[derive(Clone, Debug)]
 pub struct ModuleGraph {
     root: Arc<str>,
@@ -116,32 +120,49 @@ impl ModuleGraph {
         contract: &str,
         files: &BTreeMap<String, Arc<str>>,
     ) -> Result<Self, String> {
+        let (modules, sources) =
+            Self::dependency(&self.root, package, root, main, contract, files)?;
+        Arc::make_mut(&mut self.sources).extend(sources);
+        Arc::make_mut(&mut self.dependencies).push(modules);
+        Ok(self)
+    }
+
+    /// The modules and sources of a package a graph rooted at `own_root` may
+    /// import the contract of.
+    pub fn dependency(
+        own_root: &str,
+        package: &str,
+        root: &str,
+        main: &str,
+        contract: &str,
+        files: &BTreeMap<String, Arc<str>>,
+    ) -> Result<PackageDependency, String> {
         let root_url = directory_url(root)?;
-        if self.root.starts_with(root_url.as_str()) || root_url.as_str().starts_with(&*self.root) {
+        if own_root.starts_with(root_url.as_str()) || root_url.as_str().starts_with(own_root) {
             return Err(format!("dependency {package} shares the package root"));
         }
-        let sources = Arc::make_mut(&mut self.sources);
+        let mut sources = Vec::new();
         for (path, source) in files {
             validate_path(path)?;
-            sources.insert(file_url(&root_url, path)?.to_string(), source.clone());
+            sources.push((file_url(&root_url, path)?.to_string(), source.clone()));
         }
         let url = |path: &str| -> Result<Arc<str>, String> {
             validate_path(path)?;
             Ok(file_url(&root_url, path)?.to_string().into())
         };
         let contract = url(contract)?;
-        if !sources.contains_key(&*contract) {
+        if !sources.iter().any(|(name, _)| **name == *contract) {
             return Err(format!(
                 "contract module of {package} is unavailable: {contract}"
             ));
         }
-        Arc::make_mut(&mut self.dependencies).push(PackageModules {
+        let modules = PackageModules {
             package: package.into(),
             root: root_url.to_string().into(),
             main: url(main)?,
             contract: Some(contract),
-        });
-        Ok(self)
+        };
+        Ok((modules, sources))
     }
 
     fn module_url(&self, path: &str) -> Result<Arc<str>, String> {

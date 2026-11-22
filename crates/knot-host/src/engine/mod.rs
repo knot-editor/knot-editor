@@ -533,6 +533,9 @@ struct ModuleRegistry {
     entries: HashMap<String, Arc<str>>,
     package: Option<PackageModules>,
     dependencies: Vec<PackageModules>,
+    /// Only checking syntax and imports: a package import names a module that
+    /// is not known yet, so it resolves to an empty stand-in.
+    validating: bool,
 }
 
 impl ModuleRegistry {
@@ -574,7 +577,14 @@ impl ModuleRegistry {
             dependencies: graph
                 .map(|graph| graph.dependencies().to_vec())
                 .unwrap_or_default(),
+            validating: false,
         }
+    }
+
+    /// Makes a loaded package's contract module importable.
+    fn add_dependency(&mut self, modules: PackageModules, sources: Vec<(String, Arc<str>)>) {
+        self.sources.extend(sources);
+        self.dependencies.push(modules);
     }
 
     /// The required package whose root holds `url`.

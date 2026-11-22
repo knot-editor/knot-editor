@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use super::{
     engine::{self, EngineEvent, LifecycleEnd, RuntimePool},
-    module_graph::{ConfigPhase, ModuleGraph},
+    module_graph::{ConfigPhase, ModuleGraph, PackageDependency},
     scheduler::PoolConfig,
 };
 use knot_protocol::{
@@ -139,6 +139,14 @@ impl ExtensionPool {
         graph: ModuleGraph,
     ) -> Result<(), ExtensionPoolError> {
         self.engine.load_personal_config(key, config.0, graph)
+    }
+
+    pub fn add_personal_config_dependencies(
+        &self,
+        key: ExtensionKey,
+        packages: Vec<PackageDependency>,
+    ) -> Result<(), ExtensionPoolError> {
+        self.engine.add_personal_config_dependencies(key, packages)
     }
 
     pub fn evaluate_personal_config_phase(

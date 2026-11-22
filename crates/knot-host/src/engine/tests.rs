@@ -121,6 +121,63 @@ fn personal_config_phase_errors_keep_their_source_and_can_be_unloaded() {
 }
 
 #[test]
+fn personal_config_imports_the_contract_of_a_package_added_after_validation() {
+    let graph = config_graph(
+        &["post-init.js"],
+        &[(
+            "post-init.js",
+            "import { rows } from '@example/provider'; globalThis.contract = rows.name;",
+        )],
+    );
+    validate_module_graph_entry(&graph, "post-init.js")
+        .expect("a package import is checked once the package is known");
+
+    let pool = RuntimePool::new(PoolConfig::single_worker());
+    let runtime = key(97);
+    pool.load_personal_config(runtime, IsolateConfig::default(), graph.clone())
+        .unwrap();
+    let error = pool
+        .evaluate_personal_config_phase(runtime, ConfigPhase::PostInit)
+        .unwrap()
+        .wait()
+        .unwrap_err();
+    assert_eq!(error.kind(), RuntimeErrorKind::ModuleResolution);
+    pool.unload(runtime).unwrap();
+
+    let runtime = key(98);
+    pool.load_personal_config(runtime, IsolateConfig::default(), graph.clone())
+        .unwrap();
+    let contract = "import { defineContract, s } from 'knot/contract';\n\
+        export const rows = defineContract('rows', { list: s.fn(s.void(), s.void()) });";
+    let dependency = ModuleGraph::dependency(
+        "file:///config/knot/",
+        "@example/provider",
+        "file:///extensions/provider/",
+        "main.js",
+        "contract.js",
+        &std::collections::BTreeMap::from([("contract.js".to_owned(), Arc::from(contract))]),
+    )
+    .unwrap();
+    pool.add_personal_config_dependencies(runtime, vec![dependency])
+        .unwrap();
+    pool.evaluate_personal_config_phase(runtime, ConfigPhase::PostInit)
+        .unwrap()
+        .wait()
+        .unwrap();
+    assert_eq!(
+        pool.execute(runtime, "verify.js", "contract")
+            .unwrap()
+            .wait()
+            .unwrap()
+            .value
+            .as_ref(),
+        "rows"
+    );
+    pool.unload(runtime).unwrap();
+    pool.shutdown();
+}
+
+#[test]
 fn personal_config_can_have_only_post_init() {
     let pool = RuntimePool::new(PoolConfig::single_worker());
     let runtime = key(93);

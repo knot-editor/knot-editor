@@ -190,6 +190,7 @@ pub fn validate_module_graph_entry(graph: &ModuleGraph, entry: &str) -> Result<(
     let scope = &mut v8::ContextScope::new(&mut scope, context);
     v8::tc_scope!(let try_catch, scope);
     let mut modules = ModuleRegistry::new(Some(graph));
+    modules.validating = true;
     let blocked = blocked_post_init_import(&modules, entry);
     compile_module_graph(try_catch, &mut modules, entry, blocked.as_deref(), false)
         .map(|_| ())
@@ -239,7 +240,12 @@ pub(super) fn compile_module_graph(
     {
         return Ok(record.module.clone());
     }
-    let Some(source) = registry.sources.get(specifier).cloned() else {
+    let source = if registry.validating && specifier.starts_with(PACKAGE_STAND_IN) {
+        Some(Arc::from("export {};"))
+    } else {
+        registry.sources.get(specifier).cloned()
+    };
+    let Some(source) = source else {
         throw_module_error(
             scope,
             &if registry.package_root.is_some() {
@@ -307,7 +313,8 @@ pub(super) fn compile_module_graph(
                 .entry(resolved.clone())
                 .or_insert_with(|| source.into());
         }
-        if !registry.sources.contains_key(&resolved) {
+        let stand_in = registry.validating && resolved.starts_with(PACKAGE_STAND_IN);
+        if !stand_in && !registry.sources.contains_key(&resolved) {
             let kind = if registry.package_root.is_some() {
                 "package"
             } else {
@@ -351,6 +358,10 @@ fn contract_owner(registry: &ModuleRegistry, referrer: &str) -> String {
         .or_else(|| registry.package_root.as_deref().map(str::to_owned))
         .unwrap_or_else(|| "fixture".into())
 }
+
+/// The prefix of the empty module a package import resolves to while a graph is
+/// only checked.
+const PACKAGE_STAND_IN: &str = "knot-validation:";
 
 const CONTRACT_IMPORTS: &str =
     "a contract module may import only knot/contract and its own package's modules";
@@ -406,6 +417,11 @@ pub(super) fn resolve_module_specifier(
                 .and_then(|dependency| dependency.contract.as_deref())
             {
                 return Ok(contract.to_owned());
+            }
+            if registry.validating && registry.package.is_none() {
+                // Personal config may import any loaded package, which is
+                // known only once packages load: check the import then.
+                return Ok(format!("{PACKAGE_STAND_IN}{request}"));
             }
             return Err(format!(
                 "extension import must be relative, knot, knot/contract, or a required package: {request}"
