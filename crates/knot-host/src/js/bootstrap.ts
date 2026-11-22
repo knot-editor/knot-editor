@@ -239,7 +239,6 @@ export function ownership(removeLocal: () => void, release: () => Promise<unknow
 /** A frozen handle released by `await using` or `[Symbol.asyncDispose]()`. */
 function disposableHandle(owned: { dispose(): Promise<void> }) {
   return Object.freeze({
-    dispose: () => owned.dispose(),
     [Symbol.asyncDispose]: () => owned.dispose(),
   });
 }
@@ -715,7 +714,6 @@ function bufferFor(handle: Native) {
       const ifRevision = revision(options);
       await contributionOwnership.track(request("replaceEditorContributions", handle, converted, ifRevision));
     },
-    dispose: () => contributionOwnership.dispose(),
     [Symbol.asyncDispose]: () => contributionOwnership.dispose(),
   });
 
@@ -793,7 +791,6 @@ function bufferFor(handle: Native) {
       const owned = ownership(() => {}, () => request("disposeMark", handle, id));
       return Object.freeze({
         position: () => request("markPosition", handle, id),
-        dispose: () => owned.dispose(),
         [Symbol.asyncDispose]: () => owned.dispose(),
       });
     },
@@ -949,10 +946,6 @@ function editorFor(authority: Native) {
           await owned.dispose();
           return Object.freeze(entries.map((entry: unknown) => Object.freeze(entry)));
         },
-        dispose() {
-          finished = true;
-          return owned.dispose();
-        },
         [Symbol.asyncDispose]() {
           finished = true;
           return owned.dispose();
@@ -1031,7 +1024,6 @@ export async function openEditor(target: unknown) {
       });
       return disposableHandle({ dispose: async () => { entry.barListeners.delete(listener); } });
     },
-    dispose: () => owned.dispose(),
     [Symbol.asyncDispose]: () => owned.dispose(),
   });
 }
@@ -1395,7 +1387,6 @@ export async function registerStatusItem(id: unknown, options: unknown) {
       if (next === null && window === null) throw new TypeError("a status item needs a value");
       await owned.track(request("updateStatusItem", registration, next === null ? null : statusItemValue(next), window));
     },
-    dispose: () => owned.dispose(),
     [Symbol.asyncDispose]: () => owned.dispose(),
   });
 }
@@ -1739,7 +1730,6 @@ export async function registerView(contribution: unknown) {
         optionalWindowAuthority(window),
       ));
     },
-    dispose: () => owned.dispose(),
     [Symbol.asyncDispose]: () => owned.dispose(),
   });
 }
@@ -2574,7 +2564,6 @@ export async function spawnProcess(options: Opts) {
       if (signal !== undefined && !processSignals.has(signal as string)) throw new TypeError("unsupported process signal");
       return request("killProcess", id, signal ?? null);
     },
-    dispose: () => request("disposeProcess", id),
     [Symbol.asyncDispose]: () => request("disposeProcess", id),
     exited,
   });
@@ -2701,7 +2690,7 @@ export async function observeWorkbench(listener: unknown) {
   const owned = ownership(() => applicationListeners.delete(value.subscription),
     () => request("unobserveWorkbench", value.subscription));
   return Object.freeze({ snapshot: applicationSnapshotFromNative(value.snapshot), watermark: value.watermark,
-    dispose: () => owned.dispose(), [Symbol.asyncDispose]: () => owned.dispose() });
+    [Symbol.asyncDispose]: () => owned.dispose() });
 }
 globalThis.__knotDispatchApplicationChange = async (subscription, value) => {
   const listener = await callable(applicationListeners, subscription);

@@ -79,7 +79,7 @@ keyboard input the editor receives as plain data, so a package can replay it.
 const group = await editor.beginUndoGroup();
 await buffer.applyEdits([{ range, text: "" }], { ifRevision: revision });
 // ...the user types; later, on Escape:
-await group.dispose();
+await group[Symbol.asyncDispose]();
 
 const recording = await editor.record();
 // ...the user types; later:

@@ -1096,7 +1096,7 @@ declare module "knot" {
      * Entries the `files.hidden` setting names are never reported; ignored
      * entries are. Watching sees every change on disk, including Knot's own
      * saves, and independently of open documents. Notifications reach one
-     * listener in order, and it stops with its lifecycle or `dispose()`. Resolves
+     * listener in order, and it stops with its lifecycle or when it is disposed. Resolves
      * once the watch runs, so a read after it misses no later change.
      * @throws HostError with InvalidUri, ResourceNotFound when `uri` does not
      * exist, or ProviderFailure when the provider cannot watch. */
@@ -1152,7 +1152,6 @@ declare module "knot" {
     kill(signal?: ProcessSignal): Promise<void>;
     /** Releases the handle, killing the process group when it still runs.
      * Later calls with the handle reject with InvalidTarget. */
-    dispose(): Promise<void>;
     [Symbol.asyncDispose](): Promise<void>;
     /** Resolves when the process exits. A process that writes more than its
      * pipe holds does not exit until its output is read. */
@@ -1398,6 +1397,12 @@ declare module "knot" {
    * A lifecycle-owned registration, subscription or contribution set; native IDs
    * are hidden and must not be persisted. Unload/failed activation/shutdown release
    * ownership independently of extension awaits or final JavaScript callbacks.
+   *
+   * Release it with `await handle[Symbol.asyncDispose]()`, or bind it with
+   * `await using handle = await ...` to release it when the scope exits. If the
+   * release fails at scope exit, the failure is thrown after the body; when the
+   * body threw too, both arrive as a `SuppressedError` whose `error` is the
+   * release failure and `suppressed` the body error.
    */
   export interface Disposable extends AsyncDisposable {
     /**
@@ -1416,7 +1421,6 @@ declare module "knot" {
      * succeeds. Contribution cleanup
      * can fail with BufferClosed; an absent contribution set is already released.
      */
-    dispose(): Promise<void>;
     [Symbol.asyncDispose](): Promise<void>;
   }
   /**

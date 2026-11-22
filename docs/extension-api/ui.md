@@ -27,7 +27,7 @@ await view.invalidate(null);        // every live window
 await view.show();                  // every live window
 await view.hide();
 await view.focus();
-await view.dispose();
+await view[Symbol.asyncDispose]();
 ```
 
 Each window owns at most one native instance. A view is a tool window that

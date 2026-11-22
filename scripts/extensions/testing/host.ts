@@ -270,9 +270,9 @@ function nextId(prefix: string) {
   return `${prefix}-${state.nextId++}`;
 }
 
-/** The members of a disposable handle: `dispose()` beside the `[Symbol.asyncDispose]` the real host implements. */
+/** The members of a disposable handle, as the real host implements them. */
 function disposers(release: () => Promise<void>) {
-  return { dispose: release, [Symbol.asyncDispose]: release };
+  return { [Symbol.asyncDispose]: release };
 }
 
 export function hostError(code: HostErrorCode, message: string = code): Knot.HostError {

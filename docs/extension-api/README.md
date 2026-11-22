@@ -80,6 +80,30 @@ so a delay is a minimum, and unloading the package cancels its timers. Package
 tests get Node's own timers, which `mock.timers` drives, though its mocked
 timeouts ignore `refresh()`.
 
+## Release handles
+
+Every registration, subscription, and handle the API returns is
+`AsyncDisposable`: release it with `await handle[Symbol.asyncDispose]()`, or
+bind it with `await using` so it is released when the scope exits, even when the
+body throws:
+
+```ts
+await using group = await editor.beginUndoGroup();
+await buffer.applyEdits([{ range, text: "" }], { ifRevision: revision });
+// the group is released here
+```
+
+There is no `dispose()` method. Releasing twice is safe; calls share one
+promise. If the release itself fails at scope exit, the failure is thrown after
+the body. When the body threw as well, both arrive as one `SuppressedError`
+whose `error` is the release failure and whose `suppressed` is the body's
+error, so catch around the scope and check both. `await using` accepts `null`
+and `undefined`, so an optional handle needs no guard.
+
+Handles that outlive a scope, such as registrations made in `start()`, need no
+release: the package's lifecycle ends them. Release one early only to stop it
+before that.
+
 Keep policy in plain functions over plain data and keep mutable state out of
 module scope: export `start()` to create state and register contributions, and
 make `main.ts` only `await start()`. Tests then exercise policy directly and run

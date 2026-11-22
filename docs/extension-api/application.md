@@ -194,7 +194,7 @@ Knot kills when the package unloads or restarts or Knot quits, so helpers a prog
 not kill its programs; abort its `signal` to stop them, as in the
 [processes example](../../scripts/extensions/examples/processes.js).
 
-A handle that is no longer needed is released with `await child.dispose()`,
+A handle that is no longer needed is released with `await child[Symbol.asyncDispose]()`,
 which kills the group when it still runs. A finished handle whose streams were
 both read to their ends is released automatically; anything else keeps its entry
 until the package unloads. So a program that spawns many processes disposes
