@@ -88,6 +88,35 @@ pub(super) fn start_loading(
     for (name, requires, source) in packages {
         install_extension(extensions.path(), name, requires, &[("main.js", source)]);
     }
+    start_installed(extensions, cx)
+}
+
+/// Installs and starts `packages` (name, requirements, `main.js`, and the
+/// `contract.js` that makes it publish a contract), whatever their load
+/// results.
+pub(super) fn start_with_contracts(
+    packages: &[(&str, &[&str], &str, Option<&str>)],
+    cx: &mut TestAppContext,
+) -> Fixture {
+    let extensions = tempfile::tempdir().unwrap();
+    for (name, requires, main, contract) in packages {
+        match contract {
+            Some(contract) => install_package(
+                extensions.path(),
+                name,
+                requires,
+                Some("contract.js"),
+                &[("main.js", main), ("contract.js", contract)],
+            ),
+            None => install_extension(extensions.path(), name, requires, &[("main.js", main)]),
+        }
+    }
+    let fixture = start_installed(extensions, cx);
+    wait_for_extension_report(&fixture.host, cx);
+    fixture
+}
+
+fn start_installed(extensions: tempfile::TempDir, cx: &mut TestAppContext) -> Fixture {
     let documents = install_globals(cx);
     let host = cx.update(crate::app::extensions::host::install);
     let storage = tempfile::tempdir().unwrap();
@@ -110,7 +139,11 @@ pub(super) fn start_loading(
 
 impl Fixture {
     pub(super) fn rewrite(&self, name: &str, source: &str) {
-        std::fs::write(self.extensions.path().join(name).join("main.js"), source).unwrap();
+        self.rewrite_file(name, "main.js", source);
+    }
+
+    pub(super) fn rewrite_file(&self, name: &str, path: &str, source: &str) {
+        std::fs::write(self.extensions.path().join(name).join(path), source).unwrap();
     }
 
     pub(super) fn command(

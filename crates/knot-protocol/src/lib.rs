@@ -146,6 +146,20 @@ impl ProviderRegistrationId {
     }
 }
 
+/// An opaque identity for one consumer's binding to a contract registration.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, serde::Serialize)]
+pub struct ContractClientId(u64);
+
+impl ContractClientId {
+    pub const fn new(value: u64) -> Self {
+        Self(value)
+    }
+
+    pub const fn value(self) -> u64 {
+        self.0
+    }
+}
+
 /// A live provider registration as `providers.get` and `providers.all` report
 /// it: the identity a call addresses and the method names it offers.
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize)]

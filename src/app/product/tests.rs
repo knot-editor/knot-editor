@@ -4,6 +4,7 @@ mod chrome;
 mod closure;
 mod commands;
 mod context_menus;
+mod contracts;
 mod dock_header;
 mod document_watch;
 mod editing;
@@ -455,20 +456,31 @@ fn type_text(window: &Entity<KnotWindow>, text: &str, cx: &mut TestAppContext) {
 }
 
 fn install_extension(root: &Path, name: &str, requires: &[&str], files: &[(&str, &str)]) {
+    install_package(root, name, requires, None, files);
+}
+
+/// Installs a package whose main module is the first of `files` and whose
+/// contract module, when given, is another of them.
+fn install_package(
+    root: &Path,
+    name: &str,
+    requires: &[&str],
+    contract: Option<&str>,
+    files: &[(&str, &str)],
+) {
     let directory = root.join(name);
     std::fs::create_dir_all(&directory).unwrap();
     let main = files[0].0;
-    std::fs::write(
-        directory.join("knot.jsonc"),
-        serde_json::json!({
-            "name": name,
-            "apiVersion": 1, "version": "1.0.0",
-            "main": main,
-            "requires": requires,
-        })
-        .to_string(),
-    )
-    .unwrap();
+    let mut manifest = serde_json::json!({
+        "name": name,
+        "apiVersion": 1, "version": "1.0.0",
+        "main": main,
+        "requires": requires,
+    });
+    if let Some(contract) = contract {
+        manifest["contract"] = contract.into();
+    }
+    std::fs::write(directory.join("knot.jsonc"), manifest.to_string()).unwrap();
     for (path, source) in files {
         let destination = directory.join(path);
         std::fs::create_dir_all(destination.parent().unwrap()).unwrap();

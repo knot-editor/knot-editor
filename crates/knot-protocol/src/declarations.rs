@@ -252,6 +252,11 @@ impl HostSuccess for crate::ProviderRegistrationId {
         encode_json(self)
     }
 }
+impl HostSuccess for crate::ContractClientId {
+    fn encode(self) -> Result<EncodedValue, DecodeError> {
+        encode_json(self)
+    }
+}
 
 impl HostSuccess for crate::CommandRegistrationId {
     fn encode(self) -> Result<EncodedValue, DecodeError> {

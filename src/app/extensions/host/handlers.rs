@@ -2903,6 +2903,203 @@ pub(crate) async fn call_provider(
     }
 }
 
+/// A contract as a package's `serve` or `client` describes it: the package
+/// whose contract module defines it, its name, and that side's schema.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct ContractArguments {
+    pub owner: String,
+    pub name: String,
+    pub schema: knot_model::contracts::ContractSchema,
+}
+impl HostArguments for ContractArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self {
+            owner: reader.text(2, "contract owner must be text")?,
+            name: reader.text(3, "contract name must be text")?,
+            schema: knot_model::contracts::ContractSchema::parse(
+                &reader.text(4, "contract descriptor must be JSON text")?,
+            )
+            .map_err(|_| DecodeError::Type("invalid contract descriptor"))?,
+        })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct CallContractArguments {
+    pub client: knot_protocol::ContractClientId,
+    pub method: String,
+    pub argument: String,
+    pub window: Option<String>,
+}
+impl HostArguments for CallContractArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self {
+            client: knot_protocol::ContractClientId::new(reader.integer(2)?),
+            method: reader.text(3, "contract method must be text")?,
+            argument: reader.text(4, "contract argument must be JSON text")?,
+            window: reader.optional_text(5, "window target must be text")?,
+        })
+    }
+}
+
+#[derive(Debug, HostError)]
+pub(crate) enum ContractClientError {
+    #[error(transparent)]
+    Semantic(SemanticError),
+    #[error(
+        code = "ContractNotFound",
+        message = "no package serves {owner} {name}"
+    )]
+    NotFound { owner: String, name: String },
+}
+impl From<AccessError> for ContractClientError {
+    fn from(error: AccessError) -> Self {
+        Self::Semantic(error.into())
+    }
+}
+impl From<SemanticError> for ContractClientError {
+    fn from(error: SemanticError) -> Self {
+        Self::Semantic(error)
+    }
+}
+
+/// Failures of a call through a contract client.
+#[derive(Debug, HostError)]
+pub(crate) enum ContractCallError {
+    #[error(transparent)]
+    Access(AccessError),
+    #[error(
+        code = "ContractNotFound",
+        message = "the contract registration is no longer served"
+    )]
+    NotFound,
+    #[error(
+        code = "UnsupportedOperation",
+        message = "a package calls the contracts it serves directly, not through a client"
+    )]
+    OwnContract,
+    #[error(code = "ContractViolation", message = "{message}")]
+    Violation { message: String },
+    #[error(code = "ProviderFailure", message = "{message}")]
+    Failure { message: String },
+}
+impl From<AccessError> for ContractCallError {
+    fn from(error: AccessError) -> Self {
+        Self::Access(error)
+    }
+}
+
+#[host_operation("serveContract")]
+pub(crate) async fn serve_contract(
+    context: HostContext,
+    arguments: ContractArguments,
+) -> Result<knot_protocol::ProviderRegistrationId, SemanticError> {
+    let request = context.request;
+    context.foreground(|host, _| {
+        host.semantics.serve_contract(
+            &request,
+            knot_model::providers::ServedContract {
+                owner: arguments.owner,
+                name: arguments.name,
+                schema: std::sync::Arc::new(arguments.schema),
+            },
+        )
+    })?
+}
+
+/// Binds the caller to the latest registration serving the contract, which
+/// its calls then address.
+#[host_operation("contractClient")]
+pub(crate) async fn contract_client(
+    context: HostContext,
+    arguments: ContractArguments,
+) -> Result<knot_protocol::ContractClientId, ContractClientError> {
+    let request = context.request;
+    context.foreground(|host, _| {
+        host.semantics
+            .bind_contract_client(
+                &request,
+                &arguments.owner,
+                &arguments.name,
+                arguments.schema,
+            )?
+            .ok_or(ContractClientError::NotFound {
+                owner: arguments.owner,
+                name: arguments.name,
+            })
+    })?
+}
+
+/// Runs a method of the registration a client is bound to and answers with
+/// its JSON result as text, checking the argument and the result against the
+/// consumer's and the provider's schemas.
+#[host_operation("callContract")]
+pub(crate) async fn call_contract(
+    context: HostContext,
+    arguments: CallContractArguments,
+) -> Result<String, ContractCallError> {
+    let caller = context.request.extension;
+    let method = arguments.method.clone();
+    let (execution, binding, label) = context.foreground(move |host, _| {
+        let (client, provider) = host
+            .semantics
+            .providers()
+            .client(arguments.client, caller)
+            .ok_or(ContractCallError::NotFound)?;
+        if provider.extension == caller {
+            return Err(ContractCallError::OwnContract);
+        }
+        let label = provider
+            .contract
+            .as_ref()
+            .map(knot_model::providers::ServedContract::label)
+            .unwrap_or_default();
+        let argument = serde_json::from_str(&arguments.argument).map_err(|error| {
+            ContractCallError::Failure {
+                message: error.to_string(),
+            }
+        })?;
+        client
+            .binding
+            .validate_argument(&arguments.method, &argument)
+            .map_err(|violation| ContractCallError::Violation {
+                message: format!("{label}: {violation}"),
+            })?;
+        let key = ExtensionKey::new(provider.extension, provider.lifecycle);
+        let execution = host
+            .pool
+            .call_provider(
+                key,
+                knot_protocol::ProviderCallRequest {
+                    registration: provider.id,
+                    method: arguments.method,
+                    argument: arguments.argument,
+                    window: arguments.window,
+                },
+            )
+            .map_err(|_| ContractCallError::NotFound)?;
+        Ok((execution, client.binding.clone(), label))
+    })??;
+    let result = match execution.await {
+        Ok(Ok(result)) => result,
+        Ok(Err(message)) => return Err(ContractCallError::Failure { message }),
+        Err(error) => {
+            return Err(ContractCallError::Failure {
+                message: error.to_string(),
+            });
+        }
+    };
+    let value = serde_json::from_str(&result).map_err(|error| ContractCallError::Failure {
+        message: error.to_string(),
+    })?;
+    binding
+        .validate_result(&method, &value)
+        .map_err(|violation| ContractCallError::Violation {
+            message: format!("{label}: {violation}"),
+        })?;
+    Ok(result)
+}
+
 use crate::app::commands::catalog::CommandMetadata;
 use crate::app::commands::extension::CommandError;
 use knot_protocol::{

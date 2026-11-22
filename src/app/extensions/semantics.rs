@@ -1,4 +1,5 @@
-//! Foreground ownership for extension view and named providers.
+//! Foreground ownership for extension view and named providers and served
+//! contracts.
 //!
 //! A contributed view definition and its native instances share one
 //! lifecycle-owned registration. Definitions exist independently of windows;
@@ -8,8 +9,9 @@ use std::collections::{HashMap, HashSet};
 
 use gpui::{App, Entity, WeakEntity};
 
-use knot_model::providers::{ProviderRegistration, ProviderRegistry};
-use knot_protocol::ProviderRegistrationId;
+use knot_model::contracts::ContractSchema;
+use knot_model::providers::{ProviderRegistration, ProviderRegistry, ServedContract};
+use knot_protocol::{ContractClientId, ProviderRegistrationId};
 use knot_protocol::{
     ExtensionId, ExtensionLifecycleId, RequestContext, TreeAction, TreeChildrenResponse,
     TreeProviderRegistrationId, ViewContentKind, ViewId,
@@ -476,6 +478,39 @@ impl ExtensionSemanticBridge {
         Ok(self
             .providers
             .register(request.extension, request.lifecycle, name, methods))
+    }
+
+    pub(crate) fn serve_contract(
+        &mut self,
+        request: &RequestContext,
+        contract: ServedContract,
+    ) -> Result<ProviderRegistrationId, SemanticError> {
+        self.validate(request)?;
+        Ok(self
+            .providers
+            .serve(request.extension, request.lifecycle, contract))
+    }
+
+    /// Binds the requesting lifecycle to the latest registration serving
+    /// `owner`'s contract `name`; None when nothing serves it.
+    pub(crate) fn bind_contract_client(
+        &mut self,
+        request: &RequestContext,
+        owner: &str,
+        name: &str,
+        consumer: ContractSchema,
+    ) -> Result<Option<ContractClientId>, SemanticError> {
+        self.validate(request)?;
+        let Some(registration) = self
+            .providers
+            .latest_contract(owner, name)
+            .map(|registration| registration.id)
+        else {
+            return Ok(None);
+        };
+        Ok(self
+            .providers
+            .bind(request.extension, request.lifecycle, registration, consumer))
     }
 
     pub(crate) fn unregister_provider(
