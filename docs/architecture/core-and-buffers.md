@@ -121,6 +121,19 @@ to `\E` or `\e` or the replacement's end, over literal text and groups alike.
 Nothing is committed when no
 match changes the text.
 
+## Line diff
+
+`knot_model::diff::line_hunks` (`crates/knot-model/src/diff.rs`) compares two
+texts by line with imara-diff's Histogram algorithm and its line
+post-processing, and returns ascending, disjoint hunks of 0-based, half-open
+line ranges. Lines compare exactly, terminators included; with
+`ignore_whitespace` they compare by their non-whitespace characters, which also
+ignores `\r\n` against `\n`, so lines differing only in whitespace fall inside
+no hunk. External reload maps the hunks to minimal byte edits, and the
+extension API's `diff` returns them for two strings or buffers: buffer sides
+are copied on the foreground and the comparison runs on the background
+executor, so a buffer's text never crosses the extension boundary.
+
 ## Anchored ranges
 
 - `AnchoredRangeStore` owns stable range geometry only. Each endpoint is a

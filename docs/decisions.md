@@ -45,6 +45,9 @@ touches.
 - [Reversible edits](decisions/core-and-buffers.md#reversible-edits): undo
   through ordinary mutations on shared model history; content identity apart
   from revisions.
+- [Line diff for extensions](decisions/core-and-buffers.md#line-diff-for-extensions):
+  one native, stateless diff over strings or buffers; no text handles or
+  per-buffer method.
 
 ## [Editing](decisions/editing.md)
 

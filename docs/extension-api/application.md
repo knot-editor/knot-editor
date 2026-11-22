@@ -87,6 +87,28 @@ observe again when a fresh baseline is needed.
 The bundled [project registry](../../extensions/@knot/projects/src/) is a
 complete observer: it waits for `launched`, then tracks windows and documents.
 
+## Compare texts
+
+`diff(old, updated, options?)` returns the line hunks that turn one text into
+another. Each side is a string or a live buffer, which is read natively, so its
+text never crosses the boundary:
+
+```js
+const { hunks, newRevision } = await diff(baseline, buffer);
+for (const { old, new: now } of hunks) {
+  // Lines old.start..old.end were replaced by now.start..now.end.
+}
+```
+
+Ranges are 0-based, half-open line numbers, as `buffer.lines` numbers them. An
+empty `old` range is an insertion before `old.start`, an empty `new` range a
+deletion. Hunks are ascending and disjoint, and the result carries the revision
+of each side that was a buffer. Lines compare exactly, terminators included, so
+convert a baseline to the working-tree form first (for Git,
+`git cat-file --filters`) or pass `{ ignoreWhitespace: true }`, which also
+ignores `\r\n` against `\n`. The comparison runs off the foreground, has no
+size limit, and reports no changes inside a line.
+
 ## Read files
 
 `files` reads stored resources through the registered resource providers, for

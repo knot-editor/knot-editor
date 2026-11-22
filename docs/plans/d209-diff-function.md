@@ -78,7 +78,9 @@ whitespace removed (an imara-diff `TokenSource` over lines yielding the
 normalized key) instead of the raw line; hunk indices stay line indices of
 the original texts.
 
-### 2. `knot.diff` in the extension API
+### 2. `knot.diff` in the extension API ✅
+
+Implemented, awaiting review. The binding is the top-level `diff` export of the `knot` module. Handler tests run through a registered extension command (string/string, buffer/string, buffer/buffer, revisions, invalid arguments); closed-buffer and cancellation behavior come from the shared `read_model` and `foreground` paths and have no diff-specific test. The documentation and decision entry are written.
 
 Deliverables: the host operation, the JavaScript binding and declaration, the
 extension test harness's implementation, and documentation.
