@@ -30,7 +30,6 @@ point.
 
 The [version control plan](plans/vcs.md) comes first, in its milestone order:
 
-- D210 — Richer gutter contributions.
 - D211 — VCS foundation and Git change gutter.
 - D212 — Resource decorations.
 - D213 — VCS file status and current ref.
@@ -243,17 +242,8 @@ hold the analyses that support some items.
     present. Add an optional dependency kind whose import still resolves, with
     a client that rejects while no provider is served.
 
-- **D210 — Richer gutter contributions** 🚧
-  - Depends on: none
-  - Description: A contribution marks only its first line with a dot. A change
-    gutter needs bars spanning lines, a marker for deleted lines, and click
-    actions that can open a popup, and language-server diagnostics (D067) need
-    the same. Extend gutter contributions for them, with native painting and
-    theme color keys. Part of the [version control plan](plans/vcs.md);
-    planned in [D210](plans/d210-richer-gutter-contributions.md).
-
 - **D225 — Gutter mark tooltips**
-  - Depends on: D210
+  - Depends on: none
   - Description: Gutter marks show a color but not why they are there, so a
     diagnostic's message or a change's summary needs a click. Do it after the
     [version control plan](plans/vcs.md), before language-server diagnostics
@@ -402,7 +392,7 @@ The [version control plan](plans/vcs.md) holds the agreed architecture and the
 milestones these items belong to.
 
 - **D211 — VCS foundation and Git change gutter** 🚧
-  - Depends on: D210
+  - Depends on: none
   - Description: No version control integration exists. Add `@knot/vcs`, which
     defines the provider contract and owns the shared surfaces, and `@knot/git`,
     its first backend over the `git` command line: find repositories per root,
