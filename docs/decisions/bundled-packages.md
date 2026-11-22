@@ -228,6 +228,16 @@ absolute path, because a symlinked directory would then no longer match the
 document URIs and window roots. Reading uses `GIT_OPTIONAL_LOCKS=0` so it never
 holds a lock a user's own command needs.
 
+Freshness comes from watching, not polling: for each repository it has served,
+`@knot/git` watches the git directory (HEAD, the index, `packed-refs`) and the
+common directory's `refs` and reports a change to `vcs`. The object store is
+not watched, since it is large and busy and no baseline depends on a change
+there. `.git` is hidden, so these watches opt in with `files.watch`'s
+`includeHidden`, a generic option that the explorer and other watchers leave
+off; polling on window focus would miss a change made in a terminal while Knot
+stays focused. A watch ends when its repository directory is gone, and the
+next lookup of a file there watches again.
+
 The `process` entitlement is declared like any package's and is implicitly
 granted to a bundled one, so the backend never prompts. Without `git` on the
 `PATH` it raises one notice and does not register.

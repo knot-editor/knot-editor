@@ -143,9 +143,9 @@ every keystroke rather than holding the list of files.
 
 `files.watch(uri, listener, { recursive, includeHidden })` calls the listener
 with batches of changed URIs. Entries the `files.hidden` setting names are left
-out unless `includeHidden` is set, as a watch of `.git` needs. A batch does not say whether an entry was created, changed, or
-removed, so stat or list what you need, and read the current state after
-awaiting the watch. The returned `Disposable` and the lifecycle end it.
+out unless `includeHidden` is set, as a watch of `.git` needs. A batch does not
+say whether an entry was created, changed, or removed, so stat or list what you
+need, and read the current state after awaiting the watch. The returned `Disposable` and the lifecycle end it.
 
 `readText` decodes UTF-8 and drops a leading byte-order mark. It reads what is
 saved, never an open document's buffer, so unsaved edits are invisible; use

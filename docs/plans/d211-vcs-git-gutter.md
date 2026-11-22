@@ -100,9 +100,8 @@ Alt+F5 and Shift+Alt+F5 as in VS Code.
   callbacks are in order among themselves but interleave arbitrarily with a
   separate `workbench.observe`'s for the same event. Projects tolerates this
   because each handler ends in a live `track(state)` query.
-- Whether `files.watch` reports changes inside `.git`, which is hidden; if
-  not, checkpoint 5 decides between a generic watch option and polling on
-  window focus.
+- ✅ `files.watch` hides `.git`, so a generic `includeHidden` option was added
+  rather than polling on window focus.
 - Whether the gutter has an enable setting. The debounce is a fixed 150 ms; checkpoint 3 adds no setting.
 
 ## Checkpoints
@@ -147,22 +146,14 @@ open is covered only by the fake-host tests.
 
 ### 5. Freshness
 
-Deliverables: `@knot/git` watches each repository's metadata (HEAD, the
-current branch's ref, packed refs) and reports changes through `vcs`;
-`@knot/vcs` refetches baselines for affected documents, and re-resolves a
-document that moved or was saved.
-
-Validation: behavior tests for a commit, checkout, and reset made outside
-Knot, a branch switch, Save As into another repository, and a watcher that
-stops when the repository is deleted.
-
-Review gate: settles the `.git` watching decision.
-
-**Implementation context:**
-- `files.watch` in `docs/extension-api/application.md#read-files` and its
-  native side in `docs/decisions/documents-and-persistence.md#file-watching`;
-  watch tests in `src/app/product/tests/document_watch.rs`.
-- `documents.track`'s `onDidChange` for moves and saves.
+Implemented, awaiting review. `@knot/git` watches each repository it serves and reports changes
+through `vcs`; `files.watch` gained `includeHidden` because it hid `.git`
+(see [Git baseline](../decisions/bundled-packages.md#git-baseline)). Tests:
+`crates/knot-ext-vcs/tests/git.rs` covers a commit, soft reset, branch switch,
+staging, and a deleted repository made outside Knot; a move or save of a
+document is covered by the fake-host tests in
+`extensions/@knot/vcs/test/gutter.test.ts`, since the product harness has no
+Save As. Real-host watch tests need `TestProduct::watch_files`.
 
 ### 6. Navigation
 

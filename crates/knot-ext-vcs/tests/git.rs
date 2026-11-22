@@ -229,3 +229,70 @@ fn repositories_below_a_root_that_is_not_one_are_found(cx: &mut TestAppContext) 
     wait_until(cx, |cx| !bars(&window, 0, cx).is_empty());
     assert_eq!(bars(&window, 0, cx), [added(4)]);
 }
+
+/// A repository whose `file.txt` has a line added after HEAD, open in a window
+/// whose gutter has shown that line.
+fn open_with_added_line(directory: &Path, cx: &mut TestAppContext) -> (TestProduct, TestWindow) {
+    repository(
+        directory,
+        &[("file.txt", BASE.as_bytes()), ("marker.txt", b"m\n")],
+    );
+    std::fs::write(directory.join("file.txt"), "a\nb\nc\nd\ne\n").unwrap();
+    let (product, window) = product(cx);
+    product.watch_files(cx);
+    window.set_roots(&[&uri(directory)], cx);
+    window.open_path(&directory.join("file.txt"), cx);
+    wait_until(cx, |cx| bars(&window, 0, cx) == [added(4)]);
+    (product, window)
+}
+
+#[gpui::test]
+fn a_commit_made_outside_knot_clears_the_marks_and_a_soft_reset_brings_them_back(
+    cx: &mut TestAppContext,
+) {
+    let directory = tempfile::tempdir().unwrap();
+    let (_product, window) = open_with_added_line(directory.path(), cx);
+    git(directory.path(), &["commit", "-q", "-a", "-m", "more"]);
+    wait_until(cx, |cx| bars(&window, 0, cx).is_empty());
+    git(directory.path(), &["reset", "-q", "--soft", "HEAD~1"]);
+    wait_until(cx, |cx| bars(&window, 0, cx) == [added(4)]);
+}
+
+#[gpui::test]
+fn a_branch_switch_outside_knot_changes_the_baseline(cx: &mut TestAppContext) {
+    let directory = tempfile::tempdir().unwrap();
+    let (_product, window) = open_with_added_line(directory.path(), cx);
+    // A branch whose file already has the added line, reached without
+    // touching the working tree.
+    git(directory.path(), &["branch", "other"]);
+    git(directory.path(), &["checkout", "-q", "other"]);
+    git(directory.path(), &["commit", "-q", "-a", "-m", "more"]);
+    wait_until(cx, |cx| bars(&window, 0, cx).is_empty());
+    git(
+        directory.path(),
+        &["symbolic-ref", "HEAD", "refs/heads/main"],
+    );
+    wait_until(cx, |cx| bars(&window, 0, cx) == [added(4)]);
+}
+
+#[gpui::test]
+fn staging_a_file_outside_knot_gives_a_new_file_its_baseline(cx: &mut TestAppContext) {
+    let directory = tempfile::tempdir().unwrap();
+    let (_product, window) = open_with_added_line(directory.path(), cx);
+    std::fs::write(directory.path().join("new.txt"), "x\ny\n").unwrap();
+    window.open_path(&directory.path().join("new.txt"), cx);
+    // Untracked until added to the index; the sentinel settles it.
+    std::fs::write(directory.path().join("marker.txt"), "m\nchanged\n").unwrap();
+    settle(&window, directory.path(), 2, cx);
+    assert!(bars(&window, 1, cx).is_empty());
+    git(directory.path(), &["add", "new.txt"]);
+    wait_until(cx, |cx| bars(&window, 1, cx) == [added(0), added(1)]);
+}
+
+#[gpui::test]
+fn deleting_the_repository_ends_the_gutter(cx: &mut TestAppContext) {
+    let directory = tempfile::tempdir().unwrap();
+    let (_product, window) = open_with_added_line(directory.path(), cx);
+    std::fs::remove_dir_all(directory.path().join(".git")).unwrap();
+    wait_until(cx, |cx| bars(&window, 0, cx).is_empty());
+}
