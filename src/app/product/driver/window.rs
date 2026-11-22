@@ -494,6 +494,38 @@ impl TestWindow {
         })
     }
 
+    /// The gutter's bar lane of the editor tab at `index`, in layout order,
+    /// as line, style, and color key; a wedge drawn below its line is
+    /// reported on the line after it.
+    pub fn gutter_bars(
+        &self,
+        index: usize,
+        cx: &mut TestAppContext,
+    ) -> Vec<(usize, &'static str, String)> {
+        cx.read(|cx| {
+            let workbench = self.window.read(cx).workbench.read(cx);
+            let view = workbench
+                .tabs()
+                .filter_map(|tab| workbench.editor(tab))
+                .nth(index)
+                .expect("an editor tab");
+            view.read(cx)
+                .editor()
+                .read(cx)
+                .gutter_bars()
+                .iter()
+                .map(|mark| {
+                    let style = match mark.style {
+                        knot_protocol::GutterStyle::Dot => "dot",
+                        knot_protocol::GutterStyle::Bar => "bar",
+                        knot_protocol::GutterStyle::Deletion => "deletion",
+                    };
+                    (mark.line + usize::from(mark.below), style, mark.key.clone())
+                })
+                .collect()
+        })
+    }
+
     /// Split the normal group's pane, moving focus to the new pane beside it.
     pub fn split(&self, cx: &mut TestAppContext) {
         self.window.update(cx, |window, cx| {
