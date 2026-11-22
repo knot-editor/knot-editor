@@ -511,8 +511,8 @@ pub(crate) fn run_contribution_action(
     cx: &mut App,
 ) {
     let Some(window) = cx
-        .global::<ApplicationWindows>()
-        .in_native_window(action.window)
+        .try_global::<ApplicationWindows>()
+        .and_then(|windows| windows.in_native_window(action.window))
     else {
         return;
     };
@@ -1624,11 +1624,15 @@ impl KnotWindow {
                 [
                     (
                         "startByteOffset".to_owned(),
-                        knot_protocol::CommandArgumentValue::Number(action.range.start_byte_offset as f64),
+                        knot_protocol::CommandArgumentValue::Number(
+                            action.range.start_byte_offset as f64,
+                        ),
                     ),
                     (
                         "endByteOffset".to_owned(),
-                        knot_protocol::CommandArgumentValue::Number(action.range.end_byte_offset as f64),
+                        knot_protocol::CommandArgumentValue::Number(
+                            action.range.end_byte_offset as f64,
+                        ),
                     ),
                 ]
                 .into(),

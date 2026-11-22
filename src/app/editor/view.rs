@@ -213,6 +213,21 @@ impl EditorView {
             .collect()
     }
 
+    /// Where a click lands on `line` in the marker lane, the bar lane, or the
+    /// start of the text.
+    #[cfg(test)]
+    pub(crate) fn click_point_for_test(&self, lane: Option<bool>, line: usize) -> Point<Pixels> {
+        let x = match lane {
+            Some(false) => 4.,
+            Some(true) => self.gutter.bars_start + 2.,
+            None => self.gutter.width + 2.,
+        };
+        point(
+            self.bounds.origin.x + px(x),
+            self.bounds.origin.y + px(line as f32 * self.metrics.line_height + 5.),
+        )
+    }
+
     /// Each gutter marker's line and color, as the view paints them.
     #[cfg(test)]
     pub(crate) fn gutter_colors_for_test(&self, cx: &App) -> Vec<(usize, Hsla)> {

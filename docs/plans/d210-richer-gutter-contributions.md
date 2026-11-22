@@ -103,6 +103,12 @@ unregistered command reports as other unknown commands do.
 
 Review gate: the command context and arguments a click produces.
 
+Status: implemented, awaiting review. The editor defers a call to
+`product::run_contribution_action` after emitting `EditorContributionAction`,
+rather than each view-creating site subscribing; the window finds the tab whose
+view holds the clicked editor's focus handle, so split views of one document
+target the clicked one.
+
 **Implementation context.**
 - Input: `src/app/editor/input.rs` resolves the clicked mark per lane
   (`GutterLane::Markers` and the new `Bars`) and emits

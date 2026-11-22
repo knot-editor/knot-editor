@@ -5,6 +5,7 @@ mod closure;
 mod commands;
 mod context_menus;
 mod contracts;
+mod contribution_clicks;
 mod dock_header;
 mod document_watch;
 mod editing;
