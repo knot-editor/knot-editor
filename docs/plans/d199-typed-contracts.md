@@ -116,10 +116,46 @@ value is its own frozen descriptor; `s.void()` marks a missing argument or
 result and carries null; `s.optional(x)` is only an object field and means
 absent; `s.nullable(x)` is `union([x, null()])`; a violation reads
 `files: result[1].label: expected string, found number 2 (the provider's schema)`.
-Checkpoint 2 adds `serve`/`client`, the call-context parameter of
+Checkpoint 3 adds `serve`/`client`, the call-context parameter of
 `ContractImplementation`, and the package/contract prefix on violations.
 
-### 2. Cross-isolate transport: manifest, import resolution, serve/client
+### 2. Host JavaScript in TypeScript, with unit tests
+
+Write the host's own modules in TypeScript, type-checked against the public
+declarations, and unit-test them in Node before the transport work grows
+them. Not specific to contracts; done here because checkpoints 3–5 change
+these files heavily.
+
+- **Deliverables:** `bootstrap.js`, `knot.js`, and `contract.js` become
+  strict TypeScript sources that `knot-host`'s build script compiles with the
+  lockfile-pinned `tsc` and embeds, as the bundled packages are today;
+  `knot.d.ts` stays the hand-written public contract, and the build fails
+  when the `"knot"` and `"knot/contract"` implementations stop matching what
+  it declares; the private native bindings get a typed declaration; `node:test`
+  unit tests for the host modules with the native bindings stubbed, starting
+  with the schema builder (moved from `scripts/extensions/testing/schemas.test.ts`)
+  and the boundary helpers such as `validateJsonValue`, argument
+  normalization, and lifecycle-owned disposal.
+- **Implementation context:** reuse the compile, fingerprint, and tool-install
+  logic in [knot-bundled's build.rs](../../crates/knot-bundled/src/build.rs)
+  rather than copying it; `include_str!` in
+  [engine/mod.rs](../../crates/knot-host/src/engine/mod.rs) reads the emitted
+  modules from `OUT_DIR`. Emit must stay module-for-module (no bundler) so
+  V8 module specifiers, error locations, and the
+  private-bootstrap import rule in
+  [modules.rs](../../crates/knot-host/src/engine/modules.rs) keep working.
+  The Node tests' `register.mjs` maps `"knot/contract"` to the compiled
+  builder. Update [development](../development.md) where it describes what
+  `tsc` builds and the `knot.d.ts` rebuild trigger.
+- **Validation:** existing V8 engine and product tests pass unchanged; an
+  intentional mismatch between an implementation and `knot.d.ts` fails the
+  build (checked once by hand, not as a permanent test); new unit tests run
+  under `node tasks.mjs test`; `just check`; incremental rebuild still
+  touches only what changed (`scripts/check-bundled-incremental.sh`).
+- **Review gate:** the conformance approach (how an implementation is tied to
+  `knot.d.ts`) and the unit-test harness shape agreed; no behavior change.
+
+### 3. Cross-isolate transport: manifest, import resolution, serve/client
 
 Make a fixture consumer call a fixture provider through a contract, with
 validation on the boundary.
@@ -152,13 +188,13 @@ validation on the boundary.
 - **Review gate:** a two-package fixture calling through a contract in a
   product test; API wording in `knot.d.ts` reviewed.
 
-### 3. Migrate the native-interpreted providers
+### 4. Migrate the native-interpreted providers
 
 Move `editor.completion` and `editor.paste.<languageId>` onto Knot-defined
 contracts; native aggregation and failure isolation stay as they are.
 
 - **Implementation context:** Knot exports the two contract values from
-  `"knot"`; serve-side registration feeds the same registry checkpoint 2
+  `"knot"`; serve-side registration feeds the same registry checkpoint 3
   built; native callers in
   [semantics.rs](../../src/app/extensions/semantics.rs) (completion) and
   the paste path in `src/app/editor/` switch from name/method strings to
@@ -172,7 +208,7 @@ contracts; native aggregation and failure isolation stay as they are.
   new path; a provider returning malformed items fails only its own part.
 - **Review gate:** no behavior change visible in completion or paste.
 
-### 4. Migrate `workspace.*` and remove `providers.*`
+### 5. Migrate `workspace.*` and remove `providers.*`
 
 Move the bundled package-to-package providers onto a published contract
 and delete the old mechanism.
@@ -185,7 +221,7 @@ and delete the old mechanism.
   tolerance, and drops its local redeclaration
   ([command-line.ts](../../extensions/@knot/vim/src/command-line.ts:32));
   remove `providers` from
-  [knot.js](../../crates/knot-host/src/js/knot.js:96),
+  the `"knot"` facade,
   [knot.d.ts](../../crates/knot-host/src/js/knot.d.ts:2621), bootstrap, the
   model registry's old shape, and handlers; keep
   `docs/schemas/knot.schema.json` in sync with the manifest field.
@@ -193,7 +229,7 @@ and delete the old mechanism.
   cases, full `just check`.
 - **Review gate:** `providers.*` gone from the public API.
 
-### 5. Document
+### 6. Document
 
 - **Deliverables:** a contract example under
   `scripts/extensions/examples/`; update
@@ -208,9 +244,9 @@ and delete the old mechanism.
 
 - Contract-graph purity is enforced by import restriction, not by
   sandboxing the evaluated module; a contract module with side effects
-  would run them in every consumer. The checkpoint-2 tests pin the
+  would run them in every consumer. The checkpoint-3 tests pin the
   restriction; the guide states the rule.
-- Validation sits on the completion path while typing; checkpoint 3
+- Validation sits on the completion path while typing; checkpoint 4
   measures completion latency before and after.
 - Native-interpreted contracts invert the dependency direction (Knot is
   the consumer). Keep their aggregation in native code rather than
