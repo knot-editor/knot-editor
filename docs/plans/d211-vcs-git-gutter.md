@@ -107,33 +107,14 @@ Alt+F5 and Shift+Alt+F5 as in VS Code.
 
 ## Checkpoints
 
-### 1. `documents.track` and `@knot/projects` ✅ pending review
+### 1. `documents.track` and `@knot/projects` ✅
 
-Deliverables: `documents.track` in the `knot` module with its declaration;
-`@knot/projects` migrated to it for documents opening, changing file, and
-closing, keeping `workbench.observe` for windows and `launched`.
-
-Validation: product tests for the snapshot-then-new delivery, change
-filtering (revision-only changes are silent), close, disposal, and lifecycle
-teardown; ordering against a concurrent `workbench.observe`; the existing
-projects behavior tests unchanged and passing.
-
-Review gate: the API shape and the ordering result, which settles the first
-deferred decision.
-
-**Implementation context:**
-- `crates/knot-host/src/js/bootstrap.ts`: build on `observeWorkbench` and
-  `__knotDispatchApplicationChange` (around line 2729), reusing
-  `documentFromNative` and `ownership` for disposal.
-- `crates/knot-host/src/js/knot.ts` (the `documents` object, line 103) and
-  `knot.d.ts` (the `documents` declaration, line 172).
-- Tests beside `src/app/product/tests/observation.rs`.
-- `extensions/@knot/projects/src/tracking.ts`: `membershipChange`,
-  `state.tracked`, and the document branches of `onApplicationEvent` move to
-  the tracker; tests in `extensions/@knot/projects/test/tracking.test.ts` and
-  `crates/knot-ext-workbench/tests/workbench/projects.rs`.
-- Docs: `docs/extension-api/application.md` (inspect and change application
-  state) and `docs/architecture/extension-host.md#application-observation`.
+Complete. `documents.track` is documented in
+[application](../extension-api/application.md#inspect-and-change-application-state) and
+[application observation](../architecture/extension-host.md#application-observation);
+`@knot/projects` follows documents with it and keeps `workbench.observe` for
+windows and `launched`. A tracker is ordered within itself but not against a
+separate `workbench.observe`.
 
 ### 2. Skeleton and contracts
 
