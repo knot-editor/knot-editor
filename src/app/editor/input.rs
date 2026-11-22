@@ -67,14 +67,17 @@ impl EditorView {
         };
         if let Some((command, source, range)) = action {
             self.suppress_drag_selection = true;
-            cx.emit(EditorContributionAction {
+            let action = EditorContributionAction {
                 command,
                 source,
                 range,
                 model: self.model.clone(),
                 window: window.window_handle(),
                 focus: self.focus.downgrade(),
-            });
+            };
+            cx.emit(action.clone());
+            // Run it once this event has been handled.
+            cx.defer(move |cx| crate::app::product::run_contribution_action(action, cx));
             cx.stop_propagation();
             return;
         }

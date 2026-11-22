@@ -504,6 +504,21 @@ pub(crate) fn test_window_id(native_window: AnyWindowHandle) -> String {
     TEST_WINDOW_IDS.with_borrow(|ids| ids[&native_window.window_id().as_u64()].clone())
 }
 
+/// Run the command a click on an editor contribution names, in the window the
+/// click happened in.
+pub(crate) fn run_contribution_action(
+    action: super::editor::EditorContributionAction,
+    cx: &mut App,
+) {
+    let Some(window) = cx
+        .global::<ApplicationWindows>()
+        .in_native_window(action.window)
+    else {
+        return;
+    };
+    window.update(cx, |window, cx| window.run_contribution_action(&action, cx));
+}
+
 /// The native window an open window is shown in, without reading the window.
 pub(crate) fn native_window(window: EntityId, cx: &App) -> Option<AnyWindowHandle> {
     cx.global::<ApplicationWindows>().native_window(window)
@@ -1562,6 +1577,68 @@ impl KnotWindow {
             focused,
             view,
         }
+    }
+
+    /// Run the command of a clicked contribution against the view that was
+    /// clicked, with the contribution's current `range` added to its
+    /// arguments.
+    fn run_contribution_action(
+        &mut self,
+        action: &super::editor::EditorContributionAction,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(focus) = action.focus.upgrade() else {
+            return;
+        };
+        let workbench = self.workbench.read(cx);
+        let clicked = workbench.panes().iter().find_map(|pane| {
+            pane.tabs().iter().find_map(|tab| {
+                let view = workbench.command_view(tab)?;
+                (view.focus_handle(cx) == focus).then(|| (pane.id(), tab, view))
+            })
+        });
+        let Some((pane, tab, view)) = clicked else {
+            return;
+        };
+        let target = ProductCommandTarget {
+            window: cx.entity().downgrade(),
+            workbench: self.workbench.downgrade(),
+            tab: Some(TargetTab {
+                pane,
+                tab: tab.id(),
+                surface: tab.surface_id(),
+                presentation: tab.presentation(),
+            }),
+            focused: true,
+            view: match &view {
+                super::workbench::CommandView::Extension(extension) => {
+                    Some(extension.instance_id(cx))
+                }
+                _ => None,
+            },
+        };
+        let mut arguments = action.command.arguments.clone();
+        arguments.insert(
+            "range".to_owned(),
+            knot_protocol::CommandArgumentValue::Object(
+                [
+                    (
+                        "startByteOffset".to_owned(),
+                        knot_protocol::CommandArgumentValue::Number(action.range.start_byte_offset as f64),
+                    ),
+                    (
+                        "endByteOffset".to_owned(),
+                        knot_protocol::CommandArgumentValue::Number(action.range.end_byte_offset as f64),
+                    ),
+                ]
+                .into(),
+            ),
+        );
+        let command = knot_protocol::Command {
+            name: action.command.name.as_str().into(),
+            arguments: knot_protocol::CommandArgumentValue::Object(arguments),
+        };
+        self.dispatch_command(command, target, cx);
     }
 
     fn dispatch_command(

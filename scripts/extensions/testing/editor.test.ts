@@ -400,3 +400,28 @@ test("diff ignores whitespace only when asked and rejects invalid arguments", as
   await assert.rejects(diff("", {} as never), TypeError);
   await assert.rejects(diff("", "", { ignoreWhitespace: "yes" as never }), TypeError);
 });
+
+test("clicking a contribution runs its command with its range", async () => {
+  const document = host.addDocument({ text: "abcdef" });
+  host.openWindow({ documents: [document] });
+  const seen: unknown[] = [];
+  await commands.register("mark.click", async ({ editor, buffer, arguments: args }) => {
+    seen.push([args, editor !== null, buffer !== null]);
+  });
+  const { revision } = await (await capture()).buffer!.snapshot();
+  await (await capture()).buffer!.contributions.replace(
+    [
+      { range: { startByteOffset: 1, endByteOffset: 3 }, gutter: { color: "diff.added", style: "bar" }, command: "mark.click" },
+      { range: { startByteOffset: 4, endByteOffset: 4 }, gutter: { color: "diff.removed", style: "deletion" }, command: { name: "mark.click", arguments: { hunk: 2 } } },
+      { range: { startByteOffset: 0, endByteOffset: 1 } },
+    ],
+    { ifRevision: revision },
+  );
+  await host.clickContribution(document, 0);
+  await host.clickContribution(document, 1);
+  assert.deepEqual(seen, [
+    [{ range: { startByteOffset: 1, endByteOffset: 3 } }, true, true],
+    [{ hunk: 2, range: { startByteOffset: 4, endByteOffset: 4 } }, true, true],
+  ]);
+  await assert.rejects(host.clickContribution(document, 2), /no command/);
+});

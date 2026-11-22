@@ -1478,6 +1478,25 @@ export async function clickBarControl(
   return run(target.command.name, { window, arguments: target.command.arguments ?? null });
 }
 
+/**
+ * Clicks the contribution at `index` of a document's contributions as the
+ * user would click its gutter mark or inline text: runs its command in the
+ * window's selected editor with the contribution's range added to its
+ * arguments. The fake stores ranges as given, so edits do not move them.
+ */
+export async function clickContribution(
+  id: Knot.DocumentId,
+  index: number,
+  window: Knot.WindowTarget = state.windows[0]!.target,
+) {
+  const contribution = contributions(id)[index];
+  if (contribution === undefined) throw new Error(`no contribution ${index}`);
+  const { command, range } = contribution;
+  if (command === undefined || command === null) throw new Error(`contribution ${index} has no command`);
+  const { name, arguments: given } = typeof command === "string" ? { name: command, arguments: undefined } : command;
+  return run(name, { window, arguments: { ...given, range: { ...range } } });
+}
+
 function barTexts(bar: FakeBar): Record<string, string> {
   return Object.fromEntries(bar.fields.map((field) => [field.id, field.text]));
 }
