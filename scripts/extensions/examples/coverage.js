@@ -257,7 +257,7 @@ export async function exerciseEditor(context) {
   const current = await buffer.snapshot();
   await buffer.contributions.replace([
     { range: { startByteOffset: 0, endByteOffset: 5 }, decoration: { color: "info", style: "background" },
-      gutter: "warning", command: "coverage.command" },
+      gutter: { color: "warning", style: "dot" }, command: "coverage.command" },
     { range: { startByteOffset: 6, endByteOffset: 7 }, decoration: null, gutter: null, command: null },
   ], { ifRevision: current.revision });
   await buffer.contributions.replace([], { ifRevision: current.revision });

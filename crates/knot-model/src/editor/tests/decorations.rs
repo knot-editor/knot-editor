@@ -4,7 +4,7 @@ use super::super::{
     BufferModel, ContributionSource, ResolvedEditorContribution, Row, decoration_fills,
     project_contributions,
 };
-use knot_protocol::{ByteRange, Decoration, DecorationStyle};
+use knot_protocol::{ByteRange, Decoration, DecorationStyle, GutterMark, GutterStyle};
 
 use DecorationStyle::{Background, Line};
 
@@ -294,4 +294,110 @@ mod view {
         f.editor.release(&mut f.buffer);
         assert_eq!(f.buffer.anchored_range_count(), baseline - 1);
     }
+}
+
+/// The gutter marks `marks` project on `text`, as each lane's
+/// `(line, style, key, below)` entries: the marker lane, then the bar lane.
+type Lanes = Vec<(usize, GutterStyle, String, bool)>;
+
+fn lanes(text: &str, marks: &[(Range<usize>, &str, GutterStyle)]) -> (Lanes, Lanes) {
+    let model = BufferModel::from_text(text);
+    let contributions = marks
+        .iter()
+        .map(|(range, key, style)| ResolvedEditorContribution {
+            range: ByteRange {
+                start_byte_offset: range.start,
+                end_byte_offset: range.end,
+            },
+            source: ContributionSource::fixture(),
+            decoration: None,
+            gutter: Some(GutterMark::new(key, *style)),
+            command: None,
+        })
+        .collect();
+    let (_, markers, bars, _) = project_contributions(&model, contributions);
+    let flatten = |marks: Vec<super::super::RenderedGutterMarker>| {
+        marks
+            .into_iter()
+            .map(|mark| (mark.line, mark.style, mark.key, mark.below))
+            .collect()
+    };
+    (flatten(markers), flatten(bars))
+}
+
+fn entry(
+    line: usize,
+    style: GutterStyle,
+    key: &str,
+    below: bool,
+) -> (usize, GutterStyle, String, bool) {
+    (line, style, key.to_owned(), below)
+}
+
+#[test]
+fn a_bar_claims_every_line_of_its_range() {
+    let (markers, bars) = lanes("aa\nbb\ncc\ndd", &[(1..7, "diff.added", GutterStyle::Bar)]);
+    assert!(markers.is_empty());
+    assert_eq!(
+        bars,
+        [
+            entry(0, GutterStyle::Bar, "diff.added", false),
+            entry(1, GutterStyle::Bar, "diff.added", false),
+            entry(2, GutterStyle::Bar, "diff.added", false),
+        ]
+    );
+}
+
+#[test]
+fn a_bar_ending_at_column_zero_leaves_that_line_out() {
+    // 0..6 ends at the start of line 2; an empty range still marks its line.
+    let (_, bars) = lanes("aa\nbb\ncc", &[(0..6, "diff.added", GutterStyle::Bar)]);
+    assert_eq!(bars.iter().map(|bar| bar.0).collect::<Vec<_>>(), [0, 1]);
+    let (_, bars) = lanes("aa\nbb", &[(3..3, "diff.added", GutterStyle::Bar)]);
+    assert_eq!(bars.iter().map(|bar| bar.0).collect::<Vec<_>>(), [1]);
+}
+
+#[test]
+fn a_deletion_sits_above_its_start_line_or_below_the_text() {
+    let (_, bars) = lanes("aa\nbb", &[(3..3, "diff.removed", GutterStyle::Deletion)]);
+    assert_eq!(
+        bars,
+        [entry(1, GutterStyle::Deletion, "diff.removed", false)]
+    );
+    // At the end of a text whose last line has content, there is no line after
+    // the boundary.
+    let (_, bars) = lanes("aa\nbb", &[(5..5, "diff.removed", GutterStyle::Deletion)]);
+    assert_eq!(
+        bars,
+        [entry(1, GutterStyle::Deletion, "diff.removed", true)]
+    );
+    // After a final newline the empty last line is the line after.
+    let (_, bars) = lanes("aa\n", &[(3..3, "diff.removed", GutterStyle::Deletion)]);
+    assert_eq!(
+        bars,
+        [entry(1, GutterStyle::Deletion, "diff.removed", false)]
+    );
+}
+
+#[test]
+fn lanes_compete_separately_and_the_most_severe_latest_mark_wins() {
+    let (markers, bars) = lanes(
+        "aa\nbb\ncc",
+        &[
+            (0..8, "diff.added", GutterStyle::Bar),
+            (0..1, "warning", GutterStyle::Dot),
+            (3..3, "diff.removed", GutterStyle::Deletion),
+            (6..7, "error", GutterStyle::Bar),
+            (0..1, "diff.modified", GutterStyle::Bar),
+        ],
+    );
+    assert_eq!(markers, [entry(0, GutterStyle::Dot, "warning", false)]);
+    assert_eq!(
+        bars,
+        [
+            entry(0, GutterStyle::Bar, "diff.modified", false),
+            entry(1, GutterStyle::Deletion, "diff.removed", false),
+            entry(2, GutterStyle::Bar, "error", false),
+        ]
+    );
 }

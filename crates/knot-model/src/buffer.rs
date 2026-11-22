@@ -15,7 +15,8 @@ use knot_core::{
 };
 use knot_protocol::{BufferHandle, BufferSubscriptionId, ExtensionKey};
 use knot_protocol::{
-    ByteRange, Decoration, EditorContribution, ExtensionId, ExtensionLifecycleId, SnapshotText,
+    ByteRange, ContributionCommand, Decoration, EditorContribution, ExtensionId,
+    ExtensionLifecycleId, GutterMark, SnapshotText,
 };
 
 use crate::{
@@ -59,13 +60,13 @@ pub fn decoration_precedence(key: &str) -> u8 {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ResolvedEditorContribution {
     pub range: ByteRange,
     pub source: ContributionSource,
     pub decoration: Option<Decoration>,
-    pub gutter: Option<String>,
-    pub command: Option<String>,
+    pub gutter: Option<GutterMark>,
+    pub command: Option<ContributionCommand>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -98,8 +99,8 @@ struct ContributionSet {
 struct ContributionMetadata {
     source: ContributionSource,
     decoration: Option<Decoration>,
-    gutter: Option<String>,
-    command: Option<String>,
+    gutter: Option<GutterMark>,
+    command: Option<ContributionCommand>,
 }
 
 struct ContributionRegistry {

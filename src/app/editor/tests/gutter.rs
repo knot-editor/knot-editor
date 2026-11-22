@@ -13,7 +13,7 @@ use crate::app::settings::{
     ApplicationSettings, EDITOR_FOLDING, EDITOR_LINE_NUMBERS, EDITOR_SHOW_FOLDING_CONTROLS,
     Folding, LineNumbers, SettingsScope,
 };
-use knot_protocol::{ByteRange, EditorContribution};
+use knot_protocol::{ByteRange, EditorContribution, GutterMark, GutterStyle};
 
 fn set_line_numbers(cx: &mut VisualTestContext, value: &str, view: Option<&str>) {
     cx.update(|_, cx| {
@@ -276,7 +276,7 @@ fn the_marker_lane_runs_the_top_marker_command_and_selects_nothing(cx: &mut Test
                 end_byte_offset: start + 1,
             },
             decoration: None,
-            gutter: Some(key.to_owned()),
+            gutter: Some(GutterMark::new(key, GutterStyle::Dot)),
             command: command.map(Into::into),
         };
         model
@@ -298,7 +298,7 @@ fn the_marker_lane_runs_the_top_marker_command_and_selects_nothing(cx: &mut Test
     let seen = commands.clone();
     cx.update(|_, cx| {
         cx.subscribe(&editor, move |_, action: &EditorContributionAction, _| {
-            seen.borrow_mut().push(action.command.clone());
+            seen.borrow_mut().push(action.command.name.clone());
         })
         .detach();
     });

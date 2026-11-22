@@ -46,7 +46,9 @@ use std::{
 };
 
 use knot_core::anchored_range::AnchoredRangeId;
-use knot_protocol::{ByteRange, DecorationStyle, ProviderRegistrationId, TextEdit};
+use knot_protocol::{
+    ByteRange, ContributionCommand, DecorationStyle, GutterStyle, ProviderRegistrationId, TextEdit,
+};
 
 use crate::{
     buffer::{BufferModel, ContributionSource, ResolvedEditorContribution, decoration_precedence},
@@ -123,13 +125,18 @@ pub struct RenderedDecoration {
     pub style: DecorationStyle,
 }
 
-/// The marker the gutter shows on `line`: the most severe of the line's
-/// markers, with the command a click runs.
+/// The mark a gutter lane shows on `line`: the most severe of the line's
+/// marks in that lane, with the command a click runs. A `Dot` belongs to the
+/// marker lane, a `Bar` or `Deletion` to the bar lane. A `Deletion` is a wedge
+/// on the boundary above `line`, or below it when `below` is set: the range
+/// starts at the end of a text whose last line has content.
 #[derive(Clone)]
 pub struct RenderedGutterMarker {
     pub line: usize,
+    pub style: GutterStyle,
+    pub below: bool,
     pub key: String,
-    pub command: Option<String>,
+    pub command: Option<ContributionCommand>,
     pub source: ContributionSource,
     pub range: ByteRange,
 }
@@ -139,7 +146,7 @@ pub struct RenderedContributionAction {
     pub line: usize,
     pub start: usize,
     pub end: usize,
-    pub command: String,
+    pub command: ContributionCommand,
     pub source: ContributionSource,
     pub range: ByteRange,
 }
@@ -247,6 +254,7 @@ pub struct EditorState {
     /// decorations.
     decorations: Vec<RenderedDecoration>,
     gutter_markers: Vec<RenderedGutterMarker>,
+    gutter_bars: Vec<RenderedGutterMarker>,
     contribution_actions: Vec<RenderedContributionAction>,
     /// The brackets matched at the caret.
     bracket_cache: RefCell<Option<brackets::BracketCache>>,
@@ -309,7 +317,7 @@ impl EditorState {
     ) -> Self {
         let line_count = buffer.line_count();
         let seen_revision = buffer.revision();
-        let (decorations, gutter_markers, contribution_actions) =
+        let (decorations, gutter_markers, gutter_bars, contribution_actions) =
             project_contributions(buffer, buffer.resolved_contributions());
         let position_range = buffer.add_view_position(0..0);
         Self {
@@ -325,6 +333,7 @@ impl EditorState {
             view_decorations: Vec::new(),
             decorations,
             gutter_markers,
+            gutter_bars,
             contribution_actions,
             bracket_cache: RefCell::default(),
             scroll_top: 0.,
@@ -485,9 +494,15 @@ impl EditorState {
         &self.decorations
     }
 
-    /// The most severe gutter marker of each line that has one, by line.
+    /// The most severe marker-lane dot of each line that has one, by line.
     pub fn gutter_markers(&self) -> &[RenderedGutterMarker] {
         &self.gutter_markers
+    }
+
+    /// The most severe bar-lane bar or deletion of each line that has one, by
+    /// line.
+    pub fn gutter_bars(&self) -> &[RenderedGutterMarker] {
+        &self.gutter_bars
     }
 
     /// The contributed commands a click on their text runs.
@@ -1177,10 +1192,12 @@ fn project_contributions(
 ) -> (
     Vec<RenderedDecoration>,
     Vec<RenderedGutterMarker>,
+    Vec<RenderedGutterMarker>,
     Vec<RenderedContributionAction>,
 ) {
     let mut decorations = Vec::new();
     let mut gutter_markers = Vec::new();
+    let mut gutter_bars = Vec::new();
     let mut actions = Vec::new();
     for contribution in contributions {
         let start = contribution.range.start_byte_offset;
@@ -1188,14 +1205,37 @@ fn project_contributions(
         let first_line = model.line_of_offset(start);
         let last_line = model.line_of_offset(end);
 
-        if let Some(key) = &contribution.gutter {
-            gutter_markers.push(RenderedGutterMarker {
-                line: first_line,
-                key: key.clone(),
-                command: contribution.command.clone(),
-                source: contribution.source,
-                range: contribution.range,
-            });
+        if let Some(mark) = &contribution.gutter {
+            let push = |marks: &mut Vec<RenderedGutterMarker>, line, below| {
+                marks.push(RenderedGutterMarker {
+                    line,
+                    style: mark.style,
+                    below,
+                    key: mark.color.clone(),
+                    command: contribution.command.clone(),
+                    source: contribution.source,
+                    range: contribution.range,
+                });
+            };
+            match mark.style {
+                GutterStyle::Dot => push(&mut gutter_markers, first_line, false),
+                GutterStyle::Bar => {
+                    for line in first_line..=last_line {
+                        // A range ending at column 0 of a later line leaves
+                        // that line out, as `line` decorations do.
+                        if line == first_line || end > model.line_range(line).start {
+                            push(&mut gutter_bars, line, false);
+                        }
+                    }
+                }
+                GutterStyle::Deletion => {
+                    let line_range = model.line_range(first_line);
+                    let below = first_line + 1 == model.line_count()
+                        && start == line_range.end
+                        && start > line_range.start;
+                    push(&mut gutter_bars, first_line, below);
+                }
+            }
         }
 
         if contribution.decoration.is_none() && contribution.command.is_none() {
@@ -1252,16 +1292,18 @@ fn project_contributions(
             }
         }
     }
-    // Each line keeps its most severe marker, and among equals the latest.
-    gutter_markers.reverse();
-    gutter_markers.sort_by_key(|marker| {
-        (
-            marker.line,
-            std::cmp::Reverse(decoration_precedence(&marker.key)),
-        )
-    });
-    gutter_markers.dedup_by_key(|marker| marker.line);
-    (decorations, gutter_markers, actions)
+    // Each lane keeps a line's most severe mark, and among equals the latest.
+    for marks in [&mut gutter_markers, &mut gutter_bars] {
+        marks.reverse();
+        marks.sort_by_key(|mark| {
+            (
+                mark.line,
+                std::cmp::Reverse(decoration_precedence(&mark.key)),
+            )
+        });
+        marks.dedup_by_key(|mark| mark.line);
+    }
+    (decorations, gutter_markers, gutter_bars, actions)
 }
 
 #[cfg(test)]

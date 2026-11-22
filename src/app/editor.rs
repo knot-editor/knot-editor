@@ -30,7 +30,7 @@ use layout::*;
 use gpui::{prelude::*, *};
 use unicode_segmentation::UnicodeSegmentation;
 
-use knot_protocol::{ByteRange, DecorationStyle, ProviderRegistrationId};
+use knot_protocol::{ByteRange, ContributionCommand, DecorationStyle, ProviderRegistrationId};
 
 pub(crate) use knot_model::editor::*;
 
@@ -73,9 +73,9 @@ impl SyntaxCache {
     }
 }
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub(crate) struct EditorContributionAction {
-    pub command: String,
+    pub command: ContributionCommand,
     pub source: ContributionSource,
     pub range: ByteRange,
     pub model: Entity<Buffer>,

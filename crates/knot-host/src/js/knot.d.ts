@@ -1491,8 +1491,30 @@ declare module "knot" {
     readonly style: DecorationStyle;
   }
   /**
+   * What a gutter mark draws: a `dot` on the range's first line in the marker
+   * lane; a `bar` along every line of the range, wrapped rows included, in the
+   * bar lane (a range ending at column 0 of a later line leaves that line
+   * out); or a `deletion` wedge on the boundary above the range's start line,
+   * in the bar lane, below the last line at the end of a text. A zero-width
+   * range is the usual form of a deletion.
+   */
+  export type GutterStyle = "dot" | "bar" | "deletion";
+  /** How a contribution marks the gutter, in the color of a theme key. */
+  export interface GutterMark {
+    readonly color: ColorKey;
+    readonly style: GutterStyle;
+  }
+  /**
+   * The command a click on a contribution runs: a name, or a name with an
+   * `arguments` object. The host adds `range`, the contribution's current
+   * range, to the arguments.
+   */
+  export type ContributionCommand =
+    | string
+    | { readonly name: string; readonly arguments?: { readonly [key: string]: JsonValue } };
+  /**
    * Anchored semantic range. Optional decoration, gutter and command may be null.
-   * Edits stabilize its anchors. Command is a name, not structured arguments.
+   * Edits stabilize its anchors.
    */
   export interface EditorContribution {
     readonly range: ByteRange;
@@ -1502,12 +1524,14 @@ declare module "knot" {
      * beneath the selection.
      */
     readonly decoration?: Decoration | null;
-    /** Marks the range's first line in the gutter with a dot in this key's
-     * color. A line shows one marker, chosen like decorations by severity and
-     * then by the latest. */
-    readonly gutter?: ColorKey | null;
-    /** Runs when the gutter marker is clicked. */
-    readonly command?: string | null;
+    /**
+     * Marks the gutter. Each of the two lanes shows one mark per line, chosen
+     * like decorations by severity and then by the latest; a `bar` claims
+     * every line it spans and a `deletion` its start line.
+     */
+    readonly gutter?: GutterMark | null;
+    /** Runs when a gutter mark or the range's text is clicked. */
+    readonly command?: ContributionCommand | null;
   }
   /** A decoration one view paints; see `Editor.setDecorations`. */
   export interface ViewDecoration {

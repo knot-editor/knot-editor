@@ -3,11 +3,16 @@
 use super::*;
 
 impl EditorState {
-    /// The marker shown on `line`, if any.
+    /// The dot the marker lane shows on `line`, if any.
     pub fn gutter_marker(&self, line: usize) -> Option<&RenderedGutterMarker> {
         self.gutter_markers
             .iter()
             .find(|marker| marker.line == line)
+    }
+
+    /// The bar or deletion the bar lane shows on `line`, if any.
+    pub fn gutter_bar(&self, line: usize) -> Option<&RenderedGutterMarker> {
+        self.gutter_bars.iter().find(|bar| bar.line == line)
     }
 
     /// Select whole lines from a click on the line numbers: the clicked line,

@@ -38,12 +38,12 @@ use knot_protocol::declarations::{HostError, HostFailure, TransportError};
 use knot_protocol::{
     ApplicationChange, ApplicationEvent, BufferChange, BufferHandle, BufferSubscriptionId,
     ByteRange, Command, CommandArgumentValue, CommandInvocation, CommandInvocationId,
-    CommandOutcome, Decoration, DecorationStyle, EditorContribution, EditorEvent, ExtensionId,
-    HostRequest, HostResponse, KeybindingMutation, ProviderCallRequest, ProviderCallResponse,
-    ProviderIdentity, RequestId, SettingsSubscriptionId, SnapshotText, SurfaceCallbackRequest,
-    TextEdit, TextSnapshot, TreeAction, TreeChildrenRequest, TreeChildrenResponse,
-    TreeCollapsibleState, TreeItem, TreeItemKind, TreeProviderError, WatchSubscriptionId,
-    WorkbenchSubscriptionId,
+    CommandOutcome, ContributionCommand, Decoration, DecorationStyle, EditorContribution,
+    EditorEvent, ExtensionId, GutterMark, GutterStyle, HostRequest, HostResponse,
+    KeybindingMutation, ProviderCallRequest, ProviderCallResponse, ProviderIdentity, RequestId,
+    SettingsSubscriptionId, SnapshotText, SurfaceCallbackRequest, TextEdit, TextSnapshot,
+    TreeAction, TreeChildrenRequest, TreeChildrenResponse, TreeCollapsibleState, TreeItem,
+    TreeItemKind, TreeProviderError, WatchSubscriptionId, WorkbenchSubscriptionId,
 };
 
 static V8_INITIALIZATION: Once = Once::new();

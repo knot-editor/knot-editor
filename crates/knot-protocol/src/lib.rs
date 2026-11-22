@@ -324,14 +324,59 @@ pub struct TextEdit {
 }
 
 /// One semantic editor contribution supplied by an extension. The
-/// decoration and gutter marker each name a theme color key.
-#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+/// decoration and gutter mark each name a theme color key.
+#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EditorContribution {
     pub range: ByteRange,
     pub decoration: Option<Decoration>,
-    pub gutter: Option<String>,
-    pub command: Option<String>,
+    pub gutter: Option<GutterMark>,
+    pub command: Option<ContributionCommand>,
+}
+
+/// The command a click on a contribution runs; `arguments` is an object, to
+/// which the host adds the contribution's current `range`.
+#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContributionCommand {
+    pub name: String,
+    pub arguments: BTreeMap<String, CommandArgumentValue>,
+}
+
+impl From<&str> for ContributionCommand {
+    fn from(name: &str) -> Self {
+        Self {
+            name: name.to_owned(),
+            arguments: BTreeMap::new(),
+        }
+    }
+}
+
+/// How a contribution marks the gutter, in the color of a theme key.
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GutterMark {
+    pub color: String,
+    pub style: GutterStyle,
+}
+
+impl GutterMark {
+    pub fn new(color: &str, style: GutterStyle) -> Self {
+        Self {
+            color: color.to_owned(),
+            style,
+        }
+    }
+}
+
+/// What a gutter mark draws: a dot on the range's first line, a bar along
+/// every line of the range, or a wedge on the boundary above the range.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum GutterStyle {
+    Dot,
+    Bar,
+    Deletion,
 }
 
 /// How a contribution paints its range, in the color of a theme key.

@@ -23,7 +23,7 @@ use crate::app::{
 };
 use knot_protocol::{
     ByteRange, Decoration, DecorationStyle, EditorContribution, ExtensionId, ExtensionLifecycleId,
-    LanguageInfo,
+    GutterMark, GutterStyle, LanguageInfo,
 };
 
 #[gpui::test]
@@ -615,7 +615,7 @@ fn views_share_model_state_and_keep_presentation_state_independent(cx: &mut Test
                         end_byte_offset: 6,
                     },
                     decoration: Some(Decoration::new("warning", DecorationStyle::Wavy)),
-                    gutter: Some("warning".to_owned()),
+                    gutter: Some(GutterMark::new("warning", GutterStyle::Dot)),
                     command: None,
                 }],
                 revision,

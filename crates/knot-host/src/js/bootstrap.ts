@@ -373,13 +373,30 @@ function decoration(value: unknown) {
   if (style === null) throw new TypeError("decoration needs a style");
   return { color: string(value.color, "decoration color must be text"), style };
 }
+function gutterMark(value: unknown) {
+  if (value == null) return null;
+  expectRecord(value, "gutter must be an object");
+  const style = token(value.style, ["dot", "bar", "deletion"]);
+  if (style === null) throw new TypeError("gutter needs a style");
+  return { color: string(value.color, "gutter color must be text"), style };
+}
+function contributionCommand(value: unknown) {
+  if (value == null) return null;
+  if (typeof value === "string") return { name: value, arguments: {} };
+  expectRecord(value, "contribution command must be a name or { name, arguments }");
+  const arguments_ = value.arguments === undefined ? {} : validateJsonValue(value.arguments);
+  if (arguments_ === null || typeof arguments_ !== "object" || Array.isArray(arguments_)) {
+    throw new TypeError("contribution command arguments must be an object");
+  }
+  return { name: string(value.name, "contribution command name must be text"), arguments: arguments_ };
+}
 function contribution(value: unknown) {
   expectRecord(value, "contribution must be an object");
   return {
     range: byteRange(value.range),
     decoration: decoration(value.decoration),
-    gutter: optionalText(value.gutter),
-    command: optionalText(value.command),
+    gutter: gutterMark(value.gutter),
+    command: contributionCommand(value.command),
   };
 }
 function viewDecoration(value: unknown) {

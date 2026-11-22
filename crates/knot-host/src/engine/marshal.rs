@@ -728,9 +728,40 @@ pub(super) fn editor_contributions(
             })
         };
         let gutter_value = property(scope, object, "gutter", error)?;
-        let gutter = optional_string(scope, gutter_value, error)?;
+        let gutter = if gutter_value.is_null_or_undefined() {
+            None
+        } else {
+            let gutter = v8::Local::<v8::Object>::try_from(gutter_value).map_err(|_| error)?;
+            let color_value = property(scope, gutter, "color", error)?;
+            let style_value = property(scope, gutter, "style", error)?;
+            let style = match required_string(scope, style_value, error)?.as_str() {
+                "dot" => GutterStyle::Dot,
+                "bar" => GutterStyle::Bar,
+                "deletion" => GutterStyle::Deletion,
+                _ => return Err(error.into()),
+            };
+            Some(GutterMark {
+                color: required_string(scope, color_value, error)?,
+                style,
+            })
+        };
         let command_value = property(scope, object, "command", error)?;
-        let command = optional_string(scope, command_value, error)?;
+        let command = if command_value.is_null_or_undefined() {
+            None
+        } else {
+            let command = v8::Local::<v8::Object>::try_from(command_value).map_err(|_| error)?;
+            let name_value = property(scope, command, "name", error)?;
+            let arguments_value = property(scope, command, "arguments", error)?;
+            let CommandArgumentValue::Object(arguments) =
+                command_argument_from_v8(scope, arguments_value)?
+            else {
+                return Err(error.into());
+            };
+            Some(ContributionCommand {
+                name: required_string(scope, name_value, error)?,
+                arguments,
+            })
+        };
         contributions.push(EditorContribution {
             range,
             decoration,

@@ -1,7 +1,7 @@
 //! Typing, deletion, movement, undo across editors, composition, completion,
 //! selection reveals, view state, and contribution projection.
 
-use knot_protocol::{Decoration, ExtensionId, ExtensionKey, ExtensionLifecycleId};
+use knot_protocol::{Decoration, ExtensionId, ExtensionKey, ExtensionLifecycleId, GutterMark};
 
 use super::*;
 use crate::completion::{CompletionProviderRegistration, CompletionResponse, CompletionResultItem};
@@ -686,7 +686,7 @@ fn soft_wrap_and_indentation_commands_leave_their_settings_to_the_owner() {
 #[test]
 fn contribution_projection_indexes_multiline_ranges() {
     let model = BufferModel::from_text("aa\nbbbb\ncc");
-    let (decorations, gutters, actions) = project_contributions(
+    let (decorations, gutters, _, actions) = project_contributions(
         &model,
         vec![ResolvedEditorContribution {
             range: ByteRange {
@@ -695,7 +695,7 @@ fn contribution_projection_indexes_multiline_ranges() {
             },
             source: ContributionSource::fixture(),
             decoration: Some(Decoration::new("warning", DecorationStyle::Wavy)),
-            gutter: Some("warning".to_owned()),
+            gutter: Some(GutterMark::new("warning", GutterStyle::Dot)),
             command: Some("fixture.action".into()),
         }],
     );
@@ -709,7 +709,7 @@ fn contribution_projection_indexes_multiline_ranges() {
     );
     assert_eq!(gutters.len(), 1);
     assert_eq!(gutters[0].line, 0);
-    assert_eq!(gutters[0].command.as_deref(), Some("fixture.action"));
+    assert_eq!(gutters[0].command, Some("fixture.action".into()));
     assert!(actions.iter().all(|action| {
         action.range
             == ByteRange {
@@ -736,10 +736,10 @@ fn each_line_keeps_its_most_severe_marker() {
         },
         source: ContributionSource::fixture(),
         decoration: None,
-        gutter: Some(key.to_owned()),
+        gutter: Some(GutterMark::new(key, GutterStyle::Dot)),
         command: Some(command.into()),
     };
-    let (_, gutters, _) = project_contributions(
+    let (_, gutters, _, _) = project_contributions(
         &model,
         vec![
             marker(0, "error", "first.error"),
@@ -753,7 +753,13 @@ fn each_line_keeps_its_most_severe_marker() {
     assert_eq!(
         gutters
             .iter()
-            .map(|marker| (marker.line, marker.key.as_str(), marker.command.as_deref()))
+            .map(|marker| {
+                (
+                    marker.line,
+                    marker.key.as_str(),
+                    marker.command.as_ref().map(|command| command.name.as_str()),
+                )
+            })
             .collect::<Vec<_>>(),
         [
             (0, "error", Some("second.error")),

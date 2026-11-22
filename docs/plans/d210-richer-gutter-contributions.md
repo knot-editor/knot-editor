@@ -1,6 +1,6 @@
 # D210 — Richer gutter contributions
 
-Status: 🚧 approved, not started. Source: [roadmap D210](../roadmap.md), part
+Status: 🚧 in progress; checkpoint 1 awaits its review gate. Source: [roadmap D210](../roadmap.md), part
 of the [version control plan](vcs.md).
 
 ## Outcome
@@ -69,7 +69,11 @@ defines generic `diff.*` color keys, never version control semantics.
 
 ## Checkpoints
 
-### 1. Marks in the model and the extension API
+### 1. Marks in the model and the extension API ✅
+
+Implemented; awaiting the review gate. Projection keeps one `Vec` per lane in
+`EditorState` (`gutter_markers`, `gutter_bars`); a deletion records `below`
+when its range starts at the end of a text whose last line has content.
 
 Deliverables: the new `gutter` and `command` shapes in the protocol, the host
 binding and declarations, and the buffer's contribution store; projection of

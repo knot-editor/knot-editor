@@ -445,7 +445,8 @@ mod tests {
     use gpui::{AppContext, TestAppContext};
 
     use knot_protocol::{
-        ByteRange, Decoration, DecorationStyle, EditorContribution, RequestId, TextEdit,
+        ByteRange, Decoration, DecorationStyle, EditorContribution, GutterMark, GutterStyle,
+        RequestId, TextEdit,
     };
 
     use super::*;
@@ -787,7 +788,7 @@ mod tests {
                             end_byte_offset: 3,
                         },
                         decoration: Some(Decoration::new("warning", DecorationStyle::Wavy)),
-                        gutter: Some("info".to_owned()),
+                        gutter: Some(GutterMark::new("info", GutterStyle::Dot)),
                         command: Some("fixture.action".into()),
                     }],
                     if_revision: 0,

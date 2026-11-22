@@ -1665,3 +1665,86 @@ await commands.register("timers.arm", async () => {
         Some("timeout")
     );
 }
+
+#[gpui::test]
+fn contribution_gutter_and_command_values_are_validated_and_normalized(cx: &mut TestAppContext) {
+    use knot_protocol::{ExtensionKey, GutterStyle};
+    const SOURCE: &str = r#"
+import { commands } from "knot";
+await commands.register("marks.bad", async ({ buffer }) => {
+  const { revision } = await buffer.snapshot();
+  const range = { startByteOffset: 0, endByteOffset: 1 };
+  const bad = [
+    { gutter: "info" },
+    { gutter: { color: "info" } },
+    { gutter: { color: "info", style: "square" } },
+    { gutter: { color: 3, style: "dot" } },
+    { command: 3 },
+    { command: { arguments: {} } },
+    { command: { name: "x", arguments: 3 } },
+    { command: { name: "x", arguments: [] } },
+    { command: { name: "x", arguments: null } },
+  ];
+  for (const item of bad) {
+    let rejected = false;
+    try { await buffer.contributions.replace([{ range, ...item }], { ifRevision: revision }); }
+    catch { rejected = true; }
+    if (!rejected) throw new Error(`accepted ${JSON.stringify(item)}`);
+  }
+});
+await commands.register("marks.good", async ({ buffer }) => {
+  const { revision } = await buffer.snapshot();
+  await buffer.contributions.replace([
+    { range: { startByteOffset: 0, endByteOffset: 1 }, gutter: { color: "info", style: "bar" }, command: "marks.run" },
+    { range: { startByteOffset: 2, endByteOffset: 2 }, gutter: { color: "error", style: "deletion" }, command: { name: "marks.run", arguments: { id: 7 } } },
+  ], { ifRevision: revision });
+});
+"#;
+    let documents = install_globals(cx);
+    let host = cx.update(super::super::super::extensions::host::install);
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("owned")));
+    let document = documents.update(cx, |documents, cx| {
+        documents.create_untitled("Clean", model.clone(), cx)
+    });
+    let window = headless_window(document, model.clone(), cx);
+    let native_window = Headless;
+    let key = ExtensionKey::new(ExtensionId::new(707), ExtensionLifecycleId::new(1));
+    host.update(cx, |host, cx| {
+        let execution = host.load_test_source(key, SOURCE).unwrap();
+        cx.spawn(async move |_, _| {
+            execution.await.unwrap();
+        })
+        .detach();
+    });
+    wait_for_api_condition(cx, |cx| {
+        cx.global::<ApplicationProductCommands>()
+            .0
+            .read(cx)
+            .catalog()
+            .borrow()
+            .resolve("marks.good")
+            .is_ok()
+    });
+    let bad = dispatch_product_command(&window, native_window, "marks.bad", cx);
+    assert_eq!(wait_for_command(bad, cx), CommandOutcome::Completed);
+    cx.read(|cx| assert!(model.read(cx).resolved_contributions().is_empty()));
+    let good = dispatch_product_command(&window, native_window, "marks.good", cx);
+    assert_eq!(wait_for_command(good, cx), CommandOutcome::Completed);
+    let resolved = cx.read(|cx| model.read(cx).resolved_contributions());
+    let marks = resolved
+        .iter()
+        .map(|contribution| {
+            let gutter = contribution.gutter.as_ref().unwrap();
+            let command = contribution.command.as_ref().unwrap();
+            (gutter.style, command.name.clone(), command.arguments.len())
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        marks,
+        [
+            (GutterStyle::Bar, "marks.run".to_owned(), 0),
+            (GutterStyle::Deletion, "marks.run".to_owned(), 1)
+        ]
+    );
+    host.update(cx, |host, cx| host.unload(key, cx).unwrap());
+}

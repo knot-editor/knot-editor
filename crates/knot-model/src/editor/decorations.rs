@@ -104,6 +104,7 @@ impl EditorState {
         (
             self.decorations,
             self.gutter_markers,
+            self.gutter_bars,
             self.contribution_actions,
         ) = project_contributions(model, contributions);
     }

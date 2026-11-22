@@ -148,9 +148,9 @@ use knot_protocol::{
     ApplicationChange, ApplicationEvent, BufferChange, BufferHandle, BufferSubscriptionId,
     ByteRange, CommandArgumentValue, CommandInvocation, CommandInvocationId, CommandInvokeDispatch,
     CommandOutcome, CommandRegistrationId, Decoration, DecorationStyle, EditorContribution,
-    ExtensionId, HostResponse, KeybindingMutation, ProviderRegistrationId, RequestId, SnapshotText,
-    TextEdit, TextSnapshot, TreeChildrenRequest, TreeProviderRegistrationId,
-    WorkbenchSubscriptionId, declarations::HostFailure,
+    ExtensionId, GutterMark, GutterStyle, HostResponse, KeybindingMutation, ProviderRegistrationId,
+    RequestId, SnapshotText, TextEdit, TextSnapshot, TreeChildrenRequest,
+    TreeProviderRegistrationId, WorkbenchSubscriptionId, declarations::HostFailure,
 };
 use knot_protocol::{ExtensionKey, ExtensionLifecycleId};
 use std::{collections::BTreeMap, num::NonZeroUsize, process::Command, sync::mpsc};
@@ -1827,7 +1827,7 @@ fn buffer_requests_and_typed_responses_round_trip() {
                 }], { ifRevision: 7 });
                 await buffer.contributions.replace([{
                   range: { startByteOffset: 0, endByteOffset: 2 },
-                  decoration: { color: "warning", style: "wavy" }, gutter: "error", command: "fixture.command",
+                  decoration: { color: "warning", style: "wavy" }, gutter: { color: "error", style: "dot" }, command: "fixture.command",
                 }], { ifRevision: 8 });
                 const disposable = await buffer.onDidChange(() => {});
                 await disposable[Symbol.asyncDispose]();
@@ -1906,7 +1906,7 @@ fn buffer_requests_and_typed_responses_round_trip() {
                     end_byte_offset: 2
                 },
                 decoration: Some(Decoration::new("warning", DecorationStyle::Wavy)),
-                gutter: Some("error".to_owned()),
+                gutter: Some(GutterMark::new("error", GutterStyle::Dot)),
                 command: Some("fixture.command".into()),
             }],
             if_revision: 8,
