@@ -451,6 +451,49 @@ fn quitting_kills_every_process(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+fn the_ended_promises_settle_after_the_last_chunk_is_handled(cx: &mut TestAppContext) {
+    let written = run_package(
+        r#"
+const child = await processes.spawn({
+  command: "sh",
+  args: ["-c", "printf out; printf err >&2"],
+});
+// Output is only read while a listener is attached, so with none on stderr
+// its promise stays pending however long the process has been gone.
+let out = "";
+let handled = "";
+child.onStdout(async (chunk) => {
+  out += chunk;
+  handled += chunk;
+});
+await child.exited;
+await child.stdoutEnded;
+let stderrEnded = false;
+child.stderrEnded.then(() => { stderrEnded = true; });
+// Host round trips give an unwanted settlement every chance to arrive.
+for (let turn = 0; turn < 20; turn++) await workbench.writeClipboardText("");
+const stderrBefore = stderrEnded ? "ended" : "pending";
+let err = "";
+child.onStderr((chunk) => { err += chunk; });
+await child.stderrEnded;
+await answer({ out, handled, stderrBefore, err });
+"#,
+        &["process"],
+        cx,
+    );
+    let result: serde_json::Value = serde_json::from_str(&written).unwrap();
+    assert_eq!(
+        result,
+        serde_json::json!({
+            "out": "out",
+            "handled": "out",
+            "stderrBefore": "pending",
+            "err": "err",
+        })
+    );
+}
+
+#[gpui::test]
 fn the_checked_example_runs_git_and_follows_lines(cx: &mut TestAppContext) {
     let repository = tempfile::tempdir().unwrap();
     for arguments in [&["init", "-q"][..], &["config", "core.fsmonitor", "false"]] {

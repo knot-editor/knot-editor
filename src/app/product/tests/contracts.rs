@@ -309,3 +309,33 @@ fn personal_config_replaces_an_installed_provider_for_every_consumer(cx: &mut Te
         r#"{"greeting":"hi knot","window":false}"#
     );
 }
+
+/// The authoring example, whose contract and provider modules a consumer
+/// outside the package imports and calls.
+#[gpui::test]
+fn the_authoring_example_serves_and_is_called_across_packages(cx: &mut TestAppContext) {
+    const EXAMPLE_CONTRACT: &str =
+        include_str!("../../../../scripts/extensions/examples/contract.js");
+    const EXAMPLE_PROVIDER: &str = include_str!("../../../../scripts/extensions/examples/serve.js");
+    const CALLS_EXAMPLE: &str = r#"
+import { commands, workbench } from "knot";
+import { greeter } from "@example/provider";
+await commands.register("consumer.example", async () => {
+  const client = await greeter.client();
+  const answer = await client.greet({ name: "knot", shout: true });
+  await client.reset();
+  await workbench.writeClipboardText(JSON.stringify(answer));
+});
+"#;
+    let fixture = start_with_contracts(
+        &[
+            (PROVIDER, &[], EXAMPLE_PROVIDER, Some(EXAMPLE_CONTRACT)),
+            (CONSUMER, &[PROVIDER], CALLS_EXAMPLE, None),
+        ],
+        cx,
+    );
+    assert_eq!(
+        json(&fixture, "consumer.example", cx),
+        serde_json::json!({ "greeting": "HELLO KNOT", "window": true })
+    );
+}

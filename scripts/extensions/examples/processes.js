@@ -29,7 +29,7 @@ export async function followLines(command, args, onLine, signal) {
     partial = lines.pop() ?? "";
     lines.forEach(onLine);
   });
-  const exit = await child.exited;
+  const [exit] = await Promise.all([child.exited, child.stdoutEnded]);
   if (partial !== "") onLine(partial);
   await child[Symbol.asyncDispose]();
   return exit;
