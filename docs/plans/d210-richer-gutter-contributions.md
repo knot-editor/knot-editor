@@ -1,6 +1,6 @@
 # D210 — Richer gutter contributions
 
-Status: 🚧 in progress; checkpoints 1 and 2 are done. Source: [roadmap D210](../roadmap.md), part
+Status: 🚧 in progress; checkpoints 1 to 3 are done. Source: [roadmap D210](../roadmap.md), part
 of the [version control plan](vcs.md).
 
 ## Outcome
@@ -89,39 +89,16 @@ selects nothing; nothing dispatches it yet. Native `diff.added`, `diff.modified`
 and `diff.removed` default to `success`, `info`, and `error`, and each bundled
 theme sets them.
 
-### 3. Click actions run commands
+### 3. Click actions run commands ✅
 
-Deliverables: a click on any mark or inline contribution dispatches its
-command through the product's command path, targeting the clicked editor, with
-`range` added to its arguments; the extension test harness does the same.
-
-Validation: product tests that a JavaScript command registered by a test
-extension receives `context.editor`, `context.buffer`, and the current range
-after edits moved it, from a dot, a bar, a deletion wedge, and inline text;
-a text frame click runs with a null editor; clicks select nothing; an
-unregistered command reports as other unknown commands do.
-
-Review gate: the command context and arguments a click produces.
-
-Status: implemented, awaiting review. The editor defers a call to
-`product::run_contribution_action` after emitting `EditorContributionAction`,
-rather than each view-creating site subscribing; the window finds the tab whose
-view holds the clicked editor's focus handle, so split views of one document
-target the clicked one.
-
-**Implementation context.**
-- Input: `src/app/editor/input.rs` resolves the clicked mark per lane
-  (`GutterLane::Markers` and the new `Bars`) and emits
-  `EditorContributionAction` (`src/app/editor.rs:77`), which today only a test
-  subscribes to; carry the command's name and arguments in it.
-- Dispatch: subscribe where editor views are created
-  (`src/app/workbench.rs`, `src/app/text_view.rs`) and route to
-  `Product::dispatch_command` (`src/app/product.rs`) with a
-  `ProductCommandTarget` for that view's tab, built as
-  `capture_command_target` does, so the existing editor context reaches the
-  handler. Merge `range` into the arguments as a `ByteRange` value.
-- Tests: `src/app/product/tests/` with a test extension, following the
-  existing extension-command product tests.
+Done and approved. A click on a mark or an inline contribution's text defers
+`product::run_contribution_action` (`src/app/product.rs`) after the editor emits
+`EditorContributionAction`. It finds the tab whose view holds the clicked
+editor's focus handle, so a split view of one document targets the clicked one,
+and dispatches the command with the contribution's current `range` added to its
+arguments as `{ startByteOffset, endByteOffset }`. A text frame click runs with a
+null editor and buffer. `clickContribution` in the extension test harness does
+the same; its fake stores ranges as given, so edits do not move them.
 
 ### 4. Documentation and decision
 
