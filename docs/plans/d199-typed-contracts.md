@@ -1,6 +1,6 @@
 # D199 — Typed contracts between packages
 
-Status: 🚧 checkpoint 1 done; checkpoint 2 next. Item: [D199](../roadmap.md#extension-platform-and-language-tooling),
+Status: 🚧 checkpoint 1 done; checkpoint 2 implemented, awaiting its review gate. Item: [D199](../roadmap.md#extension-platform-and-language-tooling),
 part of the [version control plan](vcs.md) (milestone 1, before D211).
 
 ## Outcome
@@ -120,6 +120,18 @@ Checkpoint 4 adds `serve`/`client`, the call-context parameter of
 `ContractImplementation`, and the package/contract prefix on violations.
 
 ### 2. Host JavaScript in TypeScript, with unit tests
+
+Implemented, pending the review gate. Decisions made while building it:
+the host project (`crates/knot-host/src/js/tsconfig.json`) is standalone
+rather than extending `tsconfig.base.json`, so package settings never rebuild
+the host; unit tests live in `crates/knot-host/js-tests`, loading the
+bootstrap through a harness that stubs the native bindings and restores the
+console and timer globals it installs; values from the Rust side are typed
+`Native` (an alias of `any` in the bindings declaration), extension-supplied
+values `unknown`. The export-name check covers each module's exports, not the
+members of a group object. Types exposed one drift: `documents.open` and its
+siblings omitted the declared `tool` and `directory` fields of a
+presentation, which are now `null`.
 
 Write the host's own modules in TypeScript, type-checked against the public
 declarations, and unit-test them in Node before the transport work grows
