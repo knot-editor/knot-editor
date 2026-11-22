@@ -8,12 +8,13 @@
 //! - Resources: [`resource`], [`filesystem`], [`open`], and [`workspace`].
 //! - Input: [`keys`], [`commands`], [`completion`], and [`matching`].
 //! - Presentation values: [`style`] and [`theme`].
-//! - Packages: [`extensions`].
+//! - Packages: [`extensions`] and [`contracts`].
 //! - Layout: [`workbench`].
 
 pub mod buffer;
 pub mod commands;
 pub mod completion;
+pub mod contracts;
 pub mod documents;
 pub mod editing;
 pub mod editor;
