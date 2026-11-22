@@ -155,6 +155,7 @@ async function release(follow: Follow) {
   follow.selection = null;
   follow.shown = null;
   if (handle === null) return;
+  await using _handle = handle;
   try {
     if (buffer !== null) {
       const { revision } = await buffer.snapshot({ startByteOffset: 0, endByteOffset: 0 });
@@ -163,7 +164,6 @@ async function release(follow: Follow) {
   } catch (error) {
     if (!isGone(error) && (error as { code?: string }).code !== "RevisionConflict") throw error;
   }
-  await handle[Symbol.asyncDispose]();
 }
 
 export async function start() {
