@@ -30,7 +30,6 @@ point.
 
 The [version control plan](plans/vcs.md) comes first, in its milestone order:
 
-- D209 — Diff function for extensions.
 - D210 — Richer gutter contributions.
 - D211 — VCS foundation and Git change gutter.
 - D212 — Resource decorations.
@@ -145,13 +144,13 @@ hold the analyses that support some items.
     D007: decide here how results recover when edits make their targets stale.
 
 - **D197 — Diff view** 🚧
-  - Depends on: D209
+  - Depends on: none
   - Description: Knot cannot compare two texts. Build a native side-by-side and
     inline diff of two buffers or snapshots that stays current while one side
     is edited, with navigation between hunks, and an extension API to open one,
     so version control (D211) can show a file's changes and D174 can diff the
     buffer against the file. Part of the [version control plan](plans/vcs.md);
-    it computes hunks with D209's diff function.
+    it computes hunks with the extension API's `diff`.
 
 - **D124 — Workspace trust**
   - Depends on: D089
@@ -242,16 +241,6 @@ hold the analyses that support some items.
     such as Vim's file completion or a feature that uses `@knot/vcs` when
     present. Add an optional dependency kind whose import still resolves, with
     a client that rejects while no provider is served.
-
-- **D209 — Diff function for extensions** 🚧
-  - Depends on: none
-  - Description: Extensions cannot compare texts, and a diff written in
-    JavaScript is slow on large files and copies the text across. Add a
-    stateless native diff in the API, between two texts or a buffer and a
-    text, returning line hunks, with the policy of when and what to compare
-    left to packages as with `buffer.find`. The change gutter (D211) and the
-    diff view (D197) use it. Part of the [version control plan](plans/vcs.md);
-    see the [D209 plan](plans/d209-diff-function.md).
 
 - **D210 — Richer gutter contributions** 🚧
   - Depends on: none
@@ -403,7 +392,7 @@ The [version control plan](plans/vcs.md) holds the agreed architecture and the
 milestones these items belong to.
 
 - **D211 — VCS foundation and Git change gutter** 🚧
-  - Depends on: D209, D210
+  - Depends on: D210
   - Description: No version control integration exists. Add `@knot/vcs`, which
     defines the provider contract and owns the shared surfaces, and `@knot/git`,
     its first backend over the `git` command line: find repositories per root,
@@ -857,7 +846,7 @@ and may move into a section above when daily use asks for them.
     as Zed's `overrides.scm` does.
 
 - **D159 — Trim trailing whitespace on modified lines only**
-  - Depends on: D209
+  - Depends on: none
   - Description: Save trims every line. Trimming only the lines a change
     touched keeps saves from adding noise to the diff of a file that already
     had trailing whitespace, and needs a notion of modified lines that Knot

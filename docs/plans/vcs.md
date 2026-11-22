@@ -77,11 +77,11 @@ Items in a milestone are listed in dependency order.
 - **D199 — Typed contracts between packages.** Done: code-defined schemas,
   inferred types, host-enforced validation; see
   [packages](../extension-api/packages.md).
-- **D209 — Diff function for extensions.** 🚧 [Plan](d209-diff-function.md).
+- **D209 — Diff function for extensions.** Done: `diff` in the `knot` module; see [application state](../extension-api/application.md#compare-texts).
 - **D210 — Richer gutter contributions.**
 - **D211 — VCS foundation and Git change gutter.** `@knot/vcs` and `@knot/git`:
   repositories per root, baselines, the change gutter, and next and previous
-  change. Depends on D087, D199, D209, D210.
+  change. Depends on D087, D199, D210.
 
 ### 2. File status
 
@@ -93,7 +93,7 @@ Items in a milestone are listed in dependency order.
 
 ### 3. Diffs
 
-- **D197 — Diff view.** Depends on D209. Opening a file's changes from the
+- **D197 — Diff view.** Opening a file's changes from the
   gutter and from `@knot/vcs` is part of it once D211 exists.
 - **D220 — Anchored floating panels.** Split from D145, which keeps virtual
   text for later consumers.
