@@ -1,6 +1,6 @@
 # D199 — Typed contracts between packages
 
-Status: 🚧 checkpoints 1–5 done, 6 awaiting review. Item: [D199](../roadmap.md#extension-platform-and-language-tooling),
+Status: 🚧 checkpoints 1–6 done. Item: [D199](../roadmap.md#extension-platform-and-language-tooling),
 part of the [version control plan](vcs.md) (milestone 1, before D211).
 
 ## Outcome
@@ -181,33 +181,16 @@ completion item fields are now rejected rather than ignored. Validating 500
 items costs about 0.3 ms including the parse. The test fake serves the two
 contracts as providers `knot:completion` and `knot:paste.<languageId>`.
 
-### 6. Migrate `workspace.*` and remove `providers.*`
+### 6. Migrate `workspace.*` and remove `providers.*` ✅
 
-Implemented, awaiting review. `@knot/go-to-file` publishes a `workspace`
-contract (`files`, `buffers`, `actions`) from
-[contract.ts](../../extensions/@knot/go-to-file/src/contract.ts); Vim requires
-it and imports it from `"@knot/go-to-file"`, keeping its tolerance of a
-missing or restarting provider. `providers` is gone from the facade,
-[knot.d.ts](../../crates/knot-host/src/js/knot.d.ts), bootstrap, the host
-operations, `knot-protocol`, and the registry, whose registrations are all
-served contracts. Personal config may import any discovered package's contract
-from post-init: the host adds the contract modules to the loaded config graph
-once packages load, and the check before that resolves a package import to an
-empty stand-in. Decisions made on the way:
-
-- A bundled package compiles alone (its own `rootDir`, fingerprint, and
-  build), so Vim cannot import go-to-file's TypeScript for types; it carries a
-  small ambient declaration of the one method it calls
-  ([go-to-file.d.ts](../../extensions/@knot/vim/src/go-to-file.d.ts)), and the
-  provider's schema still checks every call.
-- The test fake serves contracts under their names (Knot's under `knot:`)
-  and `knot/testing` exposes `contractClient(key)` to call them; it validates
-  no schema. `register.mjs` maps `@knot/go-to-file` to its contract module.
-- Vim's `requires` is hard, so Vim does not load without Go to File until
-  D226. Vim's tests load both, and the missing-list case serves nothing from
-  a Go to File that only publishes the contract.
-- **Review gate:** `providers.*` is gone from the public API; confirm `:e `
-  file completion in Vim and Search Everywhere's tabs in the running app.
+Done. `@knot/go-to-file` publishes the `workspace` contract
+([contract.ts](../../extensions/@knot/go-to-file/src/contract.ts)); Vim
+requires it, and `providers` is gone from the public API (see
+[extension host](../architecture/extension-host.md#providers)). Personal config
+imports any discovered package's contract from post-init. Vim types the one
+method it calls with an ambient declaration, since a bundled package compiles
+alone. Vim's `requires` is hard until D226. The test fake serves contracts by
+name and validates no schema.
 
 ### 7. Document
 
