@@ -4,7 +4,7 @@
 //! drives them, and its globals wrap this crate's plain state.
 //!
 //! - Text: [`buffer`], [`editor`], [`history`], [`indentation`], [`editing`],
-//!   and [`syntax`].
+//!   [`diff`], and [`syntax`].
 //! - Resources: [`resource`], [`filesystem`], [`open`], and [`workspace`].
 //! - Input: [`keys`], [`commands`], [`completion`], and [`matching`].
 //! - Presentation values: [`style`] and [`theme`].
@@ -15,6 +15,7 @@ pub mod buffer;
 pub mod commands;
 pub mod completion;
 pub mod contracts;
+pub mod diff;
 pub mod documents;
 pub mod editing;
 pub mod editor;

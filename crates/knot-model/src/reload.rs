@@ -1,9 +1,9 @@
 //! Reloading a document from changed file content: what a check of the file
 //! found, and the minimal line edits that turn the buffer into the file.
 
-use imara_diff::{Algorithm, Diff, InternedInput};
 use knot_protocol::{ByteRange, TextEdit};
 
+use crate::diff::{DiffOptions, line_hunks};
 use crate::filesystem::ResourceVersion;
 
 /// What reading a persisted document's file found.
@@ -39,16 +39,13 @@ pub fn check_file(
 /// `old` into `new`. Only the lines the diff reports as changed are touched,
 /// so anchored positions elsewhere stay in place.
 pub fn line_edits(old: &str, new: &str) -> Vec<TextEdit> {
-    let input = InternedInput::new(old, new);
-    let mut diff = Diff::compute(Algorithm::Histogram, &input);
-    diff.postprocess_lines(&input);
     let old_starts = line_starts(old);
     let new_starts = line_starts(new);
-    diff.hunks()
+    line_hunks(old, new, DiffOptions::default())
+        .into_iter()
         .map(|hunk| {
-            let before =
-                old_starts[hunk.before.start as usize]..old_starts[hunk.before.end as usize];
-            let after = new_starts[hunk.after.start as usize]..new_starts[hunk.after.end as usize];
+            let before = old_starts[hunk.old.start as usize]..old_starts[hunk.old.end as usize];
+            let after = new_starts[hunk.new.start as usize]..new_starts[hunk.new.end as usize];
             TextEdit {
                 range: ByteRange {
                     start_byte_offset: before.start,

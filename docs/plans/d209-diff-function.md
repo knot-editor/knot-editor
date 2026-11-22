@@ -55,7 +55,9 @@ to compare stays package policy, as with `buffer.find`.
 
 ## Checkpoints
 
-### 1. Native line diff with ignore-whitespace
+### 1. Native line diff with ignore-whitespace ✅
+
+Implemented, awaiting review. Whitespace equality is a `Line` token that hashes and compares by non-whitespace characters yet exposes its full text to the indentation heuristic, rather than interning a normalized key.
 
 Deliverables: a `knot-model` diff module returning line hunks for two texts
 with `ignoreWhitespace`; reload's `line_edits` built on it.
