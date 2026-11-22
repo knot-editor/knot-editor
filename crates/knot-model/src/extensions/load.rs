@@ -313,6 +313,7 @@ mod tests {
                 name: name.into(),
                 version: "1.0.0".into(),
                 main: "main.js".into(),
+                contract: None,
                 requires: requires
                     .iter()
                     .map(|dependency| (*dependency).into())

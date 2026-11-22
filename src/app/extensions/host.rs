@@ -3907,6 +3907,7 @@ mod tests {
                     name: "@test/a".into(),
                     version: "1.0.0".into(),
                     main: "main.js".into(),
+                    contract: None,
                     requires: Vec::new(),
                     entitlements: Vec::new(),
                     display_name: None,

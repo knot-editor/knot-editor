@@ -499,3 +499,44 @@ fn entitlements_default_to_empty_and_unknown_or_duplicate_names_are_manifest_err
             .contains("duplicate entitlements")
     );
 }
+
+#[test]
+fn a_contract_module_is_a_captured_relative_path_other_than_main() {
+    let temp = tempfile::tempdir().unwrap();
+    let manifest = |contract: &str| {
+        format!(
+            r#"{{"name":"@example/tools","apiVersion":1,"version":"1.0.0","main":"dist/main.js","contract":{contract:?}}}"#
+        )
+    };
+    let path = package(temp.path(), "@example/tools", &manifest("dist/helper.js"));
+    let report = discover(temp.path());
+    assert!(report.diagnostics.is_empty(), "{:?}", report.diagnostics);
+    assert_eq!(
+        report.packages[0].manifest.contract.as_deref(),
+        Some("dist/helper.js")
+    );
+    for (contract, expected) in [
+        ("../contract.js", "invalid contract path"),
+        ("dist/contract.ts", "invalid contract path"),
+        ("dist/main.js", "contract cannot be the main module"),
+        ("dist/missing.js", "contract dist/missing.js"),
+    ] {
+        fs::write(path.join("knot.jsonc"), manifest(contract)).unwrap();
+        let report = discover(temp.path());
+        assert!(report.packages.is_empty());
+        assert!(
+            report.diagnostics[0].cause.contains(expected),
+            "{contract}: {:?}",
+            report.diagnostics
+        );
+    }
+    let sources = BTreeMap::from([("dist/main.js".to_owned(), Arc::from("export {};"))]);
+    assert!(
+        bundled_package(
+            r#"{"name":"@knot/projects","apiVersion":1,"version":"1.0.0","main":"dist/main.js","contract":"dist/contract.js"}"#,
+            sources,
+        )
+        .unwrap_err()
+        .contains("contract dist/contract.js: not captured")
+    );
+}

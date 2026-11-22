@@ -28,8 +28,13 @@
       "type": "string",
       "description": "A relative .js or .mjs file path inside the package; empty, dot, parent, and backslash segments are invalid."
     },
+    "contract": {
+      "type": "string",
+      "description": "A relative .js or .mjs file path inside the package, other than main, to the module that defines the contracts other packages import. It may import only \"knot/contract\" and its own relative modules."
+    },
     "requires": {
       "type": "array",
+      "description": "Packages that must load first. A package may import the contract of a package it requires.",
       "default": [],
       "uniqueItems": true,
       "items": {

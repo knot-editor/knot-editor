@@ -44,6 +44,9 @@ pub struct Manifest {
     pub name: String,
     pub version: String,
     pub main: String,
+    /// The module that defines the package's published contracts, a relative
+    /// path like `main`.
+    pub contract: Option<String>,
     #[serde(default)]
     pub requires: Vec<String>,
     #[serde(default)]
@@ -280,6 +283,10 @@ fn read_package(directory: &Path) -> Result<InstalledPackage, (Option<String>, S
     let main_path = directory.join(&manifest.main);
     read_contained_file(&canonical, &main_path)
         .map_err(|cause| (name.clone(), format!("main {}: {cause}", manifest.main)))?;
+    if let Some(contract) = &manifest.contract {
+        read_contained_file(&canonical, &directory.join(contract))
+            .map_err(|cause| (name.clone(), format!("contract {contract}: {cause}")))?;
+    }
     let mut sources = BTreeMap::new();
     collect_sources(directory, directory, &canonical, &mut sources)
         .map_err(|cause| (name, cause))?;
@@ -338,8 +345,13 @@ pub fn bundled_package(
         serde_json::from_value(value).map_err(|error| format!("invalid knot.jsonc: {error}"))?;
     validate_manifest(&manifest, true)?;
     validate_bundled_name(&manifest.name)?;
-    if !sources.contains_key(&manifest.main) {
-        return Err(format!("main {}: not captured", manifest.main));
+    for (field, path) in [
+        ("main", Some(&manifest.main)),
+        ("contract", manifest.contract.as_ref()),
+    ] {
+        if let Some(path) = path.filter(|path| !sources.contains_key(*path)) {
+            return Err(format!("{field} {path}: not captured"));
+        }
     }
     Ok(InstalledPackage {
         directory: PathBuf::from(format!("<bundled>/{}", manifest.name)),
@@ -354,7 +366,13 @@ fn validate_manifest(manifest: &Manifest, bundled: bool) -> Result<(), String> {
     validate_name_inner(&manifest.name, bundled)?;
     semver::Version::parse(&manifest.version)
         .map_err(|error| format!("invalid version: {error}"))?;
-    validate_relative_module_path(&manifest.main)?;
+    validate_relative_module_path("main", &manifest.main)?;
+    if let Some(contract) = &manifest.contract {
+        validate_relative_module_path("contract", contract)?;
+        if *contract == manifest.main {
+            return Err("contract cannot be the main module".into());
+        }
+    }
     let mut requires = BTreeSet::new();
     for dependency in &manifest.requires {
         // Any package may depend on a built-in package, which is the only owner
@@ -435,7 +453,7 @@ fn validate_name_inner(name: &str, allow_reserved_scope: bool) -> Result<(), Str
     Ok(())
 }
 
-fn validate_relative_module_path(path: &str) -> Result<(), String> {
+fn validate_relative_module_path(field: &str, path: &str) -> Result<(), String> {
     let value = Path::new(path);
     if !(path.ends_with(".js") || path.ends_with(".mjs"))
         || path.contains('\\')
@@ -445,7 +463,7 @@ fn validate_relative_module_path(path: &str) -> Result<(), String> {
             .any(|part| !matches!(part, Component::Normal(_)))
     {
         return Err(format!(
-            "invalid main path {path}: expected a relative .js or .mjs path within the package"
+            "invalid {field} path {path}: expected a relative .js or .mjs path within the package"
         ));
     }
     Ok(())

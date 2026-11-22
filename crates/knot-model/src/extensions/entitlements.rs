@@ -162,6 +162,7 @@ mod tests {
                 name: name.into(),
                 version: "1.0.0".into(),
                 main: "main.js".into(),
+                contract: None,
                 requires: Vec::new(),
                 entitlements: entitlements.to_vec(),
                 display_name: None,
