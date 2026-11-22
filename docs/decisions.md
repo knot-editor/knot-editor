@@ -173,6 +173,9 @@ touches.
 - [Version control backends](decisions/bundled-packages.md#version-control-backends):
   a contract per backend, defined by a factory in `@knot/vcs`, plus one the
   backends call.
+- [Git baseline](decisions/bundled-packages.md#git-baseline): HEAD through
+  `cat-file --filters`, not the index; roots derived from URIs, not Git's
+  absolute paths.
 
 ## [Workbench and lifecycle](decisions/workbench-and-lifecycle.md)
 

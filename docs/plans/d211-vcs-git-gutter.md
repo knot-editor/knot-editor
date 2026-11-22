@@ -136,7 +136,13 @@ cleared. Tests: `extensions/@knot/vcs/test/gutter.test.ts` (fake host) and
 `crates/knot-ext-vcs/tests/gutter.rs` (real host, `TestWindow::gutter_bars`).
 A removal after the last line of a text without a final newline is not covered.
 
-### 4. `@knot/git` baselines
+### 4. `@knot/git` baselines 🚧
+
+Implemented, awaiting review. Behavior tests: `crates/knot-ext-vcs/tests/git.rs`
+(real host, temporary repositories). A missing `git` is not tested, since the
+product harness resolves the user's `PATH`; `TestWindow::append` bypasses
+buffer notifications, so editing after open is covered by the fake-host tests,
+not here. Decision: [Git baseline](../decisions/bundled-packages.md#git-baseline).
 
 Deliverables: `@knot/git` declares `process`, registers with `vcs`, finds
 repositories, and serves HEAD baselines through `git cat-file --filters`;

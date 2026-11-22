@@ -5,6 +5,7 @@
   "version": "0.1.0",
   "main": "dist/main.js",
   "requires": ["@knot/vcs"],
+  "entitlements": ["process"],
   "displayName": "Git",
   "description": "Git support for version control: repositories and the HEAD baseline of their files.",
   "author": "Knot",

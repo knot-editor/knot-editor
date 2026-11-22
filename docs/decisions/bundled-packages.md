@@ -214,3 +214,20 @@ stops without withdrawing is dropped when `@knot/vcs` next fails to bind its
 contract, because nothing tells a package when another unloads.
 
 References: [sharing between packages](../extension-api/packages.md#share-a-feature-with-other-packages).
+
+## Git baseline
+
+Git's baseline is HEAD, as in IntelliJ, read with `git cat-file --filters` so
+the text is the checked-out form after line-ending and other smudge filters and
+compares cleanly with the buffer. The index is not the baseline: it would make
+a staged edit disappear from the gutter, and staging belongs to the Git-specific
+work of D216. A file the index holds but HEAD lacks is the one exception, with
+an empty baseline so it shows as added. A repository's root URI is derived from
+`rev-parse --show-prefix` and the directory's own URI, never from Git's
+absolute path, because a symlinked directory would then no longer match the
+document URIs and window roots. Reading uses `GIT_OPTIONAL_LOCKS=0` so it never
+holds a lock a user's own command needs.
+
+The `process` entitlement is declared like any package's and is implicitly
+granted to a bundled one, so the backend never prompts. Without `git` on the
+`PATH` it raises one notice and does not register.
