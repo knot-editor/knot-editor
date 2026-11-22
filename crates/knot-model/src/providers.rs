@@ -170,6 +170,20 @@ impl ProviderRegistry {
         })
     }
 
+    /// Every registration serving `owner`'s contract `name`, oldest first.
+    pub fn contracts<'a>(
+        &'a self,
+        owner: &'a str,
+        name: &'a str,
+    ) -> impl Iterator<Item = &'a ProviderRegistration> {
+        self.registrations.iter().filter(move |registration| {
+            registration
+                .contract
+                .as_ref()
+                .is_some_and(|contract| contract.owner == owner && contract.name == name)
+        })
+    }
+
     /// Binds a consumer with schema `consumer` to a contract registration,
     /// reusing its binding with the same schema. None when the registration
     /// serves no contract.
@@ -361,6 +375,13 @@ mod tests {
             Some(second)
         );
         assert!(registry.latest_contract("@example/other", "rows").is_none());
+        assert_eq!(
+            registry
+                .contracts("@example/provider", "rows")
+                .map(|found| found.id)
+                .collect::<Vec<_>>(),
+            vec![first, second]
+        );
         let (extension, lifecycle) = owner(2);
         registry.unregister(second, extension, lifecycle);
         assert_eq!(

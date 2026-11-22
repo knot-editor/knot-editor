@@ -381,3 +381,20 @@ fn malformed_descriptors_name_where_they_fail() {
         assert_eq!(descriptor_error(methods), expected);
     }
 }
+
+#[test]
+fn a_native_caller_checks_a_result_text_against_the_providers_schema_only() {
+    let binding = ContractBinding::new(
+        compile(json!({ "call": method(
+            json!({ "kind": "void" }),
+            json!({ "kind": "array", "items": { "kind": "int" } }),
+        ) })),
+        None,
+    );
+    assert_eq!(binding.check_result_text("call", "[1,2]"), Ok(()));
+    assert_eq!(
+        binding.check_result_text("call", r#"[1,"x"]"#).unwrap_err(),
+        "call: result[1]: expected safe integer, found string \"x\" (the provider's schema)"
+    );
+    assert!(binding.check_result_text("call", "[1,").is_err());
+}

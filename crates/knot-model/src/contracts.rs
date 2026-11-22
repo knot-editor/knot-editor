@@ -174,6 +174,15 @@ impl ContractBinding {
         self.consumer.is_some()
     }
 
+    /// Checks a result the provider answered with as JSON text, as a native
+    /// caller that trusts its own descriptor does; the error reads as the
+    /// violation or the parse failure.
+    pub fn check_result_text(&self, method: &str, text: &str) -> Result<(), String> {
+        let value = serde_json::from_str(text).map_err(|error| error.to_string())?;
+        self.validate_result(method, &value)
+            .map_err(|violation| violation.to_string())
+    }
+
     /// Checks an argument against the consumer's, then the provider's schema.
     pub fn validate_argument(
         &self,
