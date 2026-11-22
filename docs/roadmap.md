@@ -105,7 +105,7 @@ hold the analyses that support some items.
   - Depends on: none
   - Description: Extensions have no network access. Do it when a package needs
     one: a `fetch`-shaped HTTP client gated by a `network` entitlement through
-    D087's declarations and startup consent.
+    the existing entitlement declarations and startup consent.
 
 - **D089 — Project-local settings**
   - Depends on: none
@@ -139,8 +139,8 @@ hold the analyses that support some items.
     rules. It provides a query input with case, regex, whole-word, and glob
     options; streamed results in a tree grouped by file (contributed tree
     groups and row actions already exist); opening a result at its range as a
-    preview tab; cancelling a superseded search; and refresh. It promotes
-    D007: decide here how results recover when edits make their targets stale.
+    preview tab; cancelling a superseded search; and refresh. Decide here how
+    results recover when edits make their targets stale.
 
 - **D197 — Diff view** 🚧
   - Depends on: none
@@ -159,7 +159,7 @@ hold the analyses that support some items.
     an opened repository, and before D125 runs repository-defined commands:
     decide, as VS Code's workspace trust and Neovim's `exrc` trust database do,
     how a folder becomes trusted, what an untrusted folder disables, and where
-    grants are stored, reusing D087's grant storage if it fits.
+    grants are stored, reusing the entitlement grant storage if it fits.
 
 - **D090 — EditorConfig support**
   - Depends on: D089
@@ -317,7 +317,7 @@ hold the analyses that support some items.
     semantic-token paint layer above syntax. Do it when daily editing needs
     diagnostics, navigation, hover, or semantic highlighting: decide whether
     the client is native or an extension (if an extension that spawns servers,
-    it needs D087), define a whole-range semantic-token contribution that
+    it needs the `process` entitlement), define a whole-range semantic-token contribution that
     scales to file-sized token counts unlike per-item anchored contributions,
     and connect diagnostics to decorations and completion to D022. It needs
     D220 for hover and D145 for inlay hints and diagnostic text, and format on

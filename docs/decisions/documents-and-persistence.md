@@ -69,7 +69,7 @@ Reference: [workspaces](../architecture/documents-and-persistence.md#workspaces-
 
 ## Extension file reads
 
-Reads are ungated and text-only. D087's entitlements gate processes and the
+Reads are ungated and text-only. Entitlements gate processes and the
 network, the only ways file contents could leave the machine, so reading alone
 exposes nothing a package cannot already leak by being installed; a read gate
 would add consent prompts without a boundary behind them. Workspace trust
