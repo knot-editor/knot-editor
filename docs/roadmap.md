@@ -268,7 +268,8 @@ hold the analyses that support some items.
     packages decorate resource URIs with a color key and a badge, painted on
     tabs and in the explorer, so version control status (D213) and later
     diagnostics reach them without native code knowing about either. Part of
-    the [version control plan](plans/vcs.md).
+    the [version control plan](plans/vcs.md). Plan:
+    [d212-resource-decorations](plans/d212-resource-decorations.md).
 
 - **D200 — Progress reporting**
   - Depends on: none
