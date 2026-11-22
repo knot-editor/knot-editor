@@ -27,6 +27,15 @@ test("serving sends the owner, name, and descriptor", async () => {
   assert.deepEqual(stub.calls.at(-1), { operation: "unregisterProvider", args: [5] });
 });
 
+test("serving requires the methods the implementation defines, not ones every object inherits", async () => {
+  const inherited = host.contractModule("@example/inherited").defineContract("tools", {
+    toString: s.fn(s.void(), s.void()),
+  });
+  await assert.rejects(inherited.serve({} as never), /toString method/);
+  class Tools { toString() { return "tools"; } }
+  await assert.doesNotReject(inherited.serve(new Tools() as never));
+});
+
 test("a client calls through the host with JSON text and the caller's window", async () => {
   const client = await rows.client();
   assert.deepEqual(Object.keys(client).sort(), ["files", "refresh"]);

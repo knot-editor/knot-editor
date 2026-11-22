@@ -1777,8 +1777,8 @@ globalThis.__knotCallProvider = async (registration: number, method: string, arg
   if (!implementation) return { error: "the provider is disposed" };
   try {
     const context = Object.freeze({ window: window === null ? null : windowTarget({ window }) });
-    const handler = implementation[method];
-    if (typeof handler !== "function") throw new TypeError(`provider has no method ${method}`);
+    if (!isMethod(implementation, method)) throw new TypeError(`provider has no method ${method}`);
+    const handler = implementation[method] as Fn;
     const result = await handler.call(implementation, JSON.parse(argument), context);
     return { result: JSON.stringify(validateJsonValue(result === undefined ? null : result)) };
   } catch (error) {
@@ -1852,6 +1852,14 @@ export function pasteContract(languageId: unknown) {
   return contract;
 }
 
+// A method the implementation defines, own or from its class, not one every
+// object inherits such as `toString`.
+function isMethod(implementation: Rec, method: string) {
+  const handler = implementation[method];
+  return typeof handler === "function" &&
+    !(method in Object.prototype && handler === (Object.prototype as Rec)[method]);
+}
+
 // A served contract dispatches like a provider: the host validates each call
 // and runs the method through `__knotCallProvider`.
 async function serveContract(
@@ -1861,7 +1869,7 @@ async function serveContract(
     throw new TypeError(`serve requires an object with the methods of ${name}`);
   }
   for (const method of Object.keys(methods)) {
-    if (typeof (implementation as Rec)[method] !== "function") {
+    if (!isMethod(implementation as Rec, method)) {
       throw new TypeError(`serve requires a ${method} method for ${name}`);
     }
   }
