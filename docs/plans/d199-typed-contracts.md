@@ -152,6 +152,22 @@ drift types cannot catch (an option declared but rejected or ignored).
   option fails it (checked once by hand).
 - **Review gate:** coverage of the API groups agreed.
 
+Implemented, awaiting the gate. The exhaustive fixture is
+[coverage.js](../../scripts/extensions/examples/coverage.js) (typed through
+`coverage-settings.d.ts`), run by `declared_api_options_are_accepted_by_the_real_host`
+in [startup.rs](../../src/app/product/tests/startup.rs). `exerciseApi` covers
+settings, themes, icons, languages, storage, history, menus, keymaps, files,
+processes, documents, windows, completion matching, status items, notices,
+views, commands, recovery, and observation; `exerciseEditor` runs in a real
+editor tab and covers every buffer and editor method and option. It found no
+rejected declared option, only documented behavior the fixture first
+misread (a released process handle, `selectedText` on an editor, `newTab` on a
+container, `registerForView` naming an existing command). Not covered because
+they block on the user or restructure the test windows: pickers, input and
+confirmation prompts, `windows.open`/`focus`, `workspaces.openFolder`,
+`replaceRoots`, `pickFolder`, `workbench.replaceWindows`, `recovery.retain`,
+`restore` and `release`, `terminals.open`, and `files.reveal`.
+
 ### 4. Cross-isolate transport: manifest, import resolution, serve/client
 
 Make a fixture consumer call a fixture provider through a contract, with
