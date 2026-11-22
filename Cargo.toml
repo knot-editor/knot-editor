@@ -6,6 +6,7 @@ default-members = [
     "crates/knot-bundled",
     "crates/knot-core",
     "crates/knot-ext-languages",
+    "crates/knot-ext-vcs",
     "crates/knot-ext-vim",
     "crates/knot-ext-workbench",
     "crates/knot-handler-macros",

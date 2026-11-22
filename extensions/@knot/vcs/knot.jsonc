@@ -1,0 +1,12 @@
+{
+  // Bundled version control foundation: the change gutter, over backends such as @knot/git.
+  "name": "@knot/vcs",
+  "apiVersion": 1,
+  "version": "0.1.0",
+  "main": "dist/main.js",
+  "contract": "dist/contract.js",
+  "displayName": "Version Control",
+  "description": "Shows what changed against the version control baseline of a file. Backends such as Git register with it.",
+  "author": "Knot",
+  "license": "GPL-3.0-or-later",
+}

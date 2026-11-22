@@ -16,6 +16,7 @@ path = "src/main.rs"
 knot = { path = "../.." }
 knot-bundled = { path = "../knot-bundled" }
 knot-ext-languages = { path = "../knot-ext-languages" }
+knot-ext-vcs = { path = "../knot-ext-vcs" }
 knot-ext-vim = { path = "../knot-ext-vim" }
 knot-ext-workbench = { path = "../knot-ext-workbench" }
 gpui_platform = { workspace = true }

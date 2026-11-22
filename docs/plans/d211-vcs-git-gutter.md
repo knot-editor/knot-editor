@@ -116,7 +116,7 @@ Complete. `documents.track` is documented in
 windows and `launched`. A tracker is ordered within itself but not against a
 separate `workbench.observe`.
 
-### 2. Skeleton and contracts
+### 2. Skeleton and contracts 🚧 awaiting review
 
 Deliverables: the `knot-ext-vcs` crate with `@knot/vcs` and `@knot/git`
 packages; the `vcs` contract and the `backendContract(id)` factory; backend
@@ -131,6 +131,13 @@ Review gate: the contract shape and the factory's identity; if the factory
 cannot work, redesign here before anything builds on it. Record the
 two-direction contract and per-backend factory in `docs/decisions/` if
 validated.
+
+**Built:** `@knot/vcs` serves `vcs` (`register`, `unregister`, `changed`,
+`backends`); `backendContract(id)` is in its contract module; `@knot/git` is a
+skeleton that registers and finds no repositories. `backends` drops a backend
+whose contract no longer binds. Tests are in `crates/knot-ext-vcs/tests/` and
+`extensions/@knot/vcs/test/`. The decision is in
+[version control backends](../decisions/bundled-packages.md#version-control-backends).
 
 **Implementation context:**
 - Mirror `crates/knot-ext-workbench` (`build.rs` with

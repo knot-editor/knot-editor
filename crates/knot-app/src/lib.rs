@@ -10,6 +10,7 @@ pub fn packages() -> &'static [BundledSource] {
     PACKAGES.get_or_init(|| {
         [
             knot_ext_languages::PACKAGES,
+            knot_ext_vcs::PACKAGES,
             knot_ext_vim::PACKAGES,
             knot_ext_workbench::PACKAGES,
         ]

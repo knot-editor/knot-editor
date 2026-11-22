@@ -195,3 +195,22 @@ that project's identity, and a plain switch from it would close its project's
 windows.
 
 References: [projects](../architecture/workbench-and-lifecycle.md#projects).
+
+## Version control backends
+
+`@knot/vcs` owns what every backend shares and each backend serves a contract
+of its own, so several can be active at once and a package such as Git only
+answers questions about repositories. The contracts run in both directions
+because no callbacks cross a contract and `client()` binds only the latest
+registration: `vcs`, served by `@knot/vcs`, is what backends call to register
+and to report changed baselines, and `backendContract(id)` is what `@knot/vcs`
+calls on each backend. The factory lives in `@knot/vcs`'s contract module, so
+the host owns every backend contract under that package, and a backend needs
+only a `requires` entry. It memoizes per ID, like Knot's `pasteContract`.
+
+One shared contract served by every backend was rejected: `client()` would bind
+only the newest backend, and the others would be unreachable. A backend that
+stops without withdrawing is dropped when `@knot/vcs` next fails to bind its
+contract, because nothing tells a package when another unloads.
+
+References: [sharing between packages](../extension-api/packages.md#share-a-feature-with-other-packages).

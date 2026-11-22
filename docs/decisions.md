@@ -170,6 +170,9 @@ touches.
 - [Project inference](decisions/bundled-packages.md#project-inference): the
   nearest `.git` ancestor, adopted without asking only by a rootless window
   opened for the file; known projects open through the switch.
+- [Version control backends](decisions/bundled-packages.md#version-control-backends):
+  a contract per backend, defined by a factory in `@knot/vcs`, plus one the
+  backends call.
 
 ## [Workbench and lifecycle](decisions/workbench-and-lifecycle.md)
 

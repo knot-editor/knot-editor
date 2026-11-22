@@ -15,6 +15,7 @@ const modules = {
   "knot/testing/languages": pathToFileURL(join(build, "languages.js")).href,
   "knot/contract": pathToFileURL(join(build, "contract.js")).href,
   "@knot/go-to-file": pathToFileURL(join(buildRoot, "extensions/@knot/go-to-file/src/contract.js")).href,
+  "@knot/vcs": pathToFileURL(join(buildRoot, "extensions/@knot/vcs/src/contract.js")).href,
 };
 
 registerHooks({

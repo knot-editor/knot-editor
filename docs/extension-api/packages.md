@@ -63,6 +63,7 @@ Bundled packages publish contracts for each other:
 | Package | Contract | Methods |
 | --- | --- | --- |
 | `@knot/go-to-file` | `workspace` | `files(query)`, `buffers(query)`, `actions(query)`: the rows of that Search Everywhere tab for the caller's window |
+| `@knot/vcs` | `vcs`, `backendContract(id)` | `vcs`, served by `@knot/vcs`: backends `register(id)`, `unregister(id)`, and report `changed(...)` baselines. `backendContract(id)`, served by the backend `id` and called by `@knot/vcs`: `repositories(root)`, `repositoryOf(file)`, `baseline(...)` |
 
 ## Identity and lifetime
 

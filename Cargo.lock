@@ -3870,6 +3870,7 @@ dependencies = [
  "knot",
  "knot-bundled",
  "knot-ext-languages",
+ "knot-ext-vcs",
  "knot-ext-vim",
  "knot-ext-workbench",
 ]
@@ -3891,6 +3892,19 @@ dependencies = [
  "knot-bundled",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "knot-ext-vcs"
+version = "0.1.0"
+dependencies = [
+ "gpui-pre",
+ "knot",
+ "knot-bundled",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "url",
 ]
 
 [[package]]

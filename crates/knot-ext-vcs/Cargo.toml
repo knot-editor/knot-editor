@@ -1,0 +1,19 @@
+[package]
+name = "knot-ext-vcs"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+
+[dependencies]
+knot-bundled = { path = "../knot-bundled" }
+
+[build-dependencies]
+knot-bundled = { path = "../knot-bundled" }
+
+[dev-dependencies]
+knot = { path = "../..", features = ["test-support"] }
+gpui = { workspace = true, features = ["test-support"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+url = { workspace = true }
