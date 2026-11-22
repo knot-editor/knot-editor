@@ -14,6 +14,7 @@
   "include": [
     "../../crates/knot-host/src/js/knot.d.ts",
     "examples/*.js",
+    "examples/*.d.ts",
     "contract.test.ts"
   ]
 }

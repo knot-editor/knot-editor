@@ -632,6 +632,59 @@ fn checked_authoring_examples_run_as_an_installed_version_one_package(cx: &mut T
     });
 }
 
+/// Every API group, called with the option shapes `knot.d.ts` declares, so an
+/// option the host rejects or ignores fails here rather than in a package.
+#[gpui::test]
+fn declared_api_options_are_accepted_by_the_real_host(cx: &mut TestAppContext) {
+    let root = tempfile::tempdir().unwrap();
+    install_extension(
+        root.path(),
+        "@example/coverage",
+        &[],
+        &[
+            (
+                "main.js",
+                "import {exerciseApi, exerciseEditor} from './coverage.js'; import {commands} from 'knot'; await commands.register('coverage.run', exerciseApi); await commands.register('coverage.editor', exerciseEditor);",
+            ),
+            (
+                "coverage.js",
+                include_str!("../../../../scripts/extensions/examples/coverage.js"),
+            ),
+        ],
+    );
+    super::entitlements::declare(root.path(), "@example/coverage", &["process"]);
+    cx.update(|cx| {
+        crate::app::extensions::entitlements::decide(
+            "@example/coverage",
+            &[knot_model::extensions::package::Entitlement::Process],
+            knot_model::extensions::entitlements::Decision::Granted,
+            cx,
+        );
+    });
+    let documents = install_globals(cx);
+    cx.update(super::super::bind_product_keys);
+    let host = cx.update(super::super::super::extensions::host::install);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (window, native_window) = product_window(document, model, cx);
+    host.update(cx, |host, cx| {
+        host.start_installed_extensions(root.path().to_path_buf(), cx)
+    });
+    let report = wait_for_extension_report(&host, cx);
+    assert_eq!(
+        report.report.entries[0].result,
+        super::super::super::extensions::load::LoadResult::Loaded
+    );
+    let run = dispatch_product_command(&window, native_window, "coverage.run", cx);
+    assert_eq!(wait_for_command(run, cx), CommandOutcome::Completed);
+    cx.update_window(native_window, |_, _, cx| {
+        window.update(cx, |window, cx| window.focus_active_surface(cx))
+    })
+    .unwrap();
+    let editor = dispatch_product_command(&window, native_window, "coverage.editor", cx);
+    assert_eq!(wait_for_command(editor, cx), CommandOutcome::Completed);
+}
+
 #[gpui::test]
 fn on_disk_extensions_load_in_order_invoke_dependencies_and_isolate_failures(
     cx: &mut TestAppContext,
