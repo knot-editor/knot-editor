@@ -1,6 +1,6 @@
 # D199 — Typed contracts between packages
 
-Status: 🚧 checkpoint 1 done; checkpoint 2 done; checkpoint 3 next. Item: [D199](../roadmap.md#extension-platform-and-language-tooling),
+Status: 🚧 checkpoint 1 done; checkpoint 2 done; checkpoint 3 done; checkpoint 4 next. Item: [D199](../roadmap.md#extension-platform-and-language-tooling),
 part of the [version control plan](vcs.md) (milestone 1, before D211).
 
 ## Outcome
@@ -133,40 +133,18 @@ group object. Types exposed one drift: presentations returned by
 `documents.open` and its siblings omitted the declared `tool` and
 `directory`, which are now `null`.
 
-### 3. Run the declared API against the real host
+### 3. Run the declared API against the real host ✅
 
-Prove at runtime that the real host accepts what `knot.d.ts` declares, the
-drift types cannot catch (an option declared but rejected or ignored).
-
-- **Deliverables:** grow the authoring examples under
-  `scripts/extensions/examples/` (or add one) so each API group is called
-  with its declared option shapes, run by the existing installed-package
-  startup test.
-- **Implementation context:** the examples are type-checked by
-  `node tasks.mjs check` and already run in the real app by
-  [startup.rs](../../src/app/product/tests/startup.rs:468); keep each
-  example a readable authoring sample, so exhaustive cases go in a separate
-  example file rather than into the guide's samples. Later checkpoints extend
-  it as they add API.
-- **Validation:** the startup test passes; a deliberately rejected declared
-  option fails it (checked once by hand).
-- **Review gate:** coverage of the API groups agreed.
-
-Implemented, awaiting the gate. The exhaustive fixture is
-[coverage.js](../../scripts/extensions/examples/coverage.js) (typed through
-`coverage-settings.d.ts`), run by `declared_api_options_are_accepted_by_the_real_host`
-in [startup.rs](../../src/app/product/tests/startup.rs). `exerciseApi` covers
-settings, themes, icons, languages, storage, history, menus, keymaps, files,
-processes, documents, windows, completion matching, status items, notices,
-views, commands, recovery, and observation; `exerciseEditor` runs in a real
-editor tab and covers every buffer and editor method and option. It found no
-rejected declared option, only documented behavior the fixture first
-misread (a released process handle, `selectedText` on an editor, `newTab` on a
-container, `registerForView` naming an existing command). Not covered because
-they block on the user or restructure the test windows: pickers, input and
-confirmation prompts, `windows.open`/`focus`, `workspaces.openFolder`,
-`replaceRoots`, `pickFolder`, `workbench.replaceWindows`, `recovery.retain`,
-`restore` and `release`, `terminals.open`, and `files.reveal`.
+Done. [coverage.js](../../scripts/extensions/examples/coverage.js) calls the
+API groups with their declared option shapes, run by
+`declared_api_options_are_accepted_by_the_real_host` in
+[startup.rs](../../src/app/product/tests/startup.rs); `exerciseEditor` covers
+the buffer and editor in a real tab. The host rejected no declared option.
+Not covered because they block on the user or restructure the test windows:
+pickers, input and confirmation prompts, `windows.open`/`focus`, the
+`workspaces` folder methods, `workbench.replaceWindows`, `recovery`
+retain/restore/release, `terminals.open`, and `files.reveal`. Later
+checkpoints extend the example as they add API.
 
 ### 4. Cross-isolate transport: manifest, import resolution, serve/client
 
