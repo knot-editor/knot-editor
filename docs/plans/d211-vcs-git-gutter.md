@@ -144,9 +144,9 @@ A missing `git` is untested, since the product harness uses the real `PATH`.
 `TestWindow::append` does not notify extensions of the edit, so editing after
 open is covered only by the fake-host tests.
 
-### 5. Freshness
+### 5. Freshness ✅
 
-Implemented, awaiting review. `@knot/git` watches each repository it serves and reports changes
+Complete. `@knot/git` watches each repository it serves and reports changes
 through `vcs`; `files.watch` gained `includeHidden` because it hid `.git`
 (see [Git baseline](../decisions/bundled-packages.md#git-baseline)). Tests:
 `crates/knot-ext-vcs/tests/git.rs` covers a commit, soft reset, branch switch,
