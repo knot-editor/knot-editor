@@ -101,18 +101,14 @@ class Immediate {
   hasRef() { return this.#refed; }
 }
 
-// `Symbol.dispose` is absent from the ES2022 library and, in older V8s, from the runtime.
-const disposeSymbol = (Symbol as { dispose?: symbol }).dispose;
-if (disposeSymbol) {
-  Object.defineProperty(Timeout.prototype, disposeSymbol, {
-    value: function (this: Timeout) { clearTimeout(this); },
-    writable: true, configurable: true,
-  });
-  Object.defineProperty(Immediate.prototype, disposeSymbol, {
-    value: function (this: Immediate) { clearImmediate(this); },
-    writable: true, configurable: true,
-  });
-}
+Object.defineProperty(Timeout.prototype, Symbol.dispose, {
+  value: function (this: Timeout) { clearTimeout(this); },
+  writable: true, configurable: true,
+});
+Object.defineProperty(Immediate.prototype, Symbol.dispose, {
+  value: function (this: Immediate) { clearImmediate(this); },
+  writable: true, configurable: true,
+});
 
 function clearTimeout(timer: unknown) {
   const entry = typeof timer === "number" || typeof timer === "string"
@@ -238,6 +234,14 @@ export function ownership(removeLocal: () => void, release: () => Promise<unknow
       return cleanup;
     },
   };
+}
+
+/** A frozen handle released by `await using` or `[Symbol.asyncDispose]()`. */
+function disposableHandle(owned: { dispose(): Promise<void> }) {
+  return Object.freeze({
+    dispose: () => owned.dispose(),
+    [Symbol.asyncDispose]: () => owned.dispose(),
+  });
 }
 
 function record(value: unknown, message: string): Rec {
@@ -712,6 +716,7 @@ function bufferFor(handle: Native) {
       await contributionOwnership.track(request("replaceEditorContributions", handle, converted, ifRevision));
     },
     dispose: () => contributionOwnership.dispose(),
+    [Symbol.asyncDispose]: () => contributionOwnership.dispose(),
   });
 
   buffer = Object.freeze({
@@ -789,6 +794,7 @@ function bufferFor(handle: Native) {
       return Object.freeze({
         position: () => request("markPosition", handle, id),
         dispose: () => owned.dispose(),
+        [Symbol.asyncDispose]: () => owned.dispose(),
       });
     },
     async onDidChange(listener: unknown) {
@@ -798,7 +804,7 @@ function bufferFor(handle: Native) {
         () => request("subscribeBufferChanges", handle));
       const owned = ownership(() => bufferChangeListeners.delete(subscription),
         () => request("unsubscribeBufferChanges", subscription));
-      return Object.freeze({ dispose: () => owned.dispose() });
+      return disposableHandle(owned);
     },
     contributions,
   });
@@ -927,7 +933,7 @@ function editorFor(authority: Native) {
     async beginUndoGroup() {
       const group = await request("editorBeginUndoGroup", authority);
       const owned = ownership(() => {}, () => request("editorEndUndoGroup", group));
-      return Object.freeze({ dispose: () => owned.dispose() });
+      return disposableHandle(owned);
     },
     async record() {
       const id = await request("editorBeginRecording", authority);
@@ -944,6 +950,10 @@ function editorFor(authority: Native) {
           return Object.freeze(entries.map((entry: unknown) => Object.freeze(entry)));
         },
         dispose() {
+          finished = true;
+          return owned.dispose();
+        },
+        [Symbol.asyncDispose]() {
           finished = true;
           return owned.dispose();
         },
@@ -997,10 +1007,10 @@ export async function openEditor(target: unknown) {
       expectFunction(listener, "onDidClose requires a listener");
       if (entry.closed) {
         (globalThis as unknown as { queueMicrotask(callback: () => void): void }).queueMicrotask(() => listener());
-        return Object.freeze({ dispose: async () => {} });
+        return disposableHandle({ dispose: async () => {} });
       }
       entry.listeners.add(listener);
-      return Object.freeze({ dispose: async () => { entry.listeners.delete(listener); } });
+      return disposableHandle({ dispose: async () => { entry.listeners.delete(listener); } });
     },
     async onDidChangeSelection(listener: unknown, options?: Opts) {
       expectFunction(listener, "onDidChangeSelection requires a listener");
@@ -1010,7 +1020,7 @@ export async function openEditor(target: unknown) {
         entry.watching ??= request("watchEditorSelection", authority);
         try { await entry.watching; } catch (error) { entry.watching = null; throw error; }
       });
-      return Object.freeze({ dispose: async () => { entry.selectionListeners.delete(listener); } });
+      return disposableHandle({ dispose: async () => { entry.selectionListeners.delete(listener); } });
     },
     async onDidEditBar(listener: unknown) {
       expectFunction(listener, "onDidEditBar requires a listener");
@@ -1019,9 +1029,10 @@ export async function openEditor(target: unknown) {
         entry.watchingBars ??= request("watchEditorBars", authority);
         try { await entry.watchingBars; } catch (error) { entry.watchingBars = null; throw error; }
       });
-      return Object.freeze({ dispose: async () => { entry.barListeners.delete(listener); } });
+      return disposableHandle({ dispose: async () => { entry.barListeners.delete(listener); } });
     },
     dispose: () => owned.dispose(),
+    [Symbol.asyncDispose]: () => owned.dispose(),
   });
 }
 
@@ -1129,7 +1140,7 @@ export async function registerCommand(name: unknown, handler: unknown, options: 
     () => request("registerCommand", name, title, description, palette));
   const owned = ownership(() => commandHandlers.delete(registration),
     () => request("unregisterCommand", registration));
-  return Object.freeze({ dispose: () => owned.dispose() });
+  return disposableHandle(owned);
 }
 
 export async function registerViewCommand(viewKind: unknown, name: unknown, handler: unknown) {
@@ -1142,7 +1153,7 @@ export async function registerViewCommand(viewKind: unknown, name: unknown, hand
     () => request("registerViewCommand", viewKind, name));
   const owned = ownership(() => commandHandlers.delete(registration),
     () => request("unregisterCommand", registration));
-  return Object.freeze({ dispose: () => owned.dispose() });
+  return disposableHandle(owned);
 }
 
 export async function selectedViewText(target: unknown) {
@@ -1385,6 +1396,7 @@ export async function registerStatusItem(id: unknown, options: unknown) {
       await owned.track(request("updateStatusItem", registration, next === null ? null : statusItemValue(next), window));
     },
     dispose: () => owned.dispose(),
+    [Symbol.asyncDispose]: () => owned.dispose(),
   });
 }
 
@@ -1412,7 +1424,7 @@ export async function addMenuItem(location: unknown, item: unknown) {
     context,
   });
   const owned = ownership(() => {}, () => request("removeMenuItem", registration));
-  return Object.freeze({ dispose: () => owned.dispose() });
+  return disposableHandle(owned);
 }
 
 export async function listCommands(view: unknown) {
@@ -1728,6 +1740,7 @@ export async function registerView(contribution: unknown) {
       ));
     },
     dispose: () => owned.dispose(),
+    [Symbol.asyncDispose]: () => owned.dispose(),
   });
 }
 
@@ -1795,7 +1808,7 @@ export async function registerProvider(name: unknown, implementation: unknown) {
     () => request("registerProvider", name, methods));
   const owned = ownership(() => providerImplementations.delete(registration),
     () => request("unregisterProvider", registration));
-  return Object.freeze({ dispose: () => owned.dispose() });
+  return disposableHandle(owned);
 }
 
 // A handle calls one registration's methods in the provider's package; each
@@ -1880,7 +1893,7 @@ async function serveContract(
     () => request("serveContract", owner, name, descriptor));
   const owned = ownership(() => providerImplementations.delete(registration),
     () => request("unregisterProvider", registration));
-  return Object.freeze({ dispose: () => owned.dispose() });
+  return disposableHandle(owned);
 }
 
 // A client calls the registration the host bound it to; each call carries the
@@ -2062,7 +2075,7 @@ export async function associateLanguage(id: unknown, patterns: unknown) {
   const claimed = languagePatterns(record(patterns, "languages.associate requires patterns"));
   const association = await request("associateLanguage", language, ...claimed);
   const owned = ownership(() => {}, () => request("unregisterLanguage", association));
-  return Object.freeze({ dispose: () => owned.dispose() });
+  return disposableHandle(owned);
 }
 function editingToken(value: unknown, message: string) {
   const token = string(value, message);
@@ -2144,7 +2157,7 @@ export async function registerLanguage(definition: unknown) {
   const registration = await request("registerLanguage", id, name, grammar, fileExtensions,
     fileNames, interpreters, highlights, injections, indents, folds, editing);
   const owned = ownership(() => {}, () => request("unregisterLanguage", registration));
-  return Object.freeze({ dispose: () => owned.dispose() });
+  return disposableHandle(owned);
 }
 const settingTypes = {
   boolean: (value: unknown) => typeof value === "boolean",
@@ -2206,7 +2219,7 @@ export async function observeSetting(key: unknown, listener: unknown) {
     () => request("observeSetting", key));
   const owned = ownership(() => settingListeners.delete(subscription),
     () => request("unobserveSetting", subscription));
-  return Object.freeze({ dispose: () => owned.dispose() });
+  return disposableHandle(owned);
 }
 globalThis.__knotDispatchSettingChange = async (subscription, key) => {
   const listener = await callable(settingListeners, subscription);
@@ -2291,7 +2304,7 @@ export async function registerTheme(definition: unknown) {
   const registration = await request("registerTheme",
     { name, appearance: value.appearance, colors, syntax, chrome });
   const owned = ownership(() => {}, () => request("unregisterTheme", registration));
-  return Object.freeze({ dispose: () => owned.dispose() });
+  return disposableHandle(owned);
 }
 export async function getTheme(name: unknown) {
   const theme = await request("getTheme", string(name, "theme name must be text"));
@@ -2330,7 +2343,7 @@ export async function overrideIcon(name: unknown, definition: unknown) {
   const key = string(name, "icon name must be text");
   const registration = await request("registerIconOverride", key, iconSpec(definition, key));
   const owned = ownership(() => {}, () => request("unregisterIconOverride", registration));
-  return Object.freeze({ dispose: () => owned.dispose() });
+  return disposableHandle(owned);
 }
 export async function associateIcons(patterns: unknown) {
   const value = record(patterns, "icons.associate requires patterns");
@@ -2341,7 +2354,7 @@ export async function associateIcons(patterns: unknown) {
   });
   const registration = await request("registerIconAssociation", ...claims);
   const owned = ownership(() => {}, () => request("unregisterIconAssociation", registration));
-  return Object.freeze({ dispose: () => owned.dispose() });
+  return disposableHandle(owned);
 }
 export async function registerIconPack(definition: unknown) {
   const value = record(definition, "icons.registerPack requires a pack object");
@@ -2352,7 +2365,7 @@ export async function registerIconPack(definition: unknown) {
   }
   const registration = await request("registerIconPack", name, icons);
   const owned = ownership(() => {}, () => request("unregisterIconPack", registration));
-  return Object.freeze({ dispose: () => owned.dispose() });
+  return disposableHandle(owned);
 }
 export async function listIconPacks() {
   return Object.freeze(await request("listIconPacks"));
@@ -2384,7 +2397,7 @@ export async function registerKeymapPreset(definition: unknown) {
   });
   const registration = await request("registerKeymapPreset", { name, title, bindings });
   const owned = ownership(() => {}, () => request("unregisterKeymapPreset", registration));
-  return Object.freeze({ dispose: () => owned.dispose() });
+  return disposableHandle(owned);
 }
 export async function getKeymapPreset(name: unknown) {
   const preset = await request("getKeymapPreset", string(name, "keymap preset name must be text"));
@@ -2477,7 +2490,7 @@ export async function watchFiles(uri: unknown, listener: unknown, options?: Opts
     () => request("watchFiles", uri, recursive));
   const owned = ownership(() => watchListeners.delete(subscription),
     () => request("unwatchFiles", subscription));
-  return Object.freeze({ dispose: () => owned.dispose() });
+  return disposableHandle(owned);
 }
 globalThis.__knotDispatchWatchChange = async (subscription, uris) => {
   const listener = await callable(watchListeners, subscription);
@@ -2544,7 +2557,7 @@ function processStream(id: unknown, stream: string) {
       running = true;
       pump();
     }
-    return Object.freeze({ dispose: () => { listeners.delete(listener); return Promise.resolve(); } });
+    return disposableHandle({ dispose: () => { listeners.delete(listener); return Promise.resolve(); } });
   };
 }
 export async function spawnProcess(options: Opts) {
@@ -2562,6 +2575,7 @@ export async function spawnProcess(options: Opts) {
       return request("killProcess", id, signal ?? null);
     },
     dispose: () => request("disposeProcess", id),
+    [Symbol.asyncDispose]: () => request("disposeProcess", id),
     exited,
   });
 }
@@ -2687,7 +2701,7 @@ export async function observeWorkbench(listener: unknown) {
   const owned = ownership(() => applicationListeners.delete(value.subscription),
     () => request("unobserveWorkbench", value.subscription));
   return Object.freeze({ snapshot: applicationSnapshotFromNative(value.snapshot), watermark: value.watermark,
-    dispose: () => owned.dispose() });
+    dispose: () => owned.dispose(), [Symbol.asyncDispose]: () => owned.dispose() });
 }
 globalThis.__knotDispatchApplicationChange = async (subscription, value) => {
   const listener = await callable(applicationListeners, subscription);

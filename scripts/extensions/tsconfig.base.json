@@ -2,10 +2,10 @@
   // Shared compiler settings for every extension package. A package extends
   // this file, compiles src/ to dist/, and sees only ES2022 and the knot API.
   "compilerOptions": {
-    "target": "ES2022",
+    "target": "ESNext",
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "lib": ["ES2022"],
+    "lib": ["ES2022", "ESNext.Disposable"],
     "types": [],
     "strict": true,
     "exactOptionalPropertyTypes": true,

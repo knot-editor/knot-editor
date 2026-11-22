@@ -270,6 +270,11 @@ function nextId(prefix: string) {
   return `${prefix}-${state.nextId++}`;
 }
 
+/** The members of a disposable handle: `dispose()` beside the `[Symbol.asyncDispose]` the real host implements. */
+function disposers(release: () => Promise<void>) {
+  return { dispose: release, [Symbol.asyncDispose]: release };
+}
+
 export function hostError(code: HostErrorCode, message: string = code): Knot.HostError {
   const error = new Error(message) as Error & { name: string; code: HostErrorCode };
   error.name = "KnotHostError";
@@ -614,7 +619,7 @@ function createBuffer(document: FakeDocument): Knot.Buffer {
       let set = changeListeners.get(document);
       if (set === undefined) changeListeners.set(document, (set = new Set()));
       set.add(listener);
-      return { dispose: async () => void set.delete(listener) };
+      return { ...disposers(async () => void set.delete(listener)) };
     },
     lineCount: async () => lineRanges(document.text).length,
     lineRange: async (line) => {
@@ -723,10 +728,10 @@ function createBuffer(document: FakeDocument): Knot.Buffer {
       marksOf(document).add(mark);
       return {
         position: async () => mark.offset,
-        dispose: async () => {
+        ...disposers(async () => {
           marksOf(document).delete(mark);
           mark.offset = null;
-        },
+        }),
       };
     },
     contributions: {
@@ -734,7 +739,7 @@ function createBuffer(document: FakeDocument): Knot.Buffer {
         if (ifRevision !== document.revision) throw hostError("RevisionConflict");
         contributionSets.set(document, structuredClone(items));
       },
-      dispose: async () => void contributionSets.delete(document),
+      ...disposers(async () => void contributionSets.delete(document)),
     },
   };
   return fake as unknown as Knot.Buffer;
@@ -1631,7 +1636,7 @@ function editor(tab: FakeTab): Knot.Editor {
       const { document } = live();
       if (undoGroups.has(document)) throw hostError("OperationInProgress");
       undoGroups.add(document);
-      return { dispose: async () => void undoGroups.delete(document) };
+      return { ...disposers(async () => void undoGroups.delete(document)) };
     },
     record: async () => {
       throw new Error("input recording needs the real editor; run the test through the Rust runner");
@@ -1711,10 +1716,10 @@ function editorHandle(target: Knot.ViewTarget): Knot.EditorHandle {
       tab.closeListeners.add(listener);
       listeners.add(listener);
       return {
-        dispose: async () => {
+        ...disposers(async () => {
           tab.closeListeners.delete(listener);
           listeners.delete(listener);
-        },
+        }),
       };
     },
     onDidChangeSelection: (async (
@@ -1725,10 +1730,10 @@ function editorHandle(target: Knot.ViewTarget): Knot.EditorHandle {
       tab.selectionListeners.set(listener, options?.lines ?? null);
       selectionListeners.add(listener);
       return {
-        dispose: async () => {
+        ...disposers(async () => {
           tab.selectionListeners.delete(listener);
           selectionListeners.delete(listener);
-        },
+        }),
       };
     }) as Knot.EditorHandle["onDidChangeSelection"],
     async onDidEditBar(listener) {
@@ -1736,13 +1741,13 @@ function editorHandle(target: Knot.ViewTarget): Knot.EditorHandle {
       tab.barListeners.add(listener);
       barListeners.add(listener);
       return {
-        dispose: async () => {
+        ...disposers(async () => {
           tab.barListeners.delete(listener);
           barListeners.delete(listener);
-        },
+        }),
       };
     },
-    async dispose() {
+    ...disposers(async () => {
       disposed = true;
       for (const listener of listeners) tab.closeListeners.delete(listener);
       for (const listener of selectionListeners) tab.selectionListeners.delete(listener);
@@ -1750,7 +1755,7 @@ function editorHandle(target: Knot.ViewTarget): Knot.EditorHandle {
       listeners.clear();
       selectionListeners.clear();
       barListeners.clear();
-    },
+    }),
   };
 }
 
@@ -2114,18 +2119,18 @@ export const api: KnotApi = {
       if (!GRAMMARS.includes(definition.grammar)) throw hostError("UnknownGrammar");
       state.languages.push(definition);
       return {
-        dispose: async () => {
+        ...disposers(async () => {
           state.languages = state.languages.filter((candidate) => candidate !== definition);
-        },
+        }),
       };
     },
     associate: async (id, patterns) => {
       const association = { id, patterns };
       state.associations.push(association);
       return {
-        dispose: async () => {
+        ...disposers(async () => {
           state.associations = state.associations.filter((candidate) => candidate !== association);
-        },
+        }),
       };
     },
     get: async (id) => {
@@ -2181,9 +2186,9 @@ export const api: KnotApi = {
       const entry = { key, listener };
       state.settingListeners.push(entry);
       return {
-        dispose: async () => {
+        ...disposers(async () => {
           state.settingListeners = state.settingListeners.filter((candidate) => candidate !== entry);
-        },
+        }),
       };
     },
   },
@@ -2195,9 +2200,9 @@ export const api: KnotApi = {
       if (unknown !== undefined) throw hostError("UnknownCapture");
       state.themes.push(definition);
       return {
-        dispose: async () => {
+        ...disposers(async () => {
           state.themes = state.themes.filter((candidate) => candidate !== definition);
-        },
+        }),
       };
     },
     // Later registrations win, as in the native registry.
@@ -2234,26 +2239,26 @@ export const api: KnotApi = {
       const entry = { name, definition: checkedIcon(definition) };
       state.iconOverrides.push(entry);
       return {
-        dispose: async () => {
+        ...disposers(async () => {
           state.iconOverrides = state.iconOverrides.filter((candidate) => candidate !== entry);
-        },
+        }),
       };
     },
     associate: async (associations) => {
       state.iconAssociations.push(associations);
       return {
-        dispose: async () => {
+        ...disposers(async () => {
           state.iconAssociations = state.iconAssociations.filter((candidate) => candidate !== associations);
-        },
+        }),
       };
     },
     registerPack: async (pack) => {
       for (const definition of Object.values(pack.icons)) checkedIcon(definition);
       state.iconPacks.push(pack);
       return {
-        dispose: async () => {
+        ...disposers(async () => {
           state.iconPacks = state.iconPacks.filter((candidate) => candidate !== pack);
-        },
+        }),
       };
     },
     listPacks: async () => [...new Set(state.iconPacks.map((pack) => pack.name))].sort(),
@@ -2369,9 +2374,9 @@ export const api: KnotApi = {
       const entry = { uri: checked, recursive: options?.recursive ?? false, listener };
       state.fileWatches.push(entry);
       return {
-        dispose: async () => {
+        ...disposers(async () => {
           state.fileWatches = state.fileWatches.filter((candidate) => candidate !== entry);
-        },
+        }),
       };
     },
     stat: async (uri) => {
@@ -2491,9 +2496,9 @@ export const api: KnotApi = {
       const entry: FakeMenuItem = { location, item: { ...item } };
       state.menuItems.push(entry);
       return {
-        dispose: async () => {
+        ...disposers(async () => {
           state.menuItems = state.menuItems.filter((candidate) => candidate !== entry);
-        },
+        }),
       };
     },
   },
@@ -2577,9 +2582,9 @@ export const api: KnotApi = {
           launched: state.launched,
         },
         watermark: state.sequence,
-        dispose: async () => {
+        ...disposers(async () => {
           state.listeners = state.listeners.filter((candidate) => candidate !== listener);
-        },
+        }),
       };
     },
     close: notFaked("workbench.close"),
@@ -2631,9 +2636,9 @@ export const api: KnotApi = {
         setText: async (text) => {
           registered.text = text;
         },
-        dispose: async () => {
+        ...disposers(async () => {
           state.views.delete(contribution.id);
-        },
+        }),
       };
     },
     showPicker: async (options) => {
@@ -2722,10 +2727,10 @@ export const api: KnotApi = {
             entry.windows.set(scope.window, { ...next });
           }
         },
-        dispose: async () => {
+        ...disposers(async () => {
           live = false;
           state.statusItems = state.statusItems.filter((candidate) => candidate !== entry);
-        },
+        }),
       };
     },
     selectedText: async () => state.selectedText,
@@ -2741,18 +2746,18 @@ export const api: KnotApi = {
       state.commandOptions.set(name, options ?? {});
       state.commands.set(name, handler);
       return {
-        dispose: async () => {
+        ...disposers(async () => {
           state.commands.delete(name);
           state.commandOptions.delete(name);
-        },
+        }),
       };
     },
     registerForView: async (viewKind, name, handler) => {
       state.viewCommands.set(`${viewKind}:${name}`, handler);
       return {
-        dispose: async () => {
+        ...disposers(async () => {
           state.viewCommands.delete(`${viewKind}:${name}`);
-        },
+        }),
       };
     },
     list: async (view) =>
@@ -2801,9 +2806,9 @@ export const api: KnotApi = {
       const provider = { name, implementation, methods };
       state.providers.push(provider);
       return {
-        dispose: async () => {
+        ...disposers(async () => {
           state.providers = state.providers.filter((candidate) => candidate !== provider);
-        },
+        }),
       };
     },
     get: async (name) => {
@@ -2830,9 +2835,9 @@ export const api: KnotApi = {
       if (definition.name === "knot") throw new TypeError("the knot keymap preset cannot be replaced");
       state.keymapPresets.push(definition);
       return {
-        dispose: async () => {
+        ...disposers(async () => {
           state.keymapPresets = state.keymapPresets.filter((candidate) => candidate !== definition);
-        },
+        }),
       };
     },
     // Later registrations win, as in the native registry.

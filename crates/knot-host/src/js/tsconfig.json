@@ -3,10 +3,10 @@
   // engine. Standalone rather than extending the extension base so that
   // package settings never rebuild the host.
   "compilerOptions": {
-    "target": "ES2022",
+    "target": "ESNext",
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "lib": ["ES2022"],
+    "lib": ["ES2022", "ESNext.Disposable"],
     "types": [],
     "strict": true,
     "exactOptionalPropertyTypes": true,

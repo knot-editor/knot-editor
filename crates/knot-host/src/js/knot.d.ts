@@ -1153,6 +1153,7 @@ declare module "knot" {
     /** Releases the handle, killing the process group when it still runs.
      * Later calls with the handle reject with InvalidTarget. */
     dispose(): Promise<void>;
+    [Symbol.asyncDispose](): Promise<void>;
     /** Resolves when the process exits. A process that writes more than its
      * pipe holds does not exit until its output is read. */
     readonly exited: Promise<ProcessExit>;
@@ -1398,7 +1399,7 @@ declare module "knot" {
    * are hidden and must not be persisted. Unload/failed activation/shutdown release
    * ownership independently of extension awaits or final JavaScript callbacks.
    */
-  export interface Disposable {
+  export interface Disposable extends AsyncDisposable {
     /**
      * Mark inactive immediately and release native ownership.
      * Resolution acknowledges release, not completion of an executing callback;
@@ -1416,6 +1417,7 @@ declare module "knot" {
      * can fail with BufferClosed; an absent contribution set is already released.
      */
     dispose(): Promise<void>;
+    [Symbol.asyncDispose](): Promise<void>;
   }
   /**
    * Half-open absolute UTF-8 byte range [startByteOffset, endByteOffset).
