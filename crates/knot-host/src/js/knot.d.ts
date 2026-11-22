@@ -1156,6 +1156,14 @@ declare module "knot" {
     /** Resolves when the process exits. A process that writes more than its
      * pipe holds does not exit until its output is read. */
     readonly exited: Promise<ProcessExit>;
+    /** Resolves once standard output has been read to its end and every
+     * listener has finished with its last chunk. `exited` can resolve before
+     * this, so await both before treating the output as complete. Output is
+     * only read while a listener is attached, so this stays pending until
+     * `onStdout` is called. */
+    readonly stdoutEnded: Promise<void>;
+    /** Like `stdoutEnded`, for standard error and `onStderr`. */
+    readonly stderrEnded: Promise<void>;
   }
   /**
    * Runs programs on the user's computer, which a package declares with the

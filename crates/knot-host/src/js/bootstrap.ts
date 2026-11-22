@@ -2509,6 +2509,8 @@ export async function runProcess(options: Opts) {
 function processStream(id: unknown, stream: string) {
   const listeners = new Set<Fn>();
   let running = false;
+  let finish!: () => void;
+  const ended = new Promise<void>((resolve) => { finish = resolve; });
   const pump = () => withFrame(null, async () => {
     while (listeners.size > 0) {
       let chunk;
@@ -2517,17 +2519,17 @@ function processStream(id: unknown, stream: string) {
       } catch (error) {
         // The handle is gone: its process finished and drained, or its
         // lifecycle ended. Either way the stream is over.
-        if (errorCode(error) === "InvalidTarget") break;
+        if (errorCode(error) === "InvalidTarget") { finish(); break; }
         throw error;
       }
-      if (chunk === null) break;
+      if (chunk === null) { finish(); break; }
       for (const listener of [...listeners]) {
         try { await listener(chunk); } catch (error) { void Promise.reject(error); }
       }
     }
     running = false;
   });
-  return (listener: unknown) => {
+  const listen = (listener: unknown) => {
     expectFunction(listener, "process stream requires a listener");
     listeners.add(listener);
     if (!running) {
@@ -2536,15 +2538,20 @@ function processStream(id: unknown, stream: string) {
     }
     return disposableHandle({ dispose: () => { listeners.delete(listener); return Promise.resolve(); } });
   };
+  return { listen, ended };
 }
 export async function spawnProcess(options: Opts) {
   const id = await request("spawnProcess", ...processArguments(options, false));
   const exited = withFrame(null, () => request("waitProcess", id))
     .then((status: Native) => Object.freeze({ exitCode: status.exitCode, signal: status.signal }));
   exited.catch(() => {});
+  const stdout = processStream(id, "stdout");
+  const stderr = processStream(id, "stderr");
   return Object.freeze({
-    onStdout: processStream(id, "stdout"),
-    onStderr: processStream(id, "stderr"),
+    onStdout: stdout.listen,
+    onStderr: stderr.listen,
+    stdoutEnded: stdout.ended,
+    stderrEnded: stderr.ended,
     write: (text: unknown) => request("writeProcessInput", id, string(text, "process input must be text")),
     closeStdin: () => request("closeProcessInput", id),
     kill: (signal: unknown) => {
