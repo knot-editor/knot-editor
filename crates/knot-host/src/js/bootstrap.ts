@@ -510,6 +510,7 @@ function inTurn<K extends string, T>(
 }
 
 const buffers = new Map<Native, Native>();
+const bufferHandles = new WeakMap<object, Native>();
 const commandHandlers = new Map<number, Fn>();
 const bufferChangeListeners = new Map<number, { handle: Native; listener: Fn; turn?: Promise<unknown> }>();
 const treeProviders = new Map<number, { getChildren: Fn }>();
@@ -806,7 +807,31 @@ function bufferFor(handle: Native) {
     contributions,
   });
   buffers.set(handle, buffer);
+  bufferHandles.set(buffer, handle);
   return buffer;
+}
+
+function diffSide(side: unknown, name: string): [string | null, Native | null] {
+  if (typeof side === "string") return [side, null];
+  const handle = typeof side === "object" && side !== null ? bufferHandles.get(side) : undefined;
+  if (handle === undefined) throw new TypeError(`diff ${name} must be a string or a buffer`);
+  return [null, handle];
+}
+
+export async function diff(old: unknown, updated: unknown, options?: Opts) {
+  const [oldText, oldHandle] = diffSide(old, "old side");
+  const [newText, newHandle] = diffSide(updated, "new side");
+  const ignoreWhitespace = options?.ignoreWhitespace ?? false;
+  if (typeof ignoreWhitespace !== "boolean") throw new TypeError("ignoreWhitespace must be a boolean");
+  const result = await request("diff", oldText, oldHandle, newText, newHandle, ignoreWhitespace);
+  const range = (value: Native) => Object.freeze({ start: value.start, end: value.end });
+  const frozen: Native = {
+    hunks: Object.freeze(result.hunks.map((hunk: Native) =>
+      Object.freeze({ old: range(hunk.old), new: range(hunk.new) }))),
+  };
+  if (result.oldRevision !== undefined) frozen.oldRevision = result.oldRevision;
+  if (result.newRevision !== undefined) frozen.newRevision = result.newRevision;
+  return Object.freeze(frozen);
 }
 
 function lineItems(items: Native) {

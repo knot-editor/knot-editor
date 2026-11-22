@@ -44,9 +44,11 @@ import {
   registerTheme, getTheme, listThemes, defineColor,
   defineIcon, overrideIcon, associateIcons, registerIconPack, listIconPacks,
   homeUri,
+  diff,
 } from "knot:bootstrap";
 
-export { platform, homeUri };
+export { platform, homeUri, diff };
+diff satisfies typeof Declared.diff;
 platform satisfies typeof Declared.platform;
 homeUri satisfies typeof Declared.homeUri;
 

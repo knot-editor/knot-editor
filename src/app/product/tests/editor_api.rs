@@ -3,7 +3,7 @@
 use super::*;
 
 const SOURCE: &str = r#"
-import { commands, workbench } from "knot";
+import { commands, diff, workbench } from "knot";
 const check = (condition, message) => { if (!condition) throw new Error(message); };
 const expectCode = async (operation, code) => {
   try { await operation(); } catch (error) { if (error.code === code) return; throw error; }
@@ -85,6 +85,33 @@ await commands.register("api.find", async ({ buffer }) => {
   let rejected = false;
   try { await buffer.find(7); } catch (error) { rejected = error instanceof TypeError; }
   check(rejected, "query type");
+});
+await commands.register("api.diff", async ({ buffer }) => {
+  const shown = (result) => result.hunks.map((h) => `${h.old.start}-${h.old.end}:${h.new.start}-${h.new.end}`).join("|");
+  const { revision } = await buffer.snapshot();
+  // The buffer holds "one\r\ntwo\nthree\n".
+  const same = await diff(buffer, buffer);
+  check(same.hunks.length === 0 && same.oldRevision === revision && same.newRevision === revision, "buffer against itself");
+  const strings = await diff("a\nb\n", "a\nc\nb\nd\n");
+  check(shown(strings) === "1-1:1-2|2-2:3-4", "insertions");
+  check(strings.oldRevision === undefined && strings.newRevision === undefined, "no revisions for strings");
+  check(Object.isFrozen(strings) && Object.isFrozen(strings.hunks) && Object.isFrozen(strings.hunks[0].old), "frozen");
+  const fromBuffer = await diff(buffer, "one\ntwo\nthree\n");
+  check(shown(fromBuffer) === "0-1:0-1" && fromBuffer.oldRevision === revision, "CRLF differs by default");
+  check((await diff(buffer, "one\ntwo\nthree\n", { ignoreWhitespace: true })).hunks.length === 0, "whitespace ignored");
+  const toBuffer = await diff("one\r\nthree\n", buffer);
+  check(shown(toBuffer) === "1-1:1-2" && toBuffer.newRevision === revision, "buffer as the new side");
+  check((await diff("", "")).hunks.length === 0, "empty texts");
+  check(shown(await diff("", "x")) === "0-0:0-1", "insertion into empty");
+  check(shown(await diff("x\n", "x")) === "0-1:0-1", "trailing newline");
+  for (const bad of [[1, ""], ["", {}], [null, ""], [{ lineCount() {} }, ""]]) {
+    let rejected = false;
+    try { await diff(...bad); } catch (error) { rejected = error instanceof TypeError; }
+    check(rejected, "side type");
+  }
+  let badOption = false;
+  try { await diff("", "", { ignoreWhitespace: 1 }); } catch (error) { badOption = error instanceof TypeError; }
+  check(badOption, "option type");
 });
 await commands.register("api.replace", async ({ buffer }) => {
   const text = async () => (await buffer.snapshot()).text;
@@ -237,6 +264,20 @@ fn buffer_find_returns_byte_ranges_options_and_revision(cx: &mut TestAppContext)
     let window = headless_window(document, model, cx);
     let native_window = Headless;
     let execution = dispatch_product_command(&window, native_window, "api.find", cx);
+    assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
+}
+
+#[gpui::test]
+fn diff_compares_strings_and_buffers_by_line(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    load(cx);
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("one\r\ntwo\nthree\n")));
+    let document = documents.update(cx, |documents, cx| {
+        documents.create_untitled("Diff", model.clone(), cx)
+    });
+    let window = headless_window(document, model, cx);
+    let native_window = Headless;
+    let execution = dispatch_product_command(&window, native_window, "api.diff", cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
 }
 

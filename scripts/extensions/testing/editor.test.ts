@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
-import { commands, workbench } from "knot";
+import { commands, diff, workbench } from "knot";
 import type { CommandContext, FindOptions } from "knot";
 import * as host from "knot/testing";
 
@@ -375,4 +375,28 @@ test("an undo group is open until disposed, and a second one is rejected", async
   await assert.rejects(editor.beginUndoGroup(), { code: "OperationInProgress" });
   await group[Symbol.asyncDispose]();
   assert.equal(host.undoGroupOpen(window), false);
+});
+
+test("diff compares strings and buffers by line and reports buffer revisions", async () => {
+  const document = host.addDocument({ text: "a\nb\nc\n" });
+  host.openWindow({ documents: [document] });
+  const buffer = (await capture()).buffer!;
+  assert.deepEqual(await diff("a\nc\n", buffer), {
+    hunks: [{ old: { start: 1, end: 1 }, new: { start: 1, end: 2 } }],
+    newRevision: 0,
+  });
+  assert.deepEqual(await diff(buffer, "a\nB\nc\n"), {
+    hunks: [{ old: { start: 1, end: 2 }, new: { start: 1, end: 2 } }],
+    oldRevision: 0,
+  });
+  assert.deepEqual(await diff("", ""), { hunks: [] });
+  assert.deepEqual((await diff(buffer, buffer)).hunks, []);
+});
+
+test("diff ignores whitespace only when asked and rejects invalid arguments", async () => {
+  assert.equal((await diff("a b\r\n", "ab\n")).hunks.length, 1);
+  assert.deepEqual(await diff("a b\r\n", "ab\n", { ignoreWhitespace: true }), { hunks: [] });
+  await assert.rejects(diff(1 as never, ""), TypeError);
+  await assert.rejects(diff("", {} as never), TypeError);
+  await assert.rejects(diff("", "", { ignoreWhitespace: "yes" as never }), TypeError);
 });

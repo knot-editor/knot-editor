@@ -180,6 +180,12 @@ impl HostSuccess for crate::FindResult {
     }
 }
 
+impl HostSuccess for crate::DiffResult {
+    fn encode(self) -> Result<EncodedValue, DecodeError> {
+        encode_json(self)
+    }
+}
+
 impl HostSuccess for crate::ReplaceResult {
     fn encode(self) -> Result<EncodedValue, DecodeError> {
         encode_json(self)

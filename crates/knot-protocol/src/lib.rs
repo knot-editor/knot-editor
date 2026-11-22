@@ -1135,6 +1135,34 @@ pub struct FindResult {
     pub more: bool,
 }
 
+/// A half-open range of 0-based line indices.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LineRange {
+    pub start: u32,
+    pub end: u32,
+}
+
+/// One changed region of a diff: the old lines replaced by the new lines.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiffHunk {
+    pub old: LineRange,
+    pub new: LineRange,
+}
+
+/// The hunks that turn the old text into the new, with the revision of each
+/// side that was a buffer.
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiffResult {
+    pub hunks: Vec<DiffHunk>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub old_revision: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub new_revision: Option<u64>,
+}
+
 /// What a buffer replacement did: the revision after it, how many matches it
 /// replaced, and whether more followed them.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize)]

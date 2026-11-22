@@ -668,8 +668,8 @@ pub(crate) async fn close_presentation(
 
 pub(crate) use crate::app::extensions::buffers::BufferError;
 use knot_protocol::{
-    BufferHandle, BufferSubscriptionId, ByteRange, EditorContribution, FindResult, ReplaceResult,
-    TextEdit, TextSnapshot, WordKind, WordSegment,
+    BufferHandle, BufferSubscriptionId, ByteRange, DiffHunk, DiffResult, EditorContribution,
+    FindResult, LineRange, ReplaceResult, TextEdit, TextSnapshot, WordKind, WordSegment,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -951,6 +951,96 @@ pub(crate) async fn find(
             },
         )
     })?
+}
+
+/// One side of a diff: text, or a buffer read natively.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum DiffSide {
+    Text(String),
+    Buffer(BufferHandle),
+}
+
+fn decode_diff_side(
+    reader: &mut dyn ArgumentReader,
+    index: usize,
+) -> Result<DiffSide, DecodeError> {
+    match reader.optional_text(index, "diff text must be a string")? {
+        Some(text) => Ok(DiffSide::Text(text)),
+        None => Ok(DiffSide::Buffer(BufferHandle::new(
+            reader.integer(index + 1)?,
+        ))),
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct DiffArguments {
+    pub old: DiffSide,
+    pub new: DiffSide,
+    pub ignore_whitespace: bool,
+}
+impl HostArguments for DiffArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self {
+            old: decode_diff_side(reader, 2)?,
+            new: decode_diff_side(reader, 4)?,
+            ignore_whitespace: reader
+                .optional_boolean(6, "ignoreWhitespace must be a boolean")?
+                .unwrap_or(false),
+        })
+    }
+}
+
+/// The line hunks that turn one text or buffer into another. Buffer sides are
+/// copied on the foreground; the comparison runs on the background executor.
+#[host_operation("diff")]
+pub(crate) async fn diff(
+    context: HostContext,
+    arguments: DiffArguments,
+) -> Result<DiffResult, BufferError> {
+    let request = context.request;
+    let (old, new) = context.foreground(|host, cx| {
+        let commands = &host.commands;
+        let mut read = |side: DiffSide| match side {
+            DiffSide::Text(text) => Ok((text, None)),
+            DiffSide::Buffer(buffer) => host.buffers.read_model(
+                &request,
+                buffer,
+                || commands.is_cancelled(request.invocation),
+                cx,
+                |model| Ok((model.text(), Some(model.revision()))),
+            ),
+        };
+        let old = read(arguments.old)?;
+        let new = read(arguments.new)?;
+        Ok::<_, BufferError>((old, new))
+    })??;
+    let options = knot_model::diff::DiffOptions {
+        ignore_whitespace: arguments.ignore_whitespace,
+    };
+    let (old_text, old_revision) = old;
+    let (new_text, new_revision) = new;
+    let hunks = context
+        .application
+        .background_executor()
+        .spawn(async move { knot_model::diff::line_hunks(&old_text, &new_text, options) })
+        .await;
+    // Fails when the invocation was cancelled while the comparison ran.
+    context.foreground(|_, _| ())?;
+    let range = |range: std::ops::Range<u32>| LineRange {
+        start: range.start,
+        end: range.end,
+    };
+    Ok(DiffResult {
+        hunks: hunks
+            .into_iter()
+            .map(|hunk| DiffHunk {
+                old: range(hunk.old),
+                new: range(hunk.new),
+            })
+            .collect(),
+        old_revision,
+        new_revision,
+    })
 }
 
 #[derive(Clone, Debug, PartialEq)]

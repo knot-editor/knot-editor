@@ -1,4 +1,4 @@
-import { commands, editor, workbench, keymaps, platform, completionContract, pasteContract } from "knot";
+import { commands, diff, editor, workbench, keymaps, platform, completionContract, pasteContract } from "knot";
 import type { Buffer, CommandInfo, CommandTarget, Disposable, HostError, HostErrorCode } from "knot";
 
 void commands.register("described", async () => {}, {
@@ -35,6 +35,13 @@ const registration: Promise<Disposable> = commands.register("check", async (cont
   const foundRevision: number = found.revision;
   const hasMore: boolean = found.more;
   void [matched, foundRevision, hasMore];
+  const compared: import("knot").DiffResult = await diff(buffer, "text", { ignoreWhitespace: true });
+  const hunk: import("knot").DiffHunk | undefined = compared.hunks[0];
+  const firstLine: number | undefined = hunk?.old.start;
+  const comparedRevision: number | undefined = compared.oldRevision;
+  void [firstLine, comparedRevision];
+  // @ts-expect-error a side is a string or a buffer
+  void diff(1, "text");
   const word: import("knot").WordSegment | null = await buffer.wordAt(line.startByteOffset);
   const wordKind: "word" | "separator" | "space" | undefined = word?.kind;
   void wordKind;

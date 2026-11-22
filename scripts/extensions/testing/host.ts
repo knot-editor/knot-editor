@@ -606,8 +606,56 @@ const buffers = new WeakMap<FakeDocument, Knot.Buffer>();
 
 function buffer(document: FakeDocument): Knot.Buffer {
   let proxy = buffers.get(document);
-  if (proxy === undefined) buffers.set(document, (proxy = createBuffer(document)));
+  if (proxy === undefined) {
+    buffers.set(document, (proxy = createBuffer(document)));
+    bufferDocuments.set(proxy, document);
+  }
   return proxy;
+}
+
+const bufferDocuments = new WeakMap<object, FakeDocument>();
+
+/** A line of text with its terminator, as the native diff compares. */
+function diffLines(text: string): string[] {
+  return text.match(/[^\n]*\n|[^\n]+$/g) ?? [];
+}
+
+/** A plain longest-common-subsequence diff, matching the native hunks on the cases tests exercise. */
+function lineHunks(old: string, updated: string, ignoreWhitespace: boolean): Knot.DiffHunk[] {
+  const key = (line: string) => (ignoreWhitespace ? line.replace(/\s/g, "") : line);
+  const before = diffLines(old).map(key);
+  const after = diffLines(updated).map(key);
+  // Longest common subsequence lengths of the suffixes, row-major.
+  const width = after.length + 1;
+  const table = new Array<number>((before.length + 1) * width).fill(0);
+  const common = (i: number, j: number) => table[i * width + j]!;
+  for (let i = before.length - 1; i >= 0; i--) {
+    for (let j = after.length - 1; j >= 0; j--) {
+      table[i * width + j] =
+        before[i] === after[j] ? common(i + 1, j + 1) + 1 : Math.max(common(i + 1, j), common(i, j + 1));
+    }
+  }
+  const hunks: Knot.DiffHunk[] = [];
+  let i = 0;
+  let j = 0;
+  while (i < before.length || j < after.length) {
+    if (i < before.length && j < after.length && before[i] === after[j]) {
+      i++;
+      j++;
+      continue;
+    }
+    const startOld = i;
+    const startNew = j;
+    while (
+      (i < before.length || j < after.length) &&
+      !(i < before.length && j < after.length && before[i] === after[j])
+    ) {
+      if (j >= after.length || (i < before.length && common(i + 1, j) >= common(i, j + 1))) i++;
+      else j++;
+    }
+    hunks.push({ old: { start: startOld, end: i }, new: { start: startNew, end: j } });
+  }
+  return hunks;
 }
 
 function createBuffer(document: FakeDocument): Knot.Buffer {
@@ -2881,6 +2929,23 @@ export const api: KnotApi = {
         .map(([name, title]) => ({ name, title }))
         .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
     },
+  },
+  diff: async (old, updated, options) => {
+    const side = (value: string | Knot.Buffer, name: string): { text: string; revision?: number } => {
+      if (typeof value === "string") return { text: value };
+      const document = typeof value === "object" && value !== null ? bufferDocuments.get(value) : undefined;
+      if (document === undefined) throw new TypeError(`diff ${name} must be a string or a buffer`);
+      return { text: document.text, revision: document.revision };
+    };
+    const ignoreWhitespace = options?.ignoreWhitespace ?? false;
+    if (typeof ignoreWhitespace !== "boolean") throw new TypeError("ignoreWhitespace must be a boolean");
+    const before = side(old, "old side");
+    const after = side(updated, "new side");
+    return Object.freeze({
+      hunks: Object.freeze(lineHunks(before.text, after.text, ignoreWhitespace)),
+      ...(before.revision === undefined ? {} : { oldRevision: before.revision }),
+      ...(after.revision === undefined ? {} : { newRevision: after.revision }),
+    });
   },
   platform: "macos",
   /** The fake home directory URI; tests set it with `setHomeUri`. */

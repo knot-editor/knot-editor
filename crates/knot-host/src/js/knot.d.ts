@@ -3101,6 +3101,46 @@ declare module "knot" {
     }[];
   }
   export interface KeymapPresetInfo { readonly name: string; readonly title: string; }
+  /** A range of 0-based line numbers, half-open, numbered as `Buffer.lines` does. */
+  export type LineRange = Readonly<{ start: number; end: number }>;
+  /**
+   * One changed region: the `old` lines are replaced by the `new` lines. An
+   * empty `old` range is an insertion before `old.start`; an empty `new`
+   * range is a deletion.
+   */
+  export type DiffHunk = Readonly<{ old: LineRange; new: LineRange }>;
+  export type DiffResult = Readonly<{
+    /** The changed regions, ascending and disjoint; empty when the sides are equal. */
+    hunks: readonly DiffHunk[];
+    /** The revision of the old side when it is a buffer, otherwise absent. */
+    oldRevision?: number;
+    /** The revision of the new side when it is a buffer, otherwise absent. */
+    newRevision?: number;
+  }>;
+  export interface DiffOptions {
+    /**
+     * Treat lines as equal when they match after removing all whitespace (as
+     * `git diff -w`), which also ignores `\r\n` against `\n`; lines that
+     * differ only in whitespace then fall inside no hunk. Lines compare
+     * exactly, terminators included, by default.
+     */
+    readonly ignoreWhitespace?: boolean;
+  }
+  /**
+   * Compare two texts by line and return the hunks that turn `old` into
+   * `updated`. Each side is a string or a live `Buffer`; a buffer is read
+   * natively, so its text never crosses the boundary. The comparison runs off
+   * the foreground and has no size limit. Changes inside a line are not
+   * reported.
+   * @throws TypeError for a side that is neither a string nor a buffer or a
+   * non-boolean `ignoreWhitespace`; HostError with BufferClosed or Cancelled
+   * on teardown.
+   */
+  export function diff(
+    old: string | Buffer,
+    updated: string | Buffer,
+    options?: DiffOptions,
+  ): Promise<DiffResult>;
   /** The operating system Knot runs on, for platform-specific configuration. */
   export const platform: "macos" | "windows" | "linux";
   /** The user's home directory as a normalized `file:` URI, in the same form
