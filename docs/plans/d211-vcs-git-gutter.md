@@ -136,33 +136,14 @@ cleared. Tests: `extensions/@knot/vcs/test/gutter.test.ts` (fake host) and
 `crates/knot-ext-vcs/tests/gutter.rs` (real host, `TestWindow::gutter_bars`).
 A removal after the last line of a text without a final newline is not covered.
 
-### 4. `@knot/git` baselines 🚧
+### 4. `@knot/git` baselines ✅
 
-Implemented, awaiting review. Behavior tests: `crates/knot-ext-vcs/tests/git.rs`
-(real host, temporary repositories). A missing `git` is not tested, since the
-product harness resolves the user's `PATH`; `TestWindow::append` bypasses
-buffer notifications, so editing after open is covered by the fake-host tests,
-not here. Decision: [Git baseline](../decisions/bundled-packages.md#git-baseline).
-
-Deliverables: `@knot/git` declares `process`, registers with `vcs`, finds
-repositories, and serves HEAD baselines through `git cat-file --filters`;
-untracked, ignored, binary, and added-only files; a missing `git` makes the
-backend inactive with one notice.
-
-Validation: behavior tests over temporary Git repositories: a committed
-file edited in Knot shows its hunks, CRLF and filter conversion compare
-cleanly, a nested repository and a submodule resolve to the deepest root, and
-the edge cases above.
-
-Review gate: the first usable Git gutter, refreshed when a document opens or
-its file changes. Record Git's HEAD baseline in `docs/decisions/`.
-
-**Implementation context:**
-- `processes.run` with `GIT_OPTIONAL_LOCKS=0`, as in
-  `docs/extension-api/application.md#run-programs`; entitlement declaration
-  as in `docs/architecture/extension-host.md#extension-entitlements`.
-- Process tests in `src/app/product/tests/processes.rs`; temporary
-  repositories with `tempfile`, as in the workbench tests.
+Complete. `@knot/git` declares `process`, finds repositories and serves HEAD
+baselines; see [Git baseline](../decisions/bundled-packages.md#git-baseline).
+Tests: `crates/knot-ext-vcs/tests/git.rs` (real host, temporary repositories).
+A missing `git` is untested, since the product harness uses the real `PATH`.
+`TestWindow::append` does not notify extensions of the edit, so editing after
+open is covered only by the fake-host tests.
 
 ### 5. Freshness
 
