@@ -7,6 +7,7 @@ import {
   languages, menus, platform, processes, recovery, settings, storage, themes, windows,
   workbench, workspaces,
 } from "knot";
+import { defineContract, s } from "knot/contract";
 
 /** @typedef {import("knot").CommandContext} CommandContext */
 
@@ -396,11 +397,34 @@ async function exerciseViewsAndDocuments() {
 }
 
 /** Runs every group; rejects at the first declared option the host refuses. */
+// Every schema kind in one contract, served and bound by this package. Its
+// own client's calls reject, so this covers registration and binding; the
+// cross-package call is covered by the contract product tests.
+async function exerciseContracts() {
+  const shapes = defineContract("coverage", {
+    shapes: s.fn(
+      s.object({
+        text: s.string(), count: s.int(), ratio: s.number(), flag: s.boolean(), nothing: s.null(),
+        free: s.json(), mode: s.enum(["a", "b"]), one: s.literal(1), list: s.array(s.string()),
+        pair: s.tuple([s.string(), s.int()]), map: s.record(s.boolean()),
+        either: s.union([s.string(), s.int()]), maybe: s.nullable(s.string()), absent: s.optional(s.string()),
+      }),
+      s.void(),
+    ),
+    ping: s.fn(s.void(), s.string()),
+  });
+  const registration = await shapes.serve({ shapes() {}, ping: () => "pong" });
+  const client = await shapes.client();
+  await rejectsWith(() => client.ping(), "UnsupportedOperation");
+  await registration.dispose();
+  await rejectsWith(() => shapes.client(), "ContractNotFound");
+}
+
 export async function exerciseApi() {
   const groups = [
     exerciseSettings, exerciseThemesAndIcons, exerciseLanguages, exerciseStorage,
     exerciseMenusAndKeymaps, exerciseFilesAndProcesses, exerciseDocumentsAndWorkbench,
-    exerciseViewsAndDocuments,
+    exerciseViewsAndDocuments, exerciseContracts,
   ];
   for (const group of groups) {
     try {
