@@ -127,6 +127,11 @@ test("r takes Enter as a line break, except in visual mode", () => {
   assert.equal(visual("r", "<cr>"), null);
 });
 
+test("]c and [c move between changes, repeated by the count", () => {
+  assert.deepEqual(parse("]", "c").command, { kind: "change", forward: true, count: 1 });
+  assert.deepEqual(parse("2", "[", "c").command, { kind: "change", forward: false, count: 2 });
+});
+
 test("gJ, gi, ga, gp, gP, and the bracket puts are commands", () => {
   assert.deepEqual(parse("3", "g", "J").command, { kind: "join", count: 3, spaces: false });
   assert.deepEqual(visual("g", "J"), { kind: "join", count: 1, spaces: false });

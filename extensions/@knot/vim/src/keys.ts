@@ -86,6 +86,8 @@ export type Command =
   | { readonly kind: "join"; readonly count: number; readonly spaces?: false }
   /** `ga`: shows the character under the caret's code. */
   | { readonly kind: "show-character" }
+  /** `]c` and `[c`: the version control commands that move to the next or previous change. */
+  | { readonly kind: "change"; readonly forward: boolean; readonly count: number }
   /** An insert command; the typed text repeats `count` times. */
   | { readonly kind: "insert"; readonly at: InsertAt; readonly count: number }
   /** `.`: repeats the last change, with `count` in place of its own. */
@@ -341,6 +343,9 @@ export function feed(pending: Pending, key: string, visual = false): Fed {
     case "[": case "]": {
       if ((key === "p" || key === "P") && operator === null && !visual) {
         return done({ kind: "put", before: pending.prefix === "[" || key === "P", register, count: count ?? 1, variant: "indent" });
+      }
+      if (key === "c" && operator === null && !visual) {
+        return done({ kind: "change", forward: pending.prefix === "]", count: count ?? 1 });
       }
       const bracketMotion = key === "z" ? BRACKET_FOLD_MOTIONS[pending.prefix] : undefined;
       return bracketMotion === undefined ? done(null) : motion(bracketMotion);

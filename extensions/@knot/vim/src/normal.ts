@@ -328,6 +328,13 @@ export async function run(state: State, command: Command, repeating = false) {
     case "show-character":
       await showCharacter(state);
       break;
+    case "change":
+      // Provided by @knot/vcs; without it the command is unavailable and nothing moves.
+      for (let step = 0; step < command.count; step += 1) {
+        const outcome = await commands.invoke(command.forward ? "vcs.nextChange" : "vcs.previousChange");
+        if (outcome.kind !== "completed") break;
+      }
+      break;
     case "replace":
       await replaceCharacters(state, command.char, command.count);
       break;
