@@ -1,6 +1,6 @@
 # D209 — Diff function for extensions
 
-Status: 🚧 approved, not started. Source: [roadmap D209](../roadmap.md), part of
+Status: ✅ approved. Source: [roadmap D209](../roadmap.md), part of
 the [version control plan](vcs.md).
 
 ## Outcome
@@ -57,7 +57,7 @@ to compare stays package policy, as with `buffer.find`.
 
 ### 1. Native line diff with ignore-whitespace ✅
 
-Implemented, awaiting review. Whitespace equality is a `Line` token that hashes and compares by non-whitespace characters yet exposes its full text to the indentation heuristic, rather than interning a normalized key.
+Approved. Whitespace equality is a `Line` token that hashes and compares by non-whitespace characters yet exposes its full text to the indentation heuristic, rather than interning a normalized key.
 
 Deliverables: a `knot-model` diff module returning line hunks for two texts
 with `ignoreWhitespace`; reload's `line_edits` built on it.
@@ -80,7 +80,7 @@ the original texts.
 
 ### 2. `knot.diff` in the extension API ✅
 
-Implemented, awaiting review. The binding is the top-level `diff` export of the `knot` module. Handler tests run through a registered extension command (string/string, buffer/string, buffer/buffer, revisions, invalid arguments); closed-buffer and cancellation behavior come from the shared `read_model` and `foreground` paths and have no diff-specific test. The documentation and decision entry are written.
+Approved. The binding is the top-level `diff` export of the `knot` module. Handler tests run through a registered extension command (string/string, buffer/string, buffer/buffer, revisions, invalid arguments); closed-buffer and cancellation behavior come from the shared `read_model` and `foreground` paths and have no diff-specific test. The documentation and decision entry are written.
 
 Deliverables: the host operation, the JavaScript binding and declaration, the
 extension test harness's implementation, and documentation.
