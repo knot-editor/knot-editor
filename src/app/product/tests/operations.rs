@@ -453,7 +453,7 @@ let listenerResult;
 const observer = await workbench.observe(async event => {
   if (event.type === "documentOpened" && event.document.resourceUri === "mem://product/trigger.txt") {
     listenerResult = await documents.open("mem://product/from-listener.txt", { target: initial.presentation.target });
-    await observer.dispose();
+    await observer[Symbol.asyncDispose]();
     await commands.register("operations.listener-ready", () => {
       if (listenerResult.document.kind !== "destination") throw new Error("listener result");
     });

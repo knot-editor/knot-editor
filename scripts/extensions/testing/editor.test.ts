@@ -12,7 +12,7 @@ async function capture(): Promise<CommandContext> {
     captured = context;
   });
   await host.run("test.capture");
-  await registration.dispose();
+  await registration[Symbol.asyncDispose]();
   return captured!;
 }
 
@@ -307,7 +307,7 @@ test("marks follow edits and end when their text is deleted or they are disposed
   const doomed = await buffer.createMark(5);
   await edit(3, 8, "");
   assert.equal(await doomed.position(), null);
-  await mark.dispose();
+  await mark[Symbol.asyncDispose]();
   assert.equal(await mark.position(), null);
 });
 
@@ -320,7 +320,7 @@ test("a disposed handle stops listening and acting", async () => {
   editor.onDidClose(() => {
     closed += 1;
   });
-  await editor.dispose();
+  await editor[Symbol.asyncDispose]();
   await host.closeTab(target);
   assert.equal(closed, 0);
   await assert.rejects(editor.selection(), { code: "InvalidTarget" });
@@ -337,10 +337,10 @@ test("a handle reports selection changes until the listener or handle is dispose
   await editor.setSelection({ anchor: 2, caret: 2 });
   await editor.setSelection({ anchor: 4, caret: 4 });
   assert.deepEqual(seen, [2, 4]);
-  await subscription.dispose();
+  await subscription[Symbol.asyncDispose]();
   await editor.setSelection({ anchor: 5, caret: 5 });
   assert.deepEqual(seen, [2, 4]);
-  await editor.dispose();
+  await editor[Symbol.asyncDispose]();
   await assert.rejects(editor.onDidChangeSelection(() => {}), { code: "InvalidTarget" });
 });
 
@@ -373,6 +373,6 @@ test("an undo group is open until disposed, and a second one is rejected", async
   const group = await editor.beginUndoGroup();
   assert.equal(host.undoGroupOpen(window), true);
   await assert.rejects(editor.beginUndoGroup(), { code: "OperationInProgress" });
-  await group.dispose();
+  await group[Symbol.asyncDispose]();
   assert.equal(host.undoGroupOpen(window), false);
 });

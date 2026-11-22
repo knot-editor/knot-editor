@@ -448,7 +448,7 @@ const observer = await workbench.observe(async event => {
   const tab = (await windows.list()).flatMap(win => win.panes.flatMap(pane => pane.tabs)).find(tab => tab.document === id);
   const result = await workbench.close(tab.target);
   if (result.kind !== "closed" || await documents.get(id) !== null) throw new Error("listener close");
-  await observer.dispose();
+  await observer[Symbol.asyncDispose]();
   await commands.register("close.listener-ready", () => {});
 });
 await commands.register("close.listener-trigger", async () => { resolveId((await documents.createUntitled()).document.id); });

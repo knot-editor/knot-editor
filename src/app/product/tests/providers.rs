@@ -14,7 +14,7 @@ const registration = await providers.register("sample.greet", {
   },
   fail() { throw new Error("provider broke"); },
 });
-await commands.register("provider.dispose", async () => { await registration.dispose(); });
+await commands.register("provider.dispose", async () => { await registration[Symbol.asyncDispose](); });
 await commands.register("provider.self", async () => {
   try { await (await providers.get("sample.greet")).greet("me"); }
   catch (error) { await workbench.writeClipboardText(error.code); }

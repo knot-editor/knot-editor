@@ -470,8 +470,8 @@ await providers.register("editor.completion", { provideCompletions() { return [{
   ];
 });
 await commands.register("api.owned-cleanup", async () => {
-  const cleanup = owned.map(owner => owner.dispose());
-  for (let index = 0; index < owned.length; index++) if (cleanup[index] !== owned[index].dispose()) throw new Error("cleanup promise changed");
+  const cleanup = owned.map(owner => owner[Symbol.asyncDispose]());
+  for (let index = 0; index < owned.length; index++) if (cleanup[index] !== owned[index][Symbol.asyncDispose]()) throw new Error("cleanup promise changed");
   await Promise.all(cleanup);
 });
 "#;
@@ -702,7 +702,7 @@ await commands.register("test.nested-new", async () => {
   const outcome = await commands.invoke("file.new");
   if (outcome.kind !== "completed") throw new Error(`nested new: ${outcome.kind}`);
 });
-await commands.register("test.dispose-view-copy", async () => viewCopy.dispose());
+await commands.register("test.dispose-view-copy", async () => viewCopy[Symbol.asyncDispose]());
 "#;
 
     let documents = install_globals(cx);

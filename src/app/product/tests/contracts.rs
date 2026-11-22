@@ -28,7 +28,7 @@ const registration = await greeter.serve({
   broken() { return 42; },
   fail() { throw new Error("provider broke"); },
 });
-await commands.register("provider.dispose", async () => { await registration.dispose(); });
+await commands.register("provider.dispose", async () => { await registration[Symbol.asyncDispose](); });
 await commands.register("provider.self", async () => {
   try { await (await greeter.client()).greet("me"); }
   catch (error) { await workbench.writeClipboardText(error.code); }
@@ -78,7 +78,7 @@ const registration = await greeter.serve({
   broken: () => "",
   fail() {},
 });
-await commands.register("override.dispose", async () => { await registration.dispose(); });
+await commands.register("override.dispose", async () => { await registration[Symbol.asyncDispose](); });
 "#;
 
 fn start(cx: &mut TestAppContext) -> Fixture {

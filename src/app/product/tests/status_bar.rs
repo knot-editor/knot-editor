@@ -31,7 +31,7 @@ await commands.register("status.clearOverride", async () => {
   const [window] = await windows.list();
   await position.update(null, { window: window.target });
 });
-await commands.register("status.drop", async () => { await position.dispose(); });
+await commands.register("status.drop", async () => { await position[Symbol.asyncDispose](); });
 "##;
 
 fn bounds(

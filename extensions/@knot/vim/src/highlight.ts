@@ -28,7 +28,7 @@ export class Highlights {
   }
 
   unfollow(state: State) {
-    this.entries.get(state)?.subscription?.dispose().catch(() => {});
+    this.entries.get(state)?.subscription?.[Symbol.asyncDispose]().catch(() => {});
     this.entries.delete(state);
   }
 

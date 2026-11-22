@@ -147,7 +147,7 @@ function hide(follow: Follow) {
 async function release(follow: Follow) {
   if (follow.timer !== null) clearTimeout(follow.timer);
   follow.timer = null;
-  for (const disposable of follow.disposables) await disposable.dispose();
+  for (const disposable of follow.disposables) await disposable[Symbol.asyncDispose]();
   follow.disposables = [];
   const { handle, buffer } = follow;
   follow.handle = null;
@@ -163,7 +163,7 @@ async function release(follow: Follow) {
   } catch (error) {
     if (!isGone(error) && (error as { code?: string }).code !== "RevisionConflict") throw error;
   }
-  await handle.dispose();
+  await handle[Symbol.asyncDispose]();
 }
 
 export async function start() {

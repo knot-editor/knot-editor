@@ -47,7 +47,7 @@ async function exerciseSettings() {
   await settings.reset("coverage.integer", { view: "editor" });
   await settings.reset("coverage.integer");
   check(await settings.get("coverage.integer") === 1, "reset reveals the default");
-  await observation.dispose();
+  await observation[Symbol.asyncDispose]();
   check(notified >= 1, "setting observer");
   await rejectsWith(() => settings.set("coverage.integer", /** @type {never} */ ("text")), "SettingTypeMismatch");
 }
@@ -68,7 +68,7 @@ async function exerciseThemesAndIcons() {
   });
   check((await themes.get("Coverage"))?.appearance === "dark", "registered theme");
   check((await themes.list()).some((info) => info.name === "Coverage"), "theme list");
-  await theme.dispose();
+  await theme[Symbol.asyncDispose]();
 
   await icons.define("coverage.mark", { lucide: "star", color: "coverage.accent" });
   const override = await icons.override("coverage.mark", { svg: "<svg viewBox='0 0 1 1'/>", color: "original" });
@@ -79,7 +79,7 @@ async function exerciseThemesAndIcons() {
   });
   const pack = await icons.registerPack({ name: "coverage", icons: { "coverage.mark": { lucide: "circle" } } });
   check((await icons.listPacks()).includes("coverage"), "icon pack list");
-  await Promise.all([override.dispose(), associations.dispose(), pack.dispose()]);
+  await Promise.all([override[Symbol.asyncDispose](), associations[Symbol.asyncDispose](), pack[Symbol.asyncDispose]()]);
 }
 
 async function exerciseLanguages() {
@@ -98,8 +98,8 @@ async function exerciseLanguages() {
   });
   check((await languages.get("coverage-lang"))?.name === "Coverage", "language get");
   check((await languages.list()).some((info) => info.id === "coverage-lang"), "language list");
-  await association.dispose();
-  await language.dispose();
+  await association[Symbol.asyncDispose]();
+  await language[Symbol.asyncDispose]();
 }
 
 async function exerciseStorage() {
@@ -142,7 +142,7 @@ async function exerciseMenusAndKeymaps() {
   });
   check((await keymaps.getPreset("coverage"))?.bindings.length === 3, "preset get");
   check((await keymaps.listPresets()).some((info) => info.name === "coverage"), "preset list");
-  await Promise.all([item.dispose(), bar.dispose(), preset.dispose(), command.dispose()]);
+  await Promise.all([item[Symbol.asyncDispose](), bar[Symbol.asyncDispose](), preset[Symbol.asyncDispose](), command[Symbol.asyncDispose]()]);
 }
 
 async function exerciseFilesAndProcesses() {
@@ -162,7 +162,7 @@ async function exerciseFilesAndProcesses() {
   const copy = await files.copy(file, `${directory}/b.txt`);
   const moved = await files.rename(copy, `${directory}/c.txt`);
   await files.delete(moved);
-  await watcher.dispose();
+  await watcher[Symbol.asyncDispose]();
   await files.delete(directory, { permanent: true });
 
   const result = await processes.run({
@@ -177,11 +177,11 @@ async function exerciseFilesAndProcesses() {
   check(await echoed === "spawned", "process stdout");
   await child.closeStdin();
   check((await child.exited).exitCode === 0, "process exit");
-  await rejectsWith(() => child.dispose(), "InvalidTarget"); // released on exit
+  await rejectsWith(() => child[Symbol.asyncDispose](), "InvalidTarget"); // released on exit
   const killed = await processes.spawn({ command: "cat" });
   await killed.kill("SIGTERM");
   check((await killed.exited).signal !== null, "process signal");
-  await killed.dispose();
+  await killed[Symbol.asyncDispose]();
 }
 
 async function exerciseDocumentsAndWorkbench() {
@@ -206,7 +206,7 @@ async function exerciseDocumentsAndWorkbench() {
   });
   await item.update({ text: "Updated", side: "left", placement: "toolbar" });
   await item.update(null, { window: windowInfo.target });
-  await item.dispose();
+  await item[Symbol.asyncDispose]();
   const noticeId = await workbench.showNotice({
     message: "Coverage", title: "Coverage", severity: "warning", autoDismiss: false,
     actions: [{ title: "Run", command: { name: "coverage.status-command" } }],
@@ -251,9 +251,9 @@ export async function exerciseEditor(context) {
   check(replaced.count === 1, "replace");
   const mark = await buffer.createMark(2);
   check(await mark.position() === 2, "mark");
-  await mark.dispose();
+  await mark[Symbol.asyncDispose]();
   const subscription = await buffer.onDidChange(() => {});
-  await subscription.dispose();
+  await subscription[Symbol.asyncDispose]();
   const current = await buffer.snapshot();
   await buffer.contributions.replace([
     { range: { startByteOffset: 0, endByteOffset: 5 }, decoration: { color: "info", style: "background" },
@@ -303,7 +303,7 @@ export async function exerciseEditor(context) {
   await editor.focusBarField("coverage", "query");
   await editor.closeBar("coverage");
   const group = await editor.beginUndoGroup();
-  await group.dispose();
+  await group[Symbol.asyncDispose]();
   const recording = await editor.record();
   await recording.stop();
   const state = await editor.viewState();
@@ -319,9 +319,9 @@ export async function exerciseEditor(context) {
   const barListener = await handle.onDidEditBar(() => {});
   const selectionListener = await handle.onDidChangeSelection(() => {});
   const linesListener = await handle.onDidChangeSelection(() => {}, { lines: 2 });
-  await Promise.all([closed.dispose(), barListener.dispose(), selectionListener.dispose(),
-    linesListener.dispose()]);
-  await handle.dispose();
+  await Promise.all([closed[Symbol.asyncDispose](), barListener[Symbol.asyncDispose](), selectionListener[Symbol.asyncDispose](),
+    linesListener[Symbol.asyncDispose]()]);
+  await handle[Symbol.asyncDispose]();
   check(await editorActiveBuffer(context) !== null, "active buffer");
 }
 
@@ -371,8 +371,8 @@ async function exerciseViewsAndDocuments() {
   check((await commands.list()).length >= 0, "view commands");
   const outcome = await commands.invoke("coverage.options", { value: [1, "a", null] });
   check(outcome.kind === "completed", "invoke");
-  await Promise.all([viewCommand.dispose(), options.dispose(), described.dispose(),
-    tree.dispose(), text.dispose(), container.dispose()]);
+  await Promise.all([viewCommand[Symbol.asyncDispose](), options[Symbol.asyncDispose](), described[Symbol.asyncDispose](),
+    tree[Symbol.asyncDispose](), text[Symbol.asyncDispose](), container[Symbol.asyncDispose]()]);
 
   const events = [];
   const observation = await workbench.observe((event) => { events.push(event); });
@@ -380,7 +380,7 @@ async function exerciseViewsAndDocuments() {
   const layout = await workbench.captureLayout(target);
   check(layout !== null, "layout");
   await workbench.lastFocusedDocument(target);
-  await observation.dispose();
+  await observation[Symbol.asyncDispose]();
   check((await recovery.list()).length >= 0, "recovery");
 
   const directory = `${homeUri ?? "file:///tmp"}/knot-coverage-docs-${Date.now()}`;
@@ -416,7 +416,7 @@ async function exerciseContracts() {
   const registration = await shapes.serve({ shapes() {}, ping: () => "pong" });
   const client = await shapes.client();
   await rejectsWith(() => client.ping(), "UnsupportedOperation");
-  await registration.dispose();
+  await registration[Symbol.asyncDispose]();
   await rejectsWith(() => shapes.client(), "ContractNotFound");
 }
 

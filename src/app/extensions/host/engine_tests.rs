@@ -728,8 +728,8 @@ fn every_disposer_shares_native_acknowledgement_and_retains_failure() {
         let disposal = pool.execute(runtime, "dispose.js", r#"
           (async () => {
             globalThis.cleanup = owned.map((owner) => {
-              const promise = owner.dispose();
-              if (promise !== owner.dispose()) throw new Error("cleanup promise changed");
+              const promise = owner[Symbol.asyncDispose]();
+              if (promise !== owner[Symbol.asyncDispose]()) throw new Error("cleanup promise changed");
               return promise;
             });
             for (const mutation of [() => buffer.contributions.replace([], { ifRevision: 0 }), () => owned[3].invalidate()]) {
@@ -739,7 +739,7 @@ fn every_disposer_shares_native_acknowledgement_and_retains_failure() {
             }
             globalThis.cleanupResults = await Promise.allSettled(cleanup);
             for (let index = 0; index < owned.length; index++) {
-              if (owned[index].dispose() !== cleanup[index]) throw new Error("settled cleanup promise changed");
+              if (owned[index][Symbol.asyncDispose]() !== cleanup[index]) throw new Error("settled cleanup promise changed");
             }
           })()
         "#).unwrap();
@@ -869,7 +869,7 @@ fn invalidation_cleanup_waits_for_earlier_native_acknowledgements() {
             r#"
       (async () => {
         const mutation = tree.invalidate("child");
-        const cleanup = tree.dispose();
+        const cleanup = tree[Symbol.asyncDispose]();
         const acknowledged = cleanup.then(() => api.writeClipboardText("cleanup acknowledged"));
         await Promise.all([mutation, cleanup, acknowledged]);
       })()
@@ -979,10 +979,10 @@ fn provider_self_disposal_acknowledges_without_waiting_for_its_callback() {
       globalThis.treeCalls = 0;
       globalThis.completionCalls = 0;
       globalThis.tree = await workbench.registerView({ id: "example.outline", title: "Outline", content: { kind: "tree", provider: {
-        async getChildren() { treeCalls++; await tree.dispose(); globalThis.treeReleased = true; return []; },
+        async getChildren() { treeCalls++; await tree[Symbol.asyncDispose](); globalThis.treeReleased = true; return []; },
       } } });
       globalThis.completion = await providers.register("editor.completion", {
-        async provideCompletions() { completionCalls++; await completion.dispose(); globalThis.completionReleased = true; return []; },
+        async provideCompletions() { completionCalls++; await completion[Symbol.asyncDispose](); globalThis.completionReleased = true; return []; },
       });
     "#).unwrap();
     for value in [
@@ -1363,7 +1363,7 @@ const observation = await workbench.observe(async (event) => {
   if (!globalThis.activationFinished || event.sequence <= observation.watermark) throw new Error("startup observation gap");
   globalThis.calls++;
   await documents.list();
-  await observation.dispose();
+  await observation[Symbol.asyncDispose]();
   globalThis.disposed = true;
 });
 globalThis.activationFinished = true;
@@ -1452,7 +1452,7 @@ fn buffer_listener_self_disposal_rejects_queued_deliveries_without_deadlock() {
       globalThis.listenerCalls = 0;
       globalThis.subscription = await buffer.onDidChange(async () => {
         listenerCalls++;
-        await subscription.dispose();
+        await subscription[Symbol.asyncDispose]();
         globalThis.listenerReleased = true;
       });
     "#,
@@ -1555,7 +1555,7 @@ fn contribution_cleanup_waits_for_its_accepted_replacement_acknowledgement() {
             r#"
       (async () => {
         const replacement = buffer.contributions.replace([], { ifRevision: 0 });
-        const cleanup = buffer.contributions.dispose();
+        const cleanup = buffer.contributions[Symbol.asyncDispose]();
         const acknowledged = cleanup.then(() => api.writeClipboardText("contribution cleanup"));
         await Promise.all([replacement, cleanup, acknowledged]);
       })()
@@ -1768,8 +1768,8 @@ fn buffer_requests_and_typed_responses_round_trip() {
                   decoration: { color: "warning", style: "wavy" }, gutter: "error", command: "fixture.command",
                 }], { ifRevision: 8 });
                 const disposable = await buffer.onDidChange(() => {});
-                await disposable.dispose();
-                await buffer.contributions.dispose();
+                await disposable[Symbol.asyncDispose]();
+                await buffer.contributions[Symbol.asyncDispose]();
             "#,
     );
 
@@ -3133,7 +3133,7 @@ fn dropped_removed_and_unloaded_provider_requests_release_runtime_state() {
         .execute(
             runtime,
             "dispose-providers.js",
-            "Promise.all([globalThis.treeProvider.dispose(), globalThis.completionProvider.dispose()])",
+            "Promise.all([globalThis.treeProvider[Symbol.asyncDispose](), globalThis.completionProvider[Symbol.asyncDispose]()])",
         )
         .unwrap();
     for expected in [
@@ -3401,7 +3401,7 @@ fn command_registration_errors_are_stable_and_disposal_removes_the_handler() {
         .execute(
             runtime,
             "dispose-command.js",
-            "globalThis.disposableCommand.dispose()",
+            "globalThis.disposableCommand[Symbol.asyncDispose]()",
         )
         .unwrap();
     let request = pool

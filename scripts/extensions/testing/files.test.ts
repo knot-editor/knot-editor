@@ -98,7 +98,7 @@ test("watching reports changes under the directory until disposed", async () => 
   assert.deepEqual(direct, [["file:///p/src/b.txt"]]);
   assert.deepEqual(deep, [["file:///p/src/b.txt"], ["file:///p/src/inner/c.txt"]]);
 
-  await directWatch.dispose();
+  await directWatch[Symbol.asyncDispose]();
   host.removeFile("file:///p/src/b.txt");
   await Promise.resolve();
   assert.equal(direct.length, 1);

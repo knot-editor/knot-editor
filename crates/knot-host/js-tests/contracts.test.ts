@@ -23,7 +23,7 @@ test("serving sends the owner, name, and descriptor", async () => {
   assert.deepEqual(stub.calls.find((call) => call.operation === "serveContract")?.args, [
     "@example/provider", "rows", descriptor,
   ]);
-  await registration.dispose();
+  await registration[Symbol.asyncDispose]();
   assert.deepEqual(stub.calls.at(-1), { operation: "unregisterProvider", args: [5] });
 });
 

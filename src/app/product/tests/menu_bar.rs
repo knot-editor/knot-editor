@@ -14,7 +14,7 @@ await menus.add("menubar.file", { command: "bar.run", title: "Bar Save", argumen
 await menus.add("menubar.file", { command: "bar.run", group: "5_extra" });
 await menus.add("menubar.go", { command: "bar.run", title: "Go Bar" });
 const dropped = await menus.add("menubar.view", { command: "bar.run", title: "Dropped", group: "3_view" });
-await commands.register("bar.drop", async () => { await dropped.dispose(); });
+await commands.register("bar.drop", async () => { await dropped[Symbol.asyncDispose](); });
 "##;
 
 /// A menu's item titles, `-` for a separator.

@@ -724,10 +724,10 @@ async function setMarkAt(state: State, name: string, offset: number) {
   if (name === name.toLowerCase()) {
     let buffer = marks.get(state.document);
     if (buffer === undefined) marks.set(state.document, buffer = new Map());
-    buffer.get(name)?.dispose();
+    buffer.get(name)?.[Symbol.asyncDispose]();
     buffer.set(name, mark);
   } else {
-    globalMarks.get(name)?.mark.dispose();
+    globalMarks.get(name)?.mark[Symbol.asyncDispose]();
     globalMarks.set(name, { document: state.document, mark });
   }
 }
@@ -737,10 +737,10 @@ async function setMarkAt(state: State, name: string, offset: number) {
 export async function recordJump(state: State, offset: number) {
   const entry = await markAt(state, offset);
   if (entry === null) return;
-  state.context?.dispose();
+  state.context?.[Symbol.asyncDispose]();
   state.context = await markAt(state, offset);
   const line = await state.buffer.lineAt(offset);
-  for (const removed of state.jumps.push(entry, line, await linesOf(state))) removed.dispose();
+  for (const removed of state.jumps.push(entry, line, await linesOf(state))) removed[Symbol.asyncDispose]();
 }
 
 /** `ctrl-o` and `ctrl-i`: goes to the jumplist's entry `count` away. */
@@ -750,7 +750,7 @@ async function stepJumps(state: State, count: number) {
   if (current === null) return;
   const line = await state.buffer.lineAt(caret);
   const { target, removed } = state.jumps.step(count, current, line, await linesOf(state));
-  for (const mark of removed) mark.dispose();
+  for (const mark of removed) mark[Symbol.asyncDispose]();
   const offset = target === null ? null : await target.position();
   if (offset === null) return;
   const lines = new BufferLines(state.buffer);
@@ -941,12 +941,8 @@ async function openGroup(state: State): Promise<Disposable | null> {
 }
 
 export async function grouped(state: State, body: () => Promise<void>) {
-  const group = await openGroup(state);
-  try {
-    await body();
-  } finally {
-    await group?.dispose();
-  }
+  await using _group = await openGroup(state);
+  await body();
 }
 
 /** Records a yank or delete in the registers and the clipboard. */
@@ -1433,6 +1429,6 @@ export async function leaveInsert(state: State) {
   state.group = null;
   state.opened = false;
   state.want = null;
-  await group?.dispose();
+  await group?.[Symbol.asyncDispose]();
   await setMode(state, "normal");
 }

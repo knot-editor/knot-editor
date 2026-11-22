@@ -153,7 +153,7 @@ await commands.register("files.watch", async () => {
     await workbench.writeClipboardText(uris.join());
   });
 });
-await commands.register("files.unwatch", async () => { await handle.dispose(); });
+await commands.register("files.unwatch", async () => { await handle[Symbol.asyncDispose](); });
 "#,
         "files.watch",
         cx,

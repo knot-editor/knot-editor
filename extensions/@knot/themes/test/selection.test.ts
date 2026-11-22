@@ -89,7 +89,7 @@ test("highlighting previews a theme and dismissing restores the settings", async
   host.highlight("Solarized Light", "Solarized Dark", null);
   host.answer("showPicker", { kind: "dismissed" });
   await host.run("themes.select");
-  await unobserve.dispose();
+  await unobserve[Symbol.asyncDispose]();
 
   assert.ok(seen.includes("Solarized Light"));
   assert.deepEqual(await selection(), { mode: "dark", dark: "Knot Islands Dark", light: "Knot Islands Light" });

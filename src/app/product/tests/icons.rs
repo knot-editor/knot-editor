@@ -41,11 +41,11 @@ await commands.register("pack.add", async () => {
 await commands.register("pack.select", async ({ arguments: [name] }) => {
   await settings.set("icons.pack", name);
 });
-await commands.register("pack.drop", async () => { await pack.dispose(); });
+await commands.register("pack.drop", async () => { await pack[Symbol.asyncDispose](); });
 await commands.register("override.add", async () => {
   override = await icons.override("x.icon", { svg: svg("#00f"), color: "error" });
 });
-await commands.register("override.drop", async () => { await override.dispose(); });
+await commands.register("override.drop", async () => { await override[Symbol.asyncDispose](); });
 "##;
 
 fn star() -> IconDefinition {
@@ -158,7 +158,7 @@ let association = null;
 await commands.register("assoc.add", async () => {
   association = await icons.associate({ files: { Untitled: "file.custom" } });
 });
-await commands.register("assoc.drop", async () => { await association.dispose(); });
+await commands.register("assoc.drop", async () => { await association[Symbol.asyncDispose](); });
 await commands.register("lang.rust", async ({ buffer }) => {
   const document = (await documents.list()).find((candidate) => candidate.buffer === buffer);
   await documents.setLanguage(document.id, "rust");

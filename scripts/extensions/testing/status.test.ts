@@ -15,9 +15,9 @@ test("items sort by priority within a side and the latest registration of an id 
   const first = await workbench.registerStatusItem("c", { text: "first", side: "right" });
   const second = await workbench.registerStatusItem("c", { text: "second", side: "right" });
   assert.deepEqual(texts(window), ["b", "a", "second"]);
-  await second.dispose();
+  await second[Symbol.asyncDispose]();
   assert.deepEqual(texts(window), ["b", "a", "first"]);
-  await first.dispose();
+  await first[Symbol.asyncDispose]();
   assert.deepEqual(texts(window), ["b", "a"]);
 });
 
@@ -30,7 +30,7 @@ test("a window's own value shadows the shared one until it is cleared", async ()
   assert.deepEqual([texts(one), texts(two)], [["Ln 9"], ["Ln 2"]]);
   await item.update(null, { window: one });
   assert.deepEqual(texts(one), ["Ln 2"]);
-  await item.dispose();
+  await item[Symbol.asyncDispose]();
   await assert.rejects(item.update({ text: "late" }), { code: "StatusItemRegistrationNotFound" });
 });
 

@@ -13,7 +13,7 @@ test("get returns the latest registration and all every one in order", async () 
   assert.equal(await (await providers.get<Greeter>("sample.greet"))!.greet("knot"), "hi knot");
   const all = await providers.all<Greeter>("sample.greet");
   assert.deepEqual(await Promise.all(all.map((handle) => handle.greet("all"))), ["hello all", "hi all"]);
-  await later.dispose();
+  await later[Symbol.asyncDispose]();
   assert.equal(await (await providers.get<Greeter>("sample.greet"))!.greet("knot"), "hello knot");
   assert.equal(await providers.get("missing"), null);
 });
@@ -24,7 +24,7 @@ test("a held handle rejects once disposed, and provider failures cross back", as
   });
   const handle = (await providers.get<Greeter>("sample.greet"))!;
   await assert.rejects(handle.greet("knot"), { code: "ProviderFailure", message: "provider broke" });
-  await registration.dispose();
+  await registration[Symbol.asyncDispose]();
   await assert.rejects(handle.greet("knot"), { code: "ProviderNotFound" });
 });
 

@@ -20,7 +20,7 @@ test("a notice is recorded with its defaults and observers see the history", asy
     ],
   );
   assert.deepEqual(events, ["saved", "saved,careful"]);
-  await observation.dispose();
+  await observation[Symbol.asyncDispose]();
 });
 
 test("reading, dismissing, and clearing change the history", async () => {

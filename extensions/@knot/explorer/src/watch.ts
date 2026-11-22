@@ -46,7 +46,7 @@ export async function syncWatches(state: ExplorerState) {
   for (const [uri, watch] of [...state.watches]) {
     if (wanted.has(uri)) continue;
     state.watches.delete(uri);
-    await watch.dispose();
+    await watch[Symbol.asyncDispose]();
   }
   for (const uri of wanted) {
     if (state.watches.has(uri)) continue;

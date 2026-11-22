@@ -27,7 +27,7 @@ await commands.register("example.application-state", async () => {
   }, null, 2));
 });
 await commands.register("example.stop-application-observer", async () => {
-  await observation.dispose();
+  await observation[Symbol.asyncDispose]();
 });
 
 await commands.register("example.open-document", async ({ arguments: args }) => {

@@ -48,7 +48,7 @@ test("observers see writes and resets of their key in any scope", async () => {
   await settings.set("editor.tabSize", 2, { language: "rust" });
   await settings.reset("editor.tabSize", { language: "rust" });
   await settings.reset("editor.tabSize", { language: "rust" });
-  await watch.dispose();
+  await watch[Symbol.asyncDispose]();
   await settings.set("editor.tabSize", 3);
   assert.deepEqual(seen, ["editor.tabSize", "editor.tabSize"]);
 });

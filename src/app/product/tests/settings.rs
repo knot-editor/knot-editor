@@ -232,7 +232,7 @@ await commands.register("assoc.remap", async () => {
   }
   association = await languages.associate("python", { fileExtensions: ["rs"] });
 });
-await commands.register("assoc.dispose", () => association.dispose());
+await commands.register("assoc.dispose", () => association[Symbol.asyncDispose]());
 "#;
 
 #[gpui::test]

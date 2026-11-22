@@ -1142,14 +1142,14 @@ const observation = await workbench.observe(async (event) => {
   const current = await documents.get(event.document.id);
   const snapshot = await current.buffer.snapshot();
   await current.buffer.applyEdits([{ range: { startByteOffset: 0, endByteOffset: 0 }, text: "listener " }], { ifRevision: snapshot.revision });
-  const disposal = observation.dispose();
-  if (disposal !== observation.dispose()) throw new Error("disposal promise changed");
+  const disposal = observation[Symbol.asyncDispose]();
+  if (disposal !== observation[Symbol.asyncDispose]()) throw new Error("disposal promise changed");
   await disposal;
 });
 await commands.register("observation.verify", async () => {
   if (count !== 1) throw new Error(`listener count ${count}`);
   if (!(await (await documents.list())[0].buffer.snapshot()).text.startsWith("listener ")) throw new Error("listener mutation missing");
-  await failing.dispose();
+  await failing[Symbol.asyncDispose]();
 });
 await commands.register("observation.live", () => {});
 await commands.register("observation.install-for-unload", async () => { await workbench.observe(() => {}); });

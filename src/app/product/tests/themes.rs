@@ -58,7 +58,7 @@ await commands.register("theme.select", async ({ arguments: [key, value] }) => {
   await settings.set(key, value);
 });
 await commands.register("theme.dropDerived", async () => {
-  await derived.dispose();
+  await derived[Symbol.asyncDispose]();
   if ((await themes.list()).some((entry) => entry.name === "My Dark")) throw new Error("kept");
 });
 "##;

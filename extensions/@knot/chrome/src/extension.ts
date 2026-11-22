@@ -125,8 +125,8 @@ export async function start() {
   };
 
   const release = async (follow: Follow) => {
-    await follow.selection?.dispose();
-    await follow.handle?.dispose();
+    await follow.selection?.[Symbol.asyncDispose]();
+    await follow.handle?.[Symbol.asyncDispose]();
   };
 
   // Follows the window's status target, moving the selection listener to a

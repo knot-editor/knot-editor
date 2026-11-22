@@ -26,11 +26,11 @@ const command = await commands.register("guide.annotate", async (context) => {
     // Explicit buffer access works even without a command context.
     await event.buffer.snapshot();
     // Cleanup is an ownership barrier, so self-disposal is safe.
-    await subscription.dispose();
+    await subscription[Symbol.asyncDispose]();
     bufferOwnership.delete(subscription);
   });
   bufferOwnership.add(subscription);
-  if (!active) await subscription.dispose();
+  if (!active) await subscription[Symbol.asyncDispose]();
 });
 
 const child = await commands.register("guide.compose", async () => {
@@ -102,8 +102,8 @@ export async function deactivateFeature() {
   keymaps.unbind("cmd-g");
   keymaps.unbind("cmd-c", { view: "guide.outline" });
   await Promise.all([
-    ...Array.from(bufferOwnership, (owner) => owner.dispose()),
-    command.dispose(), child.dispose(), nativeChild.dispose(), viewCommand.dispose(),
-    completion.dispose(), tree.dispose(), log.dispose(),
+    ...Array.from(bufferOwnership, (owner) => owner[Symbol.asyncDispose]()),
+    command[Symbol.asyncDispose](), child[Symbol.asyncDispose](), nativeChild[Symbol.asyncDispose](), viewCommand[Symbol.asyncDispose](),
+    completion[Symbol.asyncDispose](), tree[Symbol.asyncDispose](), log[Symbol.asyncDispose](),
   ]);
 }

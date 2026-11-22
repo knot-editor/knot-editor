@@ -205,8 +205,8 @@ async function remember(state: State) {
     caret: await state.buffer.createMark(visual.caret),
     linewise: state.mode === "visual-line",
   };
-  old?.anchor.dispose();
-  old?.caret.dispose();
+  old?.anchor[Symbol.asyncDispose]();
+  old?.caret[Symbol.asyncDispose]();
 }
 
 /** Shows the visual area as the editor's selection: from the first

@@ -115,9 +115,9 @@ await commands.register("api.marks", async ({ buffer }) => {
   await expectCode(() => buffer.createMark(6), "InvalidRange");
   await expectCode(() => buffer.createMark(1_000_000), "InvalidRange");
   const other = await buffer.createMark(0);
-  await other.dispose();
+  await other[Symbol.asyncDispose]();
   check(await other.position() === null, "disposed mark");
-  await mark.dispose();
+  await mark[Symbol.asyncDispose]();
   check(await mark.position() === null, "disposed mark stays gone");
 });
 await commands.register("api.clipboard", async () => {
@@ -1063,7 +1063,7 @@ await commands.register("group.edit", async ({ buffer }) => {
   await buffer.applyEdits([{ range: { startByteOffset: 0, endByteOffset: 3 }, text: "" }], { ifRevision: revision });
 });
 await commands.register("group.end", async () => {
-  await group.dispose();
+  await group[Symbol.asyncDispose]();
 });
 "#;
 
@@ -1212,7 +1212,7 @@ await commands.register("rec.stop", async ({ arguments: { name } }) => {
   await workbench.writeClipboardText(JSON.stringify(last));
 });
 await commands.register("rec.dispose", async ({ arguments: { name } }) => {
-  await recordings[name].dispose();
+  await recordings[name][Symbol.asyncDispose]();
   const entries = await recordings[name].stop();
   await workbench.writeClipboardText(JSON.stringify(entries));
 });

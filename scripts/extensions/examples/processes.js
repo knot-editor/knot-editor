@@ -31,6 +31,6 @@ export async function followLines(command, args, onLine, signal) {
   });
   const exit = await child.exited;
   if (partial !== "") onLine(partial);
-  await child.dispose();
+  await child[Symbol.asyncDispose]();
   return exit;
 }

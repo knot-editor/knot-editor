@@ -160,10 +160,10 @@ export async function start() {
     shared.lastMacro = null;
     shared.search = { forward: true, smart: true };
     for (const buffer of shared.marks.values()) {
-      for (const mark of buffer.values()) mark.dispose().catch(() => {});
+      for (const mark of buffer.values()) mark[Symbol.asyncDispose]().catch(() => {});
     }
     shared.marks.clear();
-    for (const { mark } of shared.globalMarks.values()) mark.dispose().catch(() => {});
+    for (const { mark } of shared.globalMarks.values()) mark[Symbol.asyncDispose]().catch(() => {});
     shared.globalMarks.clear();
     await saving;
     await storage.delete(REGISTERS);
@@ -318,15 +318,15 @@ class Vim {
     this.states.delete(state.target);
     this.shared.highlights.unfollow(state);
     await this.shared.highlights.draw(state, null, null);
-    await state.group?.dispose();
-    await state.recording?.dispose();
-    await state.macro?.recording.dispose();
+    await state.group?.[Symbol.asyncDispose]();
+    await state.recording?.[Symbol.asyncDispose]();
+    await state.macro?.recording[Symbol.asyncDispose]();
     disposeMarks(state);
     await state.handle.setKeyContext(NORMAL, false);
     await state.handle.setKeyContext(INSERT, false);
     await state.handle.setKeyContext(REPLACE, false);
     await state.handle.setCursorStyle(null);
-    await state.handle.dispose();
+    await state.handle[Symbol.asyncDispose]();
   }
 
   /** The followed editor a command was invoked in: the tab it was captured on. */
@@ -555,7 +555,7 @@ class Vim {
  * buffer already dropped. */
 function disposeMarks(state: State) {
   const marks = [state.previous?.anchor, state.previous?.caret, state.context, ...state.jumps.entries];
-  for (const mark of marks) mark?.dispose().catch(() => {});
+  for (const mark of marks) mark?.[Symbol.asyncDispose]().catch(() => {});
 }
 
 /** Drops the marks of a closed document, whose buffer holds them no more. */

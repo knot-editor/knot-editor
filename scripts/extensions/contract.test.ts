@@ -23,9 +23,9 @@ const registration: Promise<Disposable> = commands.register("check", async (cont
     const sameBuffer: Buffer = event.buffer;
     await sameBuffer.snapshot();
   });
-  const completion: Promise<void> = subscription.dispose();
+  const completion: Promise<void> = subscription[Symbol.asyncDispose]();
   await completion;
-  await buffer.contributions.dispose();
+  await buffer.contributions[Symbol.asyncDispose]();
   const lines: number = await buffer.lineCount();
   const line: import("knot").ByteRange = await buffer.lineRange(lines - 1);
   const lineIndex: number = await buffer.lineAt(line.startByteOffset);
@@ -112,7 +112,7 @@ const tree = await workbench.registerView({
 const centered: import("knot").ViewPlacement = { location: "document" };
 void centered;
 const invalidation: Promise<void> = tree.invalidate(null);
-const disposal: Promise<void> = tree.dispose();
+const disposal: Promise<void> = tree[Symbol.asyncDispose]();
 void [invalidation, disposal];
 await tree.show();
 await tree.hide();
@@ -127,7 +127,7 @@ const replacement: Promise<void> = text.setText("first line\n");
 void replacement;
 await text.setText("second line\n");
 await text.setText("third line\n", undefined);
-await text.dispose();
+await text[Symbol.asyncDispose]();
 
 // @ts-expect-error text frames have no tree provider
 const badContent: import("knot").ViewContent = { kind: "text", provider: {} };
@@ -157,7 +157,7 @@ const preset = await keymaps.registerPreset({
   ],
 });
 const presetNames: readonly string[] = (await keymaps.listPresets()).map((info) => info.name);
-await preset.dispose();
+await preset[Symbol.asyncDispose]();
 void presetNames;
 // @ts-expect-error unknown platform names are not part of the union
 const otherPlatform: typeof platform = "beos";
@@ -214,7 +214,7 @@ const rust = await languages.register({
 });
 const registered: readonly LanguageInfo[] = await languages.list();
 void registered;
-await rust.dispose();
+await rust[Symbol.asyncDispose]();
 // @ts-expect-error a highlights query is required
 await languages.register({ id: "bad", name: "Bad", grammar: "rust", queries: {} });
 import type { BracketPair, LanguageComments, LanguageDefinition } from "knot";
@@ -457,7 +457,7 @@ const observedWindows: readonly import("knot").WindowInfo[] = observation.snapsh
 const launchedAlready: boolean = observation.snapshot.launched;
 const observedNotices: readonly import("knot").Notice[] = observation.snapshot.notifications;
 void launchedAlready;
-await observation.dispose();
+await observation[Symbol.asyncDispose]();
 void [watermark, observedWindows];
 // @ts-expect-error an application observer requires a listener
 await workbench.observe();
@@ -624,7 +624,7 @@ await settings.reset("editor.tabSize", { language: "rust" });
 const watch: Disposable = await settings.observe("check.timeout", (key: SettingKey) => {
   void key;
 });
-await watch.dispose();
+await watch[Symbol.asyncDispose]();
 // @ts-expect-error values follow the declared key type
 await settings.set("editor.tabSize", "2");
 // @ts-expect-error undeclared keys are not settings
@@ -632,7 +632,7 @@ await settings.get("check.missing");
 // @ts-expect-error the default follows the declared key type
 await settings.define({ key: "check.timeout", type: "integer", default: "52", description: "Timeout" });
 const association: Disposable = await languages.associate("markdown", { fileExtensions: ["mdx"], fileNames: ["NOTES"] });
-await association.dispose();
+await association[Symbol.asyncDispose]();
 // @ts-expect-error patterns are lists
 await languages.associate("markdown", { fileExtensions: "mdx" });
 
@@ -651,7 +651,7 @@ const everyRows: readonly ProviderHandle<Rows>[] = await providers.all<Rows>("ch
 void everyRows;
 const untyped = await providers.get("check.rows");
 void untyped?.rows("q");
-await rowsRegistration.dispose();
+await rowsRegistration[Symbol.asyncDispose]();
 // @ts-expect-error the name is text
 await providers.register(1, {});
 

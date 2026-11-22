@@ -229,7 +229,7 @@ const child = await processes.spawn({{ command: "sh", args: ["-c", "echo $$ > {}
 // Wait until the shell recorded its pid, so disposing cannot win the race
 // against its first command.
 await processes.run({{ command: "sh", args: ["-c", "while [ ! -f {} ]; do sleep 0.05; done"] }});
-await child.dispose();
+await child[Symbol.asyncDispose]();
 let late = null;
 try {{ await child.kill(); }} catch (error) {{ late = error.code; }}
 await workbench.writeClipboardText(late);
@@ -251,9 +251,9 @@ fn disposing_a_released_handle_is_rejected(cx: &mut TestAppContext) {
     let written = run_package(
         r#"
 const child = await processes.spawn({ command: "sleep", args: ["300"] });
-await child.dispose();
+await child[Symbol.asyncDispose]();
 let code = null;
-try { await child.dispose(); } catch (error) { code = error.code; }
+try { await child[Symbol.asyncDispose](); } catch (error) { code = error.code; }
 await answer(code);
 "#,
         &["process"],

@@ -57,7 +57,7 @@ test("highlighting previews a pack and dismissing restores the setting", async (
   host.highlight("Color", null);
   host.answer("showPicker", { kind: "dismissed" });
   await host.run("themes.selectIconPack");
-  await observer.dispose();
+  await observer[Symbol.asyncDispose]();
 
   assert.ok(seen.includes("Color"));
   assert.equal(await settings.get("icons.pack"), "Mono");
@@ -73,7 +73,7 @@ test("the fake host layers overrides over packs over package defaults", async ()
   assert.deepEqual(host.resolveIcon("x.icon"), { lucide: "circle" });
   const override = await icons.override("x.icon", { lucide: "star" });
   assert.deepEqual(host.resolveIcon("x.icon"), { lucide: "star" });
-  await override.dispose();
+  await override[Symbol.asyncDispose]();
   assert.deepEqual(host.resolveIcon("x.icon"), { lucide: "circle" });
   await assert.rejects(icons.define("y", { lucide: "box", svg: "<svg></svg>" } as never), TypeError);
 });
