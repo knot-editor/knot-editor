@@ -40,6 +40,7 @@ pub mod open;
 pub mod providers;
 pub mod reload;
 pub mod resource;
+pub mod resource_decorations;
 pub mod settings;
 pub mod state_database;
 pub mod status_bar;
