@@ -177,7 +177,10 @@ async function exerciseFilesAndProcesses() {
   check(await echoed === "spawned", "process stdout");
   await child.closeStdin();
   check((await child.exited).exitCode === 0, "process exit");
-  await rejectsWith(() => child[Symbol.asyncDispose](), "InvalidTarget"); // released on exit
+  // The handle is released once the exit and both streams have been seen, which
+  // can trail `exited`; either way a second dispose finds it released.
+  await child[Symbol.asyncDispose]().catch(() => {});
+  await rejectsWith(() => child[Symbol.asyncDispose](), "InvalidTarget");
   const killed = await processes.spawn({ command: "cat" });
   await killed.kill("SIGTERM");
   check((await killed.exited).signal !== null, "process signal");
