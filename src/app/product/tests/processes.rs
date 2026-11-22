@@ -200,9 +200,14 @@ fn a_finished_spawn_leaves_the_registry_once_drained(cx: &mut TestAppContext) {
 const child = await processes.spawn({ command: "sh", args: ["-c", "printf out; printf err >&2"] });
 let out = "";
 let err = "";
-child.onStdout((chunk) => { out += chunk; });
-child.onStderr((chunk) => { err += chunk; });
+let done;
+const both = new Promise((resolve) => { done = resolve; });
+child.onStdout((chunk) => { out += chunk; if (out && err) done(); });
+child.onStderr((chunk) => { err += chunk; if (out && err) done(); });
+// The exit can be reported before the pumps deliver the output, so wait for
+// both streams as well.
 await child.exited;
+await both;
 await workbench.writeClipboardText(JSON.stringify({ out, err }));
 "#;
     let loaded = load(main, &["process"], cx);
