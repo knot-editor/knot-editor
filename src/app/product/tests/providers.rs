@@ -72,16 +72,23 @@ await commands.register("consumer.all", async () => {
 "#;
 
 const COMPLETION_FIRST: &str = r#"
-import { providers } from "knot";
-await providers.register("editor.completion", {
+import { completionContract } from "knot";
+await completionContract.serve({
   provideCompletions() { return [{ label: "first", insertText: "first" }]; },
 });
 "#;
 
 const COMPLETION_SECOND: &str = r#"
-import { providers } from "knot";
-await providers.register("editor.completion", {
+import { completionContract } from "knot";
+await completionContract.serve({
   provideCompletions() { return [{ label: "second", insertText: "second" }]; },
+});
+"#;
+
+const COMPLETION_MALFORMED: &str = r#"
+import { completionContract } from "knot";
+await completionContract.serve({
+  provideCompletions() { return [{ label: "fine", insertText: "fine" }, { label: 7, insertText: "bad" }]; },
 });
 "#;
 
@@ -300,17 +307,70 @@ fn every_completion_provider_contributes_not_only_the_latest(cx: &mut TestAppCon
     );
 }
 
+#[gpui::test]
+fn a_malformed_completion_fails_only_its_own_provider(cx: &mut TestAppContext) {
+    let fixture = start_allowing_failures(
+        &[
+            ("@example/first", &[], COMPLETION_FIRST),
+            (
+                "@example/malformed",
+                &["@example/first"],
+                COMPLETION_MALFORMED,
+            ),
+        ],
+        cx,
+    );
+    let execution = fixture.command(
+        super::super::super::commands::dispatch::SHOW_COMPLETIONS_COMMAND,
+        cx,
+    );
+    assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
+    let editor = fixture.editor(cx);
+    crate::test_support::wait_until(cx, |cx| {
+        cx.read(|cx| {
+            editor
+                .read(cx)
+                .completion_state()
+                .is_some_and(|(_, pending, _, _)| pending == 0)
+        })
+    });
+    let (items, failures) = cx.read(|cx| {
+        let snapshot = editor.read(cx).completion_surface().unwrap().snapshot();
+        (
+            snapshot
+                .items
+                .iter()
+                .map(|item| item.label.clone())
+                .collect::<Vec<_>>(),
+            snapshot
+                .failures
+                .iter()
+                .map(|failure| (failure.provider_label.clone(), failure.message.clone()))
+                .collect::<Vec<_>>(),
+        )
+    });
+    assert_eq!(items, vec!["first".to_owned()]);
+    assert_eq!(
+        failures,
+        vec![(
+            "@example/malformed".to_owned(),
+            "knot completion: provideCompletions: result[1].label: expected string, found number 7 (the provider's schema)".to_owned()
+        )]
+    );
+}
+
 const PASTE_PROVIDER: &str = r#"
-import { languages, providers } from "knot";
+import { languages, pasteContract } from "knot";
 await languages.register({
   id: "rust",
   name: "Rust",
   grammar: "rust",
   queries: { highlights: "(string_literal) @string" },
 });
-await providers.register("editor.paste.rust", {
+await pasteContract("rust").serve({
   providePaste({ text, selectedText }) {
     if (text === "boom") throw new Error("paste provider broke");
+    if (text === "number") return 7;
     return text === "keep" ? null : `<${selectedText}|${text}>`;
   },
 });
@@ -351,6 +411,11 @@ fn paste_uses_the_answer_of_the_languages_provider(cx: &mut TestAppContext) {
     // A null answer or a throw pastes the clipboard's text.
     assert_eq!(paste_over_selection(&fixture, rust, "keep", cx), "xkeepy");
     assert_eq!(paste_over_selection(&fixture, rust, "boom", cx), "xboomy");
+    // An answer the contract does not allow pastes the clipboard's text too.
+    assert_eq!(
+        paste_over_selection(&fixture, rust, "number", cx),
+        "xnumbery"
+    );
     // A language without a provider pastes the text as is.
     assert_eq!(paste_over_selection(&fixture, None, "url", cx), "xurly");
 }

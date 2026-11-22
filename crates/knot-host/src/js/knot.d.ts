@@ -1799,7 +1799,7 @@ declare module "knot" {
     selection(options: { lines: number }): Promise<EditorSelectionWithLines>;
     /**
      * The text pasting `text` over `range` (UTF-8 offsets, default the selection) would insert: what the
-     * `editor.paste.<languageId>` provider of the language at the range's start answers, or `text` itself without
+     * paste provider of the language at the range's start answers, or `text` itself without
      * one or when it throws. The editor is not changed; the caller applies the text.
      * @throws HostError with InvalidTarget, InvalidRange, or Cancelled.
      */
@@ -2638,7 +2638,7 @@ declare module "knot" {
     all<T = Record<string, (argument?: JsonValue) => Promise<JsonValue>>>(name: string): Promise<readonly ProviderHandle<T>[]>;
   }>;
 
-  /** What the editor asks an `editor.completion` provider for. */
+  /** What the editor asks a completion provider for. */
   export interface CompletionRequest {
     /** The document being completed; `documents.get(document)` gives its
      * buffer, which a provider can keep while the document is open. */
@@ -2652,10 +2652,9 @@ declare module "knot" {
   /** Candidate display label and insertion text; both are required strings. */
   export interface CompletionItem { readonly label: string; readonly insertText: string; }
   /**
-   * An editor completion provider, registered with
-   * `providers.register("editor.completion", provider)`. The editor asks every
-   * registration, oldest first, and merges their items; a later registration
-   * adds to the others rather than replacing them.
+   * An editor completion provider, served with `completionContract.serve`.
+   * The editor asks every registration, oldest first, and merges their items;
+   * a later registration adds to the others rather than replacing them.
    */
   export interface CompletionProvider {
     /**
@@ -2665,7 +2664,7 @@ declare module "knot" {
      */
     provideCompletions(request: CompletionRequest, context: ProviderCallContext): readonly CompletionItem[] | Promise<readonly CompletionItem[]>;
   }
-  /** What native paste asks an `editor.paste.<languageId>` provider for. */
+  /** What native paste asks a paste provider for. */
   export interface PasteRequest {
     readonly document: DocumentId;
     readonly revision: number;
@@ -2677,21 +2676,39 @@ declare module "knot" {
     readonly selectedText: string;
   }
   /**
-   * A language's paste provider, registered with
-   * `providers.register("editor.paste.<languageId>", provider)`, where the
-   * language is the one at the start of the selection (inside a Markdown
-   * code fence, the fence's language). The latest registration of the name
-   * answers; a language with none pastes synchronously.
+   * A language's paste provider, served with `pasteContract(languageId).serve`,
+   * where the language is the one at the start of the selection (inside a
+   * Markdown code fence, the fence's language). The latest registration for
+   * the language answers; a language with none pastes synchronously.
    */
   export interface PasteProvider {
     /**
      * Return the text to insert instead of `request.text`, or null to insert
-     * it unchanged. A throw or a non-string result inserts `request.text`. The
+     * it unchanged. A throw or an invalid result inserts `request.text`. The
      * editor makes the edit, as one undo step; an answer for a revision or
      * selection the editor has left is discarded.
      */
     providePaste(request: PasteRequest, context: ProviderCallContext): string | null | Promise<string | null>;
   }
+  /**
+   * A contract Knot defines and asks itself: any package serves it, with no
+   * `requires` entry, and none calls it through a client. The host validates
+   * each result against Knot's schema, so a malformed answer fails only that
+   * provider's part.
+   */
+  export type KnotContract<M extends import("knot/contract").ContractMethods> =
+    Pick<import("knot/contract").Contract<M>, "name" | "methods" | "serve">;
+  /** The completion contract, owned by `knot`. */
+  export const completionContract: KnotContract<{
+    readonly provideCompletions: import("knot/contract").FnSchema<CompletionRequest, readonly CompletionItem[]>;
+  }>;
+  /**
+   * The paste contract of one language, owned by `knot`.
+   * @throws TypeError for an empty language ID.
+   */
+  export function pasteContract(languageId: string): KnotContract<{
+    readonly providePaste: import("knot/contract").FnSchema<PasteRequest, string | null>;
+  }>;
   /** Explicit buffers. */
   export const editor: Readonly<{
     /**

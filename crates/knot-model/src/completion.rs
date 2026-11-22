@@ -368,7 +368,7 @@ impl CompletionController {
     }
 }
 
-/// An `editor.completion` provider a completion asks, labelled for its rows
+/// A `completion` contract provider a completion asks, labelled for its rows
 /// and failures; registration order ranks its items.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CompletionProviderRegistration {

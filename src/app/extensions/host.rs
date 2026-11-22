@@ -65,7 +65,7 @@ await commands.register("knot.fixture.primary", async ({ buffer }) => {
     text: "fixture ",
   }], { ifRevision: snapshot.revision });
 });
-await knot.providers.register("editor.completion", {
+await knot.completionContract.serve({
   provideCompletions(context) {
     return [{ label: `${context.prefix}Primary`, insertText: `${context.prefix}Primary` }];
   },
@@ -86,7 +86,7 @@ const SECONDARY_FIXTURE: &str = r#"
 import * as knot from "knot"; const { commands, editor } = knot;
 
 await commands.register("knot.fixture.secondary", async () => ({ status: "handled" }));
-await knot.providers.register("editor.completion", {
+await knot.completionContract.serve({
   provideCompletions(context) {
     return [{ label: `${context.prefix}Secondary`, insertText: `${context.prefix}Secondary` }];
   },
@@ -285,11 +285,40 @@ pub(crate) fn memory_report(cx: &App) -> String {
     report
 }
 
-/// The provider name prefix paste asks, followed by a language ID.
-const PASTE_PROVIDER_PREFIX: &str = "editor.paste.";
+/// The package that defines the contracts Knot itself asks.
+const KNOT_CONTRACTS: &str = "knot";
 
-/// The provider name editor completion asks.
-const COMPLETION_PROVIDER: &str = "editor.completion";
+/// The name of the completion contract.
+const COMPLETION_CONTRACT: &str = "completion";
+
+/// The name of a language's paste contract.
+fn paste_contract(language: &str) -> String {
+    format!("paste.{language}")
+}
+
+/// A call to a provider of a Knot-defined contract. Knot is the consumer and
+/// trusts its own descriptor, so `settle` checks the provider's result only.
+pub(crate) struct NativeContractCall {
+    execution: knot_host::pool::ExtensionProviderExecution<knot_protocol::ProviderCallResponse>,
+    binding: knot_model::contracts::ContractBinding,
+    label: String,
+    method: &'static str,
+}
+
+impl NativeContractCall {
+    /// The provider's JSON result, or why the call failed: it threw, stopped,
+    /// or answered what the contract does not allow.
+    pub(crate) async fn settle(self) -> Result<String, String> {
+        let result = self
+            .execution
+            .await
+            .unwrap_or_else(|error| Err(error.to_string()))?;
+        self.binding
+            .check_result_text(self.method, &result)
+            .map_err(|message| format!("{}: {message}", self.label))?;
+        Ok(result)
+    }
+}
 
 /// The package name of a live lifecycle, or "personal config".
 pub(crate) fn lifecycle_label(
@@ -390,13 +419,13 @@ pub(crate) fn start_completion(
     host.update(cx, |host, cx| host.start_completion(target, cx))
 }
 
-/// Start the `editor.paste.<language>` provider of `request`, when one is
-/// registered; `None` when the paste needs no provider.
+/// Start the paste provider of `request`'s language, when one is served;
+/// `None` when the paste needs no provider.
 pub(crate) fn call_paste_provider(
     target: &ProductCommandTarget,
     request: &knot_model::editor::PasteRequest,
     cx: &mut App,
-) -> Option<knot_host::pool::ExtensionProviderExecution<knot_protocol::ProviderCallResponse>> {
+) -> Option<NativeContractCall> {
     let document = target.document_id(cx).ok()?;
     let document = cx
         .try_global::<crate::app::documents::ApplicationDocuments>()?
@@ -418,21 +447,32 @@ impl ProductExtensionHost {
         document: &str,
         window: Option<String>,
         request: &knot_model::editor::PasteRequest,
-    ) -> Option<knot_host::pool::ExtensionProviderExecution<knot_protocol::ProviderCallResponse>>
-    {
-        let name = format!("{PASTE_PROVIDER_PREFIX}{}", request.language);
-        let provider = self.semantics.providers().get(&name)?;
-        self.pool
+    ) -> Option<NativeContractCall> {
+        let name = paste_contract(&request.language);
+        let provider = self
+            .semantics
+            .providers()
+            .latest_contract(KNOT_CONTRACTS, &name)?;
+        let contract = provider.contract.as_ref()?;
+        let method = "providePaste";
+        let execution = self
+            .pool
             .call_provider(
                 ExtensionKey::new(provider.extension, provider.lifecycle),
                 knot_protocol::ProviderCallRequest {
                     registration: provider.id,
-                    method: "providePaste".into(),
+                    method: method.into(),
                     argument: request.argument(document),
                     window,
                 },
             )
-            .ok()
+            .ok()?;
+        Some(NativeContractCall {
+            execution,
+            binding: knot_model::contracts::ContractBinding::new(contract.schema.clone(), None),
+            label: contract.label(),
+            method,
+        })
     }
 }
 
@@ -2880,23 +2920,42 @@ impl ProductExtensionHost {
         let providers = self.completion_providers();
         let requests = editor.update(cx, |editor, cx| editor.start_completion(providers, cx));
         for (provider, request) in requests {
-            let execution = self.pool.call_provider(
-                ExtensionKey::new(provider.extension, provider.lifecycle),
-                knot_protocol::ProviderCallRequest {
-                    registration: request.registration,
-                    method: "provideCompletions".into(),
-                    argument: request.argument(&document),
-                    window: Some(window.clone()),
-                },
-            );
+            let method = "provideCompletions";
+            let execution = self
+                .semantics
+                .providers()
+                .registration(provider.id)
+                .and_then(|registration| registration.contract.as_ref())
+                .ok_or_else(|| "the completion provider is no longer served".to_owned())
+                .and_then(|contract| {
+                    let execution = self
+                        .pool
+                        .call_provider(
+                            ExtensionKey::new(provider.extension, provider.lifecycle),
+                            knot_protocol::ProviderCallRequest {
+                                registration: request.registration,
+                                method: method.into(),
+                                argument: request.argument(&document),
+                                window: Some(window.clone()),
+                            },
+                        )
+                        .map_err(|error| error.to_string())?;
+                    Ok(NativeContractCall {
+                        execution,
+                        binding: knot_model::contracts::ContractBinding::new(
+                            contract.schema.clone(),
+                            None,
+                        ),
+                        label: contract.label(),
+                        method,
+                    })
+                });
             let generation = request.generation;
             let editor_for_task = editor.clone();
             let task = cx.spawn(async move |_, cx| {
                 let result = match execution {
-                    Ok(execution) => execution
-                        .await
-                        .unwrap_or_else(|error| Err(error.to_string())),
-                    Err(error) => Err(error.to_string()),
+                    Ok(call) => call.settle().await,
+                    Err(error) => Err(error),
                 };
                 editor_for_task.update(cx, |editor, cx| {
                     editor.apply_completion_response(request.response(result), cx);
@@ -2920,12 +2979,12 @@ impl ProductExtensionHost {
             .map(|(name, _)| name.clone())
     }
 
-    /// The `editor.completion` providers a completion asks, oldest first,
+    /// The `completion` contract providers a completion asks, oldest first,
     /// each labelled with its package.
     fn completion_providers(&self) -> Vec<crate::app::completion::CompletionProviderRegistration> {
         self.semantics
             .providers()
-            .all(COMPLETION_PROVIDER)
+            .contracts(KNOT_CONTRACTS, COMPLETION_CONTRACT)
             .map(
                 |provider| crate::app::completion::CompletionProviderRegistration {
                     id: provider.id,

@@ -3697,11 +3697,7 @@ pub(crate) async fn editor_prepare_paste(
     let Some(execution) = call else {
         return Ok(text);
     };
-    let answer = knot_model::editor::PasteRequest::answer(
-        execution
-            .await
-            .unwrap_or_else(|error| Err(error.to_string())),
-    );
+    let answer = knot_model::editor::PasteRequest::answer(execution.settle().await);
     Ok(answer.unwrap_or(text))
 }
 

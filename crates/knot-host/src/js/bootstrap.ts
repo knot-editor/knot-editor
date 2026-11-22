@@ -1865,6 +1865,49 @@ export function contractModule(owner: string): Pick<typeof DeclaredContract, "s"
   return Object.freeze({ s, defineContract });
 }
 
+// The contracts Knot itself interprets, owned by `knot`. Any package serves
+// them; native code asks every registration (completion) or the latest one
+// (paste) and validates each result against the descriptor served here, which
+// a provider cannot alter.
+const knotContracts = contractModule("knot");
+const { s: schema } = knotContracts;
+
+export const completionContract = knotContracts.defineContract("completion", {
+  provideCompletions: schema.fn(
+    schema.object({
+      document: schema.string(),
+      revision: schema.int(),
+      cursorByteOffset: schema.int(),
+      prefix: schema.string(),
+    }),
+    schema.array(schema.object({ label: schema.string(), insertText: schema.string() })),
+  ),
+});
+
+const pasteContracts = new Map<string, unknown>();
+export function pasteContract(languageId: unknown) {
+  if (typeof languageId !== "string" || languageId === "") {
+    throw new TypeError("pasteContract requires a language ID");
+  }
+  let contract = pasteContracts.get(languageId);
+  if (contract === undefined) {
+    contract = knotContracts.defineContract(`paste.${languageId}`, {
+      providePaste: schema.fn(
+        schema.object({
+          document: schema.string(),
+          revision: schema.int(),
+          text: schema.string(),
+          range: schema.tuple([schema.int(), schema.int()]),
+          selectedText: schema.string(),
+        }),
+        schema.nullable(schema.string()),
+      ),
+    });
+    pasteContracts.set(languageId, contract);
+  }
+  return contract;
+}
+
 // A served contract dispatches like a provider: the host validates each call
 // and runs the method through `__knotCallProvider`.
 async function serveContract(

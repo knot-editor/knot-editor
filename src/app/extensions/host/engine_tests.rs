@@ -703,7 +703,7 @@ fn every_disposer_shares_native_acknowledgement_and_retains_failure() {
             await buffer.onDidChange(() => { throw new Error("disposed listener ran"); }),
             buffer.contributions,
             await workbench.registerView({ id: "example.outline", title: "Outline", content: { kind: "tree", provider: { getChildren() { throw new Error("disposed tree ran"); } } } }),
-            await knot.providers.register("editor.completion", { provideCompletions() { throw new Error("disposed completion ran"); } }),
+            await knot.completionContract.serve({ provideCompletions() { throw new Error("disposed completion ran"); } }),
           ];
         "#,
         );
@@ -712,7 +712,7 @@ fn every_disposer_shares_native_acknowledgement_and_retains_failure() {
             success::<declared::register_command>(CommandRegistrationId::new(901)),
             success::<declared::subscribe_buffer_changes>(BufferSubscriptionId::new(902)),
             success::<declared::register_tree_provider>(TreeProviderRegistrationId::new(903)),
-            success::<declared::register_provider>(ProviderRegistrationId::new(904)),
+            success::<declared::serve_contract>(ProviderRegistrationId::new(904)),
         ];
         for value in responses {
             let request = pool.receive_request().unwrap();
@@ -1041,19 +1041,19 @@ fn provider_self_disposal_acknowledges_without_waiting_for_its_callback() {
     let runtime = key(194);
     pool.load(runtime, IsolateConfig::default()).unwrap();
     let setup = pool.execute_fixture_module(runtime, "file:///fixtures/self-disposal.js", r#"
-      import { editor, providers, workbench } from "knot";
+      import { completionContract, editor, workbench } from "knot";
       globalThis.treeCalls = 0;
       globalThis.completionCalls = 0;
       globalThis.tree = await workbench.registerView({ id: "example.outline", title: "Outline", content: { kind: "tree", provider: {
         async getChildren() { treeCalls++; await tree[Symbol.asyncDispose](); globalThis.treeReleased = true; return []; },
       } } });
-      globalThis.completion = await providers.register("editor.completion", {
+      globalThis.completion = await completionContract.serve({
         async provideCompletions() { completionCalls++; await completion[Symbol.asyncDispose](); globalThis.completionReleased = true; return []; },
       });
     "#).unwrap();
     for value in [
         success::<declared::register_tree_provider>(TreeProviderRegistrationId::new(906)),
-        success::<declared::register_provider>(ProviderRegistrationId::new(907)),
+        success::<declared::serve_contract>(ProviderRegistrationId::new(907)),
     ] {
         let request = pool.receive_request().unwrap();
         pool.respond(HostResponse {
@@ -1242,14 +1242,14 @@ fn tree_results_require_iterables_and_validate_only_recognized_item_fields() {
 fn registration_response_racing_unload_cannot_publish_late_ownership() {
     for operation in [
         "commands.register('late', () => {})",
-        "providers.register('editor.completion', { provideCompletions() { return []; } })",
+        "knot.completionContract.serve({ provideCompletions() { return []; } })",
         "workbench.registerView({ id: 'example.outline', title: 'Outline', content: { kind: 'tree', provider: { getChildren() { return []; } } } })",
     ] {
         let pool = RuntimePool::new(PoolConfig::single_worker());
         let runtime = key(196);
         pool.load(runtime, IsolateConfig::default()).unwrap();
         let source = format!(
-            "import {{commands, editor, providers, workbench}} from 'knot'; await {operation}; globalThis.published = true;"
+            "import * as knot from 'knot'; const {{commands, editor, providers, workbench}} = knot; await {operation}; globalThis.published = true;"
         );
         let registration = pool
             .execute_fixture_module(runtime, "file:///fixtures/late-registration.js", source)
@@ -1271,12 +1271,8 @@ fn registration_response_racing_unload_cannot_publish_late_ownership() {
             {
                 success::<declared::register_command>(CommandRegistrationId::new(1))
             }
-            operation
-                if operation
-                    .arguments::<declared::register_provider>()
-                    .is_some() =>
-            {
-                success::<declared::register_provider>(ProviderRegistrationId::new(1))
+            operation if operation.arguments::<declared::serve_contract>().is_some() => {
+                success::<declared::serve_contract>(ProviderRegistrationId::new(1))
             }
             operation
                 if operation
@@ -2892,8 +2888,7 @@ fn install_semantic_providers(
                     },
                   } },
                 });
-                globalThis.completionProvider = await knot.providers.register(
-                  "editor.completion",
+                globalThis.completionProvider = await knot.completionContract.serve(
                   {
                     async provideCompletions(request) {
                       globalThis.providerEvents.push(`completion-${request.prefix}`);
@@ -2941,18 +2936,20 @@ fn install_semantic_providers(
         .unwrap();
     assert_eq!(
         completion.operation,
-        operation::<declared::register_provider>(declared::RegisterProviderArguments {
-            name: "editor.completion".into(),
-            methods: vec!["provideCompletions".into()],
+        operation::<declared::serve_contract>(declared::ContractArguments {
+            owner: "knot".into(),
+            name: "completion".into(),
+            schema: knot_model::contracts::ContractSchema::parse(
+                r#"{"provideCompletions":{"kind":"fn","argument":{"kind":"object","fields":{"document":{"kind":"string"},"revision":{"kind":"int"},"cursorByteOffset":{"kind":"int"},"prefix":{"kind":"string"}}},"result":{"kind":"array","items":{"kind":"object","fields":{"label":{"kind":"string"},"insertText":{"kind":"string"}}}}}}"#
+            )
+            .unwrap(),
         })
     );
     pool.respond(HostResponse {
         extension: runtime.extension,
         lifecycle: runtime.lifecycle,
         id: completion.id,
-        result: Ok(success::<declared::register_provider>(
-            completion_registration,
-        )),
+        result: Ok(success::<declared::serve_contract>(completion_registration)),
     })
     .unwrap();
     setup.wait().unwrap();
@@ -4519,7 +4516,7 @@ fn public_facade_is_semantic_and_private_bindings_are_hidden() {
             if (typeof globalThis.__knotNativeBindings !== "undefined") {
                 throw new Error("private native bindings are exposed");
             }
-            if (Object.keys(knot).sort().join(",") !== "commands,completion,documents,editor,files,history,homeUri,icons,keymaps,languages,menus,platform,processes,providers,recovery,settings,storage,terminals,themes,windows,workbench,workspaces") {
+            if (Object.keys(knot).sort().join(",") !== "commands,completion,completionContract,documents,editor,files,history,homeUri,icons,keymaps,languages,menus,pasteContract,platform,processes,providers,recovery,settings,storage,terminals,themes,windows,workbench,workspaces") {
                 throw new Error("unexpected public exports");
             }
             if (!Object.isFrozen(knot.editor) || !Object.isFrozen(knot.commands) || !Object.isFrozen(knot.workbench) || !Object.isFrozen(knot.storage)) {

@@ -140,11 +140,7 @@ pub(crate) async fn editing(context: CommandContext, (): ()) -> Result<(), Comma
     let Some((editor, request, execution)) = pending else {
         return Ok(());
     };
-    let answer = knot_model::editor::PasteRequest::answer(
-        execution
-            .await
-            .unwrap_or_else(|error| Err(error.to_string())),
-    );
+    let answer = knot_model::editor::PasteRequest::answer(execution.settle().await);
     context
         .foreground(move |_, cx| {
             editor.update(cx, |editor, cx| editor.paste_answered(&request, answer, cx));
