@@ -1,6 +1,6 @@
 # Version control
 
-Status: 🚧 approved, not started. Replaces D126 from the [roadmap](../roadmap.md)
+Status: 🚧 in progress; milestone 1 is done, D212 is next. Replaces D126 from the [roadmap](../roadmap.md)
 with D209–D216, D220, and D221, and sequences D087, D199, and D197 into it.
 
 ## Goal
@@ -32,19 +32,10 @@ section can go when the plan does.
 - **Diff stands on its own.** Comparing two texts is an editor feature like
   `vim -d`, not part of version control. Version control and Show Difference
   (D174) are consumers of it.
-- **The diff algorithm is a native primitive; policy is JavaScript.** A
-  stateless native function computes hunks between two texts or a buffer and a
-  text, as `buffer.find` does for search. Packages decide when to diff and what
-  to show.
 - **Native code paints; packages supply the data.** The change gutter is
   ordinary gutter contributions from a package, through a gutter API rich
   enough for multi-line bars, deletion markers, and click actions, which
   language-server diagnostics reuse.
-- **Version control lives in JavaScript, in two layers.** `@knot/vcs` defines
-  the provider contract and owns the shared surfaces; a backend package such as
-  `@knot/git` implements a provider. Native code gains only generic
-  primitives: process spawning, the diff function, gutter contributions, and
-  resource decorations.
 - **The shared/specific split follows IntelliJ.** Shared through the contract:
   baselines for the gutter and diffs, file status, the current ref's label,
   the changes view with provider-defined groups, and committing with
@@ -58,12 +49,6 @@ section can go when the plan does.
   signing, credential helpers, filters, and sparse or split indexes behave as
   in the terminal. In-process reads (libgit2, gix) are revisited only if
   spawning proves slow.
-- **Typed, validated contracts between packages.** A package defines its
-  exported contract in code with a small schema builder from Knot's API, so
-  TypeScript types are inferred from the same definition and the schema ships
-  in the package's built JavaScript with no extra build step. The host
-  validates calls and results at the boundary against it. TypeScript, not an
-  IDL, is the schema language.
 
 ## Milestones
 
@@ -71,18 +56,11 @@ Items in a milestone are listed in dependency order.
 
 ### 1. Change gutter
 
-- **D087 — Extension entitlements.** Done: packages declare entitlements,
-  the user decides before an installed package loads, and extensions spawn
-  processes through the gated API.
-- **D199 — Typed contracts between packages.** Done: code-defined schemas,
-  inferred types, host-enforced validation; see
-  [packages](../extension-api/packages.md).
-- **D209 — Diff function for extensions.** Done: `diff` in the `knot` module; see [application state](../extension-api/application.md#compare-texts).
-- **D210 — Richer gutter contributions.** Done: dot, bar, and deletion marks
-  with click commands; see [contributions](../extension-api/languages-and-themes.md#register-a-theme-and-define-colors).
-- **D211 — VCS foundation and Git change gutter.** Done: `@knot/vcs` and
-  `@knot/git` with the change gutter and next and previous change; see
-  [version control](../architecture/version-control.md).
+✅ Done: D087 entitlements, D199 typed contracts, D209 `diff`, D210 richer
+gutter contributions, and D211 `@knot/vcs` and `@knot/git` with the change
+gutter and change navigation. See [version control](../architecture/version-control.md),
+[packages](../extension-api/packages.md), and
+[application state](../extension-api/application.md#compare-texts).
 
 ### 2. File status
 
@@ -95,7 +73,7 @@ Items in a milestone are listed in dependency order.
 ### 3. Diffs
 
 - **D197 — Diff view.** Opening a file's changes from the
-  gutter and from `@knot/vcs` is part of it once D211 exists.
+  gutter and from `@knot/vcs` is part of it.
 - **D220 — Anchored floating panels.** Split from D145, which keeps virtual
   text for later consumers.
 - **D221 — Hunk popup.** The hunk's baseline against the current lines, with
