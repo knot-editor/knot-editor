@@ -13,7 +13,7 @@ Every item has the same shape:
 - **Description** says what is missing today and when it becomes worth doing,
   then what to build.
 
-The next unused ID is **D227**; take it for a new item and bump this line.
+The next unused ID is **D228**; take it for a new item and bump this line.
 
 Each section is ordered so that an item comes after the items it depends on,
 wherever the sections allow it. Items with no dependencies are ordered by
@@ -865,3 +865,13 @@ and may move into a section above when daily use asks for them.
     them again in `start()`, which beats `pre-init` and loses to `post-init`,
     so it must show when a later write overrides a choice. Also decide whether
     it lists undefined keys that hold values, to help spot typos.
+
+- **D227 — Package unload signal**
+  - Depends on: none
+  - Description: A package cannot learn that another unloaded or restarted, so
+    `@knot/vcs` finds out only when a call to a backend rejects
+    `ContractNotFound`, and the gutter marks of a vanished backend stay until
+    then. Do it when another package needs to react to a provider leaving
+    before its next call: add an observable package lifecycle event to the
+    extension API, with its native side, and let `@knot/vcs` drop a backend
+    and clear its marks when it fires.
