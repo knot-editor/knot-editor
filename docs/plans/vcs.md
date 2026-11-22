@@ -80,10 +80,9 @@ Items in a milestone are listed in dependency order.
 - **D209 — Diff function for extensions.** Done: `diff` in the `knot` module; see [application state](../extension-api/application.md#compare-texts).
 - **D210 — Richer gutter contributions.** Done: dot, bar, and deletion marks
   with click commands; see [contributions](../extension-api/languages-and-themes.md#register-a-theme-and-define-colors).
-- **D211 — VCS foundation and Git change gutter.** `@knot/vcs` and `@knot/git`:
-  repositories per root, baselines, the change gutter, and next and previous
-  change. Depends on D087 and D199. 🚧 Plan:
-  [d211-vcs-git-gutter](d211-vcs-git-gutter.md).
+- **D211 — VCS foundation and Git change gutter.** Done: `@knot/vcs` and
+  `@knot/git` with the change gutter and next and previous change; see
+  [version control](../architecture/version-control.md).
 
 ### 2. File status
 

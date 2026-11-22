@@ -279,7 +279,7 @@ typed functions that run in the provider's isolate, and the host validates
 every argument and result. Commands return no data and shared modules would run
 provider code in the consumer, so neither fits. Untyped named providers with a
 JSON shape each consumer redeclares were rejected because nothing checks either
-side, and `@knot/vcs` and its backends (D211) are large enough for that to
+side, and `@knot/vcs` and its backends are large enough for that to
 cause mistakes.
 
 - **Schema builder of our own, not a library.** The descriptor must be plain

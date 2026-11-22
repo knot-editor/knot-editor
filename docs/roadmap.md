@@ -30,7 +30,6 @@ point.
 
 The [version control plan](plans/vcs.md) comes first, in its milestone order:
 
-- D211 — VCS foundation and Git change gutter.
 - D212 — Resource decorations.
 - D213 — VCS file status and current ref.
 - D197 — Diff view.
@@ -148,7 +147,7 @@ hold the analyses that support some items.
   - Description: Knot cannot compare two texts. Build a native side-by-side and
     inline diff of two buffers or snapshots that stays current while one side
     is edited, with navigation between hunks, and an extension API to open one,
-    so version control (D211) can show a file's changes and D174 can diff the
+    so version control can show a file's changes and D174 can diff the
     buffer against the file. Part of the [version control plan](plans/vcs.md);
     it computes hunks with the extension API's `diff`.
 
@@ -391,24 +390,15 @@ hold the analyses that support some items.
 The [version control plan](plans/vcs.md) holds the agreed architecture and the
 milestones these items belong to.
 
-- **D211 — VCS foundation and Git change gutter** 🚧
-  - Depends on: none
-  - Description: No version control integration exists. Add `@knot/vcs`, which
-    defines the provider contract and owns the shared surfaces, and `@knot/git`,
-    its first backend over the `git` command line: find repositories per root,
-    supply each open document's baseline, keep a change gutter current while
-    editing, and add next and previous change commands. Plan:
-    [d211-vcs-git-gutter](plans/d211-vcs-git-gutter.md).
-
 - **D213 — VCS file status and current ref** 🚧
-  - Depends on: D211, D212
+  - Depends on: D212
   - Description: Nothing shows which files changed or which branch is checked
     out. Report file statuses through `@knot/vcs`, which maps them to resource
     decorations on tabs and in the explorer, and show the current ref's label
     in the status bar.
 
 - **D221 — Hunk popup** 🚧
-  - Depends on: D211, D220
+  - Depends on: D220
   - Description: A gutter marker shows that lines changed, not how. Clicking
     it opens a popup anchored to the hunk that shows the baseline's lines
     against the current ones, with revert, next and previous hunk, and opening
@@ -436,7 +426,7 @@ milestones these items belong to.
     them in `@knot/git` as the plan's last milestone.
 
 - **D217 — Blame**
-  - Depends on: D211, D145
+  - Depends on: D145
   - Description: Nothing shows who last changed a line and in which commit.
     Do it after the [version control plan](plans/vcs.md): show blame through
     the provider, as end-of-line annotations on the current line or as a

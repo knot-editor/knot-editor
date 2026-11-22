@@ -175,7 +175,7 @@ touches.
   backends call.
 - [Git baseline](decisions/bundled-packages.md#git-baseline): HEAD through
   `cat-file --filters`, not the index; roots derived from URIs, not Git's
-  absolute paths.
+  absolute paths; watching, not polling, with a hidden-entry opt-in.
 
 ## [Workbench and lifecycle](decisions/workbench-and-lifecycle.md)
 

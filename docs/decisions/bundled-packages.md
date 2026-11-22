@@ -213,31 +213,22 @@ only the newest backend, and the others would be unreachable. A backend that
 stops without withdrawing is dropped when `@knot/vcs` next fails to bind its
 contract, because nothing tells a package when another unloads.
 
-References: [sharing between packages](../extension-api/packages.md#share-a-feature-with-other-packages).
+References: [version control](../architecture/version-control.md) and
+[sharing between packages](../extension-api/packages.md#share-a-feature-with-other-packages).
 
 ## Git baseline
 
 Git's baseline is HEAD, as in IntelliJ, read with `git cat-file --filters` so
-the text is the checked-out form after line-ending and other smudge filters and
-compares cleanly with the buffer. The index is not the baseline: it would make
-a staged edit disappear from the gutter, and staging belongs to the Git-specific
-work of D216. A file the index holds but HEAD lacks is the one exception, with
-an empty baseline so it shows as added. A repository's root URI is derived from
-`rev-parse --show-prefix` and the directory's own URI, never from Git's
-absolute path, because a symlinked directory would then no longer match the
-document URIs and window roots. Reading uses `GIT_OPTIONAL_LOCKS=0` so it never
-holds a lock a user's own command needs.
+the text compares cleanly with the buffer after line-ending and other smudge
+filters. The index is not the baseline: it would make a staged edit disappear
+from the gutter, and staging belongs to the Git-specific work of D216. A
+repository's root is derived from URIs, not Git's absolute path, because a
+symlinked directory would then no longer match document URIs and window roots.
 
-Freshness comes from watching, not polling: for each repository it has served,
-`@knot/git` watches the git directory (HEAD, the index, `packed-refs`) and the
-common directory's `refs` and reports a change to `vcs`. The object store is
-not watched, since it is large and busy and no baseline depends on a change
-there. `.git` is hidden, so these watches opt in with `files.watch`'s
-`includeHidden`, a generic option that the explorer and other watchers leave
-off; polling on window focus would miss a change made in a terminal while Knot
-stays focused. A watch ends when its repository directory is gone, and the
-next lookup of a file there watches again.
+Freshness comes from watching, not polling: polling on window focus would miss a
+change made in a terminal while Knot stays focused. `.git` is hidden, so the
+watches opt in with `files.watch`'s `includeHidden`, a generic option that the
+explorer and other watchers leave off. The object store is not watched, since it
+is large and busy and no baseline depends on a change there.
 
-The `process` entitlement is declared like any package's and is implicitly
-granted to a bundled one, so the backend never prompts. Without `git` on the
-`PATH` it raises one notice and does not register.
+References: [version control](../architecture/version-control.md#git).

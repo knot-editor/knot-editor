@@ -157,6 +157,8 @@ extensions supply asynchronous content rather than rendering callbacks.
   composition, cancellation, and keymaps.
 - [Extension host](architecture/extension-host.md): runtime isolation, transport,
   scheduling, lifecycle, observation, and extension storage.
+- [Version control](architecture/version-control.md): repositories, baselines,
+  the change gutter, navigation, and Git.
 - [Semantic UI](architecture/semantic-ui.md): contributions, highlight layers,
   themes, icons, trees, completion aggregation, pickers, and generated text
   surfaces.

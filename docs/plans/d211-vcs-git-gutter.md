@@ -155,19 +155,9 @@ document is covered by the fake-host tests in
 `extensions/@knot/vcs/test/gutter.test.ts`, since the product harness has no
 Save As. Real-host watch tests need `TestProduct::watch_files`.
 
-### 6. Navigation
+### 6. Navigation ✅
 
-Deliverables: `vcs.nextChange` and `vcs.previousChange` with wrap-around,
-Alt+F5 and Shift+Alt+F5, and palette entries.
-
-Validation: behavior tests for moving across hunks, wrapping, a deletion
-hunk, and a document without changes.
-
-Review gate: D211 complete. Move durable behavior into an architecture
-reference and the extension guide, mark D211 ✅ in the
-[version control plan](vcs.md), and remove this plan.
-
-**Implementation context:**
-- Command and keybinding registration as in
-  `extensions/@knot/go-to-line/src/extension.ts`; editor selection through
-  `workbench.editor(target)`.
+Complete. `vcs.nextChange` and `vcs.previousChange` are bound to Alt+F5 and
+Alt+Shift+F5, and `]c` and `[c` in Vim mode; see
+[version control](../architecture/version-control.md#navigation).
+Review gate passed; D211 durable behavior lives in that reference.
