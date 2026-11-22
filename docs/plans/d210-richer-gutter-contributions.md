@@ -1,6 +1,6 @@
 # D210 — Richer gutter contributions
 
-Status: 🚧 in progress; checkpoint 1 is done. Source: [roadmap D210](../roadmap.md), part
+Status: 🚧 in progress; checkpoints 1 and 2 are done. Source: [roadmap D210](../roadmap.md), part
 of the [version control plan](vcs.md).
 
 ## Outcome
@@ -79,32 +79,15 @@ marker lane and bars and deletions into a bar lane
 range starts at the end of a text whose last line has content, so checkpoint 2
 paints it under that line.
 
-### 2. The bar lane and its painting
+### 2. The bar lane and its painting ✅
 
-Deliverables: the bar lane in the gutter layout, painting of bars across
-wrapped rows and of deletion wedges on line boundaries, the native `diff.*`
-color keys, and hit testing that maps a bar-lane click to its mark.
-
-Validation: gutter layout tests for the lane's position and fixed width with
-numbers on and off and folding on and off; paint-input tests that bars cover
-wrapped rows and skip hidden lines and that wedges land on boundaries,
-including the end of the text; theme tests for the new keys' defaults; a
-visual check in the running app with a test contribution set.
-
-Review gate: the lane's width and look under the default themes.
-
-**Implementation context.**
-- Layout: add `GutterLane::Bars` and a `bars_start`/`bars_width` to
-  `GutterLayout` in `src/app/editor/gutter.rs`, between `numbers_end` and
-  `folds_start`, keeping `lane_at` and `folds_center` consistent; extend
-  `src/app/editor/tests/gutter.rs`.
-- Paint: extend `GutterPaint` and the gutter block in
-  `src/app/editor/paint.rs` (the marker loop near line 661), computing bar
-  row spans from `editor.wrap()` as markers use `first_row`; add bar and
-  wedge hitboxes beside the marker hitboxes in prepaint.
-- Keys: add `DIFF_ADDED`, `DIFF_MODIFIED`, `DIFF_REMOVED` to the native color
-  table in `crates/knot-model/src/theme.rs`, beside `SUCCESS` and `ERROR`, and
-  values in the bundled themes if they set the neighbouring keys.
+Done and approved. The gutter is markers, numbers, an 8px bar lane, then folds
+(`GutterLayout` in `src/app/editor/gutter.rs`); `bar_marks` picks the visible
+bar-lane marks and their rows, and `paint.rs` draws bars and wedges and inserts
+their hitboxes. A click on a bar-lane mark emits `EditorContributionAction` and
+selects nothing; nothing dispatches it yet. Native `diff.added`, `diff.modified`,
+and `diff.removed` default to `success`, `info`, and `error`, and each bundled
+theme sets them.
 
 ### 3. Click actions run commands
 
