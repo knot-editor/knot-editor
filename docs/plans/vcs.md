@@ -82,7 +82,8 @@ Items in a milestone are listed in dependency order.
   with click commands; see [contributions](../extension-api/languages-and-themes.md#register-a-theme-and-define-colors).
 - **D211 — VCS foundation and Git change gutter.** `@knot/vcs` and `@knot/git`:
   repositories per root, baselines, the change gutter, and next and previous
-  change. Depends on D087 and D199.
+  change. Depends on D087 and D199. 🚧 Plan:
+  [d211-vcs-git-gutter](d211-vcs-git-gutter.md).
 
 ### 2. File status
 

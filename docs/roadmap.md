@@ -397,7 +397,8 @@ milestones these items belong to.
     defines the provider contract and owns the shared surfaces, and `@knot/git`,
     its first backend over the `git` command line: find repositories per root,
     supply each open document's baseline, keep a change gutter current while
-    editing, and add next and previous change commands.
+    editing, and add next and previous change commands. Plan:
+    [d211-vcs-git-gutter](plans/d211-vcs-git-gutter.md).
 
 - **D213 — VCS file status and current ref** 🚧
   - Depends on: D211, D212
