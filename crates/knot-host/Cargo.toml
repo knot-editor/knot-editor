@@ -22,3 +22,6 @@ tracing-subscriber = { workspace = true }
 
 [features]
 test-support = []
+
+[build-dependencies]
+knot-bundled = { path = "../knot-bundled" }

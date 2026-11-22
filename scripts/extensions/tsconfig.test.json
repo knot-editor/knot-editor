@@ -7,12 +7,15 @@
     "outDir": ".test-build",
     "types": ["node"],
     "paths": {
+      "knot:bootstrap": ["../../crates/knot-host/src/js/bootstrap.ts"],
       "knot/testing": ["./testing/host.ts"],
       "knot/testing/languages": ["./testing/languages.ts"]
     }
   },
   "include": [
     "testing/*.ts",
+    "../../crates/knot-host/src/js/*.ts",
+    "../../crates/knot-host/js-tests/*.ts",
     "../../extensions/*/*/src",
     "../../extensions/*/*/test"
   ],

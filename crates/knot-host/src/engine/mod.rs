@@ -59,9 +59,11 @@ const PRIVATE_BOOTSTRAP_SPECIFIER: &str = "knot:bootstrap";
 const PUBLIC_FACADE_SPECIFIER: &str = "knot";
 const CONTRACT_SPECIFIER: &str = "knot/contract";
 const NATIVE_BINDINGS_GLOBAL: &str = "__knotNativeBindings";
-const PRIVATE_BOOTSTRAP_SOURCE: &str = include_str!("../js/bootstrap.js");
-const PUBLIC_FACADE_SOURCE: &str = include_str!("../js/knot.js");
-const CONTRACT_SOURCE: &str = include_str!("../js/contract.js");
+// The host's own modules, compiled from `src/js/*.ts` by the build script.
+const PRIVATE_BOOTSTRAP_SOURCE: &str =
+    include_str!(concat!(env!("OUT_DIR"), "/host-js/bootstrap.js"));
+const PUBLIC_FACADE_SOURCE: &str = include_str!(concat!(env!("OUT_DIR"), "/host-js/knot.js"));
+const CONTRACT_SOURCE: &str = include_str!(concat!(env!("OUT_DIR"), "/host-js/contract.js"));
 
 type ResultSender<T> = tokio::sync::oneshot::Sender<Result<T, RuntimeError>>;
 type ResultReceiver<T> = tokio::sync::oneshot::Receiver<Result<T, RuntimeError>>;

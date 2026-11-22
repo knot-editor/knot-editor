@@ -1,8 +1,9 @@
-//! The build-script helper that compiles bundled TypeScript packages. A group
-//! crate's `build.rs` names its packages; each is recompiled with the
-//! lockfile-pinned compiler in `scripts/extensions` only when its own inputs or a
-//! shared input changed, and the compiled sources are emitted as a generated
-//! `PACKAGES` table for the crate to include.
+//! The build-script helpers that compile TypeScript with the lockfile-pinned
+//! compiler in `scripts/extensions`. A group crate's `build.rs` names its
+//! bundled packages; each is recompiled only when its own inputs or a shared
+//! input changed, and the compiled sources are emitted as a generated
+//! `PACKAGES` table for the crate to include. The host crate compiles its own
+//! modules the same way with [`compile_host_modules`].
 
 use std::fmt::Write as _;
 use std::fs;
@@ -13,13 +14,7 @@ use std::process::Command;
 /// `bundled_packages.rs` to `OUT_DIR`. Call it from a build script in a crate
 /// two levels below the workspace root.
 pub fn compile_packages(packages: &[&str]) {
-    // Not canonicalized: on Windows that yields a verbatim `\\?\` path, which
-    // tsc cannot open.
-    let root = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap())
-        .ancestors()
-        .nth(2)
-        .unwrap()
-        .to_owned();
+    let root = workspace_root();
     let out = PathBuf::from(std::env::var("OUT_DIR").unwrap());
     let tools = root.join("scripts/extensions");
     let bundled = root.join("extensions/@knot");
@@ -49,12 +44,13 @@ pub fn compile_packages(packages: &[&str]) {
         let mut current = shared_fingerprint.clone();
         fingerprint(&package.join("src"), &mut current);
         fingerprint(&package.join("tsconfig.json"), &mut current);
-        if !dist.exists() || fs::read_to_string(&stamp).ok().as_deref() != Some(&current) {
-            // A failed compile leaves no stamp, so the next build retries.
-            let _ = fs::remove_file(&stamp);
-            compile(&tools, &package, &dist);
-            fs::write(&stamp, &current).unwrap();
-        }
+        compile_when_stale(
+            &tools,
+            &package.join("tsconfig.json"),
+            &dist,
+            &stamp,
+            &current,
+        );
 
         let mut modules = Vec::new();
         collect_modules(&dist, &dist, &mut modules);
@@ -77,6 +73,58 @@ pub fn compile_packages(packages: &[&str]) {
     }
     table.push_str("];\n");
     fs::write(out.join("bundled_packages.rs"), table).unwrap();
+}
+
+/// Compiles the host's own TypeScript modules (the `.ts` files named by
+/// `crates/knot-host/src/js/tsconfig.json`) into `OUT_DIR/host-js` and returns
+/// that directory. The project is checked against the same pinned compiler, and
+/// is recompiled only when something in its directory or the lockfile changed.
+/// Call it from the build script of a crate two levels below the workspace root.
+pub fn compile_host_modules() -> PathBuf {
+    let root = workspace_root();
+    let out = PathBuf::from(std::env::var("OUT_DIR").unwrap());
+    let tools = root.join("scripts/extensions");
+    let project = root.join("crates/knot-host/src/js");
+
+    let lockfile = tools.join("package-lock.json");
+    println!("cargo::rerun-if-changed={}", lockfile.display());
+    println!("cargo::rerun-if-changed={}", project.display());
+    install_tools(&tools);
+
+    let mut current = String::new();
+    fingerprint(&lockfile, &mut current);
+    fingerprint(&project, &mut current);
+    let dist = out.join("host-js");
+    let stamp = out.join("host-js.fingerprint");
+    compile_when_stale(
+        &tools,
+        &project.join("tsconfig.json"),
+        &dist,
+        &stamp,
+        &current,
+    );
+    dist
+}
+
+// Not canonicalized: on Windows that yields a verbatim `\\?\` path, which tsc
+// cannot open.
+fn workspace_root() -> PathBuf {
+    PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap())
+        .ancestors()
+        .nth(2)
+        .unwrap()
+        .to_owned()
+}
+
+/// Recompiles `tsconfig` into `dist` unless `stamp` already records `current`.
+fn compile_when_stale(tools: &Path, tsconfig: &Path, dist: &Path, stamp: &Path, current: &str) {
+    if dist.exists() && fs::read_to_string(stamp).ok().as_deref() == Some(current) {
+        return;
+    }
+    // A failed compile leaves no stamp, so the next build retries.
+    let _ = fs::remove_file(stamp);
+    compile(tools, tsconfig, dist);
+    fs::write(stamp, current).unwrap();
 }
 
 /// Installs the pinned toolchain when it is missing or older than the lockfile.
@@ -108,7 +156,7 @@ fn install_tools(tools: &Path) {
     );
 }
 
-fn compile(tools: &Path, package: &Path, dist: &Path) {
+fn compile(tools: &Path, tsconfig: &Path, dist: &Path) {
     if dist.exists() {
         fs::remove_dir_all(dist).unwrap();
     }
@@ -116,10 +164,10 @@ fn compile(tools: &Path, package: &Path, dist: &Path) {
         Command::new("node")
             .arg(tools.join("node_modules/typescript/bin/tsc"))
             .arg("-p")
-            .arg(package.join("tsconfig.json"))
+            .arg(tsconfig)
             .arg("--outDir")
             .arg(dist),
-        &format!("tsc for {}", package.display()),
+        &format!("tsc for {}", tsconfig.display()),
     );
 }
 

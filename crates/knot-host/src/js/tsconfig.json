@@ -1,0 +1,23 @@
+{
+  // The host's own modules, compiled module for module and embedded in the
+  // engine. Standalone rather than extending the extension base so that
+  // package settings never rebuild the host.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022"],
+    "types": [],
+    "strict": true,
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "verbatimModuleSyntax": true,
+    "noEmitOnError": true,
+    "skipLibCheck": false,
+    "rootDir": ".",
+    "paths": { "knot:bootstrap": ["./bootstrap.ts"] }
+  },
+  "files": ["knot.d.ts", "native.d.ts", "bootstrap.ts", "knot.ts", "contract.ts"]
+}

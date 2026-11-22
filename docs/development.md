@@ -124,15 +124,23 @@ changed, or for all of them when the lockfile, `tsconfig.base.json`, or
 `knot.d.ts` changed. The `knot` library never depends on compiled packages
 (`knot-app` hands them to `knot::run`), so a TypeScript edit rebuilds and retests
 only its group crate. `scripts/check-bundled-incremental.sh` verifies this. A new
-package joins the group of its domain, or starts a group crate. CI installs a pinned Node in
+package joins the group of its domain, or starts a group crate. `knot-host`
+compiles its own modules (`bootstrap`, `knot`, and `contract` in
+`crates/knot-host/src/js`, strict TypeScript checked against `knot.d.ts`) the
+same way, rerunning `tsc` when anything in that directory or the lockfile
+changes; its `tsconfig.json` does not extend the package base, so package
+settings never rebuild the host. CI installs a pinned Node in
 every job that builds Rust. On macOS, release builds also need the Metal
 Toolchain, because gpui precompiles its shaders outside debug builds:
 `xcodebuild -downloadComponent MetalToolchain`.
 
 `scripts/check-extensions.sh`, run by `just ext` and in CI, uses `npm ci` to check
-declarations, every TypeScript package and its tests, authoring samples, and
-positive/negative type fixtures, then runs the package tests under `node:test`
-with an in-memory host (see the [extension guide](extension-api/README.md#write-and-test-in-typescript)).
+declarations, the host modules (which may not write `any` outside the native
+bindings declaration), every TypeScript package and its tests, authoring
+samples, and positive/negative type fixtures, then runs the package tests and
+the host's unit tests (`crates/knot-host/js-tests`, with the native bindings
+stubbed) under `node:test` with an in-memory host (see the
+[extension guide](extension-api/README.md#write-and-test-in-typescript)).
 It does not use a global `tsc`. Runtime contracts still require Rust/V8 tests.
 Files under a package's `test/fixtures` are test inputs and are not compiled;
 The bundled language packages keep highlight fixtures there, checked by a Rust test that

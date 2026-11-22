@@ -1,10 +1,16 @@
-const nativeBindings = globalThis.__knotNativeBindings;
-delete globalThis.__knotNativeBindings;
+import type { PaneTarget, ViewTarget, WindowTarget } from "knot";
+
+type Rec = Record<string, unknown>;
+/** Options an extension passes; their fields are validated where read. */
+type Opts = Record<string, Native>;
+
+const nativeBindings = globalThis.__knotNativeBindings as NativeBindings;
+delete (globalThis as { __knotNativeBindings?: NativeBindings }).__knotNativeBindings;
 
 export const platform = nativeBindings.platform;
 export const homeUri = nativeBindings.homeUri;
 
-function formatLogArgument(value) {
+function formatLogArgument(value: unknown) {
   if (typeof value === "string") return value;
   if (value instanceof Error) return value.stack ?? String(value);
   try {
@@ -15,8 +21,8 @@ function formatLogArgument(value) {
 }
 
 // V8's console discards its output; this one writes to standard error.
-for (const level of ["debug", "log", "info", "warn", "error"]) {
-  console[level] = (...values) => {
+for (const level of ["debug", "log", "info", "warn", "error"] as const) {
+  console[level] = (...values: unknown[]) => {
     nativeBindings.log(level, values.map(formatLogArgument).join(" "));
   };
 }
@@ -24,22 +30,35 @@ for (const level of ["debug", "log", "info", "warn", "error"]) {
 // Node-compatible timer globals. The host owns IDs and waits; each expiry
 // runs as its own root, and lifecycle teardown cancels every timer.
 const TIMEOUT_MAX = 2 ** 31 - 1;
-const armedTimers = new Map();
-const timerEntries = new WeakMap();
+type TimerCallback = (this: unknown, ...args: unknown[]) => unknown;
+type TimerEntry = {
+  id: number;
+  owner: object;
+  callback: TimerCallback;
+  args: unknown[];
+  delay?: number;
+  repeat?: boolean;
+  immediate?: boolean;
+  cleared: boolean;
+};
+const armedTimers = new Map<number, TimerEntry>();
+const timerEntries = new WeakMap<object, TimerEntry>();
 
-function timerDelay(after) {
-  after *= 1;
-  return after >= 1 && after <= TIMEOUT_MAX ? after : 1;
+function timerDelay(after: unknown) {
+  const delay = Number(after) * 1;
+  return delay >= 1 && delay <= TIMEOUT_MAX ? delay : 1;
 }
 
-function timerCallback(callback) {
-  if (typeof callback === "function") return callback;
-  const error = new TypeError(`The "callback" argument must be of type function. Received ${typeof callback}`);
+function timerCallback(callback: unknown): TimerCallback {
+  if (typeof callback === "function") return callback as TimerCallback;
+  const error: Error & { code?: string } = new TypeError(
+    `The "callback" argument must be of type function. Received ${typeof callback}`,
+  );
   error.code = "ERR_INVALID_ARG_TYPE";
   throw error;
 }
 
-function cancelTimer(entry) {
+function cancelTimer(entry: TimerEntry) {
   if (entry.cleared) return;
   entry.cleared = true;
   armedTimers.delete(entry.id);
@@ -48,16 +67,15 @@ function cancelTimer(entry) {
 
 class Timeout {
   #refed = true;
-  constructor(callback, delay, args, repeat) {
-    const entry = { owner: this, callback, args, delay, repeat, cleared: false };
-    entry.id = nativeBindings.timer("start", delay);
+  constructor(callback: TimerCallback, delay: number, args: unknown[], repeat: boolean) {
+    const entry: TimerEntry = { id: nativeBindings.timer("start", delay), owner: this, callback, args, delay, repeat, cleared: false };
     timerEntries.set(this, entry);
     armedTimers.set(entry.id, entry);
   }
   refresh() {
-    const entry = timerEntries.get(this);
+    const entry = timerEntries.get(this)!;
     if (!entry.cleared) {
-      nativeBindings.timer("restart", entry.id, entry.delay);
+      nativeBindings.timer("restart", entry.id, entry.delay!);
       armedTimers.set(entry.id, entry);
     }
     return this;
@@ -66,14 +84,13 @@ class Timeout {
   ref() { this.#refed = true; return this; }
   unref() { this.#refed = false; return this; }
   hasRef() { return this.#refed; }
-  [Symbol.toPrimitive]() { return timerEntries.get(this).id; }
+  [Symbol.toPrimitive]() { return timerEntries.get(this)!.id; }
 }
 
 class Immediate {
   #refed = true;
-  constructor(callback, args) {
-    const entry = { owner: this, callback, args, immediate: true, cleared: false };
-    entry.id = nativeBindings.timer("start");
+  constructor(callback: TimerCallback, args: unknown[]) {
+    const entry: TimerEntry = { id: nativeBindings.timer("start"), owner: this, callback, args, immediate: true, cleared: false };
     timerEntries.set(this, entry);
     armedTimers.set(entry.id, entry);
   }
@@ -82,33 +99,41 @@ class Immediate {
   hasRef() { return this.#refed; }
 }
 
-if (Symbol.dispose) {
-  Timeout.prototype[Symbol.dispose] = function () { clearTimeout(this); };
-  Immediate.prototype[Symbol.dispose] = function () { clearImmediate(this); };
+// `Symbol.dispose` is absent from the ES2022 library and, in older V8s, from the runtime.
+const disposeSymbol = (Symbol as { dispose?: symbol }).dispose;
+if (disposeSymbol) {
+  Object.defineProperty(Timeout.prototype, disposeSymbol, {
+    value: function (this: Timeout) { clearTimeout(this); },
+    writable: true, configurable: true,
+  });
+  Object.defineProperty(Immediate.prototype, disposeSymbol, {
+    value: function (this: Immediate) { clearImmediate(this); },
+    writable: true, configurable: true,
+  });
 }
 
-function clearTimeout(timer) {
+function clearTimeout(timer: unknown) {
   const entry = typeof timer === "number" || typeof timer === "string"
     ? armedTimers.get(Number(timer))
     : timer !== null && typeof timer === "object" ? timerEntries.get(timer) : undefined;
   if (entry && !entry.immediate) cancelTimer(entry);
 }
 
-function clearImmediate(immediate) {
+function clearImmediate(immediate: unknown) {
   const entry = immediate !== null && typeof immediate === "object" ? timerEntries.get(immediate) : undefined;
   if (entry?.immediate) cancelTimer(entry);
 }
 
 Object.assign(globalThis, {
-  setTimeout: (callback, delay, ...args) => new Timeout(timerCallback(callback), timerDelay(delay), args, false),
-  setInterval: (callback, delay, ...args) => new Timeout(timerCallback(callback), timerDelay(delay), args, true),
-  setImmediate: (callback, ...args) => new Immediate(timerCallback(callback), args),
+  setTimeout: (callback: unknown, delay: unknown, ...args: unknown[]) => new Timeout(timerCallback(callback), timerDelay(delay), args, false),
+  setInterval: (callback: unknown, delay: unknown, ...args: unknown[]) => new Timeout(timerCallback(callback), timerDelay(delay), args, true),
+  setImmediate: (callback: unknown, ...args: unknown[]) => new Immediate(timerCallback(callback), args),
   clearTimeout,
   clearInterval: clearTimeout,
   clearImmediate,
 });
 
-globalThis.__knotDispatchTimer = async (id) => {
+globalThis.__knotDispatchTimer = async (id: number) => {
   const entry = armedTimers.get(id);
   if (!entry) return;
   if (!entry.repeat) {
@@ -121,52 +146,79 @@ globalThis.__knotDispatchTimer = async (id) => {
   } finally {
     // An interval waits again only once its callback has returned, so slow
     // callbacks never stack missed ticks.
-    if (entry.repeat && !entry.cleared) nativeBindings.timer("restart", id, entry.delay);
+    if (entry.repeat && !entry.cleared) nativeBindings.timer("restart", id, entry.delay!);
   }
   await result;
 };
 
-export function keybinding(key, command, options) {
+export function keybinding(key: string, command: unknown, options?: Opts) {
   if (command !== null && typeof command === "object" && !Array.isArray(command)) {
+    const object = command as Rec;
     try {
       command = {
-        name: command.name,
-        arguments: command.arguments === undefined ? null : validateJsonValue(command.arguments),
+        name: object.name,
+        arguments: object.arguments === undefined ? null : validateJsonValue(object.arguments),
       };
     } catch (error) {
-      nativeBindings.keybinding("invalid", String(error));
+      nativeBindings.keybinding("invalid", String(error), undefined, undefined);
       return;
     }
   }
   nativeBindings.keybinding("set", key, command, options);
 }
 
-export function removeKeybinding(key, options) {
+export function removeKeybinding(key: string, options?: Opts) {
   nativeBindings.keybinding("remove", key, undefined, options);
 }
 
-export function textBinding(command, options) {
+export function textBinding(command: unknown, options?: Opts) {
   nativeBindings.keybinding("setText", "", command, options);
 }
 
-export function removeTextBinding(options) {
+export function removeTextBinding(options?: Opts) {
   nativeBindings.keybinding("removeText", "", undefined, options);
 }
 
-function hostError(code) {
-  const exception = new Error(code);
+type CodedError = Error & { code?: unknown };
+
+/** The `code` a host error carries, if `error` has one. */
+function errorCode(error: unknown): unknown {
+  return typeof error === "object" && error !== null ? (error as CodedError).code : undefined;
+}
+
+/** The text of a thrown value, stack included when it has one. */
+function errorStack(error: unknown): string {
+  return String((error as { stack?: unknown } | null | undefined)?.stack ?? error);
+}
+
+/** The text of a thrown value, message only when it has one. */
+function errorMessage(error: unknown): string {
+  return String((error as { message?: unknown } | null | undefined)?.message ?? error);
+}
+
+function isObject(value: unknown): value is object {
+  return typeof value === "object" && value !== null;
+}
+
+/** Whether `target` is a target object registered in `table`. */
+function isLive(table: WeakMap<object, unknown>, target: unknown): boolean {
+  return typeof target === "object" && target !== null && table.has(target);
+}
+
+function hostError(code: string): never {
+  const exception: CodedError = new Error(code);
   exception.name = "KnotHostError";
   exception.code = code;
   throw exception;
 }
 
-function ownership(removeLocal, release) {
+export function ownership(removeLocal: () => void, release: () => Promise<unknown>) {
   let inactive = false;
-  let cleanup;
-  const pending = new Set();
+  let cleanup: Promise<void> | undefined;
+  const pending = new Set<Promise<unknown>>();
   return {
     assertActive() { if (inactive) hostError("OwnershipDisposed"); },
-    track(promise) {
+    track<T>(promise: Promise<T>) {
       pending.add(promise);
       promise.then(() => pending.delete(promise), () => pending.delete(promise));
       return promise;
@@ -178,7 +230,7 @@ function ownership(removeLocal, release) {
       const releasePromise = release();
       const earlier = [...pending];
       cleanup = Promise.allSettled([...earlier, releasePromise]).then((results) => {
-        const releaseResult = results.at(-1);
+        const releaseResult = results.at(-1)!;
         if (releaseResult.status === "rejected") throw releaseResult.reason;
       });
       return cleanup;
@@ -186,35 +238,45 @@ function ownership(removeLocal, release) {
   };
 }
 
-function record(value, message) {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) throw new TypeError(message);
+function record(value: unknown, message: string): Rec {
+  expectRecord(value, message);
   return value;
 }
-function string(value, message) {
+type Fn = (...args: Native[]) => unknown;
+function expectFunction(value: unknown, message: string): asserts value is Fn {
+  if (typeof value !== "function") throw new TypeError(message);
+}
+function expectRecord(value: unknown, message: string): asserts value is Rec {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) throw new TypeError(message);
+}
+function string(value: unknown, message: string) {
   if (typeof value !== "string") throw new TypeError(message);
   return value;
 }
-function flag(value, message) {
+function flag(value: unknown, message: string) {
   if (typeof value !== "boolean") throw new TypeError(message);
   return value;
 }
-function safeInteger(value) {
+function isNonNegativeInteger(value: unknown): value is number {
+  return Number.isSafeInteger(value) && (value as number) >= 0;
+}
+export function safeInteger(value: unknown) {
   if (typeof value !== "number") throw new TypeError("expected a number");
-  if (!Number.isSafeInteger(value) || value < 0) throw new RangeError("expected a nonnegative safe integer");
+  if (!isNonNegativeInteger(value)) throw new RangeError("expected a nonnegative safe integer");
   return value;
 }
-function barId(value) {
+function barId(value: unknown) {
   if (typeof value !== "string" || value === "") throw new TypeError("bar id must be a non-empty string");
   return value;
 }
-function barCommand(value) {
-  record(value, "bar command must be an object");
+function barCommand(value: unknown) {
+  expectRecord(value, "bar command must be an object");
   const name = string(value.name, "bar command name must be a string");
   if (name === "") throw new TypeError("bar command name must not be empty");
   return { name, arguments: value.arguments ?? null };
 }
-function barControl(value, kind) {
-  record(value, `bar ${kind} must be an object`);
+function barControl(value: unknown, kind: unknown) {
+  expectRecord(value, `bar ${kind} must be an object`);
   const tooltip = value.tooltip ?? null;
   if (tooltip !== null && typeof tooltip !== "string") throw new TypeError(`bar ${kind} tooltip must be a string`);
   const icon = value.icon;
@@ -228,19 +290,19 @@ function barControl(value, kind) {
     command: barCommand(value.command),
   };
 }
-function barList(value, name) {
+function barList(value: unknown, name: unknown) {
   const list = value ?? [];
   if (!Array.isArray(list)) throw new TypeError(`bar ${name} must be an array`);
   return list;
 }
-function barValue(value) {
-  record(value, "bar must be an object");
+function barValue(value: unknown) {
+  expectRecord(value, "bar must be an object");
   const fields = barList(value.fields, "fields");
   const message = value.message ?? null;
   if (message !== null && typeof message !== "string") throw new TypeError("bar message must be a string or null");
   return {
     fields: fields.map((field) => {
-      record(field, "bar field must be an object");
+      expectRecord(field, "bar field must be an object");
       const placeholder = field.placeholder ?? "";
       return {
         id: string(field.id, "bar field id must be a string"),
@@ -258,55 +320,56 @@ function barValue(value) {
     message,
   };
 }
-function foldRange(value) {
-  record(value, "fold range must be an object");
+function foldRange(value: unknown) {
+  expectRecord(value, "fold range must be an object");
   const { start, end } = value;
-  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || start >= end) {
+  if (typeof start !== "number" || typeof end !== "number" ||
+      !Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || start >= end) {
     throw new TypeError("a fold needs a non-negative safe integer start below its end");
   }
   return [start, end];
 }
-function byteRange(value) {
-  record(value, "range must be an object");
+function byteRange(value: unknown) {
+  expectRecord(value, "range must be an object");
   const startByteOffset = safeInteger(value.startByteOffset);
   const endByteOffset = safeInteger(value.endByteOffset);
   if (startByteOffset > endByteOffset) throw new RangeError("range endpoints must be ordered");
   return { startByteOffset, endByteOffset };
 }
-function revision(options) {
+function revision(options?: Opts) {
   return safeInteger(record(options, "revision options are required").ifRevision);
 }
-function arrayItems(items, convert) {
+function arrayItems<T>(items: unknown, convert: (item: unknown) => T): T[] {
   if (!Array.isArray(items)) throw new TypeError("items must be an array");
   return Array.from(items, convert);
 }
-function historyEntries(value) {
+function historyEntries(value: unknown) {
   if (value == null) return [];
-  return arrayItems(value, (entry) => string(entry, "history entries must be text"));
+  return arrayItems(value, (entry: unknown) => string(entry, "history entries must be text"));
 }
-function optionalText(value) {
+function optionalText(value: unknown) {
   return value == null ? null : string(value, "expected text or null");
 }
-function iconRef(value) {
+function iconRef(value: unknown) {
   if (value == null || typeof value === "string") return value ?? null;
-  record(value, "icon must be a name, { file } or { folder }");
+  expectRecord(value, "icon must be a name, { file } or { folder }");
   if (value.file != null) return { file: string(value.file, "icon file must be text") };
   return { folder: string(value.folder, "icon folder must be text") };
 }
-function token(value, allowed) {
+function token<const T extends string>(value: unknown, allowed: readonly T[]): T | null {
   if (value == null) return null;
-  if (!allowed.includes(value)) throw new TypeError("invalid semantic token");
-  return value;
+  if (!allowed.includes(value as T)) throw new TypeError("invalid semantic token");
+  return value as T;
 }
-function decoration(value) {
+function decoration(value: unknown) {
   if (value == null) return null;
-  record(value, "decoration must be an object");
+  expectRecord(value, "decoration must be an object");
   const style = token(value.style, ["background", "line", "underline", "wavy"]);
   if (style === null) throw new TypeError("decoration needs a style");
   return { color: string(value.color, "decoration color must be text"), style };
 }
-function contribution(value) {
-  record(value, "contribution must be an object");
+function contribution(value: unknown) {
+  expectRecord(value, "contribution must be an object");
   return {
     range: byteRange(value.range),
     decoration: decoration(value.decoration),
@@ -314,20 +377,21 @@ function contribution(value) {
     command: optionalText(value.command),
   };
 }
-function viewDecoration(value) {
-  record(value, "view decoration must be an object");
+function viewDecoration(value: unknown) {
+  expectRecord(value, "view decoration must be an object");
   const painted = decoration(value.decoration);
   if (painted === null) throw new TypeError("view decoration needs a decoration");
   return { range: byteRange(value.range), decoration: painted, gutter: null, command: null };
 }
-function iterableItems(value, convert) {
-  if (value == null || typeof value === "string" || typeof value[Symbol.iterator] !== "function") {
+function iterableItems<T>(value: unknown, convert: (item: unknown) => T): T[] {
+  if (value == null || typeof value === "string" ||
+      typeof (value as Partial<Iterable<unknown>>)[Symbol.iterator] !== "function") {
     throw new TypeError("provider result must be an iterable of items");
   }
-  return Array.from(value, convert);
+  return Array.from(value as Iterable<unknown>, convert);
 }
-function treeAction(value) {
-  record(value, "tree action must be an object");
+function treeAction(value: unknown) {
+  expectRecord(value, "tree action must be an object");
   return {
     label: string(value.label, "tree action label must be text"),
     command: string(value.command, "tree action command must be text"),
@@ -337,11 +401,11 @@ function treeAction(value) {
     arguments: value.arguments === undefined ? null : validateJsonValue(value.arguments),
   };
 }
-function treeActions(value) {
+function treeActions(value: unknown) {
   return value == null ? [] : arrayItems(value, treeAction);
 }
-function treeItem(value) {
-  record(value, "tree item must be an object");
+function treeItem(value: unknown) {
+  expectRecord(value, "tree item must be an object");
   const collapsibleState = token(value.collapsibleState, ["none", "collapsed", "expanded"]);
   if (collapsibleState === null) throw new TypeError("collapsibleState is required");
   const kind = token(value.kind, ["item", "group"]);
@@ -367,7 +431,7 @@ function treeItem(value) {
   };
 }
 
-async function requestForInvocation(invocation, operation, ...arguments_) {
+async function requestForInvocation(invocation: Native, operation: string, ...arguments_: unknown[]) {
   try {
     return await nativeBindings.request(
       invocation,
@@ -375,12 +439,12 @@ async function requestForInvocation(invocation, operation, ...arguments_) {
       ...arguments_,
     );
   } catch (error) {
-    if (error?.code === "Cancelled") liveFrames.get(invocation)?.controller.abort(error);
+    if (errorCode(error) === "Cancelled") liveFrames.get(invocation)?.controller?.abort(error);
     throw error;
   }
 }
 
-function request(operation, ...arguments_) {
+function request(operation: string, ...arguments_: unknown[]) {
   return requestForInvocation(
     currentFrame()?.invocation ?? null,
     operation,
@@ -395,7 +459,7 @@ function request(operation, ...arguments_) {
 // code that registered has continued past its `await` first; it waits again
 // if its handler is still missing and other registrations are in flight.
 let registrationsInFlight = 0;
-let registrationWaiters = [];
+let registrationWaiters: (() => void)[] = [];
 
 function wakeRegistrationWaiters() {
   const waiters = registrationWaiters;
@@ -403,7 +467,7 @@ function wakeRegistrationWaiters() {
   for (const resolve of waiters) resolve();
 }
 
-async function registerCallable(install, send) {
+async function registerCallable<R>(install: (registration: R) => void, send: () => Promise<R>): Promise<R> {
   registrationsInFlight++;
   try {
     const registration = await send();
@@ -417,13 +481,13 @@ async function registerCallable(install, send) {
   }
 }
 
-async function whenRegistered(registered) {
+async function whenRegistered(registered: () => boolean) {
   while (!registered() && registrationsInFlight > 0) {
-    await new Promise((resolve) => registrationWaiters.push(resolve));
+    await new Promise<void>((resolve) => registrationWaiters.push(resolve));
   }
 }
 
-async function callable(table, registration) {
+async function callable<V>(table: Map<number, V>, registration: number): Promise<V | undefined> {
   await whenRegistered(() => table.has(registration));
   return table.get(registration);
 }
@@ -432,28 +496,39 @@ async function callable(table, registration) {
 // subscription's notifications take turns this way, so a slow listener sees
 // them in order and, where the application coalesces changes until a
 // notification acknowledges them, the changes made meanwhile join the next one.
-function inTurn(owner, key, run) {
+function inTurn<K extends string, T>(
+  owner: { [P in K]?: Promise<unknown> }, key: K, run: () => T | Promise<T>,
+): Promise<T> {
   const result = (owner[key] ?? Promise.resolve()).then(run);
   owner[key] = result.catch(() => {});
   return result;
 }
 
-const buffers = new Map();
-const commandHandlers = new Map();
-const bufferChangeListeners = new Map();
-const treeProviders = new Map();
-const providerImplementations = new Map();
+const buffers = new Map<Native, Native>();
+const commandHandlers = new Map<number, Fn>();
+const bufferChangeListeners = new Map<number, { handle: Native; listener: Fn; turn?: Promise<unknown> }>();
+const treeProviders = new Map<number, { getChildren: Fn }>();
+const providerImplementations = new Map<number, Record<string, unknown>>();
 // The frame of the invocation a continuation belongs to travels with the
 // continuation itself (V8's continuation-preserved embedder data), so it
 // survives awaits and promise reactions. `liveFrames` indexes the frames of
 // unfinished command invocations for cancellation.
-const liveFrames = new Map();
+const liveFrames = new Map<unknown, Frame>();
 
-function currentFrame() {
-  return nativeBindings.frame() ?? null;
+type Frame = {
+  root: Native;
+  invocation?: Native;
+  controller?: KnotAbortController;
+  buffer?: Native;
+  capture?: Native;
+  target?: Native;
+};
+
+function currentFrame(): Frame | null {
+  return (nativeBindings.frame() as Frame | null | undefined) ?? null;
 }
 
-function withFrame(frame, run) {
+function withFrame<T>(frame: Frame | null, run: () => T): T {
   const previous = nativeBindings.frame();
   nativeBindings.frame(frame);
   try {
@@ -472,21 +547,34 @@ function withFrame(frame, run) {
 // rethrows once the surface settles, so a surface never stays open unowned.
 // Calls for which `supersedes` holds overlap, and only the failure of the
 // latest of them counts, since the surface drops the others' answers.
-const surfaceCallbacks = new Map();
+type SurfaceState = {
+  open: boolean;
+  callback: (event: Native) => unknown;
+  supersedes: (event: Native) => boolean;
+  latest: number;
+  failure: { error: unknown } | null;
+  frame: Frame | null;
+};
+const surfaceCallbacks = new Map<number, SurfaceState>();
 let nextSurfaceSession = 1;
 
-async function withSurfaceCallback(callback, open, supersedes = () => false) {
+async function withSurfaceCallback<T>(
+  callback: (event: Native) => unknown,
+  open: (session: number) => Promise<T>,
+  supersedes: (event: Native) => boolean = () => false,
+): Promise<T> {
   const session = nextSurfaceSession++;
   const command = currentFrame();
-  const state = { open: true, callback, supersedes, latest: 0, failure: null, frame: null };
+  const state: SurfaceState = { open: true, callback, supersedes, latest: 0, failure: null, frame: null };
   if (command !== null) {
-    state.frame = { root: command.root };
-    for (const key of ["invocation", "controller", "buffer", "capture", "target"]) {
-      Object.defineProperty(state.frame, key, { get: () => (state.open ? command[key] : undefined) });
+    const frame: Frame = { root: command.root };
+    for (const key of ["invocation", "controller", "buffer", "capture", "target"] as const) {
+      Object.defineProperty(frame, key, { get: () => (state.open ? command[key] : undefined) });
     }
+    state.frame = frame;
   }
   surfaceCallbacks.set(session, state);
-  let result;
+  let result: T;
   try {
     result = await open(session);
   } finally {
@@ -497,7 +585,7 @@ async function withSurfaceCallback(callback, open, supersedes = () => false) {
   return result;
 }
 
-globalThis.__knotSurfaceCallback = async (session, argument) => {
+globalThis.__knotSurfaceCallback = async (session: number, argument: string) => {
   const state = surfaceCallbacks.get(session);
   if (state === undefined || state.failure !== null) return { error: "the surface callback stopped" };
   const event = JSON.parse(argument);
@@ -507,34 +595,37 @@ globalThis.__knotSurfaceCallback = async (session, argument) => {
     return { result: JSON.stringify(result ?? null) };
   } catch (error) {
     if (call === null || call === state.latest) state.failure ??= { error };
-    return { error: String(error?.message ?? error) };
+    return { error: errorMessage(error) };
   }
 };
-const snapshotTables = new WeakMap();
-const targetAuthorities = new WeakMap();
-const invalidArgumentErrors = new WeakSet();
-const unavailableErrors = new WeakSet();
-const signalAborters = new WeakMap();
+type SnapshotTable = { byteAtUtf16: number[]; utf16AtByte: Map<number, number> };
+const snapshotTables = new WeakMap<object, SnapshotTable>();
+const targetAuthorities = new WeakMap<object, Native>();
+const invalidArgumentErrors = new WeakSet<object>();
+const unavailableErrors = new WeakSet<object>();
+const signalAborters = new WeakMap<object, (reason: unknown) => void>();
+
+type AbortListener = (this: KnotAbortSignal, event: Readonly<{ type: "abort"; target: KnotAbortSignal }>) => unknown;
 
 class KnotAbortSignal {
   #aborted = false;
-  #reason = undefined;
-  #listeners = new Set();
-  constructor() { signalAborters.set(this, (reason) => this.#abort(reason)); }
+  #reason: unknown = undefined;
+  #listeners = new Set<AbortListener>();
+  constructor() { signalAborters.set(this, (reason: unknown) => this.#abort(reason)); }
   get aborted() { return this.#aborted; }
   get reason() { return this.#reason; }
-  addEventListener(type, listener) {
+  addEventListener(type: unknown, listener: unknown) {
     if (type !== "abort" || typeof listener !== "function") throw new TypeError("expected an abort listener");
-    if (!this.#aborted) this.#listeners.add(listener);
+    if (!this.#aborted) this.#listeners.add(listener as AbortListener);
   }
-  removeEventListener(type, listener) {
+  removeEventListener(type: unknown, listener: unknown) {
     if (type !== "abort" || typeof listener !== "function") throw new TypeError("expected an abort listener");
-    this.#listeners.delete(listener);
+    this.#listeners.delete(listener as AbortListener);
   }
   throwIfAborted() {
     if (this.#aborted) throw this.#reason;
   }
-  #abort(reason) {
+  #abort(reason: unknown) {
     if (this.#aborted) return;
     this.#aborted = true;
     this.#reason = reason;
@@ -542,7 +633,7 @@ class KnotAbortSignal {
       try { listener.call(this, Object.freeze({ type: "abort", target: this })); }
       catch (error) {
         let message;
-        try { message = String(error?.stack ?? error); } catch { message = "abort listener failed"; }
+        try { message = errorStack(error); } catch { message = "abort listener failed"; }
         nativeBindings.reportCancellationListenerFailure(message);
       }
     }
@@ -552,23 +643,23 @@ class KnotAbortSignal {
 
 class KnotAbortController {
   signal = Object.freeze(new KnotAbortSignal());
-  abort(reason = new Error("command cancelled")) { signalAborters.get(this.signal)(reason); }
+  abort(reason: unknown = new Error("command cancelled")) { signalAborters.get(this.signal)!(reason); }
 }
 
-function byteLengthOfCodePoint(codePoint) {
+function byteLengthOfCodePoint(codePoint: number) {
   return codePoint <= 0x7f ? 1 : codePoint <= 0x7ff ? 2 : codePoint <= 0xffff ? 3 : 4;
 }
 
-function snapshotTable(snapshot) {
+function snapshotTable(snapshot: Native) {
   let table = snapshotTables.get(snapshot);
   if (table) return table;
 
   const byteAtUtf16 = [0];
-  const utf16AtByte = new Map([[0, 0]]);
+  const utf16AtByte = new Map<number, number>([[0, 0]]);
   let byteOffset = 0;
   let utf16Offset = 0;
   for (const character of snapshot.text) {
-    byteOffset += byteLengthOfCodePoint(character.codePointAt(0));
+    byteOffset += byteLengthOfCodePoint(character.codePointAt(0)!);
     utf16Offset += character.length;
     byteAtUtf16[utf16Offset] = byteOffset;
     utf16AtByte.set(byteOffset, utf16Offset);
@@ -578,7 +669,7 @@ function snapshotTable(snapshot) {
   return table;
 }
 
-function snapshotFromNative(snapshot) {
+function snapshotFromNative(snapshot: Native) {
   return Object.freeze({
     text: snapshot.text,
     range: Object.freeze({
@@ -586,7 +677,7 @@ function snapshotFromNative(snapshot) {
       endByteOffset: snapshot.range.endByteOffset,
     }),
     revision: snapshot.revision,
-    byteOffsetAtUtf16(offset) {
+    byteOffsetAtUtf16(offset: Native) {
       safeInteger(offset);
       const offsets = snapshotTable(this).byteAtUtf16;
       const value = Object.hasOwn(offsets, offset) ? offsets[offset] : undefined;
@@ -595,7 +686,7 @@ function snapshotFromNative(snapshot) {
       }
       return value;
     },
-    utf16OffsetAtByte(offset) {
+    utf16OffsetAtByte(offset: Native) {
       safeInteger(offset);
       const value = snapshotTable(this).utf16AtByte.get(offset);
       if (value === undefined) {
@@ -606,13 +697,13 @@ function snapshotFromNative(snapshot) {
   });
 }
 
-function bufferFor(handle) {
+function bufferFor(handle: Native) {
   let buffer = buffers.get(handle);
   if (buffer) return buffer;
 
   const contributionOwnership = ownership(() => {}, () => request("disposeEditorContributions", handle));
   const contributions = Object.freeze({
-    async replace(items, options) {
+    async replace(items: unknown, options?: Opts) {
       contributionOwnership.assertActive();
       const converted = arrayItems(items, contribution);
       const ifRevision = revision(options);
@@ -622,37 +713,37 @@ function bufferFor(handle) {
   });
 
   buffer = Object.freeze({
-    async snapshot(range) {
+    async snapshot(range: unknown) {
       return snapshotFromNative(await request("snapshot", handle, range == null ? null : byteRange(range)));
     },
-    async applyEdits(edits, options) {
-      const converted = arrayItems(edits, (edit) => {
-        record(edit, "edit must be an object");
+    async applyEdits(edits: unknown, options?: Opts) {
+      const converted = arrayItems(edits, (edit: unknown) => {
+        expectRecord(edit, "edit must be an object");
         return { range: byteRange(edit.range), text: string(edit.text, "edit text must be a string") };
       });
       const resultRevision = await request("applyEdits", handle, converted, revision(options));
       return Object.freeze({ revision: resultRevision });
     },
     lineCount: () => request("lineCount", handle),
-    async lineRange(line) {
+    async lineRange(line: unknown) {
       const range = await request("lineRange", handle, safeInteger(line));
       return Object.freeze({ startByteOffset: range.startByteOffset, endByteOffset: range.endByteOffset });
     },
-    async lines(first, last) {
+    async lines(first: unknown, last: unknown) {
       return lineItems(await request("lines", handle, safeInteger(first), safeInteger(last)));
     },
-    lineAt: (offset) => request("lineAt", handle, safeInteger(offset)),
-    async wordAt(offset) {
+    lineAt: (offset: unknown) => request("lineAt", handle, safeInteger(offset)),
+    async wordAt(offset: unknown) {
       const word = await request("wordAt", handle, safeInteger(offset));
       return word === null ? null : Object.freeze({
         range: Object.freeze({ startByteOffset: word.range.startByteOffset, endByteOffset: word.range.endByteOffset }),
         kind: word.kind,
       });
     },
-    async find(query, options) {
+    async find(query: unknown, options?: Opts) {
       if (typeof query !== "string") throw new TypeError("find query must be a string");
       const limit = options?.limit ?? 1000;
-      if (!Number.isSafeInteger(limit) || limit < 0) throw new TypeError("limit must be a non-negative safe integer");
+      if (!isNonNegativeInteger(limit)) throw new TypeError("limit must be a non-negative safe integer");
       const result = await request(
         "find",
         handle,
@@ -666,15 +757,15 @@ function bufferFor(handle) {
       );
       return Object.freeze({
         revision: result.revision,
-        matches: Object.freeze(result.matches.map((match) => Object.freeze(match))),
+        matches: Object.freeze(result.matches.map((match: Native) => Object.freeze(match))),
         more: result.more,
       });
     },
-    async replace(query, replacement, options) {
+    async replace(query: unknown, replacement: unknown, options?: Opts) {
       if (typeof query !== "string") throw new TypeError("replace query must be a string");
       if (typeof replacement !== "string") throw new TypeError("replacement must be a string");
       const limit = options?.limit ?? Number.MAX_SAFE_INTEGER;
-      if (!Number.isSafeInteger(limit) || limit < 0) throw new TypeError("limit must be a non-negative safe integer");
+      if (!isNonNegativeInteger(limit)) throw new TypeError("limit must be a non-negative safe integer");
       const result = await request(
         "replace",
         handle,
@@ -690,7 +781,7 @@ function bufferFor(handle) {
       );
       return Object.freeze({ revision: result.revision, count: result.count, more: result.more });
     },
-    async createMark(offset) {
+    async createMark(offset: unknown) {
       const id = await request("createMark", handle, safeInteger(offset));
       const owned = ownership(() => {}, () => request("disposeMark", handle, id));
       return Object.freeze({
@@ -698,12 +789,10 @@ function bufferFor(handle) {
         dispose: () => owned.dispose(),
       });
     },
-    async onDidChange(listener) {
-      if (typeof listener !== "function") {
-        throw new TypeError("onDidChange requires a listener");
-      }
+    async onDidChange(listener: unknown) {
+      expectFunction(listener, "onDidChange requires a listener");
       const subscription = await registerCallable(
-        (subscription) => bufferChangeListeners.set(subscription, { handle, listener }),
+        (subscription: number) => bufferChangeListeners.set(subscription, { handle, listener }),
         () => request("subscribeBufferChanges", handle));
       const owned = ownership(() => bufferChangeListeners.delete(subscription),
         () => request("unsubscribeBufferChanges", subscription));
@@ -715,14 +804,14 @@ function bufferFor(handle) {
   return buffer;
 }
 
-function lineItems(items) {
-  return Object.freeze(items.map((item) => Object.freeze({
+function lineItems(items: Native) {
+  return Object.freeze(items.map((item: Native) => Object.freeze({
     line: item.line, startByteOffset: item.startByteOffset, text: item.text,
   })));
 }
 
-function selectionFromNative(value) {
-  const selection = { anchor: value.anchor, caret: value.caret };
+function selectionFromNative(value: Native) {
+  const selection: Native = { anchor: value.anchor, caret: value.caret };
   if (value.lines !== undefined) {
     selection.line = value.line;
     selection.lines = lineItems(value.lines);
@@ -730,26 +819,26 @@ function selectionFromNative(value) {
   return Object.freeze(selection);
 }
 
-function linesOption(options) {
+function linesOption(options?: Opts) {
   if (options?.lines === undefined) return null;
   const lines = options.lines;
-  if (!Number.isSafeInteger(lines) || lines < 0) throw new TypeError("lines must be a non-negative safe integer");
+  if (!isNonNegativeInteger(lines)) throw new TypeError("lines must be a non-negative safe integer");
   return lines;
 }
 
-function editorFor(authority) {
+function editorFor(authority: Native) {
   return Object.freeze({
-    async selection(options) {
+    async selection(options?: Opts) {
       return selectionFromNative(await request("editorSelection", authority, linesOption(options)));
     },
-    async preparePaste(text, range) {
+    async preparePaste(text: unknown, range: unknown) {
       if (typeof text !== "string") throw new TypeError("text must be a string");
       if (range === undefined) return await request("editorPreparePaste", authority, text, null, null);
       if (!Array.isArray(range) || range.length !== 2) throw new TypeError("range must be a [start, end] pair");
       return await request("editorPreparePaste", authority, text, safeInteger(range[0]), safeInteger(range[1]));
     },
-    async setSelection(selection, options) {
-      record(selection, "selection must be an object");
+    async setSelection(selection: unknown, options?: Opts) {
+      expectRecord(selection, "selection must be an object");
       const anchor = safeInteger(selection.anchor);
       const caret = safeInteger(selection.caret);
       const reveal = options?.reveal ?? "nearest";
@@ -762,75 +851,75 @@ function editorFor(authority) {
       const value = await request("editorViewport", authority);
       return Object.freeze({ first: value.first, rows: value.rows });
     },
-    async rowAt(row) {
-      if (!Number.isSafeInteger(row) || row < 0) throw new TypeError("row must be a non-negative safe integer");
+    async rowAt(row: unknown) {
+      if (!isNonNegativeInteger(row)) throw new TypeError("row must be a non-negative safe integer");
       const value = await request("editorRowAt", authority, row);
       return Object.freeze({ line: value.line, column: value.column });
     },
-    async rowOf(line, column) {
-      if (!Number.isSafeInteger(line) || line < 0) throw new TypeError("line must be a non-negative safe integer");
-      if (!Number.isSafeInteger(column) || column < 0) throw new TypeError("column must be a non-negative safe integer");
+    async rowOf(line: unknown, column: unknown) {
+      if (!isNonNegativeInteger(line)) throw new TypeError("line must be a non-negative safe integer");
+      if (!isNonNegativeInteger(column)) throw new TypeError("column must be a non-negative safe integer");
       return request("editorRowOf", authority, line, column);
     },
-    async cellsBefore(line, column) {
-      if (!Number.isSafeInteger(line) || line < 0) throw new TypeError("line must be a non-negative safe integer");
-      if (!Number.isSafeInteger(column) || column < 0) throw new TypeError("column must be a non-negative safe integer");
+    async cellsBefore(line: unknown, column: unknown) {
+      if (!isNonNegativeInteger(line)) throw new TypeError("line must be a non-negative safe integer");
+      if (!isNonNegativeInteger(column)) throw new TypeError("column must be a non-negative safe integer");
       return request("editorCellsBefore", authority, line, column);
     },
-    async columnAtCells(line, cells) {
-      if (!Number.isSafeInteger(line) || line < 0) throw new TypeError("line must be a non-negative safe integer");
-      if (!Number.isSafeInteger(cells) || cells < 0) throw new TypeError("cells must be a non-negative safe integer");
+    async columnAtCells(line: unknown, cells: unknown) {
+      if (!isNonNegativeInteger(line)) throw new TypeError("line must be a non-negative safe integer");
+      if (!isNonNegativeInteger(cells)) throw new TypeError("cells must be a non-negative safe integer");
       return request("editorColumnAtCells", authority, line, cells);
     },
-    async fold(range) {
+    async fold(range: unknown) {
       const [start, end] = foldRange(range);
       await request("editorFold", authority, start, end);
     },
-    async unfold(range) {
+    async unfold(range: unknown) {
       const [start, end] = foldRange(range);
       await request("editorUnfold", authority, start, end);
     },
     async folds() {
       const folds = await request("editorFolds", authority);
-      return Object.freeze(folds.map(({ start, end }) => Object.freeze({ start, end })));
+      return Object.freeze(folds.map(({ start, end }: Native) => Object.freeze({ start, end })));
     },
     async foldRegions() {
       const regions = await request("editorFoldRegions", authority);
-      return Object.freeze(regions.map(({ start, end }) => Object.freeze({ start, end })));
+      return Object.freeze(regions.map(({ start, end }: Native) => Object.freeze({ start, end })));
     },
-    async scrollBy(rows) {
+    async scrollBy(rows: unknown) {
       if (!Number.isSafeInteger(rows)) throw new TypeError("rows must be a safe integer");
       await request("editorScrollBy", authority, rows);
     },
-    async setKeyContext(name, active) {
+    async setKeyContext(name: unknown, active: unknown) {
       if (typeof name !== "string" || name === "") {
         throw new TypeError("key context must be a non-empty string");
       }
       if (typeof active !== "boolean") throw new TypeError("active must be a boolean");
       await request("editorSetKeyContext", authority, name, active);
     },
-    async setDecorations(items, options) {
+    async setDecorations(items: unknown, options?: Opts) {
       const converted = arrayItems(items, viewDecoration);
       await request("editorSetDecorations", authority, converted, revision(options));
     },
-    async setCursorStyle(style) {
+    async setCursorStyle(style: unknown) {
       if (style !== null && style !== "bar" && style !== "block" && style !== "underline") {
         throw new TypeError('cursor style must be "bar", "block", "underline" or null');
       }
       await request("editorSetCursorStyle", authority, style);
     },
-    async openBar(id, bar) {
+    async openBar(id: unknown, bar: unknown) {
       await request("editorOpenBar", authority, barId(id), barValue(bar));
     },
-    async closeBar(id) {
+    async closeBar(id: unknown) {
       await request("editorCloseBar", authority, barId(id));
     },
-    async focusBarField(id, field, options) {
+    async focusBarField(id: unknown, field: unknown, options?: Opts) {
       const text = options?.text ?? null;
       if (text !== null && typeof text !== "string") throw new TypeError("bar field text must be a string");
       await request("editorFocusBarField", authority, barId(id), string(field, "bar field id must be a string"), text);
     },
-    async barFields(id) {
+    async barFields(id: unknown) {
       return Object.freeze(await request("editorBarFields", authority, barId(id)));
     },
     async beginUndoGroup() {
@@ -850,7 +939,7 @@ function editorFor(authority) {
           finished = true;
           const entries = await end();
           await owned.dispose();
-          return Object.freeze(entries.map((entry) => Object.freeze(entry)));
+          return Object.freeze(entries.map((entry: unknown) => Object.freeze(entry)));
         },
         dispose() {
           finished = true;
@@ -862,8 +951,8 @@ function editorFor(authority) {
       const value = await request("editorViewState", authority);
       return Object.freeze({ anchor: value.anchor, caret: value.caret, top: value.top, scrollX: value.scrollX });
     },
-    async restoreViewState(state) {
-      record(state, "view state must be an object");
+    async restoreViewState(state: unknown) {
+      expectRecord(state, "view state must be an object");
       const scrollX = state.scrollX;
       if (typeof scrollX !== "number" || !Number.isFinite(scrollX)) {
         throw new TypeError("view state scrollX must be a finite number");
@@ -874,12 +963,22 @@ function editorFor(authority) {
   });
 }
 
-const editorHandles = new Map();
+type EditorEntry = {
+  closed: boolean;
+  listeners: Set<Fn>;
+  selectionListeners: Map<Fn, number | null>;
+  watching: Promise<unknown> | null;
+  barListeners: Set<Fn>;
+  watchingBars: Promise<unknown> | null;
+  selectionTurn?: Promise<unknown>;
+  barsTurn?: Promise<unknown>;
+};
+const editorHandles = new Map<Native, EditorEntry>();
 
-export async function openEditor(target) {
-  if (!livePresentations.has(target)) hostError("InvalidTarget");
+export async function openEditor(target: unknown) {
+  if (!isLive(livePresentations, target)) hostError("InvalidTarget");
   const authority = await request("openEditor", destinationAuthority({ target }));
-  const entry = {
+  const entry: EditorEntry = {
     closed: false, listeners: new Set(), selectionListeners: new Map(), watching: null,
     barListeners: new Set(), watchingBars: null,
   };
@@ -892,17 +991,17 @@ export async function openEditor(target) {
   }, () => request("releaseEditor", authority));
   return Object.freeze({
     ...editorFor(authority),
-    onDidClose(listener) {
-      if (typeof listener !== "function") throw new TypeError("onDidClose requires a listener");
+    onDidClose(listener: unknown) {
+      expectFunction(listener, "onDidClose requires a listener");
       if (entry.closed) {
-        queueMicrotask(() => listener());
+        (globalThis as unknown as { queueMicrotask(callback: () => void): void }).queueMicrotask(() => listener());
         return Object.freeze({ dispose: async () => {} });
       }
       entry.listeners.add(listener);
       return Object.freeze({ dispose: async () => { entry.listeners.delete(listener); } });
     },
-    async onDidChangeSelection(listener, options) {
-      if (typeof listener !== "function") throw new TypeError("onDidChangeSelection requires a listener");
+    async onDidChangeSelection(listener: unknown, options?: Opts) {
+      expectFunction(listener, "onDidChangeSelection requires a listener");
       const lines = linesOption(options);
       owned.assertActive();
       await registerCallable(() => entry.selectionListeners.set(listener, lines), async () => {
@@ -911,8 +1010,8 @@ export async function openEditor(target) {
       });
       return Object.freeze({ dispose: async () => { entry.selectionListeners.delete(listener); } });
     },
-    async onDidEditBar(listener) {
-      if (typeof listener !== "function") throw new TypeError("onDidEditBar requires a listener");
+    async onDidEditBar(listener: unknown) {
+      expectFunction(listener, "onDidEditBar requires a listener");
       owned.assertActive();
       await registerCallable(() => entry.barListeners.add(listener), async () => {
         entry.watchingBars ??= request("watchEditorBars", authority);
@@ -950,10 +1049,10 @@ globalThis.__knotDispatchEditorEvent = async (authority, kind) => {
   }
 };
 
-async function dispatchSelection(authority, entry) {
+async function dispatchSelection(authority: Native, entry: EditorEntry) {
   // Acknowledge first, so changes during the listeners queue one more turn.
   // The turn reads the widest window any listener asked for.
-  const wanted = [...entry.selectionListeners.values()].filter((lines) => lines !== null);
+  const wanted = [...entry.selectionListeners.values()].filter((lines): lines is number => lines !== null);
   const selection = await request("acknowledgeEditorSelection", authority,
     wanted.length === 0 ? null : Math.max(...wanted));
   if (selection === null) return;
@@ -964,11 +1063,11 @@ async function dispatchSelection(authority, entry) {
   if (failure) throw failure.reason;
 }
 
-async function dispatchBars(authority, entry) {
+async function dispatchBars(authority: Native, entry: EditorEntry) {
   // Acknowledge first, so edits during the listeners queue one more turn.
   const edited = await request("acknowledgeEditorBars", authority);
-  const calls = [];
-  for (const { id, fields } of edited) {
+  const calls: Promise<unknown>[] = [];
+  for (const { id, fields } of edited as Native[]) {
     const event = Object.freeze({ bar: id, fields: Object.freeze(fields) });
     for (const listener of [...entry.barListeners]) calls.push(Promise.resolve().then(() => listener(event)));
   }
@@ -977,16 +1076,16 @@ async function dispatchBars(authority, entry) {
   if (failure) throw failure.reason;
 }
 
-function contextualAuthority(target) {
+function contextualAuthority(target: unknown) {
   if (target === undefined) return null;
   const frame = currentFrame();
-  const authority = targetAuthorities.get(target);
+  const authority = targetAuthorities.get(target as object);
   if (authority === undefined || !frame?.target ||
       authority !== targetAuthorities.get(frame.target)) hostError("InvalidTarget");
   return authority;
 }
 
-export async function activeBuffer(target) {
+export async function activeBuffer(target?: unknown) {
   const handle = await request("activeBuffer", contextualAuthority(target));
   return handle === null ? null : bufferFor(handle);
 }
@@ -998,7 +1097,7 @@ globalThis.__knotDispatchBufferChange = async (subscription, change) => {
     buffer: bufferFor(entry.handle),
     beforeRevision: change.beforeRevision,
     revision: change.revision,
-    edits: Object.freeze(change.edits.map((edit) => Object.freeze({
+    edits: Object.freeze(change.edits.map((edit: Native) => Object.freeze({
       range: Object.freeze({
         startByteOffset: edit.range.startByteOffset,
         endByteOffset: edit.range.endByteOffset,
@@ -1008,48 +1107,51 @@ globalThis.__knotDispatchBufferChange = async (subscription, change) => {
   })));
 };
 
-export async function registerCommand(name, handler, options = {}) {
+export async function registerCommand(name: unknown, handler: unknown, options: unknown = {}) {
   if (typeof name !== "string" || typeof handler !== "function") {
     throw new TypeError("commands.register requires a name and handler");
   }
+  expectFunction(handler, "commands.register requires a name and handler");
   if (options === null || typeof options !== "object") {
     throw new TypeError("command options must be an object");
   }
-  const title = options.title == null ? name : string(options.title, "command title must be text");
-  const description = optionalText(options.description);
-  if (options.palette != null && typeof options.palette !== "boolean") {
+  const fields = options as Rec;
+  const title = fields.title == null ? name : string(fields.title, "command title must be text");
+  const description = optionalText(fields.description);
+  if (fields.palette != null && typeof fields.palette !== "boolean") {
     throw new TypeError("command palette option must be a boolean");
   }
-  const palette = options.palette === false ? 0 : 1;
+  const palette = fields.palette === false ? 0 : 1;
   const registration = await registerCallable(
-    (registration) => commandHandlers.set(registration, handler),
+    (registration: number) => commandHandlers.set(registration, handler),
     () => request("registerCommand", name, title, description, palette));
   const owned = ownership(() => commandHandlers.delete(registration),
     () => request("unregisterCommand", registration));
   return Object.freeze({ dispose: () => owned.dispose() });
 }
 
-export async function registerViewCommand(viewKind, name, handler) {
+export async function registerViewCommand(viewKind: unknown, name: unknown, handler: unknown) {
   if (typeof viewKind !== "string" || typeof name !== "string" || typeof handler !== "function") {
     throw new TypeError("commands.registerForView requires a view, command name, and handler");
   }
+  expectFunction(handler, "commands.registerForView requires a view, command name, and handler");
   const registration = await registerCallable(
-    (registration) => commandHandlers.set(registration, handler),
+    (registration: number) => commandHandlers.set(registration, handler),
     () => request("registerViewCommand", viewKind, name));
   const owned = ownership(() => commandHandlers.delete(registration),
     () => request("unregisterCommand", registration));
   return Object.freeze({ dispose: () => owned.dispose() });
 }
 
-export async function selectedViewText(target) {
+export async function selectedViewText(target: unknown) {
   return request("selectedViewText", contextualAuthority(target));
 }
 
-export async function selectedTreeItem(target) {
+export async function selectedTreeItem(target: unknown) {
   return request("selectedTreeItem", contextualAuthority(target));
 }
 
-export async function writeClipboardText(text) {
+export async function writeClipboardText(text: unknown) {
   if (typeof text !== "string") {
     throw new TypeError("workbench.writeClipboardText requires text");
   }
@@ -1060,8 +1162,8 @@ export function readClipboardText() {
   return request("readClipboardText");
 }
 
-function pickerItem(value) {
-  record(value, "picker item must be an object");
+function pickerItem(value: unknown) {
+  expectRecord(value, "picker item must be an object");
   return {
     id: string(value.id, "picker item ID must be text"),
     label: string(value.label, "picker item label must be text"),
@@ -1070,12 +1172,12 @@ function pickerItem(value) {
     hint: optionalText(value.hint),
     icon: iconRef(value.icon),
     selected: value.selected === true,
-    tabs: value.tabs == null ? [] : arrayItems(value.tabs, (tab) => string(tab, "picker item tab must be text")),
+    tabs: value.tabs == null ? [] : arrayItems(value.tabs, (tab: unknown) => string(tab, "picker item tab must be text")),
   };
 }
 
-function pickerTab(value) {
-  record(value, "picker tab must be an object");
+function pickerTab(value: unknown) {
+  expectRecord(value, "picker tab must be an object");
   return {
     id: string(value.id, "picker tab ID must be text"),
     label: string(value.label, "picker tab label must be text"),
@@ -1083,8 +1185,8 @@ function pickerTab(value) {
   };
 }
 
-function inputCompletion(value) {
-  record(value, "input completion must be an object");
+function inputCompletion(value: unknown) {
+  expectRecord(value, "input completion must be an object");
   return {
     label: string(value.label, "input completion label must be text"),
     value: string(value.value, "input completion value must be text"),
@@ -1096,44 +1198,48 @@ function inputCompletion(value) {
   };
 }
 
-function textRange(value) {
+function textRange(value: unknown) {
   if (!Array.isArray(value) || value.length !== 2 || !value.every((unit) => Number.isSafeInteger(unit) && unit >= 0)) {
     throw new TypeError("input completion matches must be pairs of text offsets");
   }
   return [value[0], value[1]];
 }
 
-export async function matchCandidates(query, candidates, options) {
+export async function matchCandidates(query: unknown, candidates: unknown, options?: Opts) {
   const text = string(query, "match query must be text");
-  const list = arrayItems(candidates, (candidate) => string(candidate, "match candidate must be text"));
+  const list = arrayItems(candidates, (candidate: unknown) => string(candidate, "match candidate must be text"));
   const styles = options == null ? null : record(options, "match options must be an object").styles;
-  const named = styles == null ? null : arrayItems(styles, (style) => string(style, "match style must be text"));
+  const named = styles == null ? null : arrayItems(styles, (style: unknown) => string(style, "match style must be text"));
   const found = await request("matchCandidates", text, list, named);
-  return Object.freeze(found.map((match) => Object.freeze({
+  return Object.freeze(found.map((match: Native) => Object.freeze({
     index: match.index,
-    ranges: Object.freeze(match.ranges.map((range) => Object.freeze([range[0], range[1]]))),
+    ranges: Object.freeze(match.ranges.map((range: Native) => Object.freeze([range[0], range[1]]))),
   })));
 }
 
-function transientTarget(options) {
-  record(options, "transient options are required");
+function transientTarget(options: unknown) {
+  expectRecord(options, "transient options are required");
   return optionalWindowAuthority(options.target);
 }
 
-function pickerRow(value) {
+function pickerRow(value: unknown) {
   const item = pickerItem(value);
-  item.labelMatches = value.labelMatches == null ? null : arrayItems(value.labelMatches, textRange);
-  item.descriptionMatches = value.descriptionMatches == null
-    ? null : arrayItems(value.descriptionMatches, textRange);
-  return item;
+  const fields = value as Rec;
+  return {
+    ...item,
+    labelMatches: fields.labelMatches == null ? null : arrayItems(fields.labelMatches, textRange),
+    descriptionMatches: fields.descriptionMatches == null
+      ? null : arrayItems(fields.descriptionMatches, textRange),
+  };
 }
 
-export async function showPicker(options) {
+export async function showPicker(options: Opts) {
   const target = transientTarget(options);
   const title = string(options.title, "picker title must be text");
   const onQuery = options.onQuery;
-  if (onQuery != null && (typeof onQuery !== "function" || options.items != null)) {
-    throw new TypeError("picker onQuery must be a function and excludes items");
+  if (onQuery != null) {
+    if (options.items != null) throw new TypeError("picker onQuery must be a function and excludes items");
+    expectFunction(onQuery, "picker onQuery must be a function and excludes items");
   }
   const items = onQuery == null ? arrayItems(options.items, pickerItem) : [];
   const tabs = options.tabs == null ? [] : arrayItems(options.tabs, pickerTab);
@@ -1149,21 +1255,19 @@ export async function showPicker(options) {
   if (onHighlight == null && onQuery == null && tabs.length === 0) {
     return request("showPicker", title, items, target);
   }
-  if (onHighlight != null && typeof onHighlight !== "function") {
-    throw new TypeError("picker onHighlight must be a function");
-  }
-  const result = await withSurfaceCallback(async (event) => {
-    if (event.kind === "query") return arrayItems(await onQuery(event.query, event.tab), pickerRow);
-    await onHighlight(event.id);
+  if (onHighlight != null) expectFunction(onHighlight, "picker onHighlight must be a function");
+  const result = await withSurfaceCallback(async (event: Native) => {
+    if (event.kind === "query") return arrayItems(await onQuery!(event.query, event.tab), pickerRow);
+    await onHighlight!(event.id);
     return null;
-  }, (session) => request(
+  }, (session: number) => request(
     "followPicker", title, items, target, session,
     onQuery == null ? 0 : 1, onHighlight == null ? 0 : 1, tabs, initialTab,
-  ), (event) => event.kind === "query");
+  ), (event: Native) => event.kind === "query");
   return Object.freeze(result);
 }
 
-export async function showInput(options) {
+export async function showInput(options: Opts) {
   const target = transientTarget(options);
   const title = string(options.title, "input title must be text");
   const value = optionalText(options.value);
@@ -1174,23 +1278,21 @@ export async function showInput(options) {
   if (onChange == null) {
     return request("showInput", title, value, prompt, target, history, placeholder);
   }
-  if (typeof onChange !== "function") {
-    throw new TypeError("input onChange must be a function");
-  }
-  const result = await withSurfaceCallback(async (value) => {
+  expectFunction(onChange, "input onChange must be a function");
+  const result = await withSurfaceCallback(async (value: unknown) => {
     const answer = await onChange(value);
     if (typeof answer === "string") return { message: answer, items: [] };
     if (answer == null) return { message: null, items: [] };
-    record(answer, "input onChange must return text, an object, or nothing");
+    expectRecord(answer, "input onChange must return text, an object, or nothing");
     return {
       message: optionalText(answer.message),
       items: answer.items == null ? [] : arrayItems(answer.items, inputCompletion),
     };
-  }, (session) => request("followInput", title, value, prompt, target, history, placeholder, session));
+  }, (session: number) => request("followInput", title, value, prompt, target, history, placeholder, session));
   return Object.freeze(result);
 }
 
-export async function showConfirmation(options) {
+export async function showConfirmation(options: Opts) {
   const target = transientTarget(options);
   const title = string(options.title, "confirmation title must be text");
   const message = optionalText(options.message);
@@ -1199,8 +1301,8 @@ export async function showConfirmation(options) {
   return request("showConfirmation", title, message, confirmLabel, cancelLabel, target);
 }
 
-const NOTICE_SEVERITIES = ["info", "warning", "error"];
-function noticeAction(value) {
+const NOTICE_SEVERITIES: readonly unknown[] = ["info", "warning", "error"];
+function noticeAction(value: unknown) {
   const action = record(value, "notice action must be an object");
   const command = record(action.command, "notice action command must be an object");
   return {
@@ -1211,7 +1313,7 @@ function noticeAction(value) {
     },
   };
 }
-export async function showNotice(options) {
+export async function showNotice(options: Opts) {
   const target = transientTarget(options);
   const severity = options.severity ?? "info";
   if (!NOTICE_SEVERITIES.includes(severity)) {
@@ -1228,21 +1330,21 @@ export async function showNotice(options) {
     actions: options.actions == null ? [] : arrayItems(options.actions, noticeAction),
   }, target);
 }
-function noticeId(value) {
-  if (!Number.isSafeInteger(value) || value < 0) throw new TypeError("notice ID must be an integer");
+function noticeId(value: unknown) {
+  if (!isNonNegativeInteger(value)) throw new TypeError("notice ID must be an integer");
   return value;
 }
-export async function markNotificationsRead(ids) {
+export async function markNotificationsRead(ids: unknown) {
   await request("markNotificationsRead", arrayItems(ids, noticeId));
 }
-export async function dismissNotification(id) {
+export async function dismissNotification(id: unknown) {
   await request("dismissNotification", noticeId(id));
 }
 export async function clearNotifications() {
   await request("clearNotifications");
 }
 
-function statusItemValue(options) {
+function statusItemValue(options: unknown) {
   const value = record(options, "status item options must be an object");
   const command = value.command == null ? null : record(value.command, "status item command must be an object");
   const side = value.side ?? "left";
@@ -1267,14 +1369,14 @@ function statusItemValue(options) {
     priority,
   };
 }
-export async function registerStatusItem(id, options) {
+export async function registerStatusItem(id: unknown, options: unknown) {
   const name = string(id, "status item id must be text");
   if (name.length === 0) throw new TypeError("status item id must be nonempty");
   const registration = await request("registerStatusItem", name, statusItemValue(options));
   const owned = ownership(() => {}, () => request("unregisterStatusItem", registration));
   return Object.freeze({
     id: name,
-    async update(next, scope) {
+    async update(next: unknown, scope?: unknown) {
       owned.assertActive();
       const window = scope == null ? null : windowAuthority(record(scope, "status item scope must be an object").window);
       if (next === null && window === null) throw new TypeError("a status item needs a value");
@@ -1285,8 +1387,8 @@ export async function registerStatusItem(id, options) {
 }
 
 const MENU_LOCATIONS = ["tab", "content", "menubar.file", "menubar.edit", "menubar.view", "menubar.go"];
-export async function addMenuItem(location, item) {
-  if (!MENU_LOCATIONS.includes(location)) throw new TypeError(`unknown menu location: ${String(location)}`);
+export async function addMenuItem(location: unknown, item: unknown) {
+  if (typeof location !== "string" || !MENU_LOCATIONS.includes(location)) throw new TypeError(`unknown menu location: ${String(location)}`);
   const value = record(item, "menu item must be an object");
   const command = string(value.command, "menu item command must be text");
   if (command.length === 0) throw new TypeError("menu item command must be nonempty");
@@ -1311,11 +1413,11 @@ export async function addMenuItem(location, item) {
   return Object.freeze({ dispose: () => owned.dispose() });
 }
 
-export async function listCommands(view) {
+export async function listCommands(view: unknown) {
   const target = view === undefined ? undefined : { target: view };
-  return Object.freeze((await request("listCommands", destinationAuthority(target))).map((command) => Object.freeze(command)));
+  return Object.freeze((await request("listCommands", destinationAuthority(target))).map((command: unknown) => Object.freeze(command)));
 }
-export async function invokeCommand(name, commandArguments) {
+export async function invokeCommand(name: unknown, commandArguments: unknown) {
   if (typeof name !== "string") {
     throw new TypeError("commands.invoke requires a command name");
   }
@@ -1340,7 +1442,9 @@ export async function invokeCommand(name, commandArguments) {
   return Object.freeze(outcome);
 }
 
-function validateJsonValue(value, seen = new Set()) {
+type Json = null | string | number | boolean | readonly Json[] | { readonly [key: string]: Json };
+
+export function validateJsonValue(value: unknown, seen = new Set<object>()): Json {
   if (value === null || typeof value === "string" || typeof value === "boolean") return value;
   if (typeof value === "number") {
     if (Number.isFinite(value)) return value;
@@ -1350,38 +1454,40 @@ function validateJsonValue(value, seen = new Set()) {
   if (seen.has(value)) throw new TypeError("JSON values cannot contain cycles");
   const prototype = Object.getPrototypeOf(value);
   if ((Array.isArray(value) ? prototype !== Array.prototype : prototype !== null && prototype !== Object.prototype) ||
-      typeof value.toJSON === "function" || Object.getOwnPropertySymbols(value).length !== 0) {
+      typeof (value as { toJSON?: unknown }).toJSON === "function" || Object.getOwnPropertySymbols(value).length !== 0) {
     throw new TypeError("values require plain JSON data");
   }
   seen.add(value);
-  let copy;
+  let copy: Json[] | Record<string, Json>;
   if (Array.isArray(value)) {
     if (Object.keys(value).some((key) => {
       const index = Number(key);
       return !Number.isInteger(index) || index < 0 || index >= value.length || String(index) !== key;
     })) throw new TypeError("JSON arrays must contain only indexed data");
-    copy = [];
-    Object.defineProperty(copy, "toJSON", { value: undefined });
+    const items: Json[] = [];
+    copy = items;
+    Object.defineProperty(items, "toJSON", { value: undefined });
     for (let index = 0; index < value.length; index++) {
       if (!Object.hasOwn(value, index)) throw new TypeError("JSON arrays must be dense");
-      copy.push(validateJsonValue(value[index], seen));
+      items.push(validateJsonValue(value[index], seen));
     }
   } else {
-    copy = Object.create(null);
-    for (const key of Object.keys(value)) copy[key] = validateJsonValue(value[key], seen);
+    const fields: Record<string, Json> = Object.create(null);
+    copy = fields;
+    for (const key of Object.keys(value)) fields[key] = validateJsonValue((value as Rec)[key], seen);
   }
   seen.delete(value);
   return Object.freeze(copy);
 }
 
-export function invalidCommandArguments(message) {
+export function invalidCommandArguments(message: string): never {
   const error = new Error(string(message, "invalidArguments requires a message"));
   error.name = "InvalidCommandArgumentsError";
   invalidArgumentErrors.add(error);
   throw error;
 }
 
-export function unavailableCommand() {
+export function unavailableCommand(): never {
   const error = new Error("command unavailable");
   error.name = "UnavailableCommandError";
   unavailableErrors.add(error);
@@ -1389,11 +1495,11 @@ export function unavailableCommand() {
 }
 
 async function invokeRegisteredCommand(
-  invocation,
-  registration,
-  activeHandle,
-  commandArguments,
-  capture,
+  invocation: Native,
+  registration: number,
+  activeHandle: Native,
+  commandArguments: unknown,
+  capture: Native,
 ) {
   const handler = commandHandlers.get(registration)
     ?? await callable(commandHandlers, registration);
@@ -1437,9 +1543,9 @@ async function invokeRegisteredCommand(
       if (controller.signal.aborted) {
         return { kind: "cancelled" };
       }
-      if (unavailableErrors.has(error)) return { kind: "unavailable" };
-      const message = String(error?.stack ?? error);
-      if (invalidArgumentErrors.has(error)) {
+      if (isObject(error) && unavailableErrors.has(error)) return { kind: "unavailable" };
+      const message = errorStack(error);
+      if (isObject(error) && invalidArgumentErrors.has(error)) {
         return { kind: "invalidArgument", message };
       }
       return { kind: "handlerFailure", message };
@@ -1464,13 +1570,13 @@ globalThis.__knotInvokeCommand = (
 );
 
 // Whether the command is running in this isolate.
-globalThis.__knotCancelCommand = (invocation) => {
+globalThis.__knotCancelCommand = (invocation: Native) => {
   const frame = liveFrames.get(invocation);
-  frame?.controller.abort(new Error("command cancelled"));
+  frame?.controller?.abort(new Error("command cancelled"));
   return frame !== undefined;
 };
 
-export async function registerView(contribution) {
+export async function registerView(contribution: unknown) {
   const value = record(contribution, "workbench.registerView requires a contribution object");
   const id = string(value.id, "view id must be text");
   if (id.length === 0 || id.startsWith("knot.") || /\s/.test(id)
@@ -1483,15 +1589,16 @@ export async function registerView(contribution) {
   const content = value.content === undefined
     ? { kind: "container" }
     : record(value.content, "view content must be an object");
-  let provider = null;
+  let provider: { getChildren: Fn } | null = null;
   if (content.kind === "container" && value.content !== undefined) {
     throw new TypeError("view content kind must be \"tree\" or \"text\"");
   }
   if (content.kind === "tree") {
-    provider = record(content.provider, "tree content requires a provider object");
-    if (typeof provider.getChildren !== "function") {
+    const candidate = record(content.provider, "tree content requires a provider object");
+    if (typeof candidate.getChildren !== "function") {
       throw new TypeError("tree provider requires a getChildren method");
     }
+    provider = candidate as { getChildren: Fn };
   } else if (content.kind !== "text" && content.kind !== "container") {
     throw new TypeError("view content kind must be \"tree\" or \"text\"");
   }
@@ -1544,7 +1651,7 @@ export async function registerView(contribution) {
     }
   }
   const registration = await registerCallable(
-    (registration) => { if (provider !== null) treeProviders.set(registration, provider); },
+    (registration: number) => { if (provider !== null) treeProviders.set(registration, provider); },
     () => request(
     "registerView",
     id,
@@ -1563,30 +1670,30 @@ export async function registerView(contribution) {
     () => request("unregisterView", registration));
   return Object.freeze({
     id,
-    async show(window) {
+    async show(window: unknown) {
       owned.assertActive();
       await owned.track(request("showView", registration, optionalWindowAuthority(window)));
     },
-    async hide(window) {
+    async hide(window: unknown) {
       owned.assertActive();
       await owned.track(request("hideView", registration, optionalWindowAuthority(window)));
     },
-    async focus(window) {
+    async focus(window: unknown) {
       owned.assertActive();
       await owned.track(request("focusView", registration, optionalWindowAuthority(window)));
     },
-    async toggle(window) {
+    async toggle(window: unknown) {
       owned.assertActive();
       await owned.track(request("toggleView", registration, optionalWindowAuthority(window)));
     },
-    async setBadge(badge) {
+    async setBadge(badge: unknown) {
       owned.assertActive();
       if (badge !== null && badge !== "info" && badge !== "error") {
         throw new TypeError("view badge must be info, error, or null");
       }
       await owned.track(request("setViewBadge", registration, badge));
     },
-    async invalidate(parentId, window) {
+    async invalidate(parentId: unknown, window: unknown) {
       owned.assertActive();
       const parent = optionalText(parentId);
       await owned.track(request(
@@ -1596,20 +1703,20 @@ export async function registerView(contribution) {
         optionalWindowAuthority(window),
       ));
     },
-    async reveal(idPath, window) {
+    async reveal(idPath: unknown, window: unknown) {
       owned.assertActive();
-      const path = arrayItems(idPath, (id) => string(id, "reveal IDs must be text"));
+      const path = arrayItems(idPath, (id: unknown) => string(id, "reveal IDs must be text"));
       await owned.track(request("revealViewItem", registration, path, optionalWindowAuthority(window)));
     },
-    async editLabel(id, options) {
+    async editLabel(id: unknown, options?: Opts) {
       owned.assertActive();
       return owned.track(editTree(registration, false, string(id, "tree item ID must be text"), options));
     },
-    async editNewItem(parentId, options) {
+    async editNewItem(parentId: unknown, options?: Opts) {
       owned.assertActive();
       return owned.track(editTree(registration, true, string(parentId, "tree item ID must be text"), options));
     },
-    async setText(text, window) {
+    async setText(text: unknown, window: unknown) {
       owned.assertActive();
       await owned.track(request(
         "replaceViewText",
@@ -1624,7 +1731,7 @@ export async function registerView(contribution) {
 
 // An inline edit passes each value to `validate`, whose message is shown
 // under the field.
-async function editTree(registration, newRow, id, options) {
+async function editTree(registration: number, newRow: unknown, id: unknown, options?: Opts) {
   const fields = options == null ? {} : record(options, "edit options must be an object");
   const value = optionalText(fields.value) ?? "";
   const selection = fields.selection == null ? null : textRange(fields.selection);
@@ -1632,11 +1739,11 @@ async function editTree(registration, newRow, id, options) {
   if (validate != null && typeof validate !== "function") {
     throw new TypeError("edit validate must be a function");
   }
-  const edit = (session) => request(
+  const edit = (session: number | null) => request(
     "editTreeItem", registration, newRow ? 1 : 0, id, value, selection,
     iconRef(fields.icon), session, null,
   );
-  const result = validate == null ? await edit(null) : await withSurfaceCallback(async (current) => {
+  const result = validate == null ? await edit(null) : await withSurfaceCallback(async (current: unknown) => {
     const message = await validate(current);
     return { message: message == null ? null : string(message, "edit validate must return text or nothing") };
   }, edit);
@@ -1655,15 +1762,15 @@ globalThis.__knotRequestTreeChildren = async (registration, window, instance, pa
       instance: string(instance, "view instance must be text"),
     })), treeItem) };
   } catch (error) {
-    return { error: String(error?.stack ?? error) };
+    return { error: errorStack(error) };
   }
 };
 
 // The method names a provider offers: its own and inherited functions, not
 // Object's.
-function providerMethods(implementation) {
-  const names = new Set();
-  for (let object = implementation; object !== null && object !== Object.prototype;
+function providerMethods(implementation: Record<string, unknown>) {
+  const names = new Set<string>();
+  for (let object: object | null = implementation; object !== null && object !== Object.prototype;
     object = Object.getPrototypeOf(object)) {
     for (const name of Object.getOwnPropertyNames(object)) {
       if (name !== "constructor" && typeof implementation[name] === "function") names.add(name);
@@ -1672,17 +1779,17 @@ function providerMethods(implementation) {
   return [...names].sort();
 }
 
-export async function registerProvider(name, implementation) {
+export async function registerProvider(name: unknown, implementation: unknown) {
   if (typeof name !== "string" || name === "") {
     throw new TypeError("providers.register requires a provider name");
   }
   if (implementation === null || typeof implementation !== "object") {
     throw new TypeError("providers.register requires an object of methods");
   }
-  const methods = providerMethods(implementation);
+  const methods = providerMethods(implementation as Record<string, unknown>);
   if (methods.length === 0) throw new TypeError("providers.register requires at least one method");
   const registration = await registerCallable(
-    (registration) => providerImplementations.set(registration, implementation),
+    (registration: number) => providerImplementations.set(registration, implementation as Record<string, unknown>),
     () => request("registerProvider", name, methods));
   const owned = ownership(() => providerImplementations.delete(registration),
     () => request("unregisterProvider", registration));
@@ -1691,117 +1798,121 @@ export async function registerProvider(name, implementation) {
 
 // A handle calls one registration's methods in the provider's package; each
 // call carries the window of the command it runs in.
-function providerHandle(info) {
-  const handle = {};
+function providerHandle(info: Native) {
+  const handle: Record<string, (...arguments_: unknown[]) => Promise<unknown>> = {};
   for (const method of info.methods) {
-    handle[method] = async (...arguments_) => {
+    handle[method] = async (...arguments_: unknown[]) => {
       if (arguments_.length > 1) throw new TypeError("provider methods take at most one argument");
       const argument = JSON.stringify(validateJsonValue(arguments_[0] ?? null));
       const window = currentFrame()?.capture?.window ?? null;
       return JSON.parse(await request("callProvider", info.registration, method, argument, window));
     };
   }
-  return Object.freeze(handle);
+  return Object.freeze(handle) as Native;
 }
 
-export async function getProvider(name) {
+export async function getProvider(name: unknown) {
   if (typeof name !== "string") throw new TypeError("providers.get requires a provider name");
   const info = await request("getProvider", name);
   return info === null ? null : providerHandle(info);
 }
 
-export async function listProviders(name) {
+export async function listProviders(name: unknown) {
   if (typeof name !== "string") throw new TypeError("providers.all requires a provider name");
   return Object.freeze((await request("listProviders", name)).map(providerHandle));
 }
 
-globalThis.__knotCallProvider = async (registration, method, argument, window) => {
+globalThis.__knotCallProvider = async (registration: number, method: string, argument: string, window: Native) => {
   const implementation = providerImplementations.get(registration)
     ?? await callable(providerImplementations, registration);
   if (!implementation) return { error: "the provider is disposed" };
   try {
     const context = Object.freeze({ window: window === null ? null : windowTarget({ window }) });
-    const result = await implementation[method](JSON.parse(argument), context);
+    const handler = implementation[method];
+    if (typeof handler !== "function") throw new TypeError(`provider has no method ${method}`);
+    const result = await handler.call(implementation, JSON.parse(argument), context);
     return { result: JSON.stringify(validateJsonValue(result === undefined ? null : result)) };
   } catch (error) {
-    return { error: String(error?.message ?? error) };
+    return { error: errorMessage(error) };
   }
 };
 
-const liveWindows = new WeakMap();
-const livePanes = new WeakMap();
-const livePresentations = new WeakMap();
-const windowTargets = new Map();
-const paneTargets = new Map();
-const presentationTargets = new Map();
+const liveWindows = new WeakMap<object, Native>();
+const livePanes = new WeakMap<object, Native>();
+const livePresentations = new WeakMap<object, Native>();
+const windowTargets = new Map<Native, WindowTarget>();
+const panesByKey = new Map<string, PaneTarget>();
+const presentationsByKey = new Map<string, ViewTarget>();
 
-function windowTarget(value) {
+function windowTarget(value: Native): WindowTarget {
   let target = windowTargets.get(value.window);
   if (!target) {
-    target = Object.freeze({});
+    // The brand in the declaration is type-level only; a target is a bare frozen object.
+    target = Object.freeze({}) as WindowTarget;
     liveWindows.set(target, value);
     windowTargets.set(value.window, target);
   }
   return target;
 }
-function paneTarget(value) {
+function paneTarget(value: Native): PaneTarget {
   const key = `${value.window.window}/${value.workbench}/${value.pane}`;
-  let target = paneTargets.get(key);
+  let target = panesByKey.get(key);
   if (!target) {
-    target = Object.freeze({ window: windowTarget(value.window) });
+    target = Object.freeze({ window: windowTarget(value.window) }) as PaneTarget;
     livePanes.set(target, value);
-    paneTargets.set(key, target);
+    panesByKey.set(key, target);
   }
   return target;
 }
-function presentationTarget(value) {
+function presentationTarget(value: Native): ViewTarget {
   const key = `${value.pane.window.window}/${value.pane.workbench}/${value.pane.pane}/${value.tab}/${value.presentation}`;
-  let target = presentationTargets.get(key);
+  let target = presentationsByKey.get(key);
   if (!target) {
     const pane = paneTarget(value.pane);
-    target = Object.freeze({ window: pane.window, pane });
+    target = Object.freeze({ window: pane.window, pane }) as ViewTarget;
     livePresentations.set(target, value);
-    presentationTargets.set(key, target);
+    presentationsByKey.set(key, target);
   }
   return target;
 }
-function windowAuthority(target) {
-  const value = liveWindows.get(target);
+function windowAuthority(target: unknown) {
+  const value = isObject(target) ? liveWindows.get(target) : undefined;
   if (!value) hostError("InvalidTarget");
   return value.window;
 }
-function optionalWindowAuthority(target) {
+function optionalWindowAuthority(target: unknown) {
   return target == null ? null : windowAuthority(target);
 }
-function documentFromNative(value) {
+function documentFromNative(value: Native) {
   return Object.freeze({ ...value, buffer: bufferFor(value.buffer) });
 }
-function workspaceFromNative(value) {
+function workspaceFromNative(value: Native) {
   return Object.freeze({ window: windowTarget(value.window), generation: value.generation,
-    roots: Object.freeze(value.roots.map(root => Object.freeze(root))) });
+    roots: Object.freeze(value.roots.map((root: Native) => Object.freeze(root))) });
 }
-function windowFromNative(value) {
+function windowFromNative(value: Native) {
   return Object.freeze({ target: windowTarget(value.target),
     currentTarget: value.currentTarget === null ? null : presentationTarget(value.currentTarget),
     statusTarget: value.statusTarget === null ? null : presentationTarget(value.statusTarget),
     workspace: workspaceFromNative(value.workspace),
-    panes: Object.freeze(value.panes.map(pane => Object.freeze({
+    panes: Object.freeze(value.panes.map((pane: Native) => Object.freeze({
       target: paneTarget(pane.target), selected: presentationTarget(pane.selected),
       tabs: Object.freeze(pane.tabs.map(presentationFromNative)),
     }))),
   });
 }
-function presentationFromNative(tab) {
+function presentationFromNative(tab: Native) {
   return Object.freeze({
     target: presentationTarget(tab.target), kind: tab.kind, document: tab.document,
     buffer: tab.buffer === null ? null : bufferFor(tab.buffer), tool: tab.tool,
     directory: tab.directory,
   });
 }
-function destinationAuthority(options) {
+function destinationAuthority(options?: unknown) {
   if (options === undefined) return null;
   const target = record(options, "destination options must be an object").target;
   if (target === undefined) return null;
+  if (!isObject(target)) hostError("InvalidTarget");
   const window = liveWindows.get(target);
   if (window) return { kind: "window", window: window.window };
   const pane = livePanes.get(target);
@@ -1811,25 +1922,25 @@ function destinationAuthority(options) {
     pane: view.pane.pane, tab: view.tab, presentation: view.presentation };
   hostError("InvalidTarget");
 }
-function documentPresentationFromNative(value) {
+function documentPresentationFromNative(value: Native) {
   const presentation = value.presentation;
   return Object.freeze({ document: documentFromNative(value.document),
-    presentation: Object.freeze({ target: presentationTarget(presentation.target), kind: presentation.kind,
+    presentation: Object.freeze({ target: presentationTarget(presentation.target), kind: presentation.kind, tool: null, directory: null,
       document: presentation.document, buffer: bufferFor(presentation.buffer) }) });
 }
-export async function closePresentation(target, options) {
-  if (!livePresentations.has(target)) hostError("InvalidTarget");
+export async function closePresentation(target: unknown, options?: Opts) {
+  if (!isLive(livePresentations, target)) hostError("InvalidTarget");
   const discard = options === undefined ? undefined : record(options, "close options must be an object").discard;
   if (discard !== undefined && typeof discard !== "boolean") throw new TypeError("discard must be a boolean");
   return Object.freeze(await request("closePresentation", destinationAuthority({ target }), discard ?? null));
 }
-export async function createUntitled(options) {
+export async function createUntitled(options?: Opts) {
   return documentPresentationFromNative(await request("createUntitled", destinationAuthority(options)));
 }
-export async function presentDocument(id, options) {
+export async function presentDocument(id: unknown, options?: Opts) {
   return documentPresentationFromNative(await request("presentDocument", string(id, "document identity must be text"), destinationAuthority(options)));
 }
-export async function openDocument(uri, options) {
+export async function openDocument(uri: unknown, options?: Opts) {
   const preview = options === undefined ? undefined : record(options, "destination options must be an object").preview;
   if (preview !== undefined && typeof preview !== "boolean") throw new TypeError("preview must be a boolean");
   const focus = options === undefined ? undefined : options.focus;
@@ -1839,7 +1950,7 @@ export async function openDocument(uri, options) {
   return documentPresentationFromNative(value);
 }
 
-export async function openTerminal(options) {
+export async function openTerminal(options?: Opts) {
   const fields = options === undefined ? {} : record(options, "terminal options must be an object");
   const { cwd, location } = fields;
   if (location !== undefined && (typeof location !== "string" || location.length === 0)) {
@@ -1850,30 +1961,30 @@ export async function openTerminal(options) {
   return presentationFromNative(tab);
 }
 
-export async function reloadDocument(id) {
+export async function reloadDocument(id: unknown) {
   await request("reloadDocument", string(id, "document identity must be text"));
 }
-export async function saveDocument(id, options) {
+export async function saveDocument(id: unknown, options?: Opts) {
   const uri = options === undefined ? undefined : record(options, "save options must be an object").uri;
   await request("saveDocument", string(id, "document identity must be text"),
     uri === undefined ? null : string(uri, "resource URI must be text"));
 }
-export async function setDocumentLanguage(id, language) {
+export async function setDocumentLanguage(id: unknown, language: unknown) {
   await request("setDocumentLanguage", string(id, "document identity must be text"),
     optionalText(language));
 }
 
-function textList(value, message) {
-  return value === undefined ? [] : arrayItems(value, (item) => string(item, message));
+function textList(value: unknown, message: string) {
+  return value === undefined ? [] : arrayItems(value, (item: unknown) => string(item, message));
 }
-function languageId(value) {
+function languageId(value: unknown) {
   const id = string(value, "language id must be text");
   if (id.length === 0 || /\s/.test(id)) {
     throw new TypeError("language id must be nonempty and contain no whitespace");
   }
   return id;
 }
-function languagePatterns(value) {
+function languagePatterns(value: Rec) {
   const fileExtensions = textList(value.fileExtensions, "file extensions must be text");
   if (fileExtensions.some((extension) => extension.length === 0 || extension.startsWith("."))) {
     throw new TypeError("file extensions must be nonempty and omit the leading dot");
@@ -1882,32 +1993,36 @@ function languagePatterns(value) {
   const interpreters = textList(value.interpreters, "interpreters must be text");
   return [fileExtensions, fileNames, interpreters];
 }
-export async function associateLanguage(id, patterns) {
+export async function associateLanguage(id: unknown, patterns: unknown) {
   const language = languageId(id);
   const claimed = languagePatterns(record(patterns, "languages.associate requires patterns"));
   const association = await request("associateLanguage", language, ...claimed);
   const owned = ownership(() => {}, () => request("unregisterLanguage", association));
   return Object.freeze({ dispose: () => owned.dispose() });
 }
-function editingToken(value, message) {
-  if (string(value, message).length === 0 || value.trim() !== value) {
+function editingToken(value: unknown, message: string) {
+  const token = string(value, message);
+  if (token.length === 0 || token.trim() !== token) {
     throw new TypeError("comment and bracket tokens must be nonempty without surrounding whitespace");
   }
-  return value;
+  return token;
 }
-function bracketPair(value) {
-  record(value, "brackets must be objects");
-  const pair = {
+function bracketPair(value: unknown) {
+  expectRecord(value, "brackets must be objects");
+  const pair: {
+    open: string; close: string; autoClose?: boolean; newline?: boolean; notIn?: ("string" | "comment")[];
+  } = {
     open: editingToken(value.open, "bracket open must be text"),
     close: editingToken(value.close, "bracket close must be text"),
   };
-  for (const key of ["autoClose", "newline"]) {
-    if (value[key] === undefined) continue;
-    if (typeof value[key] !== "boolean") throw new TypeError(`bracket ${key} must be a boolean`);
-    pair[key] = value[key];
+  for (const key of ["autoClose", "newline"] as const) {
+    const flagValue = value[key];
+    if (flagValue === undefined) continue;
+    if (typeof flagValue !== "boolean") throw new TypeError(`bracket ${key} must be a boolean`);
+    pair[key] = flagValue;
   }
   if (value.notIn !== undefined) {
-    pair.notIn = arrayItems(value.notIn, (family) => {
+    pair.notIn = arrayItems(value.notIn, (family: unknown): "string" | "comment" => {
       if (family !== "string" && family !== "comment") {
         throw new TypeError('bracket notIn entries must be "string" or "comment"');
       }
@@ -1917,20 +2032,25 @@ function bracketPair(value) {
   return pair;
 }
 // Absent fields stay absent, so languages.get returns them as registered.
-function languageEditing(value) {
-  const editing = {};
+function languageEditing(value: Rec) {
+  const editing: {
+    comments?: { line?: string[]; block?: string[] };
+    brackets?: ReturnType<typeof bracketPair>[];
+    autoCloseBefore?: string;
+  } = {};
   if (value.comments !== undefined) {
     const comments = record(value.comments, "language comments must be an object");
-    editing.comments = {};
+    const target: { line?: string[]; block?: string[] } = {};
+    editing.comments = target;
     if (comments.line !== undefined) {
-      editing.comments.line = arrayItems(comments.line,
-        (item) => editingToken(item, "line comment tokens must be text"));
+      target.line = arrayItems(comments.line,
+        (item: unknown) => editingToken(item, "line comment tokens must be text"));
     }
     if (comments.block !== undefined) {
       const block = arrayItems(comments.block,
-        (item) => editingToken(item, "block comment tokens must be text"));
+        (item: unknown) => editingToken(item, "block comment tokens must be text"));
       if (block.length !== 2) throw new TypeError("a block comment must be [open, close]");
-      editing.comments.block = block;
+      target.block = block;
     }
   }
   if (value.brackets !== undefined) editing.brackets = arrayItems(value.brackets, bracketPair);
@@ -1939,7 +2059,7 @@ function languageEditing(value) {
   }
   return editing;
 }
-export async function registerLanguage(definition) {
+export async function registerLanguage(definition: unknown) {
   const value = record(definition, "languages.register requires a language object");
   const id = languageId(value.id);
   const name = string(value.name, "language name must be text");
@@ -1963,35 +2083,35 @@ export async function registerLanguage(definition) {
   return Object.freeze({ dispose: () => owned.dispose() });
 }
 const settingTypes = {
-  boolean: (value) => typeof value === "boolean",
+  boolean: (value: unknown) => typeof value === "boolean",
   integer: Number.isSafeInteger,
   number: Number.isFinite,
-  string: (value) => typeof value === "string",
-  strings: (value) => Array.isArray(value) && value.every((item) => typeof item === "string"),
+  string: (value: unknown) => typeof value === "string",
+  strings: (value: unknown) => Array.isArray(value) && value.every((item) => typeof item === "string"),
 };
-const settingListeners = new Map();
-const watchListeners = new Map();
-function settingKey(value) {
+const settingListeners = new Map<number, Fn>();
+const watchListeners = new Map<number, Fn>();
+function settingKey(value: unknown) {
   if (typeof value !== "string" || value.length === 0) throw new TypeError("setting key must be nonempty text");
   return value;
 }
-function settingsScope(value) {
+function settingsScope(value: unknown) {
   if (value == null) return [null, null, null];
-  record(value, "settings scope must be an object");
+  expectRecord(value, "settings scope must be an object");
   return [optionalText(value.language), optionalText(value.view), optionalText(value.document)];
 }
-export async function defineSetting(definition) {
+export async function defineSetting(definition: unknown) {
   const value = record(definition, "settings.define requires a definition object");
   const key = settingKey(value.key);
   const type = string(value.type, "setting type must be text");
   if (!Object.hasOwn(settingTypes, type)) {
     throw new TypeError("setting type must be boolean, integer, number, string, or strings");
   }
-  if (!settingTypes[type](value.default)) throw new TypeError(`setting default must be of type ${type}`);
+  if (!settingTypes[type as keyof typeof settingTypes](value.default)) throw new TypeError(`setting default must be of type ${type}`);
   const description = string(value.description, "setting description must be text");
   await request("defineSetting", key, type, value.default, description);
 }
-export async function setSettings(keyOrValues, valueOrScope, scope) {
+export async function setSettings(keyOrValues: unknown, valueOrScope?: unknown, scope?: unknown) {
   let values;
   if (typeof keyOrValues === "string") {
     values = { [settingKey(keyOrValues)]: valueOrScope };
@@ -2007,18 +2127,18 @@ export async function setSettings(keyOrValues, valueOrScope, scope) {
   }
   await request("setSettings", converted, ...settingsScope(scope));
 }
-export async function getSetting(key, facts) {
+export async function getSetting(key: unknown, facts: unknown) {
   const value = await request("getSetting", settingKey(key), ...settingsScope(facts));
-  return value === null ? undefined : validateJsonValue(value);
+  return value === null ? undefined : (validateJsonValue(value) as Native);
 }
-export async function resetSetting(key, scope) {
+export async function resetSetting(key: unknown, scope: unknown) {
   await request("resetSetting", settingKey(key), ...settingsScope(scope));
 }
-export async function observeSetting(key, listener) {
+export async function observeSetting(key: unknown, listener: unknown) {
   settingKey(key);
-  if (typeof listener !== "function") throw new TypeError("settings.observe requires a listener");
+  expectFunction(listener, "settings.observe requires a listener");
   const subscription = await registerCallable(
-    (subscription) => settingListeners.set(subscription, listener),
+    (subscription: number) => settingListeners.set(subscription, listener),
     () => request("observeSetting", key));
   const owned = ownership(() => settingListeners.delete(subscription),
     () => request("unobserveSetting", subscription));
@@ -2028,18 +2148,18 @@ globalThis.__knotDispatchSettingChange = async (subscription, key) => {
   const listener = await callable(settingListeners, subscription);
   if (listener) await listener(key);
 };
-function deepFreeze(value) {
+function deepFreeze<T>(value: T): T {
   if (value !== null && typeof value === "object") {
     Object.values(value).forEach(deepFreeze);
     Object.freeze(value);
   }
   return value;
 }
-export async function getLanguage(id) {
+export async function getLanguage(id: unknown) {
   return deepFreeze(await request("getLanguage", string(id, "language id must be text")));
 }
 export async function listLanguages() {
-  return Object.freeze((await request("listLanguages")).map((language) => Object.freeze({
+  return Object.freeze((await request("listLanguages")).map((language: Native) => Object.freeze({
     ...language,
     fileExtensions: Object.freeze(language.fileExtensions),
     fileNames: Object.freeze(language.fileNames),
@@ -2047,15 +2167,18 @@ export async function listLanguages() {
   })));
 }
 const hexColor = /^#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
-function themeColor(value, name) {
+function themeColor(value: unknown, name: unknown) {
   if (typeof value !== "string" || !hexColor.test(value)) {
     throw new TypeError(`theme color ${name} must be #rrggbb or #rrggbbaa`);
   }
   return value;
 }
-function syntaxStyle(value, capture) {
-  record(value, `syntax style ${capture} must be an object`);
-  const style = {};
+function syntaxStyle(value: unknown, capture: string) {
+  expectRecord(value, `syntax style ${capture} must be an object`);
+  const style: {
+    color?: string; fontStyle?: "normal" | "italic"; fontWeight?: number;
+    underline?: boolean; strikethrough?: boolean;
+  } = {};
   for (const [field, entry] of Object.entries(value)) {
     if (entry === undefined) continue;
     if (field === "color") style.color = themeColor(entry, capture);
@@ -2065,7 +2188,7 @@ function syntaxStyle(value, capture) {
       }
       style.fontStyle = entry;
     } else if (field === "fontWeight") {
-      if (!Number.isInteger(entry) || entry < 100 || entry > 900) {
+      if (typeof entry !== "number" || !Number.isInteger(entry) || entry < 100 || entry > 900) {
         throw new TypeError(`syntax style ${capture} fontWeight must be an integer from 100 to 900`);
       }
       style.fontWeight = entry;
@@ -2078,22 +2201,22 @@ function syntaxStyle(value, capture) {
   }
   return style;
 }
-export async function registerTheme(definition) {
+export async function registerTheme(definition: unknown) {
   const value = record(definition, "themes.register requires a theme object");
   const name = string(value.name, "theme name must be text");
   if (name.length === 0) throw new TypeError("theme name must be nonempty");
   if (value.appearance !== "dark" && value.appearance !== "light") {
     throw new TypeError('theme appearance must be "dark" or "light"');
   }
-  const colors = {};
+  const colors: Record<string, string> = {};
   for (const [key, color] of Object.entries(record(value.colors ?? {}, "theme colors must be an object"))) {
     if (color !== undefined) colors[key] = themeColor(color, key);
   }
-  const syntax = {};
+  const syntax: Record<string, ReturnType<typeof syntaxStyle>> = {};
   for (const [capture, style] of Object.entries(record(value.syntax ?? {}, "theme syntax must be an object"))) {
     if (style !== undefined) syntax[capture] = syntaxStyle(style, capture);
   }
-  const chrome = {};
+  const chrome: Record<string, number> = {};
   for (const [key, entry] of Object.entries(record(value.chrome ?? {}, "theme chrome must be an object"))) {
     if (entry === undefined) continue;
     if (typeof entry !== "number" || !Number.isFinite(entry)) {
@@ -2106,7 +2229,7 @@ export async function registerTheme(definition) {
   const owned = ownership(() => {}, () => request("unregisterTheme", registration));
   return Object.freeze({ dispose: () => owned.dispose() });
 }
-export async function getTheme(name) {
+export async function getTheme(name: unknown) {
   const theme = await request("getTheme", string(name, "theme name must be text"));
   if (theme === null) return null;
   const syntax = Object.fromEntries(Object.entries(theme.syntax)
@@ -2114,15 +2237,15 @@ export async function getTheme(name) {
   return Object.freeze({ ...theme, colors: Object.freeze(theme.colors), syntax: Object.freeze(syntax) });
 }
 export async function listThemes() {
-  return Object.freeze((await request("listThemes")).map((theme) => Object.freeze(theme)));
+  return Object.freeze((await request("listThemes")).map((theme: Native) => Object.freeze(theme)));
 }
-export async function defineColor(definition) {
+export async function defineColor(definition: unknown) {
   const value = record(definition, "themes.defineColor requires a definition object");
   const key = string(value.key, "color key must be text");
   if (key.length === 0) throw new TypeError("color key must be nonempty");
   const description = string(value.description, "color description must be text");
   const defaults = record(value.defaults, "color defaults must be an object");
-  const fallback = (appearance) => {
+  const fallback = (appearance: "dark" | "light") => {
     const entry = string(defaults[appearance], `color default ${appearance} must be text`);
     if (entry.length === 0 || (entry.startsWith("#") && !hexColor.test(entry))) {
       throw new TypeError(`color default ${appearance} must be #rrggbb, #rrggbbaa, or a color key`);
@@ -2131,21 +2254,21 @@ export async function defineColor(definition) {
   };
   await request("defineColor", key, description, fallback("dark"), fallback("light"));
 }
-function iconSpec(value, name) {
+function iconSpec(value: unknown, name: unknown) {
   const spec = record(value, `icon ${name} must be a definition object`);
   return Object.fromEntries(Object.entries(spec).filter(([, entry]) => entry !== undefined));
 }
-export async function defineIcon(name, definition) {
+export async function defineIcon(name: unknown, definition: unknown) {
   const key = string(name, "icon name must be text");
   await request("defineIcon", key, iconSpec(definition, key));
 }
-export async function overrideIcon(name, definition) {
+export async function overrideIcon(name: unknown, definition: unknown) {
   const key = string(name, "icon name must be text");
   const registration = await request("registerIconOverride", key, iconSpec(definition, key));
   const owned = ownership(() => {}, () => request("unregisterIconOverride", registration));
   return Object.freeze({ dispose: () => owned.dispose() });
 }
-export async function associateIcons(patterns) {
+export async function associateIcons(patterns: unknown) {
   const value = record(patterns, "icons.associate requires patterns");
   const claims = ["files", "extensions", "folders"].map((field) => {
     const entries = record(value[field] ?? {}, `icon associations of ${field} must be an object`);
@@ -2156,10 +2279,10 @@ export async function associateIcons(patterns) {
   const owned = ownership(() => {}, () => request("unregisterIconAssociation", registration));
   return Object.freeze({ dispose: () => owned.dispose() });
 }
-export async function registerIconPack(definition) {
+export async function registerIconPack(definition: unknown) {
   const value = record(definition, "icons.registerPack requires a pack object");
   const name = string(value.name, "icon pack name must be text");
-  const icons = {};
+  const icons: Record<string, ReturnType<typeof iconSpec>> = {};
   for (const [key, spec] of Object.entries(record(value.icons, "icon pack icons must be an object"))) {
     if (spec !== undefined) icons[key] = iconSpec(spec, key);
   }
@@ -2170,7 +2293,7 @@ export async function registerIconPack(definition) {
 export async function listIconPacks() {
   return Object.freeze(await request("listIconPacks"));
 }
-function presetCommand(command) {
+function presetCommand(command: unknown) {
   if (command === null) return null;
   if (typeof command === "string") return { name: command, arguments: null };
   const value = record(command, "keymap preset command must be a name, a command object, or null");
@@ -2179,12 +2302,12 @@ function presetCommand(command) {
     arguments: value.arguments === undefined ? null : validateJsonValue(value.arguments),
   };
 }
-export async function registerKeymapPreset(definition) {
+export async function registerKeymapPreset(definition: unknown) {
   const value = record(definition, "keymaps.registerPreset requires a preset object");
   const name = string(value.name, "keymap preset name must be text");
   const title = value.title === undefined ? name : string(value.title, "keymap preset title must be text");
   if (!Array.isArray(value.bindings)) throw new TypeError("keymap preset bindings must be an array");
-  const bindings = value.bindings.map((binding) => {
+  const bindings = value.bindings.map((binding: unknown) => {
     const entry = record(binding, "keymap preset binding must be an object");
     if (entry.command === undefined) throw new TypeError("keymap preset binding requires a command or null");
     const view = entry.view ?? null;
@@ -2199,17 +2322,17 @@ export async function registerKeymapPreset(definition) {
   const owned = ownership(() => {}, () => request("unregisterKeymapPreset", registration));
   return Object.freeze({ dispose: () => owned.dispose() });
 }
-export async function getKeymapPreset(name) {
+export async function getKeymapPreset(name: unknown) {
   const preset = await request("getKeymapPreset", string(name, "keymap preset name must be text"));
   if (preset === null) return null;
-  const bindings = preset.bindings.map((binding) => Object.freeze({
+  const bindings = preset.bindings.map((binding: Native) => Object.freeze({
     ...binding,
     command: binding.command === null ? null : Object.freeze(binding.command),
   }));
   return Object.freeze({ ...preset, bindings: Object.freeze(bindings) });
 }
 export async function listKeymapPresets() {
-  return Object.freeze((await request("listKeymapPresets")).map((preset) => Object.freeze(preset)));
+  return Object.freeze((await request("listKeymapPresets")).map((preset: Native) => Object.freeze(preset)));
 }
 export async function listGrammars() {
   return Object.freeze(await request("listGrammars"));
@@ -2218,75 +2341,75 @@ export async function listGrammars() {
 export async function listDocuments() {
   return Object.freeze((await request("listDocuments")).map(documentFromNative));
 }
-export async function getDocument(id) {
+export async function getDocument(id: unknown) {
   const value = await request("getDocument", string(id, "document identity must be text"));
   return value === null ? null : documentFromNative(value);
 }
 export async function listWindows() {
   return Object.freeze((await request("listWindows")).map(windowFromNative));
 }
-export async function lastFocusedDocument(target) {
+export async function lastFocusedDocument(target: unknown) {
   const value = await request("getWindow", windowAuthority(target));
   if (value === null || value.lastFocusedDocument === null) return null;
   return getDocument(value.lastFocusedDocument);
 }
-export async function getWindow(target) {
+export async function getWindow(target: unknown) {
   const value = await request("getWindow", windowAuthority(target));
   return value === null ? null : windowFromNative(value);
 }
-function workspaceDestination(options) {
+function workspaceDestination(options?: Opts) {
   if (options === undefined) return null;
   const target = record(options, "workspace options must be an object").target;
   return target === undefined ? null : windowAuthority(target);
 }
-export async function openFolder(uri, options) {
+export async function openFolder(uri: unknown, options?: Opts) {
   return workspaceFromNative(await request("openFolder", string(uri, "resource URI must be text"), workspaceDestination(options)));
 }
-export async function replaceWorkspaceRoots(roots, options) {
-  const uris = arrayItems(roots, uri => string(uri, "workspace root URI must be text"));
+export async function replaceWorkspaceRoots(roots: unknown, options?: Opts) {
+  const uris = arrayItems(roots, (uri: unknown) => string(uri, "workspace root URI must be text"));
   return workspaceFromNative(await request("replaceWorkspaceRoots", uris, workspaceDestination(options)));
 }
-export async function pickFolder(options) {
+export async function pickFolder(options?: Opts) {
   const value = await request("pickFolder", workspaceDestination(options));
   return Object.freeze(value.kind === "selected"
     ? { kind: "selected", uri: value.uri }
     : { kind: "dismissed" });
 }
-export function readFileText(uri) {
+export function readFileText(uri: unknown) {
   return request("readFileText", string(uri, "resource URI must be text"));
 }
-export async function listFiles(uri) {
+export async function listFiles(uri: unknown) {
   const entries = await request("listFiles", string(uri, "resource URI must be text"));
-  return Object.freeze(entries.map(entry => Object.freeze({ uri: entry.uri, name: entry.name, kind: entry.kind, ignored: entry.ignored })));
+  return Object.freeze(entries.map((entry: Native) => Object.freeze({ uri: entry.uri, name: entry.name, kind: entry.kind, ignored: entry.ignored })));
 }
-export async function searchFiles(uri, query, options) {
+export async function searchFiles(uri: unknown, query: unknown, options?: Opts) {
   const limit = options == null ? null : record(options, "search options must be an object").limit ?? null;
-  if (limit !== null && (!Number.isInteger(limit) || limit < 1)) throw new TypeError("search limit must be a positive integer");
-  const directories = typeof uri === "string" ? [uri] : arrayItems(uri, item => string(item, "resource URI must be text"));
+  if (limit !== null && (typeof limit !== "number" || !Number.isInteger(limit) || limit < 1)) throw new TypeError("search limit must be a positive integer");
+  const directories = typeof uri === "string" ? [uri] : arrayItems(uri, (item: unknown) => string(item, "resource URI must be text"));
   const found = await request("searchFiles", directories, string(query, "search query must be text"), limit);
   return Object.freeze({
-    results: Object.freeze(found.results.map(hit => Object.freeze({
+    results: Object.freeze(found.results.map((hit: Native) => Object.freeze({
       uri: hit.uri,
       directory: hit.directory,
       path: hit.path,
       name: hit.name,
-      ranges: Object.freeze(hit.ranges.map(range => Object.freeze([range[0], range[1]]))),
+      ranges: Object.freeze(hit.ranges.map((range: Native) => Object.freeze([range[0], range[1]]))),
     }))),
     more: found.more,
   });
 }
-export function isFileIgnored(uri) {
+export function isFileIgnored(uri: unknown) {
   return request("isFileIgnored", string(uri, "resource URI must be text"));
 }
-export async function watchFiles(uri, listener, options) {
+export async function watchFiles(uri: unknown, listener: unknown, options?: Opts) {
   string(uri, "resource URI must be text");
-  if (typeof listener !== "function") throw new TypeError("files.watch requires a listener");
+  expectFunction(listener, "files.watch requires a listener");
   const recursive = options === undefined
     ? false
     : record(options, "watch options must be an object").recursive ?? false;
   if (typeof recursive !== "boolean") throw new TypeError("watch recursive must be a boolean");
   const subscription = await registerCallable(
-    (subscription) => watchListeners.set(subscription, listener),
+    (subscription: number) => watchListeners.set(subscription, listener),
     () => request("watchFiles", uri, recursive));
   const owned = ownership(() => watchListeners.delete(subscription),
     () => request("unwatchFiles", subscription));
@@ -2297,12 +2420,12 @@ globalThis.__knotDispatchWatchChange = async (subscription, uris) => {
   if (listener) await listener(Object.freeze([...uris]));
 };
 const processSignals = new Set(["SIGHUP", "SIGINT", "SIGQUIT", "SIGKILL", "SIGTERM", "SIGUSR1", "SIGUSR2"]);
-function processArguments(options, allowStdin) {
+function processArguments(options: Opts, allowStdin: unknown) {
   const value = record(options, "process options must be an object");
   const command = string(value.command, "process command must be text");
   const args = value.args === undefined
     ? []
-    : arrayItems(value.args, (argument) => string(argument, "process arguments must be text"));
+    : arrayItems(value.args, (argument: unknown) => string(argument, "process arguments must be text"));
   const cwd = value.cwd === undefined ? null : string(value.cwd, "process cwd must be a file URI");
   const env = [];
   const unset = [];
@@ -2317,7 +2440,7 @@ function processArguments(options, allowStdin) {
   if (allowStdin && value.stdin !== undefined) stdin = string(value.stdin, "process stdin must be text");
   return [command, args, cwd, env, unset, stdin];
 }
-export async function runProcess(options) {
+export async function runProcess(options: Opts) {
   const result = await request("runProcess", ...processArguments(options, true));
   return Object.freeze({
     exitCode: result.exitCode,
@@ -2329,8 +2452,8 @@ export async function runProcess(options) {
 // A stream reads its next chunk only after every listener finished with the
 // previous one, so a slow listener stalls the child on its pipe. Output that
 // arrives while no listener is attached waits in the application.
-function processStream(id, stream) {
-  const listeners = new Set();
+function processStream(id: unknown, stream: string) {
+  const listeners = new Set<Fn>();
   let running = false;
   const pump = () => withFrame(null, async () => {
     while (listeners.size > 0) {
@@ -2340,7 +2463,7 @@ function processStream(id, stream) {
       } catch (error) {
         // The handle is gone: its process finished and drained, or its
         // lifecycle ended. Either way the stream is over.
-        if (error?.code === "InvalidTarget") break;
+        if (errorCode(error) === "InvalidTarget") break;
         throw error;
       }
       if (chunk === null) break;
@@ -2350,8 +2473,8 @@ function processStream(id, stream) {
     }
     running = false;
   });
-  return (listener) => {
-    if (typeof listener !== "function") throw new TypeError("process stream requires a listener");
+  return (listener: unknown) => {
+    expectFunction(listener, "process stream requires a listener");
     listeners.add(listener);
     if (!running) {
       running = true;
@@ -2360,68 +2483,68 @@ function processStream(id, stream) {
     return Object.freeze({ dispose: () => { listeners.delete(listener); return Promise.resolve(); } });
   };
 }
-export async function spawnProcess(options) {
+export async function spawnProcess(options: Opts) {
   const id = await request("spawnProcess", ...processArguments(options, false));
   const exited = withFrame(null, () => request("waitProcess", id))
-    .then((status) => Object.freeze({ exitCode: status.exitCode, signal: status.signal }));
+    .then((status: Native) => Object.freeze({ exitCode: status.exitCode, signal: status.signal }));
   exited.catch(() => {});
   return Object.freeze({
     onStdout: processStream(id, "stdout"),
     onStderr: processStream(id, "stderr"),
-    write: (text) => request("writeProcessInput", id, string(text, "process input must be text")),
+    write: (text: unknown) => request("writeProcessInput", id, string(text, "process input must be text")),
     closeStdin: () => request("closeProcessInput", id),
-    kill: (signal) => {
-      if (signal !== undefined && !processSignals.has(signal)) throw new TypeError("unsupported process signal");
+    kill: (signal: unknown) => {
+      if (signal !== undefined && !processSignals.has(signal as string)) throw new TypeError("unsupported process signal");
       return request("killProcess", id, signal ?? null);
     },
     dispose: () => request("disposeProcess", id),
     exited,
   });
 }
-export async function statFile(uri) {
+export async function statFile(uri: unknown) {
   const kind = await request("statFile", string(uri, "resource URI must be text"));
   return kind === null ? null : Object.freeze({ kind });
 }
-export function createFile(uri) {
+export function createFile(uri: unknown) {
   return request("createFile", string(uri, "resource URI must be text"));
 }
-export function writeFileText(uri, text) {
+export function writeFileText(uri: unknown, text: unknown) {
   return request("writeFileText", string(uri, "resource URI must be text"),
     string(text, "file text must be text"));
 }
-export function createDirectory(uri) {
+export function createDirectory(uri: unknown) {
   return request("createDirectory", string(uri, "resource URI must be text"));
 }
-export function renameFile(from, to) {
+export function renameFile(from: unknown, to: unknown) {
   return request("renameFile",
     string(from, "resource URI must be text"), string(to, "resource URI must be text"));
 }
-export function copyFile(from, to) {
+export function copyFile(from: unknown, to: unknown) {
   return request("copyFile",
     string(from, "resource URI must be text"), string(to, "resource URI must be text"));
 }
-export async function revealFile(uri) {
+export async function revealFile(uri: unknown) {
   await request("revealFile", string(uri, "resource URI must be text"));
 }
-export async function deleteFile(uri, options) {
+export async function deleteFile(uri: unknown, options?: Opts) {
   const permanent = options === undefined
     ? false
     : record(options, "delete options must be an object").permanent ?? false;
   if (typeof permanent !== "boolean") throw new TypeError("delete permanent must be a boolean");
   await request("deleteFile", string(uri, "resource URI must be text"), permanent);
 }
-export async function openWindow(options) {
+export async function openWindow(options?: Opts) {
   const roots = options === undefined
     ? undefined
     : record(options, "window options must be an object").roots;
-  const uris = roots === undefined ? [] : arrayItems(roots, uri => string(uri, "workspace root URI must be text"));
+  const uris = roots === undefined ? [] : arrayItems(roots, (uri: unknown) => string(uri, "workspace root URI must be text"));
   return windowFromNative(await request("openWindow", uris));
 }
-export async function focusWindow(target) {
+export async function focusWindow(target: unknown) {
   await request("focusWindow", windowAuthority(target));
 }
-function sessionEntry(value) {
-  record(value, "session entry must be an object");
+function sessionEntry(value: unknown) {
+  expectRecord(value, "session entry must be an object");
   const entry = {
     uri: optionalText(value.uri),
     document: optionalText(value.document),
@@ -2432,22 +2555,22 @@ function sessionEntry(value) {
   }
   return entry;
 }
-function optionalIndex(value) {
+function optionalIndex(value: unknown) {
   return value == null ? null : safeInteger(value);
 }
-export async function replaceWindows(options) {
-  record(options, "replaceWindows requires options");
-  const suspend = arrayItems(options.suspend, (value) => {
-    record(value, "suspended document must be an object");
+export async function replaceWindows(options: Opts) {
+  expectRecord(options, "replaceWindows requires options");
+  const suspend = arrayItems(options.suspend, (value: unknown) => {
+    expectRecord(value, "suspended document must be an object");
     return {
       document: string(value.document, "document identity must be text"),
       capture: optionalText(value.capture),
     };
   });
-  const windows = arrayItems(options.windows, (value) => {
-    record(value, "destination window must be an object");
+  const windows = arrayItems(options.windows, (value: unknown) => {
+    expectRecord(value, "destination window must be an object");
     return {
-      roots: arrayItems(value.roots, (uri) => string(uri, "workspace root URI must be text")),
+      roots: arrayItems(value.roots, (uri: unknown) => string(uri, "workspace root URI must be text")),
       entries: arrayItems(value.entries, sessionEntry),
       selected: optionalIndex(value.selected),
       layout: value.layout == null ? null : validateJsonValue(value.layout),
@@ -2459,23 +2582,23 @@ export async function replaceWindows(options) {
   });
   return Object.freeze({
     protected: value.protected,
-    windows: Object.freeze(value.windows.map((window) => Object.freeze({
+    windows: Object.freeze(value.windows.map((window: Native) => Object.freeze({
       window: windowTarget(window.window),
-      entries: Object.freeze(window.entries.map((entry) => Object.freeze(entry))),
+      entries: Object.freeze(window.entries.map((entry: Native) => Object.freeze(entry))),
       layout: window.layout,
     }))),
   });
 }
-export async function captureLayout(target) {
-  return validateJsonValue(await request("captureLayout", windowAuthority(target)));
+export async function captureLayout(target: unknown) {
+  return validateJsonValue(await request("captureLayout", windowAuthority(target))) as Native;
 }
-export async function getWorkspace(target) {
+export async function getWorkspace(target: unknown) {
   const value = await request("getWorkspace", windowAuthority(target));
   return value === null ? null : workspaceFromNative(value);
 }
 
-const applicationListeners = new Map();
-function applicationSnapshotFromNative(value) {
+const applicationListeners = new Map<number, Fn>();
+function applicationSnapshotFromNative(value: Native) {
   return Object.freeze({
     documents: Object.freeze(value.documents.map(documentFromNative)),
     windows: Object.freeze(value.windows.map(windowFromNative)),
@@ -2485,17 +2608,17 @@ function applicationSnapshotFromNative(value) {
     launched: value.launched,
   });
 }
-function noticesFromNative(notices) {
-  return Object.freeze(notices.map(notice => Object.freeze({
+function noticesFromNative(notices: Native) {
+  return Object.freeze(notices.map((notice: Native) => Object.freeze({
     ...notice,
-    actions: Object.freeze(notice.actions.map(action => Object.freeze(action))),
+    actions: Object.freeze(notice.actions.map((action: Native) => Object.freeze(action))),
     target: notice.target === null ? null : windowTarget(notice.target),
   })));
 }
-export async function observeWorkbench(listener) {
-  if (typeof listener !== "function") throw new TypeError("observe requires a listener");
+export async function observeWorkbench(listener: unknown) {
+  expectFunction(listener, "observe requires a listener");
   const value = await registerCallable(
-    (value) => applicationListeners.set(value.subscription, listener),
+    (value: Native) => applicationListeners.set(value.subscription, listener),
     () => request("observeWorkbench"));
   const owned = ownership(() => applicationListeners.delete(value.subscription),
     () => request("unobserveWorkbench", value.subscription));
@@ -2524,14 +2647,14 @@ globalThis.__knotDispatchApplicationChange = async (subscription, value) => {
   await listener(Object.freeze({ type: value.type, sequence: value.sequence, ...payload }));
 };
 
-export async function storageRead(key) {
+export async function storageRead(key: unknown) {
   const result = await request("storageRead", string(key, "storage key must be text"));
   return Object.freeze(result.found ? { found: true, value: validateJsonValue(result.value) } : { found: false });
 }
-export async function storageWrite(key, value) {
+export async function storageWrite(key: unknown, value: unknown) {
   await request("storageWrite", string(key, "storage key must be text"), validateJsonValue(value));
 }
-export async function storageDelete(key) {
+export async function storageDelete(key: unknown) {
   await request("storageDelete", string(key, "storage key must be text"));
 }
 export async function storageList() {
@@ -2539,22 +2662,22 @@ export async function storageList() {
 }
 
 const HISTORY_LIMIT = 50;
-function historyKey(name) {
+function historyKey(name: unknown) {
   return `history/${string(name, "history name must be text")}`;
 }
-async function readHistory(name) {
+async function readHistory(name: unknown) {
   const stored = await storageRead(historyKey(name));
   return stored.found && Array.isArray(stored.value) ? stored.value.filter((id) => typeof id === "string") : [];
 }
-export async function historyRecent(name) {
+export async function historyRecent(name: unknown) {
   return Object.freeze(await readHistory(name));
 }
-export async function historyRecord(name, id) {
+export async function historyRecord(name: unknown, id: unknown) {
   const recorded = string(id, "history ID must be text");
   const ids = await readHistory(name);
   await storageWrite(historyKey(name), [recorded, ...ids.filter((other) => other !== recorded)].slice(0, HISTORY_LIMIT));
 }
-export async function historyForget(name, id) {
+export async function historyForget(name: unknown, id: unknown) {
   if (id === undefined) {
     await storageDelete(historyKey(name));
     return;
@@ -2563,14 +2686,14 @@ export async function historyForget(name, id) {
   const ids = await readHistory(name);
   if (ids.includes(forgotten)) await storageWrite(historyKey(name), ids.filter((other) => other !== forgotten));
 }
-export async function historyOrder(name, items, key = (item) => item.id) {
+export async function historyOrder(name: unknown, items: unknown, key: unknown = (item: Rec) => item.id) {
   if (!Array.isArray(items)) throw new TypeError("history items must be an array");
-  if (typeof key !== "function") throw new TypeError("history key must be a function");
+  expectFunction(key, "history key must be a function");
   const places = new Map((await readHistory(name)).map((id, place) => [id, place]));
-  const recent = [];
-  const rest = [];
+  const recent: [number, unknown][] = [];
+  const rest: unknown[] = [];
   for (const item of items) {
-    const place = places.get(key(item));
+    const place = places.get(key(item) as string);
     if (place === undefined) rest.push(item);
     else recent.push([place, item]);
   }
@@ -2578,19 +2701,19 @@ export async function historyOrder(name, items, key = (item) => item.id) {
   return Object.freeze([...recent.map(([, item]) => item), ...rest]);
 }
 
-function captureFromNative(value) {
+function captureFromNative(value: Native) {
   return Object.freeze(value);
 }
 export async function recoveryList() {
   return Object.freeze((await request("recoveryList")).map(captureFromNative));
 }
-export async function recoveryRetain(document) {
+export async function recoveryRetain(document: unknown) {
   return captureFromNative(await request("recoveryRetain", string(document, "document identity must be text")));
 }
-export async function recoveryRelease(id) {
+export async function recoveryRelease(id: unknown) {
   return await request("recoveryRelease", string(id, "capture identity must be text"));
 }
-export async function recoveryRestore(id, options) {
+export async function recoveryRestore(id: unknown, options?: Opts) {
   const value = await request("recoveryRestore", string(id, "capture identity must be text"), destinationAuthority(options));
   const presentation = documentPresentationFromNative(value.presentation);
   return Object.freeze(value.outcome === "restored"
