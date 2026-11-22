@@ -13,7 +13,7 @@ Every item has the same shape:
 - **Description** says what is missing today and when it becomes worth doing,
   then what to build.
 
-The next unused ID is **D228**; take it for a new item and bump this line.
+The next unused ID is **D228**, and for bugs **B002**; take it for a new item and bump this line.
 
 Each section is ordered so that an item comes after the items it depends on,
 wherever the sections allow it. Items with no dependencies are ordered by
@@ -62,6 +62,18 @@ decisions, and remove its plan with it. Reports under [reports/](reports/)
 hold the analyses that support some items.
 
 ## Bugs
+
+- **B001 — Explorer tests flake under load**
+  - Depends on: none
+  - Description: `explorer::a_document_saved_under_a_new_name_is_selected_in_the_explorer`
+    (once on CI, 1 in 120 locally) and
+    `explorer::rename_selects_the_stem_and_open_documents_follow` (2 in 120)
+    time out waiting for tree state when the machine is loaded, for instance
+    10 `yes > /dev/null` processes beside 120 runs of the test binary, 30 at a
+    time. Reading `followMoved`, the watcher refresh, and the tree view's
+    `reveal`, `invalidate`, and `apply_response` found no race. Log the tree's
+    rows, loading state, and pending reveal when the wait times out, stress the
+    test until it fails, and fix the cause.
 
 ## Architecture and technical debt
 
