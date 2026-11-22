@@ -11,7 +11,7 @@ is the recommended authoring language and compiles before installation.
 - [Tool windows, prompts, and status](ui.md): tool windows and trees, transient prompts, editor bars, status items, notices.
 - [Languages, themes, and icons](languages-and-themes.md): register languages, themes and color keys, icons.
 - [Settings](settings.md): read and write settings.
-- [Sharing between packages](packages.md): providers (including the names Knot asks), identity and lifetime, native contributors.
+- [Sharing between packages](packages.md): contracts (including the ones Knot asks), identity and lifetime, native contributors.
 - [Application state, files, and storage](application.md): inspect and change the application, read and change files, cleanup and failures, durable storage, document captures, project sessions.
 
 ## Package and check your code

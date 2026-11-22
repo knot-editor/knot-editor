@@ -308,28 +308,43 @@ listener failure cannot prevent other listeners from receiving cancellation.
 
 ## Providers
 
-A package shares a feature with others by registering a named provider, an
-object of methods. The application keeps registrations in registration order,
-each owned by its lifecycle (`knot_model::providers`); lifecycle teardown drops
-them with the other registrations. `providers.get` answers the latest
-registration of a name and `providers.all` every one, oldest first, so one
-package overrides another by registering later. The application interprets
-no provider name, but two Knot-defined contracts, owned by `knot` and
-served from `completionContract` and `pasteContract(languageId)`: `completion`,
-which native [completion](semantic-ui.md#completion-ownership-and-aggregation)
-asks of every registration, and `paste.<languageId>`, which native
+A package shares a feature with others through a contract: a name and
+methods, each with a schema, built by `defineContract` in the package's
+contract module (the manifest's `contract`). The module may import only
+`"knot/contract"` and its own modules, so a consumer evaluates it without
+running the provider's code. The host qualifies the name with the package the
+module resolved from, so contracts cannot collide across packages. A package
+serves a contract with `serve`; others import the provider by package name
+(listed in `requires`; personal config needs no entry and may import from
+post-init) and call `client()`.
+
+The application keeps registrations in registration order, each owned by its
+lifecycle (`knot_model::providers`); lifecycle teardown drops them, and the
+clients bound to them, with the other registrations. A client binds the latest
+registration of a contract, so one package overrides another by serving later,
+and disposing it uncovers the previous one. `serve` registers the provider's
+schema and `client()` the consumer's; a call validates the argument and then
+the result against both, once when the two are equal. A violation names the
+package, contract, method, and path, and a consumer built against another
+revision of the contract fails per call, not at load.
+
+A call is a host request of the caller that enqueues a task in the provider's
+package, like a semantic provider callback, with the method, a JSON argument,
+and the caller's command window, which the provider sees as its own target. The
+provider's result or thrown message settles the caller's request. A client
+names one registration: once it is disposed, a call rejects `ContractNotFound`.
+A call to a contract the caller serves is rejected, and a package uses its own
+code directly. Other calls interleave: a provider's package may be running a
+command that waits on the caller.
+
+The application interprets no package contract, but two Knot-defined ones,
+owned by `knot` and served from `completionContract` and
+`pasteContract(languageId)`: `completion`, which native
+[completion](semantic-ui.md#completion-ownership-and-aggregation) asks of every
+registration, and `paste.<languageId>`, which native
 [paste](editor-and-languages.md#editor-views) asks of the latest. Knot is their
 consumer, so it validates only each provider's result, against the descriptor
 compiled when it was served, and never goes through a contract client.
-
-A call through a handle is a host request of the caller that enqueues a task in
-the provider's package, like a semantic provider callback, with the method
-name, a JSON argument and the caller's command window. The provider sees that
-window as its own target, and its JSON result or thrown message settles the
-caller's request. A handle names one registration: once it is disposed, a call
-rejects `ProviderNotFound`. A call to the caller's own package is rejected, and a package uses its own code
-directly. Other calls interleave: a provider's package may be running a command
-that waits on the caller.
 
 ## Application metadata queries
 

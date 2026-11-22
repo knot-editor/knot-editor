@@ -4,36 +4,47 @@ Part of the [extension guide](README.md).
 
 ## Share a feature with other packages
 
-A package offers a feature to others by registering a named provider; others
-find it by name and call it, so they reuse the feature rather than copy it:
+A package offers a feature to others through a contract defined once in code:
+the provider publishes a schema-built contract, a consumer imports it and calls
+typed functions that run in the provider's package, and the host validates
+every argument and result against the schemas. The contract module is named by
+`contract` in the manifest, next to `main`. It is pure schema code: it may
+import only `"knot/contract"` and its own relative modules, so a consumer can
+evaluate it without running the provider.
 
 ```ts
-import { providers } from "knot";
+// contract.ts, the provider's "contract": "dist/contract.js"
+import { defineContract, s } from "knot/contract";
+export const greeter = defineContract("greeter", {
+  greet: s.fn(s.string(), s.string()),
+});
 
-// In the providing package.
-await providers.register("example.greeter", {
-  async greet(name: string, context) {
+// main.ts, in the providing package.
+import { greeter } from "./contract.js";
+await greeter.serve({
+  async greet(name, context) {
     return `hello ${name}`; // context.window is the caller's window, or null
   },
 });
 
-// In another package, which declares the interface it expects.
-interface Greeter { greet(name: string): Promise<string> }
-const greeter = await providers.get<Greeter>("example.greeter");
-const text = greeter === null ? "no greeter" : await greeter.greet("knot");
+// In another package that lists "@example/greeter" in `requires`.
+import { greeter } from "@example/greeter";
+const text = await (await greeter.client()).greet("knot");
 ```
 
-Each method takes one JSON argument and returns JSON, since the call runs in the
-providing package. `get` returns the latest registration of a name, so a later
-package or personal config replaces a provider for everyone; `all` returns
-every registration, oldest first, for features several packages contribute to.
-Look a provider up when the feature runs, and fall back when it is missing: a
-handle rejects `ProviderNotFound` once its package unloads or restarts. Call
-your own package's code directly, never through `providers`. The full contract
-is `providers` in
-[`knot.d.ts`](../../crates/knot-host/src/js/knot.d.ts).
+A contract is identified by its package and name, so the author writes only the
+name. Types are inferred from the schemas, which accept JSON-shaped values
+(`s` in [`knot.d.ts`](../../crates/knot-host/src/js/knot.d.ts)). `client()`
+binds the latest registration, so a later package, or personal config from
+post-init, replaces a provider for everyone and disposing it uncovers the
+previous one. A consumer that can do without the provider catches the
+`ContractNotFound` of `client()` or of a call, which a held client also throws
+once its provider unloads or restarts; look the client up again. A call whose
+argument or result breaks a schema rejects `ContractViolation`, and a method
+that throws rejects `ProviderFailure`. Call your own package's code directly:
+a package cannot call a contract it serves.
 
-### Provider names
+### Contracts Knot defines
 
 Knot asks these contracts itself. Any package serves them with `serve`, and
 none needs `requires`. Each type is in `knot.d.ts`.
@@ -46,11 +57,11 @@ none needs `requires`. Each type is in `knot.d.ts`.
 Knot checks each result against the contract's schema, so a provider that
 returns a malformed list or a non-string paste fails only its own part.
 
-Bundled packages register providers for each other:
+Bundled packages publish contracts for each other:
 
-| Name | Package | Methods |
+| Package | Contract | Methods |
 | --- | --- | --- |
-| `workspace.files`, `workspace.buffers`, `workspace.actions` | Go to File | `rows(query)`: the rows of that Search Everywhere tab for the caller's window |
+| `@knot/go-to-file` | `workspace` | `files(query)`, `buffers(query)`, `actions(query)`: the rows of that Search Everywhere tab for the caller's window |
 
 ## Identity and lifetime
 

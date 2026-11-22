@@ -1,6 +1,6 @@
 # D199 — Typed contracts between packages
 
-Status: 🚧 checkpoints 1–5 done. Item: [D199](../roadmap.md#extension-platform-and-language-tooling),
+Status: 🚧 checkpoints 1–5 done, 6 awaiting review. Item: [D199](../roadmap.md#extension-platform-and-language-tooling),
 part of the [version control plan](vcs.md) (milestone 1, before D211).
 
 ## Outcome
@@ -108,8 +108,8 @@ and the bundled `workspace.*` providers) move onto contracts.
 ### 1. Schema builder, descriptor, and host validator ✅
 
 Done. The builder is the built-in `"knot/contract"` module,
-[contract.js](../../crates/knot-host/src/js/contract.js) (its own file, not
-in `bootstrap.js`, so the Node tests import the real builder); types in
+[contract.ts](../../crates/knot-host/src/js/contract.ts) (its own file, not
+in `bootstrap.ts`, so the Node tests import the real builder); types in
 [knot.d.ts](../../crates/knot-host/src/js/knot.d.ts); the validator is
 [contracts.rs](../../crates/knot-model/src/contracts.rs). Agreed: a schema
 value is its own frozen descriptor; `s.void()` marks a missing argument or
@@ -183,28 +183,31 @@ contracts as providers `knot:completion` and `knot:paste.<languageId>`.
 
 ### 6. Migrate `workspace.*` and remove `providers.*`
 
-Move the bundled package-to-package providers onto a published contract
-and delete the old mechanism.
+Implemented, awaiting review. `@knot/go-to-file` publishes a `workspace`
+contract (`files`, `buffers`, `actions`) from
+[contract.ts](../../extensions/@knot/go-to-file/src/contract.ts); Vim requires
+it and imports it from `"@knot/go-to-file"`, keeping its tolerance of a
+missing or restarting provider. `providers` is gone from the facade,
+[knot.d.ts](../../crates/knot-host/src/js/knot.d.ts), bootstrap, the host
+operations, `knot-protocol`, and the registry, whose registrations are all
+served contracts. Personal config may import any discovered package's contract
+from post-init: the host adds the contract modules to the loaded config graph
+once packages load, and the check before that resolves a package import to an
+empty stand-in. Decisions made on the way:
 
-- **Carried from checkpoint 4:** personal config may import any loaded
-  package's contract; the personal-config override case in
-  [providers.rs](../../src/app/product/tests/providers.rs) becomes a
-  contract case.
-- **Implementation context:** `@knot/go-to-file` adds a contract module +
-  manifest `contract` field and serves one `workspace` contract with
-  `files`, `buffers`, and `actions`
-  ([extension.ts](../../extensions/@knot/go-to-file/src/extension.ts:40));
-  Vim imports it under a new `requires` entry, keeps its try/catch
-  tolerance, and drops its local redeclaration
-  ([command-line.ts](../../extensions/@knot/vim/src/command-line.ts:32));
-  remove `providers` from
-  the `"knot"` facade,
-  [knot.d.ts](../../crates/knot-host/src/js/knot.d.ts:2621), bootstrap, the
-  model registry's old shape, and handlers; keep
-  `docs/schemas/knot.schema.json` in sync with the manifest field.
-- **Validation:** extension `check`/`test`, Vim and go-to-file behavior
-  cases, full `just check`.
-- **Review gate:** `providers.*` gone from the public API.
+- A bundled package compiles alone (its own `rootDir`, fingerprint, and
+  build), so Vim cannot import go-to-file's TypeScript for types; it carries a
+  small ambient declaration of the one method it calls
+  ([go-to-file.d.ts](../../extensions/@knot/vim/src/go-to-file.d.ts)), and the
+  provider's schema still checks every call.
+- The test fake serves contracts under their names (Knot's under `knot:`)
+  and `knot/testing` exposes `contractClient(key)` to call them; it validates
+  no schema. `register.mjs` maps `@knot/go-to-file` to its contract module.
+- Vim's `requires` is hard, so Vim does not load without Go to File until
+  D226. Vim's tests load both, and the missing-list case serves nothing from
+  a Go to File that only publishes the contract.
+- **Review gate:** `providers.*` is gone from the public API; confirm `:e `
+  file completion in Vim and Search Everywhere's tabs in the running app.
 
 ### 7. Document
 
