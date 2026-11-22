@@ -1,6 +1,6 @@
 # D199 — Typed contracts between packages
 
-Status: 🚧 checkpoint 1 done; checkpoint 2 implemented, awaiting its review gate. Item: [D199](../roadmap.md#extension-platform-and-language-tooling),
+Status: 🚧 checkpoint 1 done; checkpoint 2 done; checkpoint 3 next. Item: [D199](../roadmap.md#extension-platform-and-language-tooling),
 part of the [version control plan](vcs.md) (milestone 1, before D211).
 
 ## Outcome
@@ -119,61 +119,19 @@ absent; `s.nullable(x)` is `union([x, null()])`; a violation reads
 Checkpoint 4 adds `serve`/`client`, the call-context parameter of
 `ContractImplementation`, and the package/contract prefix on violations.
 
-### 2. Host JavaScript in TypeScript, with unit tests
+### 2. Host JavaScript in TypeScript, with unit tests ✅
 
-Implemented, pending the review gate. Decisions made while building it:
-the host project (`crates/knot-host/src/js/tsconfig.json`) is standalone
-rather than extending `tsconfig.base.json`, so package settings never rebuild
-the host; unit tests live in `crates/knot-host/js-tests`, loading the
-bootstrap through a harness that stubs the native bindings and restores the
-console and timer globals it installs; values from the Rust side are typed
-`Native` (an alias of `any` in the bindings declaration), extension-supplied
-values `unknown`. The export-name check covers each module's exports, not the
-members of a group object. Types exposed one drift: `documents.open` and its
-siblings omitted the declared `tool` and `directory` fields of a
-presentation, which are now `null`.
-
-Write the host's own modules in TypeScript, type-checked against the public
-declarations, and unit-test them in Node before the transport work grows
-them. Not specific to contracts; done here because checkpoints 4–6 change
-these files heavily.
-
-- **Deliverables:** `bootstrap.js`, `knot.js`, and `contract.js` become
-  strict TypeScript sources that `knot-host`'s build script compiles with the
-  lockfile-pinned `tsc` and embeds, as the bundled packages are today;
-  `knot.d.ts` stays the hand-written public contract, and the build fails
-  when the `"knot"` and `"knot/contract"` implementations stop matching what
-  it declares; the private native bindings get a typed declaration, the only
-  place host sources may use `any`; `node:test`
-  unit tests for the host modules with the native bindings stubbed, starting
-  with the schema builder (moved from `scripts/extensions/testing/schemas.test.ts`)
-  and the boundary helpers such as `validateJsonValue`, argument
-  normalization, and lifecycle-owned disposal.
-- **Implementation context:** reuse the compile, fingerprint, and tool-install
-  logic in [knot-bundled's build.rs](../../crates/knot-bundled/src/build.rs)
-  rather than copying it; `include_str!` in
-  [engine/mod.rs](../../crates/knot-host/src/engine/mod.rs) reads the emitted
-  modules from `OUT_DIR`. Emit must stay module-for-module (no bundler) so
-  V8 module specifiers, error locations, and the
-  private-bootstrap import rule in
-  [modules.rs](../../crates/knot-host/src/engine/modules.rs) keep working.
-  Conformance follows the fake host's `api: KnotApi` in
-  [host.ts](../../scripts/extensions/testing/host.ts): each exported group is
-  written with `satisfies` against `typeof import("knot")`, so handler
-  parameters are inferred from the declaration (its method syntax would
-  otherwise accept a narrower handler), plus a type-level check that the
-  facade's export names equal the declaration's in both directions, applied
-  to the real and the fake host alike. A `just check` step rejects `any` in
-  host sources outside the bindings declaration. The Node tests'
-  `register.mjs` maps `"knot/contract"` to the compiled builder. Update [development](../development.md) where it describes what
-  `tsc` builds and the `knot.d.ts` rebuild trigger.
-- **Validation:** existing V8 engine and product tests pass unchanged; an
-  intentional mismatch between an implementation and `knot.d.ts` fails the
-  build (checked once by hand, not as a permanent test); new unit tests run
-  under `node tasks.mjs test`; `just check`; incremental rebuild still
-  touches only what changed (`scripts/check-bundled-incremental.sh`).
-- **Review gate:** the conformance approach (how an implementation is tied to
-  `knot.d.ts`) and the unit-test harness shape agreed; no behavior change.
+Done. The host's `bootstrap`, `knot`, and `contract` modules are strict
+TypeScript in [src/js](../../crates/knot-host/src/js), compiled by
+`knot-host`'s build script and tied to `knot.d.ts` with `satisfies` and a
+two-way export-name check (see [development](../development.md)); values from
+the Rust side are typed `Native` in `native.d.ts`, the only place `any` is
+allowed. The host project is standalone, so package settings never rebuild
+it. Unit tests live in [js-tests](../../crates/knot-host/js-tests), with the
+native bindings stubbed. The export-name check does not cover members of a
+group object. Types exposed one drift: presentations returned by
+`documents.open` and its siblings omitted the declared `tool` and
+`directory`, which are now `null`.
 
 ### 3. Run the declared API against the real host
 
