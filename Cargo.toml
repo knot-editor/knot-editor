@@ -155,6 +155,11 @@ gpui = { workspace = true, features = ["test-support"] }
 name = "knot"
 path = "src/lib.rs"
 
+# Line tables keep backtraces readable while keeping `target` several GB smaller
+# than full debuginfo.
+[profile.dev]
+debug = "line-tables-only"
+
 # Startup compiles every bundled highlight query; unoptimized, the query
 # compiler takes seconds, so debug builds and tests optimize the runtime.
 [profile.dev.package.tree-sitter]
