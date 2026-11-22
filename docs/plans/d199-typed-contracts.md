@@ -1,6 +1,6 @@
 # D199 — Typed contracts between packages
 
-Status: 🚧 checkpoints 1–4 done; 5 awaiting review. Item: [D199](../roadmap.md#extension-platform-and-language-tooling),
+Status: 🚧 checkpoints 1–5 done. Item: [D199](../roadmap.md#extension-platform-and-language-tooling),
 part of the [version control plan](vcs.md) (milestone 1, before D211).
 
 ## Outcome
@@ -169,35 +169,17 @@ with `UnsupportedOperation`. Product cases are in
 its tests stay until checkpoints 5 and 6. Personal config importing contracts
 moved to checkpoint 6.
 
-### 5. Migrate the native-interpreted providers (awaiting review)
+### 5. Migrate the native-interpreted providers ✅
 
-Move `editor.completion` and `editor.paste.<languageId>` onto Knot-defined
-contracts; native aggregation and failure isolation stay as they are.
-
-- **Implementation context:** Knot exports the two contract values from
-  `"knot"`; serve-side registration feeds the same registry checkpoint 4
-  built; native callers in
-  [semantics.rs](../../src/app/extensions/semantics.rs) (completion) and
-  the paste path in `src/app/editor/` switch from name/method strings to
-  the contract descriptors, keeping per-provider failure isolation and
-  revision discarding. Bundled servers:
-  [language-markdown](../../extensions/@knot/language-markdown/src/extension.ts:14)
-  (paste) and any completion registrants.
-- **Validation:** existing completion/paste product tests
-  ([extension_api.rs](../../src/app/product/tests/extension_api.rs),
-  [editing.rs](../../src/app/product/tests/editing.rs)) pass against the
-  new path; a provider returning malformed items fails only its own part.
-- **Review gate:** no behavior change visible in completion or paste.
-- **Built:** `"knot"` exports `completionContract` and `pasteContract(languageId)`
-  (`completion` is taken by the `completion.match` group), contracts named
-  `completion` and `paste.<languageId>` owned by `knot`. Native calls go through
-  `NativeContractCall` in [host.rs](../../src/app/extensions/host.rs), which
-  checks only the provider's result against the descriptor compiled at serve
-  time (`ContractBinding::check_result_text`). A malformed result now names the
-  contract and path, and extra item fields are rejected rather than ignored.
-  Validating 500 completion items costs about 0.3 ms including the parse.
-  The test fake serves the two contracts as providers `knot:completion` and
-  `knot:paste.<languageId>`.
+Done. `"knot"` exports `completionContract` and `pasteContract(languageId)`
+(`completion` was taken by the `completion.match` group), contracts named
+`completion` and `paste.<languageId>` owned by `knot`; see
+[extension host](../architecture/extension-host.md#providers). Native calls
+check only the provider's result against the descriptor compiled at serve
+time, so a malformed result fails only that provider's part, and extra
+completion item fields are now rejected rather than ignored. Validating 500
+items costs about 0.3 ms including the parse. The test fake serves the two
+contracts as providers `knot:completion` and `knot:paste.<languageId>`.
 
 ### 6. Migrate `workspace.*` and remove `providers.*`
 
