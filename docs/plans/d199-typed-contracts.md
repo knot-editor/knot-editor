@@ -1,6 +1,6 @@
 # D199 — Typed contracts between packages
 
-Status: 🚧 checkpoint 1 done; checkpoint 2 done; checkpoint 3 done; checkpoint 4 next. Item: [D199](../roadmap.md#extension-platform-and-language-tooling),
+Status: 🚧 checkpoints 1–3 done; checkpoint 4 implemented, awaiting review. Item: [D199](../roadmap.md#extension-platform-and-language-tooling),
 part of the [version control plan](vcs.md) (milestone 1, before D211).
 
 ## Outcome
@@ -146,10 +146,38 @@ pickers, input and confirmation prompts, `windows.open`/`focus`, the
 retain/restore/release, `terminals.open`, and `files.reveal`. Later
 checkpoints extend the example as they add API.
 
-### 4. Cross-isolate transport: manifest, import resolution, serve/client
+### 4. Cross-isolate transport: manifest, import resolution, serve/client 🔍
 
 Make a fixture consumer call a fixture provider through a contract, with
 validation on the boundary.
+
+**Implemented, awaiting review.** ✅ manifest `contract` field (and
+`knot.schema.json`); ✅ bare-specifier resolution gated by `requires`, with
+the dependency's sources keyed under its own root in the consumer's graph;
+✅ contract-graph purity, the own contract graph compiled first so it is
+checked even when `main` does not import it; ✅ `serve`/`client`/`callContract`
+over the provider registry, which stores each registration's compiled schema
+and each consumer's binding. Decisions made while building it:
+
+- Each package's `"knot/contract"` resolves to its own small module that
+  wraps the shared builder with the package ID (`contractModule` in the
+  bootstrap), so ownership comes from module resolution; a second
+  `defineContract` of one name in a package throws when the module evaluates.
+- A self-call rejects at call time with `UnsupportedOperation`, as providers
+  did. New codes: `ContractNotFound` (nothing serves it at `client()`, or the
+  bound registration is gone) and `ContractViolation`, read as
+  `@example/provider greeter: greet: argument: expected string, found number 1 (the provider's schema)`;
+  a throwing method stays `ProviderFailure`.
+- `providers.*` and `callProvider` stay until checkpoint 6. The contract
+  cases live in [contracts.rs](../../src/app/product/tests/contracts.rs);
+  [providers.rs](../../src/app/product/tests/providers.rs) keeps the
+  completion and paste cases for checkpoint 5 and the personal-config
+  override for checkpoint 6.
+- ⏭️ Personal config importing a loaded package's contract moves to
+  checkpoint 6: its graph is captured before packages load, so it needs the
+  loaded packages' contract sources added when post-init runs.
+- The coverage example gains a contracts group (every schema kind, serve,
+  client, disposal).
 
 - **Deliverables:** `contract` field on the manifest; bare-specifier
   resolution gated by `requires`; `serve`/`client` over a registry that
@@ -204,6 +232,10 @@ contracts; native aggregation and failure isolation stay as they are.
 Move the bundled package-to-package providers onto a published contract
 and delete the old mechanism.
 
+- **Carried from checkpoint 4:** personal config may import any loaded
+  package's contract; the personal-config override case in
+  [providers.rs](../../src/app/product/tests/providers.rs) becomes a
+  contract case.
 - **Implementation context:** `@knot/go-to-file` adds a contract module +
   manifest `contract` field and serves one `workspace` contract with
   `files`, `buffers`, and `actions`
