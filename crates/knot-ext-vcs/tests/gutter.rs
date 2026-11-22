@@ -96,3 +96,40 @@ fn a_file_equal_to_its_baseline_shows_nothing_until_it_is_edited(cx: &mut TestAp
     wait_until(cx, |cx| !bars(&window, cx).is_empty());
     assert_eq!(bars(&window, cx), [(4, "bar", "diff.added".to_owned())]);
 }
+
+/// The line holding the caret of the first editor.
+fn caret_line(window: &knot::test_support::TestWindow, cx: &mut TestAppContext) -> usize {
+    let editor = window.editors(cx).remove(0);
+    editor.text[..editor.caret].matches('\n').count()
+}
+
+#[gpui::test]
+fn alt_f5_moves_between_changes_and_wraps(cx: &mut TestAppContext) {
+    // Against a, b, c, d: line 0 modified, c removed before line 2, line 3 added.
+    let (_product, window, _directory) = show("A\nb\nd\ne\n", cx);
+    wait_until(cx, |cx| !bars(&window, cx).is_empty());
+    window.focus_document(cx);
+    window.set_view(0, 0, 0, cx);
+
+    // A key runs the extension's command, which finishes after the key.
+    for (key, expected) in [
+        ("alt-f5", 2),
+        ("alt-f5", 3),
+        ("alt-f5", 0),
+        ("alt-shift-f5", 3),
+        ("alt-shift-f5", 2),
+        ("alt-shift-f5", 0),
+    ] {
+        window.press(key, cx);
+        wait_until(cx, |cx| caret_line(&window, cx) == expected);
+    }
+}
+
+#[gpui::test]
+fn navigation_does_nothing_without_changes(cx: &mut TestAppContext) {
+    let (_product, window, _directory) = show("a\nb\nc\nd\n", cx);
+    window.focus_document(cx);
+    window.set_view(2, 2, 0, cx);
+    window.press("alt-f5", cx);
+    assert_eq!(window.editors(cx)[0].caret, 2);
+}

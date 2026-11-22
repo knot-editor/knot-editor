@@ -4,10 +4,11 @@
 // edits through a debounced diff against the cached baseline; the baseline
 // is fetched again when the backend reports a change, the file moves, or the
 // document is saved.
-import { diff, documents, windows, workbench } from "knot";
-import type { Buffer, Disposable, DocumentId, EditorContribution } from "knot";
+import { commands, diff, documents, keymaps, windows, workbench } from "knot";
+import type { Buffer, CommandContext, Disposable, DocumentId, EditorContribution } from "knot";
 import { backendContract, vcs } from "./contract.js";
 import { contributionsOf } from "./hunks.js";
+import { targetLine, type Direction } from "./navigation.js";
 import { createDiscovery, isGone, type Repository } from "./repositories.js";
 
 /** Milliseconds after the last edit before the marks are diffed again. */
@@ -49,6 +50,9 @@ function isConflict(error: unknown) {
 function same(left: Repository | null, right: Repository | null) {
   return left?.backend === right?.backend && left?.root === right?.root;
 }
+
+export const NEXT_CHANGE = "vcs.nextChange";
+export const PREVIOUS_CHANGE = "vcs.previousChange";
 
 /** Serves `vcs` to backends and marks changes; resolves with what stops both. */
 export async function start(): Promise<Disposable> {
@@ -243,6 +247,31 @@ export async function start(): Promise<Disposable> {
     kick(follow);
   });
 
+  /** Moves the caret of the focused editor to the next or previous change. */
+  const go = (direction: Direction) => async ({ editor, buffer }: CommandContext) => {
+    if (editor === null || buffer === null) commands.unavailable();
+    const follow = [...follows.values()].find((candidate) => candidate.buffer === buffer);
+    if (follow === undefined || follow.baseline === null) commands.unavailable();
+    const { hunks } = await diff(follow.baseline, buffer);
+    const { caret } = await editor.selection();
+    const line = targetLine(hunks, await buffer.lineAt(caret), direction);
+    if (line === null) commands.unavailable();
+    const { startByteOffset } = await buffer.lineRange(Math.min(line, (await buffer.lineCount()) - 1));
+    await editor.setSelection({ anchor: startByteOffset, caret: startByteOffset }, { reveal: "center" });
+  };
+  const navigation = [
+    await commands.register(NEXT_CHANGE, go("next"), {
+      title: "Go to Next Change",
+      description: "Move the cursor to the next line changed from the version control baseline.",
+    }),
+    await commands.register(PREVIOUS_CHANGE, go("previous"), {
+      title: "Go to Previous Change",
+      description: "Move the cursor to the previous line changed from the version control baseline.",
+    }),
+  ];
+  keymaps.bind("alt-f5", NEXT_CHANGE, { view: "editor" });
+  keymaps.bind("alt-shift-f5", PREVIOUS_CHANGE, { view: "editor" });
+
   const observation = await workbench.observe((event) => {
     if (event.type === "workspaceChanged" || event.type === "windowOpened") resolveAll();
   });
@@ -250,6 +279,7 @@ export async function start(): Promise<Disposable> {
   return {
     async [Symbol.asyncDispose]() {
       await observation[Symbol.asyncDispose]();
+      for (const command of navigation) await command[Symbol.asyncDispose]();
       await tracker[Symbol.asyncDispose]();
       await served[Symbol.asyncDispose]();
     },
