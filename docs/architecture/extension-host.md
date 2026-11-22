@@ -314,11 +314,13 @@ each owned by its lifecycle (`knot_model::providers`); lifecycle teardown drops
 them with the other registrations. `providers.get` answers the latest
 registration of a name and `providers.all` every one, oldest first, so one
 package overrides another by registering later. The application interprets
-two names: `editor.completion`, which native
-[completion](semantic-ui.md#completion-ownership-and-aggregation) asks, and
-`editor.paste.<languageId>`, which native
-[paste](editor-and-languages.md#editor-views) asks; it never interprets the
-others.
+no provider name, but two Knot-defined contracts, owned by `knot` and
+served from `completionContract` and `pasteContract(languageId)`: `completion`,
+which native [completion](semantic-ui.md#completion-ownership-and-aggregation)
+asks of every registration, and `paste.<languageId>`, which native
+[paste](editor-and-languages.md#editor-views) asks of the latest. Knot is their
+consumer, so it validates only each provider's result, against the descriptor
+compiled when it was served, and never goes through a contract client.
 
 A call through a handle is a host request of the caller that enqueues a task in
 the provider's package, like a semantic provider callback, with the method

@@ -330,7 +330,7 @@ hold the analyses that support some items.
     inline suggestions, in the style of GitHub Copilot, fits it: slow and
     streamed results, cancellation as the user types, and a multi-line
     suggestion shown as virtual text (D145) rather than in the list.
-    Completion providers register as `editor.completion` extension providers;
+    Completion providers serve the Knot-defined `completion` contract;
     measure the provider call's latency while typing, and add the
     current line's text to the request if reading the buffer costs too much.
 

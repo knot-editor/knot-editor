@@ -35,12 +35,16 @@ is `providers` in
 
 ### Provider names
 
-Knot asks these providers itself. Each type is in `knot.d.ts`.
+Knot asks these contracts itself. Any package serves them with `serve`, and
+none needs `requires`. Each type is in `knot.d.ts`.
 
-| Name | Type | Asked | Registrations used |
+| Served with | Type | Asked | Registrations used |
 | --- | --- | --- | --- |
-| `editor.completion` | `CompletionProvider` | When editor completion opens; items from every registration merge, and a request names its document, which a provider reads through `documents.get`. | All, oldest first |
-| `editor.paste.<languageId>` | `PasteProvider` | When native paste runs in that language, to shape the inserted text; a language with none pastes without calling the host. Bundled: the Markdown package turns a URL pasted over selected text into a link. | Latest of that name |
+| `completionContract.serve(provider)` | `CompletionProvider` | When editor completion opens; items from every registration merge, and a request names its document, which a provider reads through `documents.get`. | All, oldest first |
+| `pasteContract(languageId).serve(provider)` | `PasteProvider` | When native paste runs in that language, to shape the inserted text; a language with none pastes without calling the host. Bundled: the Markdown package turns a URL pasted over selected text into a link. | Latest for the language |
+
+Knot checks each result against the contract's schema, so a provider that
+returns a malformed list or a non-string paste fails only its own part.
 
 Bundled packages register providers for each other:
 

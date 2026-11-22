@@ -15,7 +15,7 @@ without a window or runtime. Each operation takes the buffer model it reads
 or edits; the editor follows the settings its owner resolves for it and
 queues clipboard writes and document setting changes as effects, and paste
 receives the clipboard's text. A language can shape that text: when an
-`editor.paste.<languageId>` provider is registered for the language at the
+`paste(languageId)` contract is served for the language at the
 selection start, the paste command awaits its `providePaste` answer and
 applies it only if the revision and selection are unchanged, else it pastes
 the clipboard text; a language without a provider pastes synchronously. `Editor.preparePaste` runs the same lookup for any range and returns the text without editing, as Vim's visual put uses it. The `Editor` entity wraps the state: before

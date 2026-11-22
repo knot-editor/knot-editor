@@ -123,19 +123,21 @@ view-owned controller tracks one-shot provider states and merge policy, and a
 native surface consumes semantic snapshots. Provider objects and request
 machinery never enter surfaces, buffers, or `knot-core`.
 
-A completion provider is an `editor.completion` registration in the
-[provider registry](extension-host.md#providers), so every registration
+A completion provider is a registration of the Knot-defined `completion`
+[contract](extension-host.md#providers), so every registration
 contributes, ordered by registration and labelled with its package. An editor
 completion invocation snapshots those registrations, the buffer revision,
 cursor and prefix range, and a view-local generation before the application
 fans requests out to independent extension runtimes. Each request is an
 ordinary provider call of `provideCompletions` with the editor's window: its
 JSON argument names the document, revision, cursor, and prefix, and the JSON
-result is parsed into items in `knot-model`. A provider that needs the text
+result is validated against the descriptor the provider served and then parsed
+into items in `knot-model`; a provider whose result violates it fails only its
+own part. A provider that needs the text
 reads the document's buffer itself.
 
 ```text
-editor.completion registrations
+completion registrations
                  |
                  v
 Editor -> CompletionController -> independent extension runtimes
