@@ -2508,13 +2508,14 @@ export function isFileIgnored(uri: unknown) {
 export async function watchFiles(uri: unknown, listener: unknown, options?: Opts) {
   string(uri, "resource URI must be text");
   expectFunction(listener, "files.watch requires a listener");
-  const recursive = options === undefined
-    ? false
-    : record(options, "watch options must be an object").recursive ?? false;
+  const settings = options === undefined ? {} : record(options, "watch options must be an object");
+  const recursive = settings.recursive ?? false;
   if (typeof recursive !== "boolean") throw new TypeError("watch recursive must be a boolean");
+  const includeHidden = settings.includeHidden ?? false;
+  if (typeof includeHidden !== "boolean") throw new TypeError("watch includeHidden must be a boolean");
   const subscription = await registerCallable(
     (subscription: number) => watchListeners.set(subscription, listener),
-    () => request("watchFiles", uri, recursive));
+    () => request("watchFiles", uri, recursive, includeHidden));
   const owned = ownership(() => watchListeners.delete(subscription),
     () => request("unwatchFiles", subscription));
   return disposableHandle(owned);

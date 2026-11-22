@@ -1114,8 +1114,9 @@ declare module "knot" {
      * you care about. Without `recursive` a directory reports itself and its
      * direct children, and a file reports itself; with it, everything below.
      * When the platform drops events, the batch names `uri` itself, so rescan.
-     * Entries the `files.hidden` setting names are never reported; ignored
-     * entries are. Watching sees every change on disk, including Knot's own
+     * Entries the `files.hidden` setting names are not reported unless
+     * `includeHidden` is set, as for a watch of a directory like `.git`;
+     * ignored entries always are. Watching sees every change on disk, including Knot's own
      * saves, and independently of open documents. Notifications reach one
      * listener in order, and it stops with its lifecycle or when it is disposed. Resolves
      * once the watch runs, so a read after it misses no later change.
@@ -1124,7 +1125,7 @@ declare module "knot" {
     watch(
       uri: string,
       listener: (uris: readonly string[]) => void | Promise<void>,
-      options?: { readonly recursive?: boolean },
+      options?: { readonly recursive?: boolean; readonly includeHidden?: boolean },
     ): Promise<Disposable>;
   }>;
   /** What a process is started with. */

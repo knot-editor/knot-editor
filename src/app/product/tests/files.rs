@@ -153,6 +153,11 @@ await commands.register("files.watch", async () => {
     await workbench.writeClipboardText(uris.join());
   });
 });
+await commands.register("files.watchHidden", async () => {
+  handle = await files.watch("mem://product/src", async (uris) => {
+    await workbench.writeClipboardText(uris.join());
+  }, { recursive: true, includeHidden: true });
+});
 await commands.register("files.unwatch", async () => { await handle[Symbol.asyncDispose](); });
 "#,
         "files.watch",
@@ -185,6 +190,20 @@ await commands.register("files.unwatch", async () => { await handle[Symbol.async
     run("files.unwatch", cx);
     assert_eq!(cx.read(extensions::host::file_watch_count), 0);
     assert_eq!(provider.watch_count(), 0);
+
+    // A watch that includes hidden entries reports them.
+    run("files.watchHidden", cx);
+    provider
+        .seed_file(
+            ResourceUri::parse("mem://product/src/.git/ORIG_HEAD").unwrap(),
+            "x",
+        )
+        .unwrap();
+    wait_for_api_condition(cx, |cx| {
+        clipboard(cx).as_deref() == Some("mem://product/src/.git/ORIG_HEAD")
+    });
+    run("files.unwatch", cx);
+    assert_eq!(cx.read(extensions::host::file_watch_count), 0);
 
     // The watch resolves only once it runs.
     provider.defer_watch_starts();

@@ -2463,6 +2463,7 @@ async fn indexed_uri(
 pub(crate) struct WatchFilesArguments {
     uri: String,
     recursive: bool,
+    include_hidden: bool,
 }
 
 impl HostArguments for WatchFilesArguments {
@@ -2471,6 +2472,9 @@ impl HostArguments for WatchFilesArguments {
             uri: reader.text(2, "resource URI must be text")?,
             recursive: reader
                 .optional_boolean(3, "watch recursive must be a boolean")?
+                .unwrap_or(false),
+            include_hidden: reader
+                .optional_boolean(4, "watch includeHidden must be a boolean")?
                 .unwrap_or(false),
         })
     }
@@ -2487,7 +2491,16 @@ async fn watch_files(
         .map_err(|error| product::operations::resource_error(error.into()))?;
     let key = ExtensionKey::new(context.request.extension, context.request.lifecycle);
     let (subscription, live) = context
-        .foreground(|host, cx| host.watch_files(uri, arguments.recursive, key, &providers, cx))?
+        .foreground(|host, cx| {
+            host.watch_files(
+                uri,
+                arguments.recursive,
+                arguments.include_hidden,
+                key,
+                &providers,
+                cx,
+            )
+        })?
         .map_err(|error| product::operations::resource_error(error.into()))?;
     // Resolving once live lets the caller read the disk without missing a
     // change.

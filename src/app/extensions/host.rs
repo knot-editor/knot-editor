@@ -217,6 +217,8 @@ pub(crate) fn reset_launched_for_test(cx: &mut App) {
 /// One lifecycle-owned file watch; dropping it releases the watch.
 struct FileWatch {
     owner: ExtensionKey,
+    /// Whether entries `files.hidden` names are reported too.
+    include_hidden: bool,
     _subscription: knot_model::watch::WatchSubscription,
     _task: Task<()>,
 }
@@ -3256,6 +3258,7 @@ impl ProductExtensionHost {
         &mut self,
         uri: knot_model::resource::ResourceUri,
         recursive: bool,
+        include_hidden: bool,
         key: ExtensionKey,
         providers: &knot_model::filesystem::FileSystemProviderRegistry,
         cx: &mut Context<Self>,
@@ -3306,6 +3309,7 @@ impl ProductExtensionHost {
             id,
             FileWatch {
                 owner: key,
+                include_hidden,
                 _subscription: subscription,
                 _task: task,
             },
@@ -3330,20 +3334,24 @@ impl ProductExtensionHost {
     }
 
     /// Delivers a batch to its listener, without the entries `files.hidden`
-    /// names.
+    /// names unless the watch asked for them.
     fn file_watch_batch(
         &mut self,
         id: knot_protocol::WatchSubscriptionId,
         batch: Vec<knot_model::resource::ResourceUri>,
         cx: &mut Context<Self>,
     ) {
-        let Some(owner) = self.file_watches.get(&id).map(|watch| watch.owner) else {
+        let Some((owner, include_hidden)) = self
+            .file_watches
+            .get(&id)
+            .map(|watch| (watch.owner, watch.include_hidden))
+        else {
             return;
         };
         let policy = crate::app::settings::files_ignore_policy(cx);
         let uris: Vec<String> = batch
             .iter()
-            .filter(|uri| !policy.hides(uri))
+            .filter(|uri| include_hidden || !policy.hides(uri))
             .map(ToString::to_string)
             .collect();
         if !uris.is_empty() {

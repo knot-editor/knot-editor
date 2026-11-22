@@ -141,8 +141,9 @@ if ((await files.stat(`${root}/.editorconfig`)) !== null) {
 visible, non-ignored files below a directory, so a picker searches again on
 every keystroke rather than holding the list of files.
 
-`files.watch(uri, listener, { recursive })` calls the listener with batches of
-changed URIs. A batch does not say whether an entry was created, changed, or
+`files.watch(uri, listener, { recursive, includeHidden })` calls the listener
+with batches of changed URIs. Entries the `files.hidden` setting names are left
+out unless `includeHidden` is set, as a watch of `.git` needs. A batch does not say whether an entry was created, changed, or
 removed, so stat or list what you need, and read the current state after
 awaiting the watch. The returned `Disposable` and the lifecycle end it.
 
