@@ -3161,3 +3161,107 @@ declare module "knot" {
     listPresets(): Promise<readonly KeymapPresetInfo[]>;
   }>;
 }
+
+/**
+ * Schema-built contracts between packages. A package's contract module
+ * imports only this module and its own relative modules. Each schema value is
+ * plain, frozen data: the host compiles it and validates every value that
+ * crosses a contract against it, so the contract module is the single source
+ * of a contract's types and its runtime checks.
+ */
+declare module "knot/contract" {
+  import type { JsonValue } from "knot";
+
+  const inferred: unique symbol;
+  /** A schema for values of type `T`. Build it with `s`. */
+  export interface Schema<T> {
+    readonly kind:
+      | "string" | "int" | "number" | "boolean" | "null" | "json"
+      | "literal" | "enum" | "array" | "tuple" | "record" | "object" | "union";
+    /** Never present at runtime: carries `T` for inference. */
+    readonly [inferred]?: T;
+  }
+  /** An object field that may be absent; only `s.object` takes one. */
+  export interface OptionalSchema<T> {
+    readonly kind: "optional";
+    readonly schema: Schema<T>;
+  }
+  /** No value: a method without an argument or result. */
+  export interface VoidSchema {
+    readonly kind: "void";
+  }
+  /** One contract method: async, at most one argument, one result. */
+  export interface FnSchema<A, R> {
+    readonly kind: "fn";
+    readonly argument: Schema<A> | VoidSchema;
+    readonly result: Schema<R> | VoidSchema;
+  }
+
+  /** The type of the values `S` accepts. */
+  export type Infer<S> = S extends Schema<infer T> ? T : S extends VoidSchema ? void : never;
+
+  type ObjectFields = Readonly<Record<string, Schema<any> | OptionalSchema<any>>>;
+  type Flatten<T> = { readonly [K in keyof T]: T[K] } & {};
+  type InferObject<F extends ObjectFields> = Flatten<
+    { readonly [K in keyof F as F[K] extends OptionalSchema<any> ? never : K]: Infer<F[K]> } &
+    { readonly [K in keyof F as F[K] extends OptionalSchema<any> ? K : never]?:
+      F[K] extends OptionalSchema<infer T> ? T : never }
+  >;
+  type Scalar = string | number | boolean | null;
+
+  /**
+   * The schema builder. Values are JSON-shaped: `int` accepts safe integers
+   * only, objects reject fields they do not declare, `json` accepts any JSON
+   * value, and `nullable(x)` is `union([x, null()])`.
+   * @throws TypeError for an argument that is not a schema of the expected
+   * kind, a literal that is not a JSON scalar, or an empty or repeated enum.
+   */
+  export const s: Readonly<{
+    string(): Schema<string>;
+    int(): Schema<number>;
+    number(): Schema<number>;
+    boolean(): Schema<boolean>;
+    null(): Schema<null>;
+    json(): Schema<JsonValue>;
+    /** Only an `s.fn` argument or result. */
+    void(): VoidSchema;
+    literal<const T extends Scalar>(value: T): Schema<T>;
+    enum<const T extends readonly [string, ...string[]]>(values: T): Schema<T[number]>;
+    array<T>(items: Schema<T>): Schema<readonly T[]>;
+    tuple<const T extends readonly Schema<any>[]>(items: T): Schema<{ readonly [K in keyof T]: Infer<T[K]> }>;
+    record<T>(values: Schema<T>): Schema<Readonly<Record<string, T>>>;
+    object<const F extends ObjectFields>(fields: F): Schema<InferObject<F>>;
+    optional<T>(schema: Schema<T>): OptionalSchema<T>;
+    union<const T extends readonly [Schema<any>, ...Schema<any>[]]>(options: T): Schema<Infer<T[number]>>;
+    nullable<T>(schema: Schema<T>): Schema<T | null>;
+    fn<A = void, R = void>(argument: Schema<A> | VoidSchema, result: Schema<R> | VoidSchema): FnSchema<A, R>;
+  }>;
+
+  export type ContractMethods = Readonly<Record<string, FnSchema<any, any>>>;
+  /** A contract: its name, unique within the package whose contract module
+   * defines it, and its methods. */
+  export interface Contract<M extends ContractMethods> {
+    readonly name: string;
+    readonly methods: M;
+  }
+
+  /** What a consumer calls: each method resolves with the validated result. */
+  export type ContractClient<M extends ContractMethods> = {
+    readonly [K in keyof M]: M[K] extends FnSchema<infer A, infer R>
+      ? [A] extends [void] ? () => Promise<R> : (argument: A) => Promise<R>
+      : never;
+  };
+  /** What a provider serves: each method receives the validated argument. */
+  export type ContractImplementation<M extends ContractMethods> = {
+    readonly [K in keyof M]: M[K] extends FnSchema<infer A, infer R>
+      ? (argument: A) => R | Promise<R>
+      : never;
+  };
+
+  /**
+   * Defines a contract from `s.fn` method schemas.
+   * @throws TypeError for an empty name, no methods, or a method that is not
+   * an `s.fn` schema.
+   */
+  export function defineContract<const M extends ContractMethods>(name: string, methods: M): Contract<M>;
+}

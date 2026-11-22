@@ -13,7 +13,13 @@ pub(super) fn validate_root_module_specifier(specifier: &str) -> Result<String, 
         stack: None,
     })?;
     let canonical = parsed.to_string();
-    if canonical == PRIVATE_BOOTSTRAP_SPECIFIER || canonical == PUBLIC_FACADE_SPECIFIER {
+    if [
+        PRIVATE_BOOTSTRAP_SPECIFIER,
+        PUBLIC_FACADE_SPECIFIER,
+        CONTRACT_SPECIFIER,
+    ]
+    .contains(&canonical.as_str())
+    {
         return Err(RuntimeError {
             kind: RuntimeErrorKind::InvalidModuleSpecifier,
             message: format!("fixture module specifier is reserved: {canonical}").into(),
@@ -306,11 +312,18 @@ pub(super) fn resolve_module_specifier(
     if request == PRIVATE_BOOTSTRAP_SPECIFIER && referrer != PUBLIC_FACADE_SPECIFIER {
         return Err("Knot private bootstrap bindings are not importable by extensions".into());
     }
-    if request == PRIVATE_BOOTSTRAP_SPECIFIER || request == PUBLIC_FACADE_SPECIFIER {
+    if [
+        PRIVATE_BOOTSTRAP_SPECIFIER,
+        PUBLIC_FACADE_SPECIFIER,
+        CONTRACT_SPECIFIER,
+    ]
+    .contains(&request)
+    {
         return Ok(request.to_owned());
     }
     if let Some(package_root) = package_root {
         if referrer == PUBLIC_FACADE_SPECIFIER
+            || referrer == CONTRACT_SPECIFIER
             || (!request.starts_with("./") && !request.starts_with("../"))
         {
             return Err(format!(

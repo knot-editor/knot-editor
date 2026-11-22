@@ -294,6 +294,40 @@ fn package_module_imports_stay_within_the_supplied_graph() {
 }
 
 #[test]
+fn package_modules_import_the_contract_builder() {
+    let pool = RuntimePool::new(PoolConfig::single_worker());
+    let graph = package_graph(
+        "file:///extensions/%40example/tools/",
+        "main.js",
+        &[
+            (
+                "main.js",
+                r#"
+                    import { rows } from "./contract.js";
+                    import * as knot from "knot";
+                    if ("s" in knot || "defineContract" in knot) throw new Error("knot exports the builder");
+                    if (JSON.stringify(rows.methods) !== '{"files":{"kind":"fn","argument":{"kind":"string"},"result":{"kind":"array","items":{"kind":"int"}}}}') {
+                      throw new Error(JSON.stringify(rows.methods));
+                    }
+                "#,
+            ),
+            (
+                "contract.js",
+                r#"
+                    import { defineContract, s } from "knot/contract";
+                    export const rows = defineContract("rows", { files: s.fn(s.string(), s.array(s.int())) });
+                "#,
+            ),
+        ],
+    );
+    pool.load_package(key(302), IsolateConfig::default(), graph)
+        .unwrap()
+        .wait()
+        .unwrap();
+    pool.shutdown();
+}
+
+#[test]
 fn package_module_errors_report_generated_locations_and_dynamic_import_rejection() {
     let pool = RuntimePool::new(PoolConfig::single_worker());
     let root = "file:///extensions/%40example/tools/";

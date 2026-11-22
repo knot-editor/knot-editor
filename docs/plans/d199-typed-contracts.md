@@ -1,6 +1,6 @@
 # D199 — Typed contracts between packages
 
-Status: 🚧 planned, not started. Item: [D199](../roadmap.md#extension-platform-and-language-tooling),
+Status: 🚧 checkpoint 1 awaiting review. Item: [D199](../roadmap.md#extension-platform-and-language-tooling),
 part of the [version control plan](vcs.md) (milestone 1, before D211).
 
 ## Outcome
@@ -105,10 +105,32 @@ and the bundled `workspace.*` providers) move onto contracts.
 
 ## Checkpoints
 
-### 1. Schema builder, descriptor, and host validator
+### 1. Schema builder, descriptor, and host validator — 🔍 awaiting review
 
 Define the contract value in the public API and validate descriptors
 without any cross-isolate call.
+
+- ✅ Built: the builder lives in its own built-in module,
+  [contract.js](../../crates/knot-host/src/js/contract.js), served as
+  `"knot/contract"` (not inside `bootstrap.js`, so the Node tests import the
+  real builder and the module stays pure); types in
+  [knot.d.ts](../../crates/knot-host/src/js/knot.d.ts) (`Infer`,
+  `ContractClient`, `ContractImplementation`); the validator is
+  [contracts.rs](../../crates/knot-model/src/contracts.rs)
+  (`ContractSchema`, `ContractBinding`, `ContractViolation`).
+- ✅ Scope decisions: a schema value is its own descriptor (frozen plain
+  data); `s.void()` marks a method without argument or result and carries
+  null; `s.optional(x)` is only an object field and means absent, not null;
+  `s.nullable(x)` is `union([x, null()])`. A contract value is
+  `{ name, methods }`; `serve`/`client` come with checkpoint 2, as does the
+  call-context parameter of `ContractImplementation`.
+- 🔍 Error wording for review: a violation reads
+  `files: result[1].label: expected string, found number 2 (the provider's schema)`
+  (checkpoint 2 prefixes the package and contract name); objects report
+  `unexpected field` and `missing field "label"`, unions
+  `expected string or null`, an absent method
+  `extra: the provider's contract has no such method`. Descriptor errors read
+  `invalid contract descriptor at m.argument.items: void is only a method argument or result`.
 
 - **Deliverables:** schema builder + `defineContract` (the `"knot/contract"`
   facade) in

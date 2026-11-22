@@ -1,6 +1,7 @@
 // Loaded with `node --import` before tests: resolves "knot" to the fake host's
 // API module, "knot/testing" to its controls, and "knot/testing/languages" to
-// the shared language-package checks, all from the compiled tests.
+// the shared language-package checks, all from the compiled tests, and
+// "knot/contract" to the host's own schema builder.
 import { registerHooks } from "node:module";
 import { pathToFileURL } from "node:url";
 import { join } from "node:path";
@@ -10,6 +11,7 @@ const modules = {
   knot: pathToFileURL(join(build, "knot.js")).href,
   "knot/testing": pathToFileURL(join(build, "host.js")).href,
   "knot/testing/languages": pathToFileURL(join(build, "languages.js")).href,
+  "knot/contract": pathToFileURL(join(import.meta.dirname, "../../../crates/knot-host/src/js/contract.js")).href,
 };
 
 registerHooks({

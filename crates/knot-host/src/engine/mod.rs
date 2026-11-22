@@ -57,9 +57,11 @@ pub const DISPOSED: u8 = 3;
 const LONG_TURN: Duration = Duration::from_millis(100);
 const PRIVATE_BOOTSTRAP_SPECIFIER: &str = "knot:bootstrap";
 const PUBLIC_FACADE_SPECIFIER: &str = "knot";
+const CONTRACT_SPECIFIER: &str = "knot/contract";
 const NATIVE_BINDINGS_GLOBAL: &str = "__knotNativeBindings";
 const PRIVATE_BOOTSTRAP_SOURCE: &str = include_str!("../js/bootstrap.js");
 const PUBLIC_FACADE_SOURCE: &str = include_str!("../js/knot.js");
+const CONTRACT_SOURCE: &str = include_str!("../js/contract.js");
 
 type ResultSender<T> = tokio::sync::oneshot::Sender<Result<T, RuntimeError>>;
 type ResultReceiver<T> = tokio::sync::oneshot::Receiver<Result<T, RuntimeError>>;
@@ -536,6 +538,7 @@ impl ModuleRegistry {
                 PUBLIC_FACADE_SPECIFIER.to_owned(),
                 Arc::from(PUBLIC_FACADE_SOURCE),
             ),
+            (CONTRACT_SPECIFIER.to_owned(), Arc::from(CONTRACT_SOURCE)),
         ]);
         if let Some(graph) = graph {
             sources.extend(

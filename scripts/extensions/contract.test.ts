@@ -654,3 +654,70 @@ void untyped?.rows("q");
 await rowsRegistration.dispose();
 // @ts-expect-error the name is text
 await providers.register(1, {});
+
+import { defineContract, s } from "knot/contract";
+import type { ContractClient, ContractImplementation, Infer } from "knot/contract";
+
+const row = s.object({
+  label: s.string(),
+  detail: s.optional(s.nullable(s.string())),
+  kind: s.enum(["file", "buffer"]),
+  score: s.int(),
+  position: s.tuple([s.int(), s.number()]),
+  tag: s.literal("row"),
+  extra: s.record(s.json()),
+  either: s.union([s.boolean(), s.null()]),
+});
+type Row = Infer<typeof row>;
+const fullRow: Row = {
+  label: "a", detail: null, kind: "file", score: 1, position: [1, 0.5], tag: "row", extra: { any: [1] }, either: null,
+};
+const sparseRow: Row = { label: "a", kind: "buffer", score: 1, position: [0, 0], tag: "row", extra: {}, either: true };
+void [fullRow, sparseRow];
+// @ts-expect-error label is required
+const missingLabel: Row = { kind: "file", score: 1, position: [0, 0], tag: "row", extra: {}, either: true };
+// @ts-expect-error an optional field is absent, not undefined
+const undefinedDetail: Row = { ...sparseRow, detail: undefined };
+// @ts-expect-error kind is one of the enum values
+const badKind: Row = { ...sparseRow, kind: "folder" };
+// @ts-expect-error a tuple has its declared length
+const badPosition: Row = { ...sparseRow, position: [0] };
+// @ts-expect-error the literal is exact
+const badTag: Row = { ...sparseRow, tag: "column" };
+void [missingLabel, undefinedDetail, badKind, badPosition, badTag];
+// @ts-expect-error optional is only an object field
+s.array(s.optional(s.string()));
+// @ts-expect-error void is only a method argument or result
+s.array(s.void());
+// @ts-expect-error a method schema is not a value schema
+s.array(s.fn(s.void(), s.void()));
+// @ts-expect-error an enum has at least one value
+s.enum([]);
+
+const rowsContract = defineContract("rows", {
+  files: s.fn(s.string(), s.array(row)),
+  refresh: s.fn(s.void(), s.void()),
+});
+const rowsName: string = rowsContract.name;
+void rowsName;
+declare const rowsClient: ContractClient<typeof rowsContract.methods>;
+const clientRows: readonly Row[] = await rowsClient.files("query");
+const refreshed: void = await rowsClient.refresh();
+void [clientRows, refreshed];
+// @ts-expect-error the argument is a string
+await rowsClient.files(1);
+// @ts-expect-error refresh takes no argument
+await rowsClient.refresh("now");
+const rowsImplementation: ContractImplementation<typeof rowsContract.methods> = {
+  files: async (query) => [{ ...sparseRow, label: query }],
+  refresh: () => {},
+};
+void rowsImplementation;
+const wrongImplementation: ContractImplementation<typeof rowsContract.methods> = {
+  // @ts-expect-error a row needs its fields
+  files: (query: string) => [{ label: query }],
+  refresh: () => {},
+};
+void wrongImplementation;
+// @ts-expect-error a method is an s.fn schema
+defineContract("bad", { files: s.string() });
