@@ -67,6 +67,7 @@ fn show(cx: &mut TestAppContext) -> (TestProduct, TestWindow, TestTree, tempfile
     git(root, &["init", "-q", "-b", "main"]);
     write(root, "a.txt", "a\n");
     write(root, "src/lib.txt", "lib\n");
+    write(root, ".gitignore", "build/\n");
     git(root, &["add", "."]);
     git(root, &["commit", "-q", "-m", "base"]);
     write(root, "a.txt", "b\n");
@@ -131,4 +132,36 @@ fn a_commit_made_with_git_clears_the_decorations(cx: &mut TestAppContext) {
             .all(|label| row(&tree, label, cx).is_none())
     });
     assert_eq!(window.resource_decoration(&uri(&file), cx), None);
+}
+
+#[gpui::test]
+fn an_edit_and_a_new_file_on_disk_update_the_explorer(cx: &mut TestAppContext) {
+    let (_product, _window, tree, directory) = show(cx);
+    let root = directory.path();
+    wait_until(cx, |cx| row(&tree, "new.txt", cx).is_some());
+
+    // Neither change goes through git, so no metadata watch reports it.
+    write(root, "src/lib.txt", "edited\n");
+    write(root, "src/second.txt", "second\n");
+    wait_until(cx, |cx| {
+        row(&tree, "lib.txt", cx) == shown("vcs.modified", "M", "Modified")
+            && row(&tree, "second.txt", cx) == shown("vcs.untracked", "U", "Untracked")
+    });
+
+    write(root, "src/lib.txt", "lib\n");
+    std::fs::remove_file(root.join("src/second.txt")).unwrap();
+    wait_until(cx, |cx| {
+        row(&tree, "lib.txt", cx).is_none() && row(&tree, "second.txt", cx).is_none()
+    });
+}
+
+#[gpui::test]
+fn output_in_an_ignored_folder_shows_nothing(cx: &mut TestAppContext) {
+    let (_product, _window, tree, directory) = show(cx);
+    let root = directory.path();
+    write(root, "build/out.txt", "out\n");
+    // A later change is seen, which means the ignored one was settled before it.
+    write(root, "src/lib.txt", "edited\n");
+    wait_until(cx, |cx| row(&tree, "lib.txt", cx).is_some());
+    assert!(tree.row_id("build", cx).is_none_or(|id| tree.decoration(&id, cx).is_none()));
 }

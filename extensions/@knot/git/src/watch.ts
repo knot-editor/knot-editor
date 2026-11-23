@@ -3,7 +3,9 @@
 // watched for each repository the backend has served and `vcs` is told when
 // one moves. The directories are watched with `includeHidden`, since `.git`
 // is hidden, and the object store is left alone: it is large and busy, and
-// nothing the baselines depend on is found there.
+// nothing the baselines depend on is found there. The working tree is watched
+// too, since an edit on disk changes the status; a batch of only ignored
+// files, such as a build's output, is skipped.
 import { files } from "knot";
 import type { Disposable } from "knot";
 import { vcs } from "@knot/vcs";
@@ -24,6 +26,14 @@ function toUri(path: string): string {
 function matters(uri: string, directories: readonly string[]): boolean {
   if (directories.includes(trimmed(uri))) return true;
   return /\/(HEAD|index|packed-refs)$/.test(uri) || uri.includes("/refs/");
+}
+
+/** Whether any of the changed URIs is one the ignore policy keeps. */
+async function anyTracked(uris: readonly string[]): Promise<boolean> {
+  for (const uri of uris) {
+    if (!(await files.isIgnored(uri).catch(() => false))) return true;
+  }
+  return false;
 }
 
 async function start(repository: string): Promise<Watched | null> {
@@ -54,11 +64,20 @@ async function start(repository: string): Promise<Watched | null> {
       // `@knot/vcs` stopped: the next lookup watches again.
     }
   };
+  const tree = async (uris: readonly string[]) => {
+    if (!(await anyTracked(uris))) return;
+    try {
+      await (await vcs.client()).statusChanged({ backend: "git", repository });
+    } catch {
+      // `@knot/vcs` stopped: the next lookup watches again.
+    }
+  };
   try {
     for (const directory of directories) {
       disposables.push(await files.watch(directory, listener, { includeHidden: true }));
     }
     disposables.push(await files.watch(refs, listener, { recursive: true, includeHidden: true }));
+    disposables.push(await files.watch(repository, tree, { recursive: true }));
   } catch {
     await stop();
     return null;

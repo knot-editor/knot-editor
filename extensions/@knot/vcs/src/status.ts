@@ -98,7 +98,11 @@ export type StatusDeps = {
 };
 
 export type Statuses = {
-  /** The known repositories or one repository's status may have changed; `key` is `keyOf` of that repository. */
+  /**
+   * The known repositories, or one repository's status, may have changed;
+   * `key` is `keyOf` of that repository. Without a key, the repositories are
+   * found again and those not shown yet are pulled.
+   */
   request(key?: string): void;
   [Symbol.asyncDispose](): Promise<void>;
 };
@@ -106,19 +110,27 @@ export type Statuses = {
 /** Identifies a repository; its root may be spelled with or without a trailing slash. */
 export const keyOf = (repository: Repository) => `${repository.backend}\0${repository.root.replace(/\/+$/, "")}`;
 
+/** One repository's pulls: one in flight and at most one more queued. */
+type Slot = { running: boolean; pending: boolean };
+
 /** Keeps the decorations in step with the known repositories' status. */
 export function createStatuses(deps: StatusDeps): Statuses {
   const snapshots = new Map<string, Snapshot>();
-  /** Repositories whose status is pulled again. */
-  const dirty = new Set<string>();
+  const slots = new Map<string, Slot>();
+  /** The repositories found by the last discovery. */
+  let current: Repository[] = [];
   /** What the source holds now, as JSON by URI. */
   let published = new Map<string, string>();
   let source: DecorationSource | null = null;
-  let running = false;
-  let pending = false;
+  /** Publishes run one after another, each from the state it finds. */
+  let chain: Promise<void> = Promise.resolve();
+  let discovering = false;
+  let rediscover = false;
   let closed = false;
 
-  async function publish(wanted: Map<string, ResourceDecoration>) {
+  async function publish() {
+    if (closed) return;
+    const wanted = decorate(current.flatMap((repository) => snapshots.get(keyOf(repository)) ?? []));
     const changes: Record<string, ResourceDecoration | null> = {};
     const next = new Map<string, string>();
     for (const [uri, decoration] of wanted) {
@@ -133,51 +145,73 @@ export function createStatuses(deps: StatusDeps): Statuses {
     published = next;
   }
 
-  async function pass() {
-    const known = await deps.known();
-    const keys = new Set(known.map(keyOf));
-    for (const key of [...snapshots.keys()]) if (!keys.has(key)) snapshots.delete(key);
-    for (const repository of known) {
-      const key = keyOf(repository);
-      if (snapshots.has(key) && !dirty.has(key)) continue;
-      dirty.delete(key);
-      try {
-        snapshots.set(key, { repository, entries: await deps.fetch(repository) });
-      } catch (error) {
-        // A repository whose status failed keeps what it showed; one that never had any shows none.
-        if (!isGone(error)) continue;
-        snapshots.delete(key);
-        deps.gone(repository.backend);
-      }
+  const rebuild = () => {
+    chain = chain.then(publish).catch(() => {});
+  };
+
+  async function fetch(repository: Repository) {
+    const key = keyOf(repository);
+    try {
+      snapshots.set(key, { repository, entries: await deps.fetch(repository) });
+    } catch (error) {
+      // A repository whose status failed keeps what it showed; one that never had any shows none.
+      if (!isGone(error)) return;
+      snapshots.delete(key);
+      deps.gone(repository.backend);
     }
-    const current = known.flatMap((repository) => snapshots.get(keyOf(repository)) ?? []);
-    await publish(decorate(current));
   }
 
-  async function run() {
-    if (running) {
-      pending = true;
+  async function pull(repository: Repository) {
+    const key = keyOf(repository);
+    const slot = slots.get(key) ?? { running: false, pending: false };
+    slots.set(key, slot);
+    if (slot.running) {
+      slot.pending = true;
       return;
     }
-    running = true;
+    slot.running = true;
     try {
       do {
-        pending = false;
+        slot.pending = false;
         if (closed) break;
-        await pass();
-      } while (pending);
+        await fetch(repository);
+        rebuild();
+      } while (slot.pending);
     } finally {
-      running = false;
+      slot.running = false;
+    }
+  }
+
+  async function discover() {
+    if (discovering) {
+      rediscover = true;
+      return;
+    }
+    discovering = true;
+    try {
+      do {
+        rediscover = false;
+        if (closed) break;
+        current = await deps.known();
+        const keys = new Set(current.map(keyOf));
+        for (const key of [...snapshots.keys()]) if (!keys.has(key)) snapshots.delete(key);
+        for (const key of [...slots.keys()]) if (!keys.has(key) && !slots.get(key)?.running) slots.delete(key);
+        rebuild();
+        await Promise.all(current.filter((repository) => !snapshots.has(keyOf(repository))).map(pull));
+      } while (rediscover);
+    } finally {
+      discovering = false;
     }
   }
 
   return {
     request(key) {
-      if (key !== undefined) dirty.add(key);
-      void run().catch(() => {});
+      const known = key === undefined ? undefined : current.find((repository) => keyOf(repository) === key);
+      void (known === undefined ? discover() : pull(known)).catch(() => {});
     },
     async [Symbol.asyncDispose]() {
       closed = true;
+      await chain;
       await source?.[Symbol.asyncDispose]().catch(() => {});
       source = null;
     },

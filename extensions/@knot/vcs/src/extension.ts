@@ -213,10 +213,14 @@ export async function start(): Promise<Disposable> {
     changed({ backend, repository }) {
       discovery.invalidate(backend);
       statuses.request(keyOf({ backend, root: repository }));
+      statuses.request();
       for (const follow of follows.values()) {
         const mine = follow.repository?.backend === backend && follow.repository.root === repository;
         if (mine || follow.repository === null) invalidate(follow, { resolve: true, fetch: true });
       }
+    },
+    statusChanged({ backend, repository }) {
+      statuses.request(keyOf({ backend, root: repository }));
     },
     async backends() {
       // A backend that stopped without unregistering has nothing to bind.

@@ -9,6 +9,7 @@ declare module "@knot/vcs" {
     register: FnSchema<string, void>;
     unregister: FnSchema<string, void>;
     changed: FnSchema<{ backend: string; repository: string }, void>;
+    statusChanged: FnSchema<{ backend: string; repository: string }, void>;
   }>;
 
   /** The contract of the backend `id`, served by that backend. */

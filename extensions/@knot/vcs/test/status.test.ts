@@ -23,7 +23,7 @@ const ROOT = "file:///work";
 
 type Answers = {
   repositories?: (root: string) => string[];
-  status?: (repository: string) => Entry[];
+  status?: (repository: string) => Entry[] | Promise<Entry[]>;
 };
 
 async function backend(id: string, answers: Answers) {
@@ -264,4 +264,56 @@ test("a failing status call keeps what was shown", async () => {
   await (await vcs.client()).changed({ backend: "one", repository: ROOT });
   await settle();
   assert.equal(colorOf(`${ROOT}/a.txt`), "vcs.modified");
+});
+
+test("a burst of notifications makes at most two status pulls per repository", async () => {
+  openRoot();
+  let pulls = 0;
+  let gate: Promise<void> = Promise.resolve();
+  await backend("one", {
+    repositories: () => [ROOT],
+    status: async () => {
+      pulls += 1;
+      await gate;
+      return [{ file: `${ROOT}/a.txt`, status: "modified" }];
+    },
+  });
+  await settle();
+  const before = pulls;
+  // The first pull of the burst waits while the rest arrive.
+  let release: () => void = () => {};
+  gate = new Promise<void>((resolve) => (release = resolve));
+  const client = await vcs.client();
+  for (let index = 0; index < 10; index += 1) {
+    await client.statusChanged({ backend: "one", repository: ROOT });
+    await client.changed({ backend: "one", repository: ROOT });
+  }
+  release();
+  await settle();
+  assert.equal(pulls - before, 2);
+});
+
+test("statusChanged pulls status and leaves the baselines alone", async () => {
+  openRoot();
+  let baselines = 0;
+  let entries: Entry[] = [];
+  await running();
+  const serving = await backendContract("one").serve({
+    repositories: () => [ROOT],
+    repositoryOf: () => ROOT,
+    baseline: () => {
+      baselines += 1;
+      return null;
+    },
+    status: () => entries,
+  });
+  await (await vcs.client()).register("one");
+  await settle();
+  const before = baselines;
+  entries = [{ file: `${ROOT}/a.txt`, status: "untracked" }];
+  await (await vcs.client()).statusChanged({ backend: "one", repository: ROOT });
+  await settle();
+  assert.equal(colorOf(`${ROOT}/a.txt`), "vcs.untracked");
+  assert.equal(baselines, before);
+  await serving[Symbol.asyncDispose]();
 });

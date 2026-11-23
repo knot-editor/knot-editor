@@ -13,6 +13,11 @@ export const vcs = defineContract("vcs", {
   unregister: s.fn(s.string(), s.void()),
   /** The baselines of the repository, as a URI of its root, changed. */
   changed: s.fn(s.object({ backend: s.string(), repository: s.string() }), s.void()),
+  /**
+   * Files in the repository's working tree changed, so its status may have;
+   * its baselines did not.
+   */
+  statusChanged: s.fn(s.object({ backend: s.string(), repository: s.string() }), s.void()),
   /** The IDs of the registered backends that are still being served. */
   backends: s.fn(s.void(), s.array(s.string())),
 });
