@@ -131,6 +131,11 @@ pub(crate) struct DiffView {
     hunks: Vec<LineHunk>,
     /// Each editor's scroll as of the last sync, to tell which one moved.
     synced: [f32; 2],
+    /// The side whose editor last had focus, which hunk commands move.
+    focused: DiffSide,
+    /// Watches each editor's focus; set up on the first render, which has
+    /// the window.
+    _focus_subscriptions: Vec<Subscription>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -174,6 +179,8 @@ impl DiffView {
             pending: None,
             hunks: Vec::new(),
             synced: [0.; 2],
+            focused: DiffSide::Modified,
+            _focus_subscriptions: Vec::new(),
             _subscriptions: subscriptions,
         };
         view.rediff(None, cx);
@@ -363,12 +370,16 @@ impl DiffView {
         true
     }
 
-    /// Put the modified side's caret on its first line of the hunk after (or
+    /// Put the focused side's caret on its first line of the hunk after (or
     /// before) the caret, wrapping at the ends. Without hunks it stays.
     pub(crate) fn go_to_hunk(&mut self, forward: bool, cx: &mut Context<Self>) -> bool {
-        let editor = self.modified.editor.read(cx).editor().clone();
+        let side = match self.focused {
+            DiffSide::Original => &self.original,
+            DiffSide::Modified => &self.modified,
+        };
+        let editor = side.editor.read(cx).editor().clone();
         let line = editor.read(cx).caret().0 as u32;
-        let Some(target) = adjacent_hunk(&self.hunks, line, forward) else {
+        let Some(target) = adjacent_hunk(&self.hunks, self.focused, line, forward) else {
             return false;
         };
         editor.update(cx, |editor, cx| {
@@ -409,6 +420,12 @@ impl DiffView {
         &self.modified.editor
     }
 
+    /// Treat `side` as the one with focus, as its editor gaining focus does.
+    #[cfg(test)]
+    pub(crate) fn set_focused_side(&mut self, side: DiffSide) {
+        self.focused = side;
+    }
+
     #[cfg(test)]
     pub(crate) fn editors(&self) -> [&Entity<EditorView>; 2] {
         [&self.original.editor, &self.modified.editor]
@@ -422,7 +439,20 @@ impl Focusable for DiffView {
 }
 
 impl Render for DiffView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if self._focus_subscriptions.is_empty() {
+            for (side, kind) in [
+                (&self.original, DiffSide::Original),
+                (&self.modified, DiffSide::Modified),
+            ] {
+                let handle = side.editor.focus_handle(cx);
+                self._focus_subscriptions.push(cx.on_focus_in(
+                    &handle,
+                    window,
+                    move |this, _, _| this.focused = kind,
+                ));
+            }
+        }
         let border = theme(cx).paint_color(color::BORDER);
         let muted = theme(cx).paint_color(color::TEXT_MUTED);
         let side = |label: &str, editor: &Entity<EditorView>| {

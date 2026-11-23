@@ -98,11 +98,14 @@ pub enum DiffSide {
     Modified,
 }
 
-/// The first modified line of the hunk nearest `line` in the direction
-/// asked, wrapping at the ends, or `None` without hunks. A deletion's line is
-/// the one that followed the removed lines.
-pub fn adjacent_hunk(hunks: &[LineHunk], line: u32, forward: bool) -> Option<u32> {
-    let mut starts = hunks.iter().map(|hunk| hunk.new.start);
+/// The first line, on `side`, of the hunk nearest `line` in the direction
+/// asked, wrapping at the ends, or `None` without hunks. A hunk with no lines
+/// on this side starts at the line that follows where they would be.
+pub fn adjacent_hunk(hunks: &[LineHunk], side: DiffSide, line: u32, forward: bool) -> Option<u32> {
+    let mut starts = hunks.iter().map(|hunk| match side {
+        DiffSide::Original => hunk.old.start,
+        DiffSide::Modified => hunk.new.start,
+    });
     if forward {
         starts.clone().find(|&start| start > line).or(starts.next())
     } else {
@@ -291,8 +294,8 @@ mod tests {
         );
         let starts: Vec<u32> = found.iter().map(|hunk| hunk.new.start).collect();
         assert_eq!(starts, [1, 4]);
-        let next = |line| adjacent_hunk(&found, line, true);
-        let previous = |line| adjacent_hunk(&found, line, false);
+        let next = |line| adjacent_hunk(&found, DiffSide::Modified, line, true);
+        let previous = |line| adjacent_hunk(&found, DiffSide::Modified, line, false);
         assert_eq!(
             (next(0), next(1), next(2), next(4)),
             (Some(1), Some(4), Some(4), Some(1))
@@ -301,8 +304,11 @@ mod tests {
             (previous(5), previous(4), previous(2), previous(1)),
             (Some(4), Some(1), Some(1), Some(4))
         );
-        assert_eq!(adjacent_hunk(&[], 0, true), None);
-        assert_eq!(adjacent_hunk(&[], 0, false), None);
+        // On the original side the hunks start at lines 1 and 4.
+        let old = |line| adjacent_hunk(&found, DiffSide::Original, line, true);
+        assert_eq!((old(0), old(1), old(4)), (Some(1), Some(4), Some(1)));
+        assert_eq!(adjacent_hunk(&[], DiffSide::Original, 0, true), None);
+        assert_eq!(adjacent_hunk(&[], DiffSide::Original, 0, false), None);
     }
 
     #[test]

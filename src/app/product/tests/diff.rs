@@ -730,6 +730,38 @@ fn hunk_commands_move_the_caret_between_hunks_and_wrap(cx: &mut TestAppContext) 
     assert_eq!(next, [1, 4, 5, 1]);
     let previous: Vec<usize> = (0..4).map(|_| go(PREVIOUS_HUNK_COMMAND, cx)).collect();
     assert_eq!(previous, [5, 4, 1, 5]);
+
+    // With the original side focused its own caret moves, to its own lines.
+    let view = cx.read(|cx| {
+        let workbench = window.read(cx).workbench.read(cx);
+        workbench
+            .diff_view(workbench.focused_pane().unwrap().active_tab())
+            .unwrap()
+            .clone()
+    });
+    view.update(cx, |view, _| {
+        view.set_focused_side(knot_model::diff::DiffSide::Original)
+    });
+    let original_caret = |cx: &mut TestAppContext| {
+        cx.read(|cx| {
+            view.read(cx).editors()[0]
+                .read(cx)
+                .editor()
+                .read(cx)
+                .caret()
+                .0
+        })
+    };
+    let modified_before = modified_caret_line(&window, cx);
+    assert_eq!(go(NEXT_HUNK_COMMAND, cx), modified_before);
+    // Original hunks start at lines 1, 4, and 6; the check above moved to 1.
+    let original: Vec<usize> = (0..4)
+        .map(|_| {
+            go(NEXT_HUNK_COMMAND, cx);
+            original_caret(cx)
+        })
+        .collect();
+    assert_eq!(original, [4, 6, 1, 4]);
 }
 
 #[gpui::test]
