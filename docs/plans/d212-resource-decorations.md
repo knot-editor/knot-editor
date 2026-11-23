@@ -1,6 +1,6 @@
 # D212 — Resource decorations
 
-Status: 🚧 in progress; checkpoint 1 is implemented and awaits its review gate. Source: [roadmap D212](../roadmap.md), part
+Status: 🚧 in progress; checkpoint 1 is complete, checkpoint 2 is next. Source: [roadmap D212](../roadmap.md), part
 of the [version control plan](vcs.md), whose architecture section this plan
 refines without reopening.
 
@@ -112,47 +112,14 @@ text. D213 chooses between letters and icons.
 
 ### 1. Registry and extension API ✅
 
-Deliverables: a `knot-model` registry of decoration sources owned per
-lifecycle, with the merge and propagation rules and a lookup by URI; the
-application global that repaints on change and is removed at lifecycle
-teardown; and `decorations.createSource` with `set`, `clear`, and dispose in
-the `knot` module, with its declaration.
-
-Validation: plain model tests for merging by field (an icon badge and a text
-badge compete as one field), severity-then-latest ordering, joined tooltips,
-propagation reaching ancestors only within the same scheme and authority, a
-direct decoration beating a propagated color, removal undoing propagation,
-and lifecycle removal. Product tests for the API: validation of malformed
-URIs, decorations, icon names, and badge text that is empty or longer than
-two characters, URI normalization, partial `set`, `clear`, dispose, and
-teardown.
-
-Review gate: the API shape and the merge rules before anything paints.
-Pending the user's review.
-
-Scope decisions: a propagated color fills in on an ancestor whose direct
+Complete. The model registry is `crates/knot-model/src/resource_decorations.rs`,
+the application global `src/app/resource_decorations.rs`, and the API
+`decorations.createSource` in `crates/knot-host/src/js/knot.d.ts`. Decisions
+made on the way: a propagated color fills in on an ancestor whose direct
 decoration has no color; a badge ranks by the severity of the decoration that
-carries it; the model keeps a resolved map rebuilt on each change, so a lookup
-per painted row is one hash probe; the in-memory `knot/testing` host fakes the
-API with `decorationsOf(uri)`.
-
-**Implementation context:**
-- Mirror `crates/knot-model/src/status_bar.rs` (lifecycle-owned registry,
-  tests in `status_bar/tests.rs`) for a new `resource_decorations.rs` module,
-  and `src/app/status_bar.rs` for the `ApplicationResourceDecorations` global.
-- Keys are `knot_model::resource::ResourceUri`; walk ancestors with
-  `ResourceUri::parent`. Rank colors with `decoration_precedence` in
-  `crates/knot-model/src/buffer.rs` (line 54), the rule gutter marks use.
-- Host wiring: native handlers next to `register_status_item` in
-  `src/app/extensions/host/handlers.rs` (around line 6125); the JavaScript
-  side next to `registerStatusItem` in `crates/knot-host/src/js/bootstrap.ts`
-  (line 1419), using `ownership` and `disposableHandle` as `overrideIcon`
-  does (line 2369); export from `crates/knot-host/src/js/knot.ts` (line 108
-  shows the pattern) and declare in `crates/knot-host/src/js/knot.d.ts`.
-- Teardown: call the new `remove_lifecycle` next to the status bar and icon
-  calls in `src/app/extensions/host.rs` (line 3788).
-- Product tests in a new `src/app/product/tests/resource_decorations.rs`,
-  modeled on `status_bar.rs` there.
+carries it; the registry keeps a resolved map rebuilt on each change, so a
+lookup per painted row is one hash probe; the in-memory `knot/testing` host
+fakes the API with `decorationsOf(uri)`.
 
 ### 2. Tree rows
 
