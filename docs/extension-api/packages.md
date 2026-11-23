@@ -63,12 +63,14 @@ Bundled packages publish contracts for each other:
 | Package | Contract | Methods |
 | --- | --- | --- |
 | `@knot/go-to-file` | `workspace` | `files(query)`, `buffers(query)`, `actions(query)`: the rows of that Search Everywhere tab for the caller's window |
-| `@knot/vcs` | `vcs`, `backendContract(id)` | `vcs`, served by `@knot/vcs`: backends `register(id)`, `unregister(id)`, and report `changed(...)` baselines. `backendContract(id)`, served by the backend `id` and called by `@knot/vcs`: `repositories(root)`, `repositoryOf(file)`, `baseline(...)` |
+| `@knot/vcs` | `vcs`, `backendContract(id)` | `vcs`, served by `@knot/vcs`: backends `register(id)`, `unregister(id)`, and report `changed(...)` baselines or `statusChanged(...)` files. `backendContract(id)`, served by the backend `id` and called by `@knot/vcs`: `repositories(root)`, `repositoryOf(file)`, `baseline(...)`, `status(repository)`, `ref(repository)` |
 
 A version control backend lists `@knot/vcs` in `requires`, serves its own
 `backendContract(id)`, and registers; `@knot/vcs` then draws the change gutter
-from its baselines (see [version control](../architecture/version-control.md)).
-Call `changed` when baselines may differ, such as after a checkout:
+from its baselines and paints file status and the current ref from `status` and
+`ref` (see [version control](../architecture/version-control.md)). Call
+`changed` when baselines may differ, such as after a checkout, and
+`statusChanged` when only the working tree did:
 
 ```js
 import { backendContract, vcs } from "@knot/vcs";
@@ -77,6 +79,8 @@ await backendContract("mine").serve({
   repositories: (root) => [root],
   repositoryOf: (file) => null,
   baseline: ({ repository, file }) => "text of the file at the baseline\n",
+  status: (repository) => [{ file: "file:///work/a.txt", status: "modified" }],
+  ref: (repository) => ({ label: "main" }),
 });
 const client = await vcs.client();
 await client.register("mine");

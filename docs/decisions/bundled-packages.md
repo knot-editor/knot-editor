@@ -105,9 +105,8 @@ reveal, speed search, inline editing, `files.copy`, `files.reveal`) was closed i
 the API for all extensions, so the package proves the surface and the native
 workspace tree and its private path are gone. Cut and Copy keep the taken item in
 the extension rather than the system clipboard, so pasting text elsewhere never
-meets a file and the clipboard holds only text. Multi-select,
-compact folders, and version control decorations are roadmap items (D177,
-D178, D213).
+meets a file and the clipboard holds only text. Multi-select
+and compact folders are roadmap items (D177, D178).
 
 References: [extension guide](../extension-api/ui.md#activation-selection-and-editing-in-trees)
 and [semantic UI](../architecture/semantic-ui.md#extension-trees).
@@ -215,6 +214,30 @@ contract, because nothing tells a package when another unloads.
 
 References: [version control](../architecture/version-control.md) and
 [sharing between packages](../extension-api/packages.md#share-a-feature-with-other-packages).
+
+## Version control status
+
+File status is measured against the baseline, HEAD for Git, rather than the
+index, so it agrees with the gutter; the index and worktree split belongs to
+the changes view groups of D214 and to staging in D216. It reflects files on
+disk only, as in VS Code, since unsaved edits already show in the gutter.
+
+A backend serves `status` as a snapshot of the changed files and `@knot/vcs`
+paints it, rather than each backend decorating resources itself, so one
+vocabulary of statuses, colors, and badges serves every backend and nesting is
+resolved in one place. `@knot/vcs` sets folder colors itself instead of using
+`propagate`: colors that propagate from one source onto a folder are picked in
+hash order, so a folder with a modified file and an untracked one would take an
+arbitrary color.
+
+Git lists untracked files one by one so each gets its badge, but only up to
+2,000: unbounded listing overran the 32 MiB extension heap at roughly 25,000
+files, so past the limit the call is killed and untracked folders are listed
+collapsed. With the limit, a refresh after an on-disk change took about 0.2 s
+on clones of two repositories of about 15,000 files, and about 0.4 s with
+60,000 unignored untracked files.
+
+References: [version control](../architecture/version-control.md#file-status).
 
 ## Git baseline
 

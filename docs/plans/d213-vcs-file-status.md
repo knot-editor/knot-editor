@@ -1,6 +1,6 @@
 # D213 — VCS file status and current ref
 
-Status: 🚧 in progress; checkpoints 1 to 3 done. Source: [roadmap D213](../roadmap.md), part
+Status: implemented; checkpoint 4 awaits review. Source: [roadmap D213](../roadmap.md), part
 of the [version control plan](vcs.md), whose architecture section this plan
 refines without reopening. Builds on D211 ([version control](../architecture/version-control.md))
 and D212 ([resource decorations](../architecture/semantic-ui.md#resource-decorations)).
@@ -189,19 +189,15 @@ files: a refresh after an on-disk change took about 0.2 s, and about 0.4 s with
 60,000 unignored untracked files. The cost of the working-tree watch itself was
 not measured.
 
-### 4. Current ref and documentation
+### 4. Current ref and documentation ✅
 
-Deliverables: `ref` in the contract and in Git; the `vcs.ref` status item with
-per-window values; the architecture reference, the extension guide, a decision
-entry, and the version control plan updated.
-
-Validation: product tests of Git's `ref` on a branch, on an unborn branch, and
-with a detached HEAD. In-memory tests with `host.statusItems` covering the
-focused editor's repository winning over the first root, the fallback, a
-window without a repository hiding the item, and updates on focus change, root
-change, and `changed`. A product test over Git showing the branch, then the
-short commit after `git checkout --detach`. Check the touched documents
-against the code.
+Done: `ref` is in the contract and in Git (`extensions/@knot/git/src/ref.ts`), the
+`vcs.ref` item is per window (`extensions/@knot/vcs/src/ref.ts`), and the
+references are updated: [version control](../architecture/version-control.md#file-status),
+[packages](../extension-api/packages.md#contracts-knot-defines), and the
+[decision](../decisions/bundled-packages.md#version-control-status). Covered by
+`test/ref.test.ts` and `crates/knot-ext-vcs/tests/ref.rs`. The ref tooltip names the
+branch or the detached commit.
 
 Review gate: D213 complete; D214 can build on it.
 

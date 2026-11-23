@@ -321,7 +321,7 @@ cause mistakes.
 - **No subscriptions, callbacks, or handles cross a contract.** Tasks
   interleave at awaits, so a call needs no refusal for a provider waiting on
   the caller; only a call to the caller's own package is rejected, since its
-  code is reachable directly. Streaming designs later if D213 needs it.
+  code is reachable directly. Streaming designs later if a package needs it.
 
 Reference: [extension host](../architecture/extension-host.md#providers).
 

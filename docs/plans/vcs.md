@@ -1,6 +1,6 @@
 # Version control
 
-Status: 🚧 in progress; milestone 1 is done, D213 is next. Replaces D126 from the [roadmap](../roadmap.md)
+Status: 🚧 in progress; milestone 1 and D213 are done, D214 is next. Replaces D126 from the [roadmap](../roadmap.md)
 with D209–D216, D220, and D221, and sequences D087, D199, and D197 into it.
 
 ## Goal
@@ -67,9 +67,9 @@ gutter and change navigation. See [version control](../architecture/version-cont
 - ✅ **D212 — Resource decorations.** Color keys and badges per URI, painted on
   tabs and in trees. See
   [resource decorations](../architecture/semantic-ui.md#resource-decorations).
-- 🚧 **D213 — VCS file status and current ref.** Status decorations from
-  `@knot/vcs`, and the current ref's label in the status bar. Depends on D211,
-  D212. 🚧 Plan: [d213-vcs-file-status](d213-vcs-file-status.md).
+- ✅ **D213 — VCS file status and current ref.** Status decorations from
+  `@knot/vcs`, and the current ref's label in the status bar. See
+  [version control](../architecture/version-control.md#file-status).
 
 ### 3. Diffs
 

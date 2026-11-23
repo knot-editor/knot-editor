@@ -2,12 +2,14 @@
 
 Part of the [architecture](../architecture.md). [Decisions](../decisions.md)
 records rationale ([backends](../decisions/bundled-packages.md#version-control-backends),
-[Git baseline](../decisions/bundled-packages.md#git-baseline)). The contracts
+[Git baseline](../decisions/bundled-packages.md#git-baseline),
+[status](../decisions/bundled-packages.md#version-control-status)). The contracts
 are described in [packages](../extension-api/packages.md#contracts-knot-defines).
 
 Version control is two bundled packages in the `knot-ext-vcs` crate. `@knot/vcs`
-is backend-agnostic and owns the change gutter and navigation; a backend such as
-`@knot/git` only answers questions about repositories. Several backends can be
+is backend-agnostic and owns the change gutter, navigation, file status, and the
+current ref; a backend such as `@knot/git` only answers questions about
+repositories. Several backends can be
 active at once.
 
 ## Repositories
@@ -38,6 +40,41 @@ and a `diff.removed` wedge for a removal. The contributions are replaced at the
 revision that was diffed, and a diff an edit raced is repeated. The marks run no
 command.
 
+## File status
+
+`@knot/vcs` keeps the set of *known repositories*: every backend's repositories
+covering every window's root, plus those found for followed documents outside
+any root. The set is rebuilt when repositories are found again. For each, it
+pulls the backend's `status`, a snapshot of the files that differ from the
+baseline; a file not listed is unchanged and ignored files are never listed. A
+repository that leaves the set loses its decorations. Where repositories nest, a
+file belongs to the deepest one, so an outer repository's entries inside a
+nested one are dropped.
+
+One decoration source paints the snapshots, updated with only the URIs that
+changed. A file shows its status as a color, a letter badge, and a tooltip
+(`vcs.added` A, `vcs.modified` M, `vcs.deleted` D, `vcs.renamed` R,
+`vcs.untracked` U, `vcs.conflicted` C); tabs show the color and tooltip only.
+`@knot/vcs` defines the `vcs.*` color keys, three of them following `diff.*`.
+Each folder from a change up to the repository root takes the color of its most
+important change, in the order conflicted, deleted, modified, renamed, added,
+untracked. `@knot/vcs` sets these folder colors itself, because colors that
+propagate from one source onto the same folder have no defined order.
+
+Status reflects files on disk only; unsaved edits show in the gutter. Pulls are
+coalesced per repository: one in flight and at most one more queued. A backend
+reports `changed` when baselines and status may differ, and `statusChanged`
+when only the working tree did, which pulls status alone.
+
+## Current ref
+
+The `vcs.ref` status item shows a branch icon, the backend's `ref` label, and
+its tooltip, with no click action. Each window shows the ref of the repository
+of its focused editor's file, falling back to that of its first root; a window
+with neither, or a backend with no ref, shows nothing. It is recomputed when the
+focused editor, a window's roots, the windows, or a repository's baselines
+change.
+
 ## Navigation
 
 `vcs.nextChange` and `vcs.previousChange` (Alt+F5 and Alt+Shift+F5 in editors,
@@ -64,11 +101,23 @@ not register.
   directory non-recursively when it differs, and the common directory's `refs`
   recursively, and reports `changed` to `vcs`. The object store is not watched.
   A watch ends when the git directory is gone, and the next lookup of a file in
-  that repository watches again.
+  that repository watches again. The repository's working tree is watched
+  recursively too, and a batch with any file the ignore policy keeps reports
+  `statusChanged`; a batch of only ignored files, such as a build's output, is
+  skipped.
+- **Status** is `git status --porcelain=v2` against HEAD: a staged file edited
+  again is `modified`, and a staged rename is `renamed` at the new path. Git's
+  two columns collapse into one HEAD-relative status, so a file added to the
+  index and then removed from disk is not listed. Untracked files are listed one
+  by one until 2,000 are seen; past that the listing is cut short and each
+  untracked folder is one entry.
+- **Ref** is the branch name, or the short commit ID when HEAD is detached; an
+  unborn branch keeps its name.
 
 ## Tests
 
 `extensions/@knot/vcs/test` runs `@knot/vcs` over an in-memory host, including
 moves and saves, which the product harness cannot drive. `crates/knot-ext-vcs/tests`
 runs the packages in the launched product: `gutter.rs` over a fixed-baseline
-backend and `git.rs` over temporary repositories. A missing `git` is untested.
+backend, and `git.rs`, `status.rs`, `decorations.rs`, and `ref.rs` over
+temporary repositories. A missing `git` is untested.

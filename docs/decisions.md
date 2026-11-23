@@ -176,6 +176,10 @@ touches.
 - [Version control backends](decisions/bundled-packages.md#version-control-backends):
   a contract per backend, defined by a factory in `@knot/vcs`, plus one the
   backends call.
+- [Version control status](decisions/bundled-packages.md#version-control-status):
+  against the baseline, not the index; disk only; a snapshot painted by
+  `@knot/vcs`, which sets folder colors itself; untracked files listed one by
+  one up to a limit.
 - [Git baseline](decisions/bundled-packages.md#git-baseline): HEAD through
   `cat-file --filters`, not the index; roots derived from URIs, not Git's
   absolute paths; watching, not polling, with a hidden-entry opt-in.
