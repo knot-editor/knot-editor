@@ -96,7 +96,7 @@ struct CommandCompletionState {
 }
 
 #[derive(Clone)]
-struct CommandCompletion {
+pub(crate) struct CommandCompletion {
     state: Arc<Mutex<CommandCompletionState>>,
 }
 
