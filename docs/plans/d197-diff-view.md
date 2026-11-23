@@ -78,38 +78,12 @@ internal product operation until checkpoint 4 adds the extension API.
 
 ### 1. Diff tab kind with two snapshots ✅
 
-Implemented; awaiting review of the tab's ownership.
-
-Deliverables:
-
-- `TabSurfaceId::Diff` and `TabKind::Diff`, center-only, with the diff
-  view's identity and sides held by the workbench entity, as terminal sessions
-  are. Relocation, tab drag, and split follow the tab kind's rules.
-- A `DiffView` showing two read-only snapshot editors side by side, each a
-  private buffer with its language, and a tab title from both labels.
-- Diff tabs are skipped by window layouts and `RecentlyClosed`.
-
-Validation: model tests for placement; product tests that open, split, move,
-and close a diff tab, and confirm it is neither restored nor reopened.
-
-Review gate: the tab's ownership and how it plugs into the workbench.
-
-Scope notes: commands on a diff tab target the modified side's editor, since a
-view's command target is fixed per presentation; the extension API's tab
-`kind` gains `"diff"`. Tests open a diff through
+Done and approved. The diff tab kind, `DiffView`, and its placement rules are
+described in [workbench and lifecycle](../architecture/workbench-and-lifecycle.md)
+and [its decision](../decisions/workbench-and-lifecycle.md#diff-view). Commands
+on a diff tab target the modified side's editor. Tests open a diff through
 `Workbench::open_diff_in_center`, which stays test-only until checkpoint 4.
-
-**Implementation context**
-
-- Tab kinds: `crates/knot-model/src/workbench.rs` (`TabSurfaceId`, `TabKind`,
-  `TabKind::allows`).
-- Views: `src/app/workbench.rs`, which creates and drops the view behind a
-  presentation, and every `TabSurfaceId::Terminal` match in `src/app/product/`
-  (`render.rs`, `closure.rs`, `relocate.rs`, `tab_drag.rs`, `commands.rs`,
-  `sessions.rs`) and in `src/app/window_layout.rs`, which shows where a new
-  kind plugs in. `src/app/product/reopen.rs` must skip it.
-- Snapshot buffers follow the private read-only buffer of text frames
-  (`src/app/extensions/semantics.rs`, `src/app/product/tests/text_frames.rs`).
+There was nothing to try in the real app, since no entry point exists yet.
 
 ### 2. Hunk bands
 
