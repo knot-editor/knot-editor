@@ -136,7 +136,9 @@ unclaimed there.
 
 ### Key contexts
 
-Extensions set named key contexts on editor views through the editor handle.
+Extensions set named key contexts on editor views through the editor handle,
+and a diff's modified editor holds the native `diff` context, which keymap
+preset bindings can scope to.
 The view keeps each context with the lifecycle that set it, so two packages'
 contexts of one name are independent and teardown clears its own; contexts are
 presentation state, never recorded in layouts. The router resolves

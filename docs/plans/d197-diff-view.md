@@ -126,9 +126,9 @@ in the real app.
 
 ### 6. Hunk navigation 🚧
 
-Built, awaiting review. `diff.next-hunk` and `diff.previous-hunk` (F7 and
-Shift+F7 in editors; IntelliJ's keys, since Alt+F5 stays `vcs.nextChange`'s)
-move the modified side's caret to a hunk's first line, wrapping; they are
+Built, awaiting review. `diff.next-hunk` and `diff.previous-hunk` (Alt+F5
+and Alt+Shift+F5, bound in a `diff` key context the modified editor holds, so
+they win over `vcs.nextChange` there and only there) move the modified side's caret to a hunk's first line, wrapping; they are
 unavailable on a diff without hunks. `workbench.openDiff` takes `line`, the
 0-based modified line the caret starts at.
 

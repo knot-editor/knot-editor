@@ -547,6 +547,7 @@ fn preset(name: &str, bindings: &[(&str, Option<&str>, Option<&str>)]) -> Keymap
                 key: key.into(),
                 command: command.map(self::command),
                 view: view.map(ToOwned::to_owned),
+                context: None,
             })
             .collect(),
     }

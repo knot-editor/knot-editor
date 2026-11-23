@@ -349,10 +349,11 @@ impl BindingRegistry {
         let before = self.active.clone();
         self.remove_owner(BindingOwner::Preset);
         for binding in bindings {
-            let _ = self.set(
+            let _ = self.set_in_context(
                 BindingOwner::Preset,
                 &binding.key,
                 binding.view.as_deref(),
+                binding.context.as_deref(),
                 binding.command.clone(),
             );
         }

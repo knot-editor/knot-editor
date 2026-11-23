@@ -25,6 +25,9 @@ pub struct PresetBinding {
     pub command: Option<Command>,
     #[serde(default)]
     pub view: Option<String>,
+    /// A key context the focused view must have; only with a view.
+    #[serde(default)]
+    pub context: Option<String>,
 }
 
 impl PresetBinding {
@@ -36,7 +39,14 @@ impl PresetBinding {
                 arguments: CommandArgumentValue::Null,
             }),
             view: view.map(ToOwned::to_owned),
+            context: None,
         }
+    }
+
+    /// Apply only where the focused view has the key context `context`.
+    pub fn in_context(mut self, context: &str) -> Self {
+        self.context = Some(context.to_owned());
+        self
     }
 }
 

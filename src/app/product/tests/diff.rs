@@ -776,3 +776,76 @@ fn an_extension_opens_a_diff_with_the_caret_at_a_line(cx: &mut TestAppContext) {
     );
     assert_eq!(modified_caret_line(&window, cx), 3);
 }
+
+#[gpui::test]
+fn the_version_control_keys_move_between_hunks_in_a_diff_and_keep_their_binding_elsewhere(
+    cx: &mut TestAppContext,
+) {
+    use knot_protocol::{ExtensionId, ExtensionKey, ExtensionLifecycleId};
+    const SOURCE: &str = r#"
+        import { commands, keymaps } from "knot";
+        await commands.register("changes.next", async ({ editor }) => {
+          await editor.setSelection({ anchor: 0, caret: 0 });
+        });
+        keymaps.bind("alt-f5", "changes.next", { view: "editor" });
+    "#;
+    let documents = install_globals(cx);
+    cx.update(super::super::bind_product_keys);
+    let host = cx.update(crate::app::extensions::host::install);
+    let key = ExtensionKey::new(ExtensionId::new(732), ExtensionLifecycleId::new(1));
+    host.update(cx, |host, cx| {
+        let execution = host.load_test_source(key, SOURCE).unwrap();
+        cx.spawn(async move |_, _| execution.await.unwrap())
+            .detach();
+    });
+    wait_for_api_condition(cx, |cx| {
+        keymap_command(cx, "alt-f5", Some("editor")).as_deref() == Some("changes.next")
+    });
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    model.update(cx, |model, _| model.replace(0..0, "abc").unwrap());
+    let (window, _) = product_window(document, model, cx);
+    window.update(cx, |window, cx| {
+        window.workbench.update(cx, |workbench, cx| {
+            workbench.open_diff_in_center(
+                spec("HEAD", None, "a\nb\nc\n"),
+                spec("Now", None, "a\nB\nc\n"),
+                cx,
+            );
+        });
+        window.focus_active_surface(cx);
+    });
+    cx.run_until_parked();
+    settle(cx);
+
+    press_keys(&window, "alt-f5", cx);
+    assert_eq!(modified_caret_line(&window, cx), 1);
+    press_keys(&window, "alt-f5 alt-shift-f5", cx);
+    assert_eq!(modified_caret_line(&window, cx), 1);
+
+    // On the document's own tab the package's binding applies.
+    window.update(cx, |window, cx| {
+        window.workbench.update(cx, |workbench, _| {
+            let pane = workbench.focused_pane_id().unwrap();
+            let first = workbench.tabs().next().unwrap().id();
+            workbench.activate_tab(pane, first);
+        });
+        window.focus_active_surface(cx);
+    });
+    let editor = cx.read(|cx| {
+        window
+            .read(cx)
+            .workbench
+            .read(cx)
+            .focused_editor()
+            .unwrap()
+            .clone()
+    });
+    editor.update(cx, |editor, cx| {
+        editor.editor().clone().update(cx, |editor, cx| {
+            editor.set_selection(3, 3, crate::app::editor::Reveal::Nearest, cx)
+        })
+    });
+    press_keys(&window, "alt-f5", cx);
+    wait_for_api_condition(cx, |cx| editor.read(cx).editor().read(cx).caret() == (0, 0));
+}

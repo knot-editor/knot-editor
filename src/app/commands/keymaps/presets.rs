@@ -10,7 +10,7 @@ use crate::app::keys::{Keystroke, Modifiers};
 
 use super::{ApplicationKeymaps, Platform, PresetBinding, PresetOwner, PresetRegistry, rebuild};
 use crate::app::commands::dispatch::*;
-use crate::app::diff_view::{NEXT_HUNK_COMMAND, PREVIOUS_HUNK_COMMAND};
+use crate::app::diff_view::{DIFF_KEY_CONTEXT, NEXT_HUNK_COMMAND, PREVIOUS_HUNK_COMMAND};
 use crate::app::product::surface_menu::SHOW_CONTEXT_MENU_COMMAND;
 use crate::app::settings::{self, ApplicationSettings, KEYMAP_PRESET};
 use knot_protocol::{ExtensionId, ExtensionLifecycleId};
@@ -119,6 +119,18 @@ pub(crate) fn knot_preset(platform: Platform) -> Vec<PresetBinding> {
             PresetBinding::new(key.replace("secondary-", secondary), Some(command), view)
         })
         .collect::<Vec<_>>();
+    // A diff's editor moves between the diff's own hunks where the version
+    // control package's bindings of these keys move between a file's changes.
+    preset.extend([
+        PresetBinding::new("alt-f5".into(), Some(NEXT_HUNK_COMMAND), Some("editor"))
+            .in_context(DIFF_KEY_CONTEXT),
+        PresetBinding::new(
+            "alt-shift-f5".into(),
+            Some(PREVIOUS_HUNK_COMMAND),
+            Some("editor"),
+        )
+        .in_context(DIFF_KEY_CONTEXT),
+    ]);
     // Terminal programs read function keys.
     preset.push(PresetBinding::new(
         "shift-f10".into(),
@@ -199,8 +211,6 @@ const SHARED_BINDINGS: &[PresetEntry] = &[
         JUMP_TO_MATCHING_BRACKET_COMMAND,
         Some("editor"),
     ),
-    ("f7", NEXT_HUNK_COMMAND, Some("editor")),
-    ("shift-f7", PREVIOUS_HUNK_COMMAND, Some("editor")),
     ("alt-up", MOVE_LINES_UP_COMMAND, Some("editor")),
     ("alt-down", MOVE_LINES_DOWN_COMMAND, Some("editor")),
     ("secondary-shift-k", DELETE_LINES_COMMAND, Some("editor")),

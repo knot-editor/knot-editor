@@ -29,6 +29,10 @@ use knot_model::theme::color as key;
 const BAND_OWNER: ExtensionKey =
     ExtensionKey::new(ExtensionId::new(u64::MAX), ExtensionLifecycleId::new(1));
 
+/// The key context of a diff's modified editor, for bindings that apply only
+/// in a diff.
+pub(crate) const DIFF_KEY_CONTEXT: &str = "diff";
+
 /// How long after an edit the bands are recomputed, as the change gutter's.
 const REDIFF_DELAY: Duration = Duration::from_millis(150);
 
@@ -152,6 +156,14 @@ impl DiffView {
             subscriptions
                 .push(cx.subscribe(&editor, |this, _, _: &Scrolled, cx| this.sync_scroll(cx)));
         }
+        modified
+            .editor
+            .read(cx)
+            .editor()
+            .clone()
+            .update(cx, |editor, _| {
+                editor.set_key_context(BAND_OWNER, DIFF_KEY_CONTEXT, true)
+            });
         let mut view = Self {
             requested: (
                 original.model.read(cx).revision(),
