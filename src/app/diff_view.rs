@@ -214,6 +214,29 @@ impl DiffView {
         }));
     }
 
+    /// Replace the text of a snapshot side; a document side is left alone.
+    /// Returns whether the side is a snapshot.
+    pub(crate) fn replace_text(
+        &mut self,
+        side: DiffSide,
+        text: &str,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let side = match side {
+            DiffSide::Original => &self.original,
+            DiffSide::Modified => &self.modified,
+        };
+        if side.document.is_some() {
+            return false;
+        }
+        side.model.update(cx, |model, cx| {
+            if model.replace_generated_text(text) {
+                cx.notify();
+            }
+        });
+        true
+    }
+
     /// The tab title, from both labels.
     pub(crate) fn title(&self) -> String {
         format!("{} ↔ {}", self.original.label, self.modified.label)

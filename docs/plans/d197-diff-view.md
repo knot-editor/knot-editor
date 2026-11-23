@@ -105,19 +105,22 @@ diff tab counts as a view of its document for closure and view counts
 (`Workbench::set_diff_document`); hot exit relies on those counts. Only the
 modified side can be a document.
 
-### 4. Extension API
+### 4. Extension API ✅ (awaiting review)
 
 Deliverables:
 
-- Opening a diff from two sides with destination options, returning a
-  lifecycle-owned handle with `setText` for a snapshot side and `close`. The
-  tab closes when its owner unloads.
-- TypeScript declarations, and the
-  [extension API guide](../extension-api/application.md#compare-texts)
+- ✅ `workbench.openDiff({ original, modified, target? })` opens a diff in the
+  center of the destination's window. The original is a snapshot (`label`,
+  `text`, optional `language`); the modified side is a snapshot or
+  `{ label, document }`. It returns a handle with `target`, `setText(side,
+  text)` for a snapshot side, `close()`, and async disposal. The tab closes,
+  with the usual prompts, when its owner unloads.
+- ✅ TypeScript declarations, and the
+  [extension API guide](../extension-api/application.md#show-the-differences)
   extended next to `diff`.
 
-Validation: extension tests for argument validation, `setText`, `close`, and
-owner unload.
+Validation: product tests with a loaded extension for argument validation,
+`setText`, `close`, a document side, and owner unload.
 
 Review gate: the API shape.
 

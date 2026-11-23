@@ -2835,6 +2835,36 @@ declare module "knot" {
     unavailable(): never;
   }>;
   export type PresentationCloseOutcome = Readonly<{ kind: "closed" | "cancelled" }>;
+  /** A snapshot side of a diff: text outside document identity, read-only. */
+  export interface DiffSnapshotSide {
+    /** Shown above the side and in the tab title. */
+    readonly label: string;
+    readonly text: string;
+    /** The language the text is highlighted as, such as "typescript". */
+    readonly language?: string;
+  }
+  /** A diff side that is an open document, shown as an editable view of it. */
+  export interface DiffDocumentSide {
+    readonly label: string;
+    readonly document: DocumentId;
+  }
+  export interface OpenDiffOptions extends DocumentDestinationOptions {
+    readonly original: DiffSnapshotSide;
+    readonly modified: DiffSnapshotSide | DiffDocumentSide;
+  }
+  /** An open diff tab. Disposing it closes the tab, as `close` does. */
+  export interface DiffHandle extends AsyncDisposable {
+    readonly target: ViewTarget;
+    /**
+     * Replace the text of a snapshot side, for example with a new baseline.
+     * @throws HostError with InvalidTarget for a document side or a tab that
+     * was closed, or Cancelled; TypeError for an invalid side or text.
+     */
+    setText(side: "original" | "modified", text: string): Promise<void>;
+    /** Close the tab as `workbench.close` does; a tab already closed resolves
+     * as closed. */
+    close(options?: CloseOptions): Promise<PresentationCloseOutcome>;
+  }
   export interface CloseOptions {
     /** Close a dirty final view without the Save prompt, discarding its
      * changes. Defaults to false. */
@@ -3034,6 +3064,19 @@ declare module "knot" {
      * close commits.
      * @throws TypeError for invalid options. */
     close(target: ViewTarget, options?: CloseOptions): Promise<PresentationCloseOutcome>;
+    /**
+     * Open a diff tab comparing two texts in the center of the destination's
+     * window and focus it. The original side is a read-only snapshot. The
+     * modified side is a snapshot or an open document, which the tab edits
+     * live; the tab shows the changes between the sides and keeps them current
+     * as either changes. A diff is not restored with its window. The caller's
+     * lifecycle owns the tab: it closes, with the usual prompt for unsaved
+     * changes, when the extension unloads or the handle is disposed.
+     * @throws TypeError for invalid options; HostError with DocumentNotFound
+     * for a document that is not open, InvalidTarget for a stale destination, or
+     * Cancelled on teardown.
+     */
+    openDiff(options: OpenDiffOptions): Promise<DiffHandle>;
     /** A long-lived editor for the document tab `target` names; targets come
      * from observation. @throws HostError with InvalidTarget for a target that
      * is not a live document tab, or Cancelled. */

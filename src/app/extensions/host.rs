@@ -762,6 +762,8 @@ pub(crate) struct ProductExtensionHost {
     /// Editors each lifecycle set a key context or caret shape on or opened a
     /// bar on, cleared at teardown.
     owned_editors: HashMap<ExtensionKey, Vec<gpui::WeakEntity<crate::app::editor::Editor>>>,
+    /// The diff tabs each lifecycle opened, closed when it ends.
+    owned_diffs: HashMap<ExtensionKey, Vec<knot_protocol::PresentationTarget>>,
     /// Long-lived editor handles, each bound to one exact tab presentation.
     editor_handles: HashMap<u64, EditorHandle>,
     next_editor_handle: u64,
@@ -843,6 +845,7 @@ impl ProductExtensionHost {
             bundled: &[],
             lifecycles: HashSet::new(),
             owned_editors: HashMap::new(),
+            owned_diffs: HashMap::new(),
             editor_handles: HashMap::new(),
             undo_groups: HashMap::new(),
             next_undo_group: 0,
@@ -3771,6 +3774,9 @@ impl ProductExtensionHost {
             }
         }
         self.editor_handles.retain(|_, handle| handle.owner != key);
+        for diff in self.owned_diffs.remove(&key).unwrap_or_default() {
+            crate::app::product::operations::close_presentation_unattended(diff, cx);
+        }
         self.end_undo_groups_where(cx, |group| group.owner == key);
         self.end_recordings_where(cx, |recording| recording.owner == key);
         for editor in self.owned_editors.remove(&key).unwrap_or_default() {

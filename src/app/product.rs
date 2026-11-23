@@ -2356,6 +2356,21 @@ impl KnotWindow {
         ))
     }
 
+    /// Open a diff in the center and focus it.
+    fn open_diff(
+        &mut self,
+        original: crate::app::diff_view::SnapshotSpec,
+        modified: crate::app::diff_view::ModifiedSource,
+        cx: &mut Context<Self>,
+    ) -> OpenTarget {
+        let (pane, tab) = self.workbench.update(cx, |workbench, cx| {
+            workbench.open_diff_in_center(original, modified, cx)
+        });
+        self.focus_active_surface(cx);
+        cx.notify();
+        OpenTarget::at(cx.weak_entity(), &self.workbench, pane, tab, cx)
+    }
+
     #[cfg(test)]
     fn split(&mut self, direction: SplitDirection, cx: &mut Context<Self>) {
         let Some(pane) = self.workbench.read(cx).focused_pane_id() else {

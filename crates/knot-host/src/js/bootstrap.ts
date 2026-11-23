@@ -2085,6 +2085,55 @@ export async function closePresentation(target: unknown, options?: Opts) {
   if (discard !== undefined && typeof discard !== "boolean") throw new TypeError("discard must be a boolean");
   return Object.freeze(await request("closePresentation", destinationAuthority({ target }), discard ?? null));
 }
+function diffSnapshot(side: Rec, name: string) {
+  const language = side.language;
+  if (language !== undefined && typeof language !== "string") throw new TypeError(`${name} language must be a string`);
+  return { text: string(side.text, `${name} text must be a string`), language: language ?? null };
+}
+/** Open a diff tab and return the lifecycle-owned handle that updates and closes it. */
+export async function openDiff(options: unknown) {
+  const given = record(options, "diff options must be an object");
+  const original = record(given.original, "diff original must be an object");
+  const modified = record(given.modified, "diff modified must be an object");
+  const originalLabel = string(original.label, "diff original label must be a string");
+  const modifiedLabel = string(modified.label, "diff modified label must be a string");
+  const originalText = diffSnapshot(original, "diff original");
+  let document: string | null = null;
+  let modifiedText: { text: string | null; language: string | null } = { text: null, language: null };
+  if (modified.document !== undefined) {
+    if (modified.text !== undefined) throw new TypeError("diff modified is a document or text, not both");
+    document = string(modified.document, "diff document must be a document ID");
+  } else {
+    modifiedText = diffSnapshot(modified, "diff modified");
+  }
+  const value = await request("openDiff", destinationAuthority(given),
+    originalLabel, originalText.text, originalText.language,
+    document, modifiedLabel, modifiedText.text, modifiedText.language);
+  const target = presentationTarget(value.target);
+  const owned = ownership(() => {}, async () => {
+    try { await closePresentation(target); } catch (error) {
+      if ((error as { code?: unknown }).code !== "InvalidTarget") throw error;
+    }
+  });
+  return Object.freeze({
+    target,
+    async setText(side: unknown, text: unknown) {
+      if (side !== "original" && side !== "modified") throw new TypeError("diff side must be original or modified");
+      owned.assertActive();
+      await owned.track(request("setDiffText", destinationAuthority({ target }), side,
+        string(text, "diff text must be a string")));
+    },
+    async close(closeOptions?: Opts) {
+      try {
+        return await closePresentation(target, closeOptions);
+      } catch (error) {
+        if ((error as { code?: unknown }).code !== "InvalidTarget") throw error;
+        return Object.freeze({ kind: "closed" });
+      }
+    },
+    [Symbol.asyncDispose]: () => owned.dispose(),
+  });
+}
 export async function createUntitled(options?: Opts) {
   return documentPresentationFromNative(await request("createUntitled", destinationAuthority(options)));
 }

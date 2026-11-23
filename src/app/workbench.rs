@@ -509,8 +509,7 @@ impl Workbench {
             .insert(presentation, PresentationView::Diff(view, editor));
     }
 
-    /// Open a diff of two snapshots in the center and return its tab.
-    #[cfg(test)]
+    /// Open a diff in the center and return its tab.
     pub(crate) fn open_diff_in_center(
         &mut self,
         original: super::diff_view::SnapshotSpec,

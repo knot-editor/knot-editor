@@ -2775,6 +2775,7 @@ export const api: KnotApi = {
       };
     },
     close: notFaked("workbench.close"),
+    openDiff: notFaked("workbench.openDiff"),
     editor: async (target) => editorHandle(target),
     replaceWindows: async (options) => replaceWindows(options),
     captureLayout: async (target) => {

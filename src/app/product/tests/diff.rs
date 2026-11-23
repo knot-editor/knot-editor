@@ -451,3 +451,163 @@ async fn closing_the_final_dirty_view_of_a_document_through_its_diff_prompts(
         assert!(KnotWindow::documents(cx).read(cx).get(document).is_none());
     });
 }
+
+const API_SOURCE: &str = r#"
+import { commands, documents, workbench } from "knot";
+const check = (condition, message) => { if (!condition) throw new Error(message); };
+const expectCode = async (operation, code) => {
+  try { await operation(); } catch (error) { if (error.code === code) return; throw error; }
+  throw new Error(`expected ${code}`);
+};
+const expectType = async (operation) => {
+  try { await operation(); } catch (error) { if (error instanceof TypeError) return; throw error; }
+  throw new Error("expected TypeError");
+};
+let handle;
+await commands.register("diff.open", async () => {
+  handle = await workbench.openDiff({
+    original: { label: "HEAD", text: "a\nb\n", language: "plaintext" },
+    modified: { label: "Working copy", text: "a\nc\n" },
+  });
+  check(handle.target !== undefined, "handle target");
+});
+await commands.register("diff.setOriginal", async () => {
+  await handle.setText("original", "a\nc\n");
+  await handle.setText("modified", "a\nc\nd\n");
+});
+await commands.register("diff.openDocument", async () => {
+  const [document] = await documents.list();
+  handle = await workbench.openDiff({
+    original: { label: "HEAD", text: "base\n" },
+    modified: { label: "Document", document: document.id },
+  });
+  await expectCode(() => handle.setText("modified", "x"), "InvalidTarget");
+  await handle.setText("original", "other\n");
+});
+await commands.register("diff.invalid", async () => {
+  await expectType(() => workbench.openDiff({}));
+  await expectType(() => workbench.openDiff({ original: { label: "a" }, modified: { label: "b", text: "" } }));
+  await expectType(() => workbench.openDiff({ original: { label: "a", text: "", language: 1 }, modified: { label: "b", text: "" } }));
+  await expectType(() => workbench.openDiff({ original: { label: "a", text: "" }, modified: { label: "b", text: "", document: "x" } }));
+  await expectCode(() => workbench.openDiff({ original: { label: "a", text: "" }, modified: { label: "b", document: "missing" } }), "DocumentNotFound");
+  await handle.setText("sideways", "").catch((error) => check(error instanceof TypeError, "side"));
+});
+await commands.register("diff.close", async () => {
+  check((await handle.close()).kind === "closed", "closed");
+  check((await handle.close()).kind === "closed", "closed again");
+  await expectCode(() => handle.setText("original", "x"), "InvalidTarget");
+});
+"#;
+
+fn load_api(
+    cx: &mut TestAppContext,
+) -> (
+    Entity<crate::app::extensions::host::ProductExtensionHost>,
+    knot_protocol::ExtensionKey,
+) {
+    use knot_protocol::{ExtensionId, ExtensionKey, ExtensionLifecycleId};
+    let host = cx.update(crate::app::extensions::host::install);
+    let key = ExtensionKey::new(ExtensionId::new(730), ExtensionLifecycleId::new(1));
+    host.update(cx, |host, cx| {
+        let execution = host.load_test_source(key, API_SOURCE).unwrap();
+        cx.spawn(async move |_, _| execution.await.unwrap())
+            .detach();
+    });
+    wait_for_api_condition(cx, |cx| {
+        cx.global::<ApplicationProductCommands>()
+            .0
+            .read(cx)
+            .catalog()
+            .borrow()
+            .resolve("diff.close")
+            .is_ok()
+    });
+    (host, key)
+}
+
+fn diff_tabs(window: &Entity<KnotWindow>, cx: &TestAppContext) -> usize {
+    cx.read(|cx| {
+        let workbench = window.read(cx).workbench.read(cx);
+        workbench
+            .tabs()
+            .filter(|tab| matches!(tab.surface_id(), TabSurfaceId::Diff(_)))
+            .count()
+    })
+}
+
+#[gpui::test]
+fn an_extension_opens_updates_and_closes_a_diff_snapshot(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (window, native_window) = product_window(document, model, cx);
+    let (_, _) = load_api(cx);
+
+    let run = |name: &'static str, cx: &mut TestAppContext| {
+        assert_eq!(
+            run_command(&window, native_window, name, cx),
+            CommandOutcome::Completed,
+            "{name}"
+        );
+    };
+    run("diff.open", cx);
+    assert_eq!(diff_tabs(&window, cx), 1);
+    assert_eq!(
+        texts(&window, cx),
+        Some(("a\nb\n".to_owned(), "a\nc\n".to_owned()))
+    );
+    assert_eq!(
+        bands(&window, cx)[0].0,
+        vec![(1, "diff.modified".to_owned())]
+    );
+
+    run("diff.setOriginal", cx);
+    settle(cx);
+    assert_eq!(
+        texts(&window, cx),
+        Some(("a\nc\n".to_owned(), "a\nc\nd\n".to_owned()))
+    );
+    assert_eq!(bands(&window, cx)[1].0, vec![(2, "diff.added".to_owned())]);
+
+    run("diff.invalid", cx);
+    // Run from the document's tab, since closing the diff closes its own.
+    window.update(cx, |window, cx| {
+        window.workbench.update(cx, |workbench, _| {
+            let pane = workbench.focused_pane_id().unwrap();
+            let first = workbench.tabs().next().unwrap().id();
+            workbench.activate_tab(pane, first);
+        });
+        window.focus_active_surface(cx);
+    });
+    run("diff.close", cx);
+    assert_eq!(diff_tabs(&window, cx), 0);
+}
+
+#[gpui::test]
+fn a_diff_with_a_document_side_rejects_setting_that_side_and_closes_on_unload(
+    cx: &mut TestAppContext,
+) {
+    let documents = install_globals(cx);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (window, native_window) = product_window(document, model, cx);
+    let (host, key) = load_api(cx);
+
+    assert_eq!(
+        run_command(&window, native_window, "diff.openDocument", cx),
+        CommandOutcome::Completed
+    );
+    cx.read(|cx| {
+        let workbench = window.read(cx).workbench.read(cx);
+        assert_eq!(workbench.view_count(document), 2);
+    });
+    settle(cx);
+    assert_eq!(texts(&window, cx).unwrap().0, "other\n");
+
+    host.update(cx, |host, cx| host.unload(key, cx).unwrap());
+    cx.run_until_parked();
+    assert_eq!(diff_tabs(&window, cx), 0);
+    cx.read(|cx| {
+        assert_eq!(window.read(cx).workbench.read(cx).view_count(document), 1);
+    });
+}

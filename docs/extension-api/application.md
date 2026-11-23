@@ -120,6 +120,27 @@ convert a baseline to the working-tree form first (for Git,
 ignores `\r\n` against `\n`. The comparison runs off the foreground, has no
 size limit, and reports no changes inside a line.
 
+### Show the differences
+
+`workbench.openDiff` opens a diff tab in the center of the destination's
+window, with changed lines banded in the `diff.*` colors. The original side is
+a read-only snapshot. The modified side is a snapshot too, or an open document,
+which the tab edits live and keeps compared as either side changes:
+
+```js
+const handle = await workbench.openDiff({
+  original: { label: "HEAD", text: baseline, language: "typescript" },
+  modified: { label: "Working copy", document: document.id },
+});
+await handle.setText("original", newBaseline); // a snapshot side only
+await handle.close();
+```
+
+Closing the tab, disposing the handle, or unloading the extension closes the
+tab, with the usual prompt when it is the last view of a document with unsaved
+changes. A diff tab is not restored with its window, and `setText` rejects
+`InvalidTarget` for a document side or a tab already closed.
+
 ## Read files
 
 `files` reads stored resources through the registered resource providers, for

@@ -287,6 +287,99 @@ pub(crate) fn open_terminal(
     })
 }
 
+/// What a diff's modified side shows.
+pub(crate) enum DiffModified {
+    Snapshot(crate::app::diff_view::SnapshotSpec),
+    /// The open document with this public identity.
+    Document {
+        id: String,
+        label: String,
+    },
+}
+
+/// Open a diff in the center of the destination's window.
+pub(crate) fn open_diff(
+    destination: DocumentDestination,
+    original: crate::app::diff_view::SnapshotSpec,
+    modified: DiffModified,
+    cx: &mut App,
+) -> Result<PresentationTarget, OpenError> {
+    use crate::app::diff_view::ModifiedSource;
+
+    let (window, _) = capture_destination(&destination, cx)?;
+    let modified = match modified {
+        DiffModified::Snapshot(spec) => ModifiedSource::Snapshot(spec),
+        DiffModified::Document { id, label } => {
+            let document = document_by_identity(&id, cx)?;
+            let model = KnotWindow::documents(cx)
+                .read(cx)
+                .get(document)
+                .ok_or(OpenError::DocumentNotFound)?
+                .model()
+                .clone();
+            ModifiedSource::Document {
+                id: document,
+                label,
+                model,
+            }
+        }
+    };
+    Ok(window
+        .update(cx, |window, cx| window.open_diff(original, modified, cx))
+        .public_target())
+}
+
+/// Replace the text of a snapshot side of the diff tab `target` names.
+pub(crate) fn set_diff_text(
+    target: &PresentationTarget,
+    side: knot_model::diff::DiffSide,
+    text: &str,
+    cx: &mut App,
+) -> Result<(), AccessError> {
+    let (_, open) = capture_destination(&DocumentDestination::View(target.clone()), cx)?;
+    let workbench = open.workbench.upgrade().ok_or(AccessError::InvalidTarget)?;
+    let tab = open.tab.ok_or(AccessError::InvalidTarget)?;
+    let view = {
+        let workbench = workbench.read(cx);
+        workbench
+            .tab(tab.pane, tab.tab)
+            .and_then(|tab| workbench.diff_view(tab))
+            .cloned()
+            .ok_or(AccessError::InvalidTarget)?
+    };
+    if view.update(cx, |view, cx| view.replace_text(side, text, cx)) {
+        Ok(())
+    } else {
+        Err(AccessError::InvalidTarget)
+    }
+}
+
+/// Close the tab `presentation` names with the usual prompts, for an owner
+/// that is gone.
+pub(crate) fn close_presentation_unattended(presentation: PresentationTarget, cx: &mut App) {
+    let Ok((window, target)) = capture_destination(&DocumentDestination::View(presentation), cx)
+    else {
+        return;
+    };
+    let origin = ProductCommandTarget {
+        window: window.downgrade(),
+        workbench: target.workbench,
+        tab: target.tab,
+        focused: true,
+        view: None,
+    };
+    KnotWindow::begin_protected_operation(
+        ProtectedCloseRequest {
+            kind: ProtectedCloseKind::Tab,
+            origin,
+            caller: None,
+            discard: false,
+        },
+        Box::new(|_, _| {}),
+        cx,
+    );
+}
+
 /// An exact document tab presentation retained beyond one command. It never
 /// resolves to a replacement tab, or to the tab after a move.
 #[derive(Clone)]
