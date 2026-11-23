@@ -159,7 +159,7 @@ hold the analyses that support some items.
     is edited, with navigation between hunks, and an extension API to open one,
     so version control can show a file's changes and D174 can diff the
     buffer against the file. Part of the [version control plan](plans/vcs.md);
-    it computes hunks with the extension API's `diff`.
+    see the [plan](plans/d197-diff-view.md).
 
 - **D124 — Workspace trust**
   - Depends on: D089

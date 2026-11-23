@@ -73,7 +73,7 @@ gutter and change navigation. See [version control](../architecture/version-cont
 
 ### 3. Diffs
 
-- **D197 — Diff view.** Opening a file's changes from the
+- 🚧 **D197 — Diff view.** [Plan](d197-diff-view.md). Opening a file's changes from the
   gutter and from `@knot/vcs` is part of it.
 - **D220 — Anchored floating panels.** Split from D145, which keeps virtual
   text for later consumers.
