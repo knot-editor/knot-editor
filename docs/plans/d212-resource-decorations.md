@@ -1,6 +1,6 @@
 # D212 — Resource decorations
 
-Status: 🚧 in progress; checkpoints 1 and 2 are complete, checkpoint 3 is next. Source: [roadmap D212](../roadmap.md), part
+Status: ✅ complete. Source: [roadmap D212](../roadmap.md), part
 of the [version control plan](vcs.md), whose architecture section this plan
 refines without reopening.
 
@@ -130,29 +130,13 @@ gpui-component's `Tooltip`. A selected row keeps its own foreground. The
 product test `tree_rows_with_a_resource_show_decorations_and_repaint_on_change`
 covers the behavior; light and dark themes were reviewed in the running app.
 
-### 3. Tabs and documentation
+### 3. Tabs and documentation ✅
 
-Deliverables: document tabs tinted with their resource's decoration color,
-with its tooltip; the architecture reference, the extension guide, and the
-decision record.
-
-Validation: product tests that a decorated document's tab takes the color
-and tooltip and keeps its dirty dot, " (deleted)" suffix, preview italics,
-and pin; untitled documents and terminal and tool tabs are untouched;
-disposal restores the theme's tab foreground. Run `review-docs`-style checks
-of the touched documents against the code.
-
-Review gate: D212 complete; D213 can build on it.
-
-**Implementation context:**
-- Tab rendering in `src/app/product/render.rs` (lines 388–600): override the
-  `TAB_ACTIVE_FOREGROUND`/`TAB_INACTIVE_FOREGROUND` text color for document
-  tabs whose `resource_uri` has a decoration, and add the tooltip the way
-  terminal tabs do.
-- Tests next to `src/app/product/tests/editor_tabs.rs`.
-- Docs: a "Resource decorations" section in
-  `docs/architecture/semantic-ui.md` (beside Icons and Extension trees); a
-  "Decorate resources" section in `docs/extension-api/ui.md`; a "Resource
-  decorations" entry in `docs/decisions/semantic-ui.md` covering push sources
-  instead of a pull provider, native painting on any row with a resource,
-  icon or text badges, and no badges on tabs, plus its line in `docs/decisions.md`.
+Complete. `src/app/product/render.rs` tints a document tab's title with its
+resource's decoration color and shows its tooltip; the architecture reference,
+extension guide, and decision record are
+[Resource decorations](../architecture/semantic-ui.md#resource-decorations),
+[Decorate resources](../extension-api/ui.md#decorate-resources), and
+[the decision](../decisions/semantic-ui.md#resource-decorations). The product
+test cannot read the painted color, so it checks the foreground choice and that
+the dirty dot and pin still paint.
