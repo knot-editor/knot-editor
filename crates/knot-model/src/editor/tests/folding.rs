@@ -346,3 +346,25 @@ fn extension_selections_need_character_boundaries_within_the_text() {
     );
     assert_eq!(f.editor.selection(&f.buffer), (1, 3));
 }
+
+#[test]
+fn the_scroll_line_counts_whole_lines_and_follows_folds() {
+    let mut f = editor();
+    f.editor.set_viewport_rows_for_test(3.);
+    f.editor.scroll_to_line(4.5);
+    assert_eq!(f.editor.scroll_line(), 4.5);
+    assert_eq!(f.editor.scroll_top(), 4.5);
+
+    fold(&mut f, 1..3);
+    // Folded lines have no rows, so line 4 is not on row 4.
+    let row = f.editor.wrap.first_row(4);
+    assert!(row < 4);
+    f.editor.scroll_to_line(4.);
+    assert_eq!(f.editor.scroll_top(), row as f32);
+    assert_eq!(f.editor.scroll_line(), 4.);
+
+    f.editor.scroll_to_line(-3.);
+    assert_eq!(f.editor.scroll_top(), 0.);
+    f.editor.scroll_to_line(100.);
+    assert_eq!(f.editor.scroll_top(), f.editor.max_scroll_rows());
+}

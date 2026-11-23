@@ -98,6 +98,31 @@ pub enum DiffSide {
     Modified,
 }
 
+/// Where the line `line` of one side's text lies in the other's, so two views
+/// scroll together. Lines outside hunks keep their distance from the nearest
+/// hunk above; lines inside a hunk map proportionally onto the other side's
+/// lines of it. Fractional lines map continuously, except past a hunk with no
+/// lines on this side, which the other side's lines of it are skipped over.
+pub fn map_line(hunks: &[LineHunk], from: DiffSide, line: f32) -> f32 {
+    let mut offset = 0.;
+    for hunk in hunks {
+        let (this, other) = match from {
+            DiffSide::Original => (&hunk.old, &hunk.new),
+            DiffSide::Modified => (&hunk.new, &hunk.old),
+        };
+        if line < this.start as f32 {
+            break;
+        }
+        if line < this.end as f32 {
+            let length = (this.end - this.start) as f32;
+            let within = (line - this.start as f32) / length;
+            return other.start as f32 + within * (other.end - other.start) as f32;
+        }
+        offset = other.end as f32 - this.end as f32;
+    }
+    (line + offset).max(0.)
+}
+
 /// The decorations that mark `hunks` on one side's `text`: a `line` band per
 /// hunk, in `diff.removed.background` for lines only the original has,
 /// `diff.added.background` for lines only the modified text has, and
@@ -235,6 +260,55 @@ mod tests {
             hunks_ignoring_whitespace("a b\nc\nd\n", "a  b\nC\nd\n"),
             [(1..2, 1..2)]
         );
+    }
+
+    fn mapped(old: &str, new: &str, from: DiffSide, line: f32) -> f32 {
+        map_line(&line_hunks(old, new, DiffOptions::default()), from, line)
+    }
+
+    #[test]
+    fn lines_outside_hunks_keep_their_distance() {
+        // One line inserted at line 1 of the modified text.
+        let (old, new) = ("a\nc\nd\n", "a\nb\nc\nd\n");
+        assert_eq!(mapped(old, new, DiffSide::Original, 0.), 0.);
+        assert_eq!(mapped(old, new, DiffSide::Original, 1.), 2.);
+        assert_eq!(mapped(old, new, DiffSide::Original, 2.5), 3.5);
+        assert_eq!(mapped(old, new, DiffSide::Modified, 0.5), 0.5);
+        assert_eq!(mapped(old, new, DiffSide::Modified, 2.), 1.);
+        assert_eq!(mapped(old, new, DiffSide::Modified, 3.), 2.);
+    }
+
+    #[test]
+    fn lines_inside_a_hunk_map_proportionally() {
+        // Two lines become four: lines 1..3 against 1..5.
+        let (old, new) = ("a\nb\nc\nd\n", "a\nX\nY\nZ\nW\nd\n");
+        assert_eq!(mapped(old, new, DiffSide::Original, 1.), 1.);
+        assert_eq!(mapped(old, new, DiffSide::Original, 2.), 3.);
+        assert_eq!(mapped(old, new, DiffSide::Modified, 2.), 1.5);
+        assert_eq!(mapped(old, new, DiffSide::Modified, 5.), 3.);
+    }
+
+    #[test]
+    fn a_hunk_without_lines_on_this_side_is_skipped_over() {
+        let (old, new) = ("a\nd\n", "a\nb\nc\nd\n");
+        assert_eq!(mapped(old, new, DiffSide::Original, 1.), 3.);
+        assert_eq!(mapped(old, new, DiffSide::Original, 0.5), 0.5);
+        assert_eq!(mapped(old, new, DiffSide::Modified, 1.), 1.);
+        assert_eq!(mapped(old, new, DiffSide::Modified, 2.), 1.);
+    }
+
+    #[test]
+    fn mapping_with_empty_sides_and_no_hunks() {
+        assert_eq!(map_line(&[], DiffSide::Original, 3.5), 3.5);
+        assert_eq!(mapped("", "a\nb\n", DiffSide::Modified, 1.), 0.);
+        assert_eq!(mapped("", "a\nb\n", DiffSide::Original, 0.), 2.);
+        assert_eq!(mapped("a\nb\n", "", DiffSide::Original, 1.), 0.);
+    }
+
+    #[test]
+    fn mapping_beyond_the_last_line_keeps_the_offset() {
+        let (old, new) = ("a\n", "x\ny\na\n");
+        assert_eq!(mapped(old, new, DiffSide::Original, 4.), 6.);
     }
 
     /// The bands and wedges as (byte range, decoration key, wedge key).

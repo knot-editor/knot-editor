@@ -469,6 +469,31 @@ impl EditorState {
         self.scroll_top
     }
 
+    /// The top of the viewport as a fractional buffer line: the whole part is
+    /// the line, the fraction how far down its rows the top is.
+    pub fn scroll_line(&self) -> f32 {
+        let (line, _) = self.wrap.position(self.scroll_top as usize);
+        let rows = self.wrap.rows(line);
+        let within = (self.scroll_top - rows.start as f32) / rows.len().max(1) as f32;
+        line as f32 + within.clamp(0., 1.)
+    }
+
+    /// Scroll so a fractional buffer line, as [`Self::scroll_line`] reports,
+    /// is at the top, without moving the caret or revealing it. A line past
+    /// the last scrolls past the end, within the scroll limit.
+    pub fn scroll_to_line(&mut self, line: f32) {
+        let line = line.max(0.);
+        let whole = line.floor() as usize;
+        self.scroll_top = if whole >= self.line_count {
+            self.wrap.row_count() as f32 + (line - self.line_count as f32)
+        } else {
+            let rows = self.wrap.rows(whole);
+            rows.start as f32 + (line - whole as f32) * rows.len().max(1) as f32
+        };
+        self.reveal_caret = false;
+        self.clamp_scroll();
+    }
+
     /// The horizontal scroll in pixels.
     pub fn scroll_x(&self) -> f32 {
         self.scroll_x
