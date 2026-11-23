@@ -103,7 +103,8 @@ export type Statuses = {
   [Symbol.asyncDispose](): Promise<void>;
 };
 
-export const keyOf = (repository: Repository) => `${repository.backend}\0${repository.root}`;
+/** Identifies a repository; its root may be spelled with or without a trailing slash. */
+export const keyOf = (repository: Repository) => `${repository.backend}\0${repository.root.replace(/\/+$/, "")}`;
 
 /** Keeps the decorations in step with the known repositories' status. */
 export function createStatuses(deps: StatusDeps): Statuses {

@@ -292,6 +292,20 @@ impl TestWindow {
         })
     }
 
+    /// The color key and tooltip decorating the resource `uri`, which is what
+    /// its document tab shows.
+    pub fn resource_decoration(
+        &self,
+        uri: &str,
+        cx: &mut TestAppContext,
+    ) -> Option<(Option<String>, Option<String>)> {
+        let uri = ResourceUri::parse(uri).unwrap();
+        cx.read(|cx| {
+            let decoration = crate::app::resource_decorations::decoration_of(&uri, cx)?;
+            Some((decoration.color, decoration.tooltip))
+        })
+    }
+
     /// Replace the workspace roots with `uris`.
     pub fn set_roots(&self, uris: &[&str], cx: &mut TestAppContext) {
         self.window.update(cx, |window, cx| {

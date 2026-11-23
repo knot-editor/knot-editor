@@ -165,6 +165,10 @@ appears as one untracked folder entry, which checkpoint 2 drops.
 
 ### 2. Status decorations
 
+Implemented; automated validation passes and the review gate is open. The
+known-repository set comes from `createDiscovery`'s new `covering`, plus the
+repositories of followed documents.
+
 Deliverables: the known-repository set in `@knot/vcs`; a status pull for each
 known repository when the set changes and on `changed`; the `vcs.*` color
 keys; one decoration source with the status table above, folder colors by

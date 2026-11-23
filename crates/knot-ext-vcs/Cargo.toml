@@ -11,6 +11,7 @@ knot-bundled = { path = "../knot-bundled" }
 knot-bundled = { path = "../knot-bundled" }
 
 [dev-dependencies]
+knot-ext-workbench = { path = "../knot-ext-workbench" }
 knot = { path = "../..", features = ["test-support"] }
 gpui = { workspace = true, features = ["test-support"] }
 serde = { workspace = true }
