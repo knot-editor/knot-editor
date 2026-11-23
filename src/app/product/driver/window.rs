@@ -15,8 +15,9 @@ use crate::app::editor::EditorViewState;
 use crate::app::keys::Keystroke;
 use crate::app::product::{
     ApplicationDocuments, ApplicationProductCommands, KnotWindow, OpenRequest, OpenTarget,
-    native_window, window_id, windows,
+    native_window, test_window_id, window_id, windows,
 };
+use crate::app::status_bar::{ApplicationStatusBar, BarItem};
 use crate::app::resource::ResourceUri;
 use crate::app::transient::TransientSurface;
 use crate::app::tree_view::TreeView;
@@ -483,6 +484,19 @@ impl TestWindow {
                 .read(cx)
                 .center_pane()
                 .is_some()
+        })
+    }
+
+    /// The window's status bar texts, left side then right side.
+    pub fn status_bar(&self, cx: &mut TestAppContext) -> (Vec<String>, Vec<String>) {
+        cx.read(|cx| {
+            let key = match &self.native_window {
+                Some(native_window) => test_window_id(*native_window),
+                None => window_id(self.window.entity_id()),
+            };
+            let items = cx.global::<ApplicationStatusBar>().0.items(&key, &[]);
+            let texts = |side: Vec<BarItem>| side.into_iter().map(|bar| bar.item.text).collect();
+            (texts(items.left), texts(items.right))
         })
     }
 

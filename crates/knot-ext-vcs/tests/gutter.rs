@@ -13,6 +13,7 @@ await backendContract("fixed").serve({
   repositoryOf: () => null,
   baseline: () => "a\nb\nc\nd\n",
   status: () => [],
+  ref: () => null,
 });
 await (await vcs.client()).register("fixed");
 "#;
