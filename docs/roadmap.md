@@ -30,7 +30,6 @@ point.
 
 The [version control plan](plans/vcs.md) comes first, in its milestone order:
 
-- D213 — VCS file status and current ref.
 - D197 — Diff view.
 - D220 — Anchored floating panels.
 - D221 — Hunk popup.
@@ -392,13 +391,6 @@ hold the analyses that support some items.
 The [version control plan](plans/vcs.md) holds the agreed architecture and the
 milestones these items belong to.
 
-- **D213 — VCS file status and current ref** 🚧
-  - Depends on: none
-  - Description: Nothing shows which files changed or which branch is checked
-    out. Report file statuses through `@knot/vcs`, which maps them to resource
-    decorations on tabs and in the explorer, and show the current ref's label
-    in the status bar. Plan: [d213-vcs-file-status](plans/d213-vcs-file-status.md).
-
 - **D221 — Hunk popup** 🚧
   - Depends on: D220
   - Description: A gutter marker shows that lines changed, not how. Clicking
@@ -408,7 +400,7 @@ milestones these items belong to.
     hunk in D216.
 
 - **D214 — VCS changes view** 🚧
-  - Depends on: D213, D197
+  - Depends on: D197
   - Description: There is no list of changed files. Add a changes view that
     shows the provider's groups of changed files (for Git: staged, unstaged,
     untracked) with the actions the provider defines, and opens a file's
