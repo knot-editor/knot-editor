@@ -30,7 +30,6 @@ point.
 
 The [version control plan](plans/vcs.md) comes first, in its milestone order:
 
-- D212 — Resource decorations.
 - D213 — VCS file status and current ref.
 - D197 — Diff view.
 - D220 — Anchored floating panels.
@@ -261,16 +260,6 @@ hold the analyses that support some items.
     (D067) rely on it: let a gutter contribution carry a hover message that
     the gutter shows on hover.
 
-- **D212 — Resource decorations** 🚧
-  - Depends on: none
-  - Description: Native tabs show only dirty and deleted state, and the
-    explorer has no way to learn a file's status from another package. Let
-    packages decorate resource URIs with a color key and a badge, painted on
-    tabs and in the explorer, so version control status (D213) and later
-    diagnostics reach them without native code knowing about either. Part of
-    the [version control plan](plans/vcs.md). Plan:
-    [d212-resource-decorations](plans/d212-resource-decorations.md).
-
 - **D200 — Progress reporting**
   - Depends on: none
   - Description: A long-running task has no non-blocking way to show progress.
@@ -404,7 +393,7 @@ The [version control plan](plans/vcs.md) holds the agreed architecture and the
 milestones these items belong to.
 
 - **D213 — VCS file status and current ref** 🚧
-  - Depends on: D212
+  - Depends on: none
   - Description: Nothing shows which files changed or which branch is checked
     out. Report file statuses through `@knot/vcs`, which maps them to resource
     decorations on tabs and in the explorer, and show the current ref's label
