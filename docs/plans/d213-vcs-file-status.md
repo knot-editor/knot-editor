@@ -1,6 +1,6 @@
 # D213 — VCS file status and current ref
 
-Status: 🚧 in progress; checkpoint 1 awaits review. Source: [roadmap D213](../roadmap.md), part
+Status: 🚧 in progress; checkpoint 1 done. Source: [roadmap D213](../roadmap.md), part
 of the [version control plan](vcs.md), whose architecture section this plan
 refines without reopening. Builds on D211 ([version control](../architecture/version-control.md))
 and D212 ([resource decorations](../architecture/semantic-ui.md#resource-decorations)).
@@ -154,38 +154,14 @@ checkpoint 2 and becomes live for edits on disk in checkpoint 3, which adds
 a notification and its handler without changing how status is mapped or
 painted.
 
-### 1. Git status in the contract 🚧 awaiting review
+### 1. Git status in the contract ✅
 
-Deliverables: `status` in the contract module and in `@knot/git`'s restated
-declaration, and Git's implementation of it. There is no watch, no ref, and no
-consumer yet.
-
-Validation: product tests over temporary repositories that call the Git
-backend's contract from a test package. They cover each status, including a
-staged-then-edited file, a staged rename, an unstaged rename, a conflict from a
-failed merge, an untracked file inside an untracked folder, a file in a nested
-repository, and ignored files being absent.
-
-Review gate: the contract shape and how Git's two-column status maps to one
-HEAD-relative status.
-
-Implemented ✅: `status` in the contract and Git (`status.ts`), covered by
-`crates/knot-ext-vcs/tests/status.rs`. Settled edge cases: added to the index
-then removed from disk equals HEAD and is not listed; removed from the index
-and recreated is `modified`; a staged rename then removed from disk lists the
-old path as `deleted`; intent-to-add is `added`. A nested repository appears
-as one untracked folder entry, as the design expects.
-
-**Implementation context:**
-- Contract: `defineBackend` in `extensions/@knot/vcs/src/contract.ts`; restate
-  the shape in `extensions/@knot/git/src/vcs.d.ts`.
-- Git: a new `extensions/@knot/git/src/status.ts` beside `baseline.ts`, running
-  `git status --porcelain=v2 -z --untracked-files=all` through `git.ts`
-  (which already sets `GIT_OPTIONAL_LOCKS=0`). Turn paths into URIs with
-  `below` in `uri.ts`. Serve it in `src/main.ts`.
-- Tests: a new `crates/knot-ext-vcs/tests/status.rs`, reusing the `git` and
-  `repository` helpers of `git.rs`; `contracts.rs` shows how a test package
-  calls a contract.
+Done: `status` is in the contract and in Git (`extensions/@knot/git/src/status.ts`),
+covered by `crates/knot-ext-vcs/tests/status.rs`. Settled edge cases: added to
+the index then removed from disk equals HEAD and is not listed; removed from
+the index and recreated is `modified`; a staged rename then removed from disk
+lists the old path as `deleted`; intent-to-add is `added`. A nested repository
+appears as one untracked folder entry, which checkpoint 2 drops.
 
 ### 2. Status decorations
 
