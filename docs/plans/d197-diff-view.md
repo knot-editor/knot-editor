@@ -115,28 +115,14 @@ line bands, so bands use translucent `diff.*.background` keys that every
 bundled theme sets (see [themes](../architecture/semantic-ui.md#themes-and-color-keys)).
 That also settled the look judged at checkpoint 2.
 
-### 5. Synced scrolling and connectors
+### 5. Synced scrolling and connectors ✅
 
-Deliverables:
-
-- The hunk line mapping: lines outside hunks map one to one, lines inside a
-  hunk proportionally.
-- Synced vertical scrolling in both directions, without feedback loops; caret
-  moves that scroll one side scroll the other.
-- A connector band between the editors joining each hunk's line ranges in the
-  `diff.*` colors.
-
-Validation: model tests for the mapping (inside, between, and at the edges of
-hunks, and empty sides); product tests for synced scrolling.
-
-Review gate: how scrolling feels on long files with large hunks.
-
-**Implementation context**
-
-- Scroll state is per editor in `crates/knot-model/src/editor.rs`; scrolling
-  and painting live in `src/app/editor/layout.rs` and
-  `src/app/editor/paint.rs`. Put the mapping beside the diff view's hunks in
-  `knot-model`.
+Done and approved. Scrolling either side scrolls the other through
+`knot_model::diff::map_line`, which maps lines outside hunks one to one and
+lines inside a hunk proportionally; caret-reveal scrolls sync too. A strip
+between the editors joins each hunk's lines in the `diff.*.background` colors,
+with straight edges. The connectors have no automated test; they were judged
+in the real app.
 
 ### 6. Hunk navigation
 
