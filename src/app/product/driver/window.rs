@@ -17,8 +17,8 @@ use crate::app::product::{
     ApplicationDocuments, ApplicationProductCommands, KnotWindow, OpenRequest, OpenTarget,
     native_window, test_window_id, window_id, windows,
 };
-use crate::app::status_bar::{ApplicationStatusBar, BarItem};
 use crate::app::resource::ResourceUri;
+use crate::app::status_bar::{ApplicationStatusBar, BarItem};
 use crate::app::transient::TransientSurface;
 use crate::app::tree_view::TreeView;
 use crate::app::workbench::{DockLocation, SplitDirection, SplitPlacement, TabSurfaceId};

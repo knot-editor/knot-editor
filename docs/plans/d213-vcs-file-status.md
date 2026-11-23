@@ -200,24 +200,3 @@ references are updated: [version control](../architecture/version-control.md#fil
 branch or the detached commit.
 
 Review gate: D213 complete; D214 can build on it.
-
-**Implementation context:**
-- Git: `git symbolic-ref --short -q HEAD`, falling back to
-  `git rev-parse --short HEAD` when detached, in a new
-  `extensions/@knot/git/src/ref.ts`.
-- `workbench.registerStatusItem` and `StatusItem.update(options, { window })`
-  (`knot.d.ts`); `@knot/chrome`'s `extensions/@knot/chrome/src/extension.ts`
-  shows a package-owned status item. Follow `activeTargetChanged` through the
-  existing `workbench.observe` call, and map an editor target to its document
-  through `follows`.
-- Product test access to a status item: add a `TestWindow` accessor near the
-  existing driver methods if `src/app/product/tests/status_bar.rs`'s
-  `ApplicationStatusBar` reads are not reachable from `knot::test_support`.
-- Docs: "File status" and "Current ref" sections, and the working-tree watch
-  under "Git", in `docs/architecture/version-control.md`; the contract's new
-  methods in `docs/extension-api/packages.md#contracts-knot-defines`; the
-  `vcs.*` color keys wherever color keys are listed; a "Version control status"
-  entry in `docs/decisions/bundled-packages.md` (status against the baseline
-  rather than the index, disk-only, folder colors set by the package rather
-  than propagated, statuses as a shared snapshot) with its line in
-  `docs/decisions.md`; mark D213 ✅ in `docs/plans/vcs.md`.

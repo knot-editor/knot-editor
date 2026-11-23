@@ -163,5 +163,8 @@ fn output_in_an_ignored_folder_shows_nothing(cx: &mut TestAppContext) {
     // A later change is seen, which means the ignored one was settled before it.
     write(root, "src/lib.txt", "edited\n");
     wait_until(cx, |cx| row(&tree, "lib.txt", cx).is_some());
-    assert!(tree.row_id("build", cx).is_none_or(|id| tree.decoration(&id, cx).is_none()));
+    assert!(
+        tree.row_id("build", cx)
+            .is_none_or(|id| tree.decoration(&id, cx).is_none())
+    );
 }

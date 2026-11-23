@@ -97,7 +97,10 @@ fn a_detached_head_is_the_short_commit(cx: &mut TestAppContext) {
     git(directory.path(), &["checkout", "-q", "--detach"]);
     let short = git(directory.path(), &["rev-parse", "--short", "HEAD"]);
     let (_product, window) = launch(cx);
-    assert_eq!(answer(&window, directory.path(), cx)["label"], short.as_str());
+    assert_eq!(
+        answer(&window, directory.path(), cx)["label"],
+        short.as_str()
+    );
 }
 
 #[gpui::test]
