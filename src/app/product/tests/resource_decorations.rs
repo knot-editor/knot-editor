@@ -2,6 +2,7 @@
 use super::*;
 use crate::app::resource::ResourceUri;
 use crate::app::resource_decorations::{ApplicationResourceDecorations, Badge};
+use crate::test_support::{TestWindow, wait_until};
 use knot_protocol::ExtensionKey;
 
 const SOURCE: &str = r##"
@@ -158,4 +159,87 @@ await source.set({ "file:///repo/z.rs": { color: "error" } });
     host.update(cx, |host, cx| host.unload(second, cx)).unwrap();
     cx.run_until_parked();
     assert_eq!(lookup("file:///repo/z.rs", cx), None);
+}
+
+const TREE: &str = r##"
+import { commands, decorations, workbench } from "knot";
+const source = await decorations.createSource();
+await workbench.registerView({
+  id: "example.decorated",
+  title: "Decorated",
+  content: { kind: "tree", provider: {
+    getChildren(parentId) {
+      return parentId === null ? [
+        { id: "src", label: "src", collapsibleState: "expanded", resource: "file:///repo/src" },
+        { id: "plain", label: "plain.rs", collapsibleState: "none",
+          resource: "file:///repo/plain.rs", statusText: "own", badge: "info" },
+      ] : parentId === "src" ? [
+        { id: "main", label: "main.rs", collapsibleState: "none",
+          resource: "file:///repo/src/main.rs" },
+      ] : [];
+    },
+  } },
+});
+await commands.register("decorate", async () => {
+  await source.set({
+    "file:///repo/src/main.rs": {
+      color: "warning", badge: { text: "M" }, tooltip: "Modified", propagate: true,
+    },
+    "file:///repo/plain.rs": { badge: { icon: "star" } },
+  });
+});
+await commands.register("clear", async () => { await source.clear(); });
+"##;
+
+#[gpui::test]
+fn tree_rows_with_a_resource_show_decorations_and_repaint_on_change(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    let host = cx.update(super::super::super::extensions::host::install);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (window, native_window) = product_window(document, model, cx);
+    let key = ExtensionKey::new(ExtensionId::new(982), ExtensionLifecycleId::new(1));
+    let loaded = Arc::new(Mutex::new(None));
+    let result = loaded.clone();
+    host.update(cx, |host, cx| {
+        let execution = host.load_test_source(key, TREE).unwrap();
+        cx.spawn(async move |_, _| {
+            *result.lock().unwrap() = Some(execution.await.map(|_| ()));
+        })
+        .detach();
+    });
+    wait_for_api_condition(cx, |_| loaded.lock().unwrap().is_some());
+    loaded.lock().unwrap().take().unwrap().unwrap();
+    let tree = TestWindow::of(window.clone(), cx).tree("example.decorated", cx);
+    wait_until(cx, |cx| tree.labels(cx).len() == 3);
+    assert_eq!(tree.decoration("main", cx), None);
+    assert!(!tree.paints_decoration_badge(1, cx));
+
+    run(&window, native_window, "decorate", cx);
+    assert_eq!(
+        tree.decoration("main", cx),
+        Some((
+            Some("warning".into()),
+            Some("text:M".into()),
+            Some("Modified".into())
+        ))
+    );
+    // The folder takes the propagated color alone.
+    assert_eq!(
+        tree.decoration("src", cx),
+        Some((Some("warning".into()), None, None))
+    );
+    // A row's own status and badge stay beside the decoration.
+    assert_eq!(
+        tree.decoration("plain", cx),
+        Some((None, Some("icon:star".into()), None))
+    );
+    assert_eq!(tree.status("plain", cx).as_deref(), Some("own"));
+    assert!(tree.paints_decoration_badge(1, cx));
+    assert!(!tree.paints_decoration_badge(0, cx));
+
+    run(&window, native_window, "clear", cx);
+    assert_eq!(tree.decoration("main", cx), None);
+    assert_eq!(tree.decoration("src", cx), None);
+    assert!(!tree.paints_decoration_badge(1, cx));
 }

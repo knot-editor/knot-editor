@@ -6,7 +6,7 @@
 
 use std::path::Path;
 
-use gpui::{AnyWindowHandle, AppContext, Entity, Focusable, TestAppContext};
+use gpui::{AnyWindowHandle, AppContext, Entity, Focusable, TestAppContext, VisualTestContext};
 use knot_protocol::{Command, CommandArgumentValue, CommandOutcome};
 use serde_json::Value;
 
@@ -98,7 +98,7 @@ pub struct TestTree {
 }
 
 impl TestWindow {
-    pub(super) fn of(window: Entity<KnotWindow>, cx: &mut TestAppContext) -> Self {
+    pub(crate) fn of(window: Entity<KnotWindow>, cx: &mut TestAppContext) -> Self {
         let native_window = cx.read(|cx| native_window(window.entity_id(), cx));
         Self {
             window,
@@ -656,6 +656,35 @@ impl TestTree {
                 .status_for_test(row)
                 .and_then(|(status, _)| status)
         })
+    }
+
+    /// The decoration painted on the row `row`: its color key, badge, and
+    /// tooltip. A badge reads `icon:name` or `text:M`.
+    pub fn decoration(
+        &self,
+        row: &str,
+        cx: &mut TestAppContext,
+    ) -> Option<(Option<String>, Option<String>, Option<String>)> {
+        use crate::app::resource_decorations::Badge;
+        cx.read(|cx| {
+            let decoration = self.tree.read(cx).decoration_for_test(row, cx)?;
+            let badge = decoration.badge.map(|badge| match badge {
+                Badge::Icon(name) => format!("icon:{name}"),
+                Badge::Text(text) => format!("text:{text}"),
+            });
+            Some((decoration.color, badge, decoration.tooltip))
+        })
+    }
+
+    /// Whether the row at flat position `index` painted a decoration badge.
+    pub fn paints_decoration_badge(&self, index: usize, cx: &mut TestAppContext) -> bool {
+        let native_window = self.native_window.expect("the window is open");
+        cx.refresh().unwrap();
+        VisualTestContext::from_window(native_window, cx)
+            .debug_bounds(Box::leak(
+                format!("extension-tree-decoration-{index}").into_boxed_str(),
+            ))
+            .is_some()
     }
 
     /// The second line the row `row` shows.

@@ -28,6 +28,7 @@ pub(crate) use edit::{EditSession, EditTarget};
 
 use super::TREE_KEY_CONTEXT;
 use super::icons::{AppIcon, icon_definition, ref_definition};
+use super::resource_decorations::{ApplicationResourceDecorations, Badge, ResolvedDecoration};
 use super::theme::{color, theme};
 use super::tokens;
 use knot_model::icons::IconDefinition;
@@ -959,6 +960,11 @@ impl TreeView {
     }
 
     #[cfg(any(test, feature = "test-support"))]
+    pub(crate) fn decoration_for_test(&self, id: &str, cx: &App) -> Option<ResolvedDecoration> {
+        row_decoration(self.item(id)?, cx)
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn description_for_test(&self, id: &str) -> Option<String> {
         self.item(id).and_then(|item| item.description.clone())
     }
@@ -1409,6 +1415,7 @@ impl Render for TreeView {
                     };
                     let id = item.id.clone();
                     let is_selected = selected.as_deref() == Some(&item.id);
+                    let decoration = row_decoration(item, cx);
                     let is_group = item.kind == TreeItemKind::Group;
                     let row_action_focus = action_focus.as_ref().and_then(|focus| {
                         (focus.row.as_deref() == Some(item.id.as_str())).then_some(focus.index)
@@ -1575,7 +1582,16 @@ impl Render for TreeView {
                                             tokens::list::FIRST_LINE_HEIGHT,
                                         ))
                                     })
-                                    .when(item.bold, |label| label.font_weight(FontWeight::BOLD)),
+                                    .when(item.bold, |label| label.font_weight(FontWeight::BOLD))
+                                    // A selected row keeps its own foreground, which
+                                    // stays readable on the selection color.
+                                    .when_some(
+                                        decoration
+                                            .as_ref()
+                                            .and_then(|decoration| decoration.color.as_ref())
+                                            .filter(|_| !is_selected),
+                                        |label, key| label.text_color(theme.paint_color(key)),
+                                    ),
                                 )
                                 .when_some(item.detail.clone(), |column, detail| {
                                     column.child(
@@ -1631,6 +1647,27 @@ impl Render for TreeView {
                                 .child(status)
                                 .into_any_element(),
                         ));
+                    }
+                    if let Some(decoration) = &decoration {
+                        if let Some(badge) = &decoration.badge {
+                            let tint = decoration.color.clone().filter(|_| !is_selected);
+                            row = row.child(first_line(
+                                div()
+                                    .debug_selector(move || {
+                                        format!("extension-tree-decoration-{index}")
+                                    })
+                                    .child(decoration_badge(badge, tint, cx))
+                                    .into_any_element(),
+                            ));
+                        }
+                        if let Some(tooltip) = decoration.tooltip.clone() {
+                            let tooltip = SharedString::from(tooltip);
+                            row = row.tooltip(move |window, cx| {
+                                gpui_component::tooltip::Tooltip::new(tooltip.clone())
+                                    .text_xs()
+                                    .build(window, cx)
+                            });
+                        }
                     }
                     if let Some(badge) = &item.badge {
                         row = row.child(first_line(
@@ -1795,3 +1832,29 @@ impl Render for TreeView {
 
 #[cfg(test)]
 mod tests;
+
+/// The decoration the application paints on `item`'s resource, if any.
+fn row_decoration(item: &TreeItem, cx: &App) -> Option<ResolvedDecoration> {
+    let resource = knot_model::resource::ResourceUri::parse(item.resource.as_deref()?).ok()?;
+    cx.try_global::<ApplicationResourceDecorations>()?
+        .0
+        .lookup(&resource)
+        .cloned()
+}
+
+/// A decoration's badge at the right of a row, in the decoration's color.
+fn decoration_badge(badge: &Badge, tint: Option<String>, cx: &App) -> AnyElement {
+    match badge {
+        Badge::Icon(name) => AppIcon::new(icon_definition(name, cx))
+            .tinted(tint)
+            .into_any_element(),
+        Badge::Text(text) => div()
+            .flex_shrink_0()
+            .text_xs()
+            .when_some(tint, |badge, key| {
+                badge.text_color(theme(cx).paint_color(&key))
+            })
+            .child(text.clone())
+            .into_any_element(),
+    }
+}

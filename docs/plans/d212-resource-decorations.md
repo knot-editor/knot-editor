@@ -121,7 +121,13 @@ carries it; the registry keeps a resolved map rebuilt on each change, so a
 lookup per painted row is one hash probe; the in-memory `knot/testing` host
 fakes the API with `decorationsOf(uri)`.
 
-### 2. Tree rows
+### 2. Tree rows 🚧
+
+Implemented, awaiting the review gate. Choices made for review: a selected row
+keeps its own foreground instead of the decoration color, as IntelliJ does;
+the badge sits after `statusText` and before the row's own dot, with the
+decoration's color; the tooltip is gpui-component's `Tooltip`, as on terminal
+tabs; the row's resource is parsed on each paint of a visible row.
 
 Deliverables: decorated rows in every tree, with label color, badge icon,
 tooltip, and propagated folder colors. The explorer is decorated without any
