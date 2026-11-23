@@ -220,7 +220,9 @@ impl WindowLayout {
             match layout {
                 WorkbenchLayout::Pane(id) => {
                     let pane = workbench.pane(*id).expect("layout panes are live");
-                    let tabs = pane
+                    // Tabs that are not recorded, such as diffs, leave no gap
+                    // in the selection index.
+                    let (ids, tabs): (Vec<_>, Vec<_>) = pane
                         .tabs()
                         .iter()
                         .filter_map(|tab| {
@@ -231,13 +233,13 @@ impl WindowLayout {
                                 terminal_directory,
                                 cx,
                             )
+                            .map(|captured| (tab.id(), captured))
                         })
-                        .collect();
+                        .unzip();
                     LayoutNode::Pane {
-                        selected: pane
-                            .tabs()
+                        selected: ids
                             .iter()
-                            .position(|tab| tab.id() == pane.active_tab_id())
+                            .position(|id| *id == pane.active_tab_id())
                             .unwrap_or_default(),
                         tabs,
                     }
@@ -330,7 +332,7 @@ impl WindowLayout {
                     pinned: tab.is_pinned(),
                 }
             }
-            TabSurfaceId::Tool(_) => return None,
+            TabSurfaceId::Tool(_) | TabSurfaceId::Diff(_) => return None,
             TabSurfaceId::Terminal(id) => {
                 let facts = terminal_directory(id);
                 LayoutTab::Terminal {

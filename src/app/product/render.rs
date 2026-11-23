@@ -334,6 +334,12 @@ impl KnotWindow {
                     .terminal_view(pane.active_tab())
                     .cloned()
                     .map(|view| view.into_any_element())
+            })
+            .or_else(|| {
+                workbench
+                    .diff_view(pane.active_tab())
+                    .cloned()
+                    .map(|view| view.into_any_element())
             });
         let active_view = active_view.or_else(|| {
             let TabSurfaceId::Tool(tool) = pane.active_tab().surface_id() else {
@@ -407,6 +413,10 @@ impl KnotWindow {
                     }
                     TabSurfaceId::Terminal(session) => Self::terminal_session_label(session, cx)
                         .unwrap_or_else(|| "Terminal".to_owned()),
+                    TabSurfaceId::Diff(_) => workbench
+                        .diff_view(tab)
+                        .map(|view| view.read(cx).title())
+                        .unwrap_or_else(|| "Diff".to_owned()),
                     TabSurfaceId::Tool(id) => workbench.tool(id).unwrap().title.to_owned(),
                 };
                 let decoration = match tab.surface_id() {
@@ -509,7 +519,10 @@ impl KnotWindow {
                         )
                     })
                     .map(|element| {
-                        if matches!(tab.surface_id(), TabSurfaceId::Terminal(_)) {
+                        if matches!(
+                            tab.surface_id(),
+                            TabSurfaceId::Terminal(_) | TabSurfaceId::Diff(_)
+                        ) {
                             // A program's title can be arbitrarily long.
                             let full = SharedString::from(title.clone());
                             element

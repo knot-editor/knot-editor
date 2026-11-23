@@ -196,14 +196,17 @@ The layout model (`knot_model::workbench`) owns a window's areas: a center of
 documents and terminals surrounded by six dock slots, each showing at most one
 tool window; the center and every tool window are the same binary split tree of
 tabbed panes; stable pane/tab identities, ordered tabs, and the focused pane. A tab holds the
-identity of what it shows (a document, a terminal session, or a tool) and a
+identity of what it shows (a document, a terminal session, a diff, or a tool) and a
 presentation identity, which captured targets compare. The window's workbench
 entity pairs the layout with the view behind each presentation: it creates a
 view when a transition opens a tab and drops it once no tab or tool presents
 it. A document tab presents one `EditorView` of an application-owned document,
 fresh whenever it opens, shows another document, or moves to another window. A
 terminal tab presents the sole attached view of an application-owned session,
-with no document model. A fixed tool window's tab presents its tool's native frame, whose
+with no document model. A diff tab presents a `DiffView` of two read-only
+snapshot buffers, each an `EditorView` with its own label and language, outside
+document identity and counted as a view of no document; its split opens the same
+comparison in a fresh view. A fixed tool window's tab presents its tool's native frame, whose
 definition and presentation survive hiding.
 The slots are left top and bottom, right top and bottom, and bottom left and
 right. A side's extent is the size of the window in its first slot, else its
@@ -227,8 +230,9 @@ Split Right and Down open a new tab in a new pane beside the current one, Split
 and Move moves the current tab there, and Unsplit merges the panes back. Each
 tab kind declares where it may live (`TabKind::allows`), and placement,
 relocation, directional moves, and restore check it: documents live in the
-center, a fixed tool's tab in its own window, and a terminal in the center or
-in the container it was opened into, never in another tool window. Open as
+center, a fixed tool's tab in its own window, a diff only in the center, and a
+terminal in the center or in the container it was opened into, never in another
+tool window. Open as
 Editor Tab and Return to Tool Window, or a drag onto the center or any strip of
 the container, move a terminal between them.
 
@@ -350,8 +354,9 @@ window bounds, windowed, maximized, or fullscreen state, and the display UUID;
 the center's split tree and each tool window's slot, size, share, visibility,
 and split tree, with each split's ratio; ordered tabs, which are pinned, and the selected tab per
 pane; the focused pane; and each editor tab's view state. Preview, maximize, recent order, and the reopen stack
-are not recorded, so restored tabs are regular. Every tab kind is
-restored by position and records only what recreates it: a document tab its
+are not recorded, so restored tabs are regular. Diff tabs are not recorded or
+kept for Reopen Closed Tab, since native code cannot recreate a snapshot. Every
+other tab kind is restored by position and records only what recreates it: a document tab its
 document identity, resource URI, and explicit language, a fixed tool window records no tabs, and a terminal tab its shell's working
 directory and label, so a restored terminal starts a fresh shell there under
 its name. The value never contains pane, tab, view,

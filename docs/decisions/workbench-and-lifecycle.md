@@ -160,6 +160,18 @@ a session test bounding a small history.
 
 Reference: [terminal sessions](../architecture/workbench-and-lifecycle.md#terminal-sessions-and-views).
 
+## Diff view
+
+A diff is a native center-only tab kind presenting two ordinary editors, not a
+contributed text frame: it holds live documents and needs its own scrolling and
+painting. Its identity sits in the workbench like a terminal session's, so
+placement, relocation, drag, and split follow the tab kind's rules. Snapshot
+sides are private read-only buffers outside document identity, as text frames
+are. Diff tabs are left out of window layouts and Reopen Closed Tab: native code
+cannot recreate a snapshot without the package that supplied it.
+
+Reference: [workbench](../architecture/workbench-and-lifecycle.md).
+
 ## Window layouts and restoration by position
 
 One versioned layout serves native window hot exit and extension sessions, so

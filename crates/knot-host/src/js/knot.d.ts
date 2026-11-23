@@ -117,7 +117,7 @@ declare module "knot" {
   }
   export interface PresentationInfo {
     readonly target: ViewTarget;
-    readonly kind: "document" | "terminal" | "tool";
+    readonly kind: "document" | "terminal" | "diff" | "tool";
     readonly document: DocumentId | null;
     readonly buffer: Buffer | null;
     /** Stable contribution ID for a tool presentation, otherwise null. */

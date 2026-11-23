@@ -578,7 +578,9 @@ impl KnotWindow {
                     Self::close_terminal_ids(
                         current_scope.iter().filter_map(|key| match key.surface {
                             TabSurfaceId::Terminal(id) => Some(id),
-                            TabSurfaceId::Document(_) | TabSurfaceId::Tool(_) => None,
+                            TabSurfaceId::Document(_)
+                            | TabSurfaceId::Diff(_)
+                            | TabSurfaceId::Tool(_) => None,
                         }),
                         cx,
                     );
@@ -590,7 +592,9 @@ impl KnotWindow {
                 Self::close_terminal_ids(
                     current_scope.iter().filter_map(|key| match key.surface {
                         TabSurfaceId::Terminal(id) => Some(id),
-                        TabSurfaceId::Document(_) | TabSurfaceId::Tool(_) => None,
+                        TabSurfaceId::Document(_)
+                        | TabSurfaceId::Diff(_)
+                        | TabSurfaceId::Tool(_) => None,
                     }),
                     cx,
                 );
@@ -658,6 +662,17 @@ impl KnotWindow {
             self.workbench.update(cx, |workbench, _| {
                 workbench.hide_tool(id);
             });
+            self.focus_active_surface(cx);
+            cx.notify();
+            return Ok(());
+        }
+        if let TabSurfaceId::Diff(diff) = surface {
+            let outcome = self.workbench.update(cx, |workbench, _| {
+                workbench.request_close_diff_tab(pane, tab, diff)
+            });
+            if outcome.is_none() {
+                return Err(ProtectedCloseFailure::InvalidTarget);
+            }
             self.focus_active_surface(cx);
             cx.notify();
             return Ok(());

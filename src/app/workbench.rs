@@ -12,14 +12,15 @@ use std::ops::{Deref, DerefMut};
 use gpui::{App, AppContext, Context, Entity, EntityId, FocusHandle, Focusable};
 use knot_model::workbench as layout;
 pub(crate) use knot_model::workbench::{
-    Area, Arrangement, BottomDockLayout, CloseConfirmation, CloseRequestOutcome, DockLocation,
-    DocumentCloseDisposition, DocumentId, PaneId, PresentationId, Slot, SplitDirection, SplitEdge,
-    SplitPlacement, StripeClick, Stripes, TabId, TabMoveCapture, TabMoveDestination,
-    TabMovePlacement, TabSurfaceId, TerminalSessionId, ToolBadge, ToolFrameId, ToolKind,
-    WorkbenchLayout, WorkbenchTab, neighbor,
+    Area, Arrangement, BottomDockLayout, CloseConfirmation, CloseRequestOutcome, DiffViewId,
+    DockLocation, DocumentCloseDisposition, DocumentId, PaneId, PresentationId, Slot,
+    SplitDirection, SplitEdge, SplitPlacement, StripeClick, Stripes, TabId, TabMoveCapture,
+    TabMoveDestination, TabMovePlacement, TabSurfaceId, TerminalSessionId, ToolBadge, ToolFrameId,
+    ToolKind, WorkbenchLayout, WorkbenchTab, neighbor,
 };
 
 use super::{
+    diff_view::DiffView,
     editor::{EditorView, EditorViewState},
     model::Buffer,
     terminal::view::TerminalView,
@@ -131,6 +132,8 @@ impl CommandView {
 enum PresentationView {
     Editor(Entity<EditorView>),
     Terminal(Entity<TerminalView>),
+    /// A diff view and the editor commands act on.
+    Diff(Entity<DiffView>, Entity<EditorView>),
     Tool(ToolContent),
 }
 
@@ -240,7 +243,9 @@ impl Workbench {
     pub(crate) fn editor(&self, tab: &WorkbenchTab) -> Option<&Entity<EditorView>> {
         match self.views.get(&tab.presentation())? {
             PresentationView::Editor(editor) => Some(editor),
-            PresentationView::Terminal(_) | PresentationView::Tool(_) => None,
+            PresentationView::Terminal(_)
+            | PresentationView::Diff(..)
+            | PresentationView::Tool(_) => None,
         }
     }
 
@@ -248,7 +253,19 @@ impl Workbench {
     pub(crate) fn terminal_view(&self, tab: &WorkbenchTab) -> Option<&Entity<TerminalView>> {
         match self.views.get(&tab.presentation())? {
             PresentationView::Terminal(view) => Some(view),
-            PresentationView::Editor(_) | PresentationView::Tool(_) => None,
+            PresentationView::Editor(_)
+            | PresentationView::Diff(..)
+            | PresentationView::Tool(_) => None,
+        }
+    }
+
+    /// The view a diff tab presents.
+    pub(crate) fn diff_view(&self, tab: &WorkbenchTab) -> Option<&Entity<DiffView>> {
+        match self.views.get(&tab.presentation())? {
+            PresentationView::Diff(view, _) => Some(view),
+            PresentationView::Editor(_)
+            | PresentationView::Terminal(_)
+            | PresentationView::Tool(_) => None,
         }
     }
 
@@ -270,7 +287,9 @@ impl Workbench {
     pub(crate) fn tool_content(&self, id: ToolFrameId) -> Option<&ToolContent> {
         match self.views.get(&self.tool(id)?.presentation)? {
             PresentationView::Tool(content) => Some(content),
-            PresentationView::Editor(_) | PresentationView::Terminal(_) => None,
+            PresentationView::Editor(_)
+            | PresentationView::Terminal(_)
+            | PresentationView::Diff(..) => None,
         }
     }
 
@@ -278,6 +297,7 @@ impl Workbench {
         Some(match self.views.get(&tab.presentation())? {
             PresentationView::Editor(editor) => CommandView::Editor(editor.clone()),
             PresentationView::Terminal(view) => CommandView::Terminal(view.clone()),
+            PresentationView::Diff(_, editor) => CommandView::Editor(editor.clone()),
             PresentationView::Tool(content) => content.command_view(),
         })
     }
@@ -472,6 +492,64 @@ impl Workbench {
         self.views
             .insert(presentation, PresentationView::Terminal(view));
         Some(pane)
+    }
+
+    fn attach_diff(&mut self, presentation: PresentationId, view: Entity<DiffView>, cx: &App) {
+        let editor = view.read(cx).command_editor().clone();
+        self.views
+            .insert(presentation, PresentationView::Diff(view, editor));
+    }
+
+    /// Open a diff of two snapshots in the center and return its tab.
+    #[cfg(test)]
+    pub(crate) fn open_diff_in_center(
+        &mut self,
+        original: super::diff_view::SnapshotSpec,
+        modified: super::diff_view::SnapshotSpec,
+        cx: &mut Context<Self>,
+    ) -> (PaneId, TabId) {
+        let id = super::diff_view::allocate_diff_id();
+        let (pane, tab) = self
+            .layout
+            .open_diff_in_center(id)
+            .expect("a new diff has a fresh identity");
+        let view = cx.new(|cx| DiffView::new(original, modified, cx));
+        self.attach_diff(self.presentation_of(pane, tab), view, cx);
+        (pane, tab)
+    }
+
+    /// Split a captured pane showing a diff into one showing the same
+    /// comparison, as it is now, in a fresh view.
+    pub(crate) fn split_pane_with_diff(
+        &mut self,
+        pane_id: PaneId,
+        direction: SplitDirection,
+        placement: SplitPlacement,
+        cx: &mut Context<Self>,
+    ) -> Option<PaneId> {
+        let (original, modified) = self
+            .diff_view(self.pane(pane_id)?.active_tab())?
+            .read(cx)
+            .specs(cx);
+        let id = super::diff_view::allocate_diff_id();
+        let pane = self
+            .layout
+            .split_pane_with_diff(pane_id, direction, placement, id)?;
+        let view = cx.new(|cx| DiffView::new(original, modified, cx));
+        let presentation = self.pane(pane).unwrap().active_tab().presentation();
+        self.attach_diff(presentation, view, cx);
+        Some(pane)
+    }
+
+    pub(crate) fn request_close_diff_tab(
+        &mut self,
+        pane_id: PaneId,
+        tab_id: TabId,
+        diff: DiffViewId,
+    ) -> Option<layout::CloseTransition> {
+        let transition = self.layout.request_close_diff_tab(pane_id, tab_id, diff);
+        self.drop_ended_views();
+        transition
     }
 
     /// Define a tool presenting `content`, or return the tool that already

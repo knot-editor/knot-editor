@@ -836,6 +836,7 @@ pub struct LanguageInfo {
 pub enum SurfaceKind {
     Document,
     Terminal,
+    Diff,
     Tool,
 }
 

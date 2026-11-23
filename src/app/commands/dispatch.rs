@@ -177,7 +177,8 @@ impl ProductCommandTarget {
                 workbench.tool(id).map(|tool| tool.stable_id.clone())
             }
             crate::app::workbench::TabSurfaceId::Document(_)
-            | crate::app::workbench::TabSurfaceId::Terminal(_) => None,
+            | crate::app::workbench::TabSurfaceId::Terminal(_)
+            | crate::app::workbench::TabSurfaceId::Diff(_) => None,
         }
     }
 
@@ -188,6 +189,7 @@ impl ProductCommandTarget {
         match self.validate_tab(cx)?.surface {
             crate::app::workbench::TabSurfaceId::Document(document) => Ok(document),
             crate::app::workbench::TabSurfaceId::Terminal(_)
+            | crate::app::workbench::TabSurfaceId::Diff(_)
             | crate::app::workbench::TabSurfaceId::Tool(_) => Err(CommandOutcome::Unavailable),
         }
     }

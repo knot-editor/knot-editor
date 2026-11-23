@@ -76,7 +76,9 @@ each one records it in `docs/decisions/`.
 Each checkpoint is one reviewable commit. Product tests open diffs through an
 internal product operation until checkpoint 4 adds the extension API.
 
-### 1. Diff tab kind with two snapshots
+### 1. Diff tab kind with two snapshots ✅
+
+Implemented; awaiting review of the tab's ownership.
 
 Deliverables:
 
@@ -91,6 +93,11 @@ Validation: model tests for placement; product tests that open, split, move,
 and close a diff tab, and confirm it is neither restored nor reopened.
 
 Review gate: the tab's ownership and how it plugs into the workbench.
+
+Scope notes: commands on a diff tab target the modified side's editor, since a
+view's command target is fixed per presentation; the extension API's tab
+`kind` gains `"diff"`. Tests open a diff through
+`Workbench::open_diff_in_center`, which stays test-only until checkpoint 4.
 
 **Implementation context**
 

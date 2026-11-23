@@ -611,7 +611,7 @@ impl OpenFailure {
 fn target_document(target: &ProductCommandTarget) -> Option<DocumentId> {
     match target.surface()? {
         TabSurfaceId::Document(document) => Some(document),
-        TabSurfaceId::Terminal(_) | TabSurfaceId::Tool(_) => None,
+        TabSurfaceId::Terminal(_) | TabSurfaceId::Diff(_) | TabSurfaceId::Tool(_) => None,
     }
 }
 
@@ -1250,6 +1250,7 @@ impl KnotWindow {
                             kind: match tab.surface_id() {
                                 TabSurfaceId::Document(_) => SurfaceKind::Document,
                                 TabSurfaceId::Terminal(_) => SurfaceKind::Terminal,
+                                TabSurfaceId::Diff(_) => SurfaceKind::Diff,
                                 TabSurfaceId::Tool(_) => SurfaceKind::Tool,
                             },
                             document: document
@@ -1260,7 +1261,9 @@ impl KnotWindow {
                                 TabSurfaceId::Tool(id) => {
                                     workbench.tool(id).map(|tool| tool.stable_id.clone())
                                 }
-                                TabSurfaceId::Document(_) | TabSurfaceId::Terminal(_) => None,
+                                TabSurfaceId::Document(_)
+                                | TabSurfaceId::Terminal(_)
+                                | TabSurfaceId::Diff(_) => None,
                             },
                             directory: match tab.surface_id() {
                                 TabSurfaceId::Terminal(id) => {
@@ -1270,7 +1273,9 @@ impl KnotWindow {
                                             .map(|url| url.to_string())
                                     })
                                 }
-                                TabSurfaceId::Document(_) | TabSurfaceId::Tool(_) => None,
+                                TabSurfaceId::Document(_)
+                                | TabSurfaceId::Diff(_)
+                                | TabSurfaceId::Tool(_) => None,
                             },
                         }
                     })
@@ -1292,7 +1297,7 @@ impl KnotWindow {
         // shown; a focused terminal describes no editor.
         let status_target = match current_kind {
             Some(TabSurfaceId::Document(_)) => current_target.clone(),
-            Some(TabSurfaceId::Terminal(_)) => None,
+            Some(TabSurfaceId::Terminal(_) | TabSurfaceId::Diff(_)) => None,
             _ => last_editor_target,
         };
         let workspace = self.workspace.snapshot();
@@ -2364,12 +2369,22 @@ impl KnotWindow {
         placement: SplitPlacement,
         cx: &mut Context<Self>,
     ) -> bool {
-        let terminal = match self
+        let active = self
             .workbench
             .read(cx)
             .pane(pane)
-            .map(|pane| pane.active_tab().surface_id())
-        {
+            .map(|pane| pane.active_tab().surface_id());
+        if matches!(active, Some(TabSurfaceId::Diff(_))) {
+            let split = self.workbench.update(cx, |workbench, cx| {
+                workbench.split_pane_with_diff(pane, direction, placement, cx)
+            });
+            if split.is_some() {
+                self.focus_active_surface(cx);
+                cx.notify();
+            }
+            return split.is_some();
+        }
+        let terminal = match active {
             Some(TabSurfaceId::Terminal(id)) => Some(id),
             _ => None,
         };

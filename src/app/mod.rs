@@ -14,6 +14,7 @@ mod completion;
 mod components;
 mod context_menu;
 mod convert;
+mod diff_view;
 mod documents;
 mod editor;
 #[cfg(test)]
