@@ -2106,9 +2106,13 @@ export async function openDiff(options: unknown) {
   } else {
     modifiedText = diffSnapshot(modified, "diff modified");
   }
+  const line = given.line;
+  if (line !== undefined && (typeof line !== "number" || !Number.isSafeInteger(line) || line < 0)) {
+    throw new TypeError("diff line must be a non-negative integer");
+  }
   const value = await request("openDiff", destinationAuthority(given),
     originalLabel, originalText.text, originalText.language,
-    document, modifiedLabel, modifiedText.text, modifiedText.language);
+    document, modifiedLabel, modifiedText.text, modifiedText.language, line ?? null);
   const target = presentationTarget(value.target);
   const owned = ownership(() => {}, async () => {
     try { await closePresentation(target); } catch (error) {

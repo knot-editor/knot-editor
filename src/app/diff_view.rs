@@ -11,7 +11,10 @@ use std::time::Duration;
 
 use gpui::{prelude::*, *};
 
-use knot_model::diff::{DiffOptions, DiffSide, LineHunk, hunk_decorations, line_hunks, map_line};
+use knot_model::diff::{
+    DiffOptions, DiffSide, LineHunk, adjacent_hunk, hunk_decorations, line_hunks, map_line,
+};
+use knot_model::editor::Reveal;
 use knot_model::workbench::{DiffViewId, DocumentId};
 use knot_protocol::{ExtensionId, ExtensionKey, ExtensionLifecycleId};
 
@@ -348,6 +351,28 @@ impl DiffView {
         true
     }
 
+    /// Put the modified side's caret on its first line of the hunk after (or
+    /// before) the caret, wrapping at the ends. Without hunks it stays.
+    pub(crate) fn go_to_hunk(&mut self, forward: bool, cx: &mut Context<Self>) -> bool {
+        let editor = self.modified.editor.read(cx).editor().clone();
+        let line = editor.read(cx).caret().0 as u32;
+        let Some(target) = adjacent_hunk(&self.hunks, line, forward) else {
+            return false;
+        };
+        editor.update(cx, |editor, cx| {
+            editor.move_to_line(target as usize, Reveal::Center, cx)
+        });
+        true
+    }
+
+    /// Put the modified side's caret at the start of `line`, 0-based.
+    pub(crate) fn go_to_line(&mut self, line: usize, cx: &mut Context<Self>) {
+        let editor = self.modified.editor.read(cx).editor().clone();
+        editor.update(cx, |editor, cx| {
+            editor.move_to_line(line, Reveal::Center, cx)
+        });
+    }
+
     /// The tab title, from both labels.
     pub(crate) fn title(&self) -> String {
         format!("{} ↔ {}", self.original.label, self.modified.label)
@@ -418,4 +443,31 @@ impl Render for DiffView {
             .child(div().w(px(1.)).h_full().bg(border))
             .child(side(&self.modified.label, &self.modified.editor))
     }
+}
+
+/// The command that moves to the next changed hunk of a diff.
+pub(crate) const NEXT_HUNK_COMMAND: &str = "diff.next-hunk";
+/// The command that moves to the previous changed hunk of a diff.
+pub(crate) const PREVIOUS_HUNK_COMMAND: &str = "diff.previous-hunk";
+
+/// Move the modified side's caret to the next or previous hunk, wrapping.
+/// Only a diff tab has hunks; a diff without any leaves the caret.
+#[crate::app::commands::declarations::command(NEXT_HUNK_COMMAND, title = "Go to Next Difference", description = "Move the cursor to the next hunk of the diff, wrapping at the end.", participant = Editor)]
+#[crate::app::commands::declarations::command(PREVIOUS_HUNK_COMMAND, title = "Go to Previous Difference", description = "Move the cursor to the previous hunk of the diff, wrapping at the start.", participant = Editor)]
+pub(crate) async fn go_to_hunk(
+    context: crate::app::commands::declarations::CommandContext,
+    (): (),
+) -> Result<(), knot_protocol::CommandOutcome> {
+    use knot_protocol::CommandOutcome;
+    let forward = context.name == NEXT_HUNK_COMMAND;
+    context
+        .foreground(move |target, cx| {
+            let view = target.diff_view(cx).ok_or(CommandOutcome::InvalidTarget)?;
+            if view.update(cx, |view, cx| view.go_to_hunk(forward, cx)) {
+                Ok(())
+            } else {
+                Err(CommandOutcome::Unavailable)
+            }
+        })
+        .await
 }

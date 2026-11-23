@@ -685,6 +685,8 @@ pub(crate) struct OpenDiffArguments {
     pub target: Option<knot_protocol::DocumentDestination>,
     pub original: DiffSnapshotArguments,
     pub modified: DiffModifiedArguments,
+    /// The modified side's line the caret starts at, 0-based.
+    pub line: Option<usize>,
 }
 
 impl HostArguments for OpenDiffArguments {
@@ -704,10 +706,14 @@ impl HostArguments for OpenDiffArguments {
                 language: reader.optional_text(9, "diff language must be a string")?,
             }),
         };
+        let line = reader
+            .optional_integer(10)?
+            .map(|line| usize::try_from(line).unwrap_or(usize::MAX));
         Ok(Self {
             target,
             original,
             modified,
+            line,
         })
     }
 }
@@ -738,6 +744,7 @@ pub(crate) async fn open_diff(
             destination,
             snapshot(arguments.original),
             modified,
+            arguments.line,
             cx,
         )?;
         host.owned_diffs

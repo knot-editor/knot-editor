@@ -297,11 +297,13 @@ pub(crate) enum DiffModified {
     },
 }
 
-/// Open a diff in the center of the destination's window.
+/// Open a diff in the center of the destination's window, with the caret at
+/// the start of `line` (0-based) of the modified side when given.
 pub(crate) fn open_diff(
     destination: DocumentDestination,
     original: crate::app::diff_view::SnapshotSpec,
     modified: DiffModified,
+    line: Option<usize>,
     cx: &mut App,
 ) -> Result<PresentationTarget, OpenError> {
     use crate::app::diff_view::ModifiedSource;
@@ -325,7 +327,9 @@ pub(crate) fn open_diff(
         }
     };
     Ok(window
-        .update(cx, |window, cx| window.open_diff(original, modified, cx))
+        .update(cx, |window, cx| {
+            window.open_diff(original, modified, line, cx)
+        })
         .public_target())
 }
 

@@ -201,6 +201,16 @@ impl ProductCommandTarget {
         workbench.command_view(workbench.tab(tab.pane, tab.tab)?)
     }
 
+    /// The diff view the captured tab presents, if it is a diff tab.
+    pub(crate) fn diff_view(&self, cx: &App) -> Option<Entity<crate::app::diff_view::DiffView>> {
+        let tab = self.validate_tab(cx).ok()?;
+        let workbench = self.workbench.upgrade()?;
+        let workbench = workbench.read(cx);
+        workbench
+            .diff_view(workbench.tab(tab.pane, tab.tab)?)
+            .cloned()
+    }
+
     /// Validate the captured tab and its view, or, for a target captured
     /// without a tab, the session; a command that needs a tab asks for it
     /// with [`tab`](Self::tab).

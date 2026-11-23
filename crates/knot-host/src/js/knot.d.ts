@@ -2857,6 +2857,9 @@ declare module "knot" {
   export interface OpenDiffOptions extends DocumentDestinationOptions {
     readonly original: DiffSnapshotSide;
     readonly modified: DiffSnapshotSide | DiffDocumentSide;
+    /** The line of the modified side the caret starts at, 0-based and clamped
+     * to the last line. Defaults to the first. */
+    readonly line?: number;
   }
   /** An open diff tab. Disposing it closes the tab, as `close` does. */
   export interface DiffHandle extends AsyncDisposable {

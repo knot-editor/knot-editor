@@ -131,6 +131,7 @@ which the tab edits live and keeps compared as either side changes:
 const handle = await workbench.openDiff({
   original: { label: "HEAD", text: baseline, language: "typescript" },
   modified: { label: "Working copy", document: document.id },
+  line: 41, // optional: start the caret at this 0-based line of the modified side
 });
 await handle.setText("original", newBaseline); // a snapshot side only
 await handle.close();

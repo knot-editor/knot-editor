@@ -354,6 +354,13 @@ impl Editor {
         });
     }
 
+    /// Put the caret at the start of `line`; see [`EditorState::move_to_line`].
+    pub(crate) fn move_to_line(&mut self, line: usize, reveal: Reveal, cx: &mut Context<Self>) {
+        self.update_state(cx, |editor, buffer| {
+            editor.move_to_line(line, reveal, buffer)
+        });
+    }
+
     /// Move the selection to extension-named offsets; see
     /// [`EditorState::set_selection_checked`].
     pub(crate) fn set_selection_checked(

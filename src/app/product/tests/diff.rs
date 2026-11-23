@@ -471,6 +471,13 @@ await commands.register("diff.open", async () => {
   });
   check(handle.target !== undefined, "handle target");
 });
+await commands.register("diff.openAtLine", async () => {
+  handle = await workbench.openDiff({
+    original: { label: "HEAD", text: "a\nb\nc\nd\ne\n" },
+    modified: { label: "Working copy", text: "a\nb\nc\nd\nE\n" },
+    line: 3,
+  });
+});
 await commands.register("diff.setOriginal", async () => {
   await handle.setText("original", "a\nc\n");
   await handle.setText("modified", "a\nc\nd\n");
@@ -486,6 +493,9 @@ await commands.register("diff.openDocument", async () => {
 });
 await commands.register("diff.invalid", async () => {
   await expectType(() => workbench.openDiff({}));
+  for (const line of [-1, 1.5, "3"]) {
+    await expectType(() => workbench.openDiff({ original: { label: "a", text: "" }, modified: { label: "b", text: "" }, line }));
+  }
   await expectType(() => workbench.openDiff({ original: { label: "a" }, modified: { label: "b", text: "" } }));
   await expectType(() => workbench.openDiff({ original: { label: "a", text: "", language: 1 }, modified: { label: "b", text: "" } }));
   await expectType(() => workbench.openDiff({ original: { label: "a", text: "" }, modified: { label: "b", text: "", document: "x" } }));
@@ -672,4 +682,97 @@ fn scrolling_one_side_scrolls_the_other_through_the_hunks(cx: &mut TestAppContex
     // Past the inserted lines the original stays at the hunk's boundary.
     scroll_to(&window, 1, 15., cx);
     assert_eq!(scroll_lines(&window, cx), [10., 15.]);
+}
+
+/// The modified side's caret line of the focused diff.
+fn modified_caret_line(window: &Entity<KnotWindow>, cx: &TestAppContext) -> usize {
+    cx.read(|cx| {
+        let workbench = window.read(cx).workbench.read(cx);
+        let view = workbench
+            .diff_view(workbench.focused_pane().unwrap().active_tab())
+            .unwrap();
+        view.read(cx).editors()[1]
+            .read(cx)
+            .editor()
+            .read(cx)
+            .caret()
+            .0
+    })
+}
+
+#[gpui::test]
+fn hunk_commands_move_the_caret_between_hunks_and_wrap(cx: &mut TestAppContext) {
+    use crate::app::diff_view::{NEXT_HUNK_COMMAND, PREVIOUS_HUNK_COMMAND};
+    let (window, native_window, _) = diff_window(cx);
+    // Hunks start at modified lines 1, 4 (a deletion), and 6.
+    window.update(cx, |window, cx| {
+        window.workbench.update(cx, |workbench, cx| {
+            workbench.open_diff_in_center(
+                spec("HEAD", None, "a\nb\nc\nd\ne\nf\ng\nh\n"),
+                spec("Now", None, "a\nB\nc\nd\nf\nG\nh\n"),
+                cx,
+            );
+        });
+        window.focus_active_surface(cx);
+    });
+    cx.run_until_parked();
+    settle(cx);
+
+    let go = |name: &'static str, cx: &mut TestAppContext| {
+        assert_eq!(
+            run_command(&window, native_window, name, cx),
+            CommandOutcome::Completed,
+            "{name}"
+        );
+        modified_caret_line(&window, cx)
+    };
+    let next: Vec<usize> = (0..4).map(|_| go(NEXT_HUNK_COMMAND, cx)).collect();
+    assert_eq!(next, [1, 4, 5, 1]);
+    let previous: Vec<usize> = (0..4).map(|_| go(PREVIOUS_HUNK_COMMAND, cx)).collect();
+    assert_eq!(previous, [5, 4, 1, 5]);
+}
+
+#[gpui::test]
+fn hunk_commands_are_unavailable_without_hunks_and_outside_a_diff(cx: &mut TestAppContext) {
+    use crate::app::diff_view::NEXT_HUNK_COMMAND;
+    let (window, native_window, _) = diff_window(cx);
+    window.update(cx, |window, cx| {
+        window.workbench.update(cx, |workbench, cx| {
+            workbench.open_diff_in_center(spec("A", None, "same\n"), spec("B", None, "same\n"), cx);
+        });
+        window.focus_active_surface(cx);
+    });
+    cx.run_until_parked();
+    settle(cx);
+    assert_eq!(
+        run_command(&window, native_window, NEXT_HUNK_COMMAND, cx),
+        CommandOutcome::Unavailable
+    );
+    // From the document's own tab there is no diff.
+    window.update(cx, |window, cx| {
+        window.workbench.update(cx, |workbench, _| {
+            let pane = workbench.focused_pane_id().unwrap();
+            let first = workbench.tabs().next().unwrap().id();
+            workbench.activate_tab(pane, first);
+        });
+        window.focus_active_surface(cx);
+    });
+    assert_eq!(
+        run_command(&window, native_window, NEXT_HUNK_COMMAND, cx),
+        CommandOutcome::InvalidTarget
+    );
+}
+
+#[gpui::test]
+fn an_extension_opens_a_diff_with_the_caret_at_a_line(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (window, native_window) = product_window(document, model, cx);
+    let (_, _) = load_api(cx);
+    assert_eq!(
+        run_command(&window, native_window, "diff.openAtLine", cx),
+        CommandOutcome::Completed
+    );
+    assert_eq!(modified_caret_line(&window, cx), 3);
 }

@@ -2361,10 +2361,20 @@ impl KnotWindow {
         &mut self,
         original: crate::app::diff_view::SnapshotSpec,
         modified: crate::app::diff_view::ModifiedSource,
+        line: Option<usize>,
         cx: &mut Context<Self>,
     ) -> OpenTarget {
         let (pane, tab) = self.workbench.update(cx, |workbench, cx| {
-            workbench.open_diff_in_center(original, modified, cx)
+            let (pane, tab) = workbench.open_diff_in_center(original, modified, cx);
+            if let Some(line) = line
+                && let Some(view) = workbench
+                    .tab(pane, tab)
+                    .and_then(|tab| workbench.diff_view(tab))
+                    .cloned()
+            {
+                view.update(cx, |view, cx| view.go_to_line(line, cx));
+            }
+            (pane, tab)
         });
         self.focus_active_surface(cx);
         cx.notify();

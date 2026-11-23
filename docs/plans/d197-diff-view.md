@@ -124,13 +124,13 @@ between the editors joins each hunk's lines in the `diff.*.background` colors,
 with straight edges. The connectors have no automated test; they were judged
 in the real app.
 
-### 6. Hunk navigation
+### 6. Hunk navigation 🚧
 
-Deliverables:
-
-- Native commands in the diff view's scope for the next and previous hunk,
-  wrapping at the ends, with key bindings.
-- An open option that places the caret at a given line.
+Built, awaiting review. `diff.next-hunk` and `diff.previous-hunk` (F7 and
+Shift+F7 in editors; IntelliJ's keys, since Alt+F5 stays `vcs.nextChange`'s)
+move the modified side's caret to a hunk's first line, wrapping; they are
+unavailable on a diff without hunks. `workbench.openDiff` takes `line`, the
+0-based modified line the caret starts at.
 
 Validation: product tests for navigation and opening at a line.
 
