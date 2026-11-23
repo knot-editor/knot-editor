@@ -105,31 +105,15 @@ diff tab counts as a view of its document for closure and view counts
 (`Workbench::set_diff_document`); hot exit relies on those counts. Only the
 modified side can be a document.
 
-### 4. Extension API ✅ (awaiting review)
+### 4. Extension API ✅
 
-Deliverables:
-
-- ✅ `workbench.openDiff({ original, modified, target? })` opens a diff in the
-  center of the destination's window. The original is a snapshot (`label`,
-  `text`, optional `language`); the modified side is a snapshot or
-  `{ label, document }`. It returns a handle with `target`, `setText(side,
-  text)` for a snapshot side, `close()`, and async disposal. The tab closes,
-  with the usual prompts, when its owner unloads.
-- ✅ TypeScript declarations, and the
-  [extension API guide](../extension-api/application.md#show-the-differences)
-  extended next to `diff`.
-
-Validation: product tests with a loaded extension for argument validation,
-`setText`, `close`, a document side, and owner unload.
-
-Review gate: the API shape.
-
-**Implementation context**
-
-- Declarations in `crates/knot-protocol/src/declarations.rs`, handlers in
-  `src/app/extensions/host/handlers.rs`, and types in
-  `crates/knot-host/src/js/knot.d.ts`. Lifecycle-owned teardown follows the
-  existing registrations released on host release.
+Done and approved. `workbench.openDiff` opens a diff and returns a
+lifecycle-owned handle; see
+[the extension API guide](../extension-api/application.md#show-the-differences).
+Reviewing it in the real app showed the solid `diff.*` colors unreadable as
+line bands, so bands use translucent `diff.*.background` keys that every
+bundled theme sets (see [themes](../architecture/semantic-ui.md#themes-and-color-keys)).
+That also settled the look judged at checkpoint 2.
 
 ### 5. Synced scrolling and connectors
 
