@@ -614,3 +614,62 @@ fn a_diff_with_a_document_side_rejects_setting_that_side_and_closes_on_unload(
         assert_eq!(window.read(cx).workbench.read(cx).view_count(document), 1);
     });
 }
+
+fn numbered(lines: std::ops::Range<u32>) -> String {
+    lines.map(|line| format!("line {line}\n")).collect()
+}
+
+/// The two editors' scroll lines.
+fn scroll_lines(window: &Entity<KnotWindow>, cx: &TestAppContext) -> [f32; 2] {
+    cx.read(|cx| {
+        let workbench = window.read(cx).workbench.read(cx);
+        let view = workbench
+            .diff_view(workbench.focused_pane().unwrap().active_tab())
+            .unwrap();
+        view.read(cx)
+            .editors()
+            .map(|editor| editor.read(cx).editor().read(cx).scroll_line())
+    })
+}
+
+fn scroll_to(window: &Entity<KnotWindow>, side: usize, line: f32, cx: &mut TestAppContext) {
+    let editor = cx.read(|cx| {
+        let workbench = window.read(cx).workbench.read(cx);
+        let view = workbench
+            .diff_view(workbench.focused_pane().unwrap().active_tab())
+            .unwrap();
+        view.read(cx).editors()[side].read(cx).editor().clone()
+    });
+    editor.update(cx, |editor, cx| editor.scroll_to_line(line, cx));
+    cx.run_until_parked();
+}
+
+#[gpui::test]
+fn scrolling_one_side_scrolls_the_other_through_the_hunks(cx: &mut TestAppContext) {
+    let (window, _, _) = diff_window(cx);
+    // Ten lines are inserted at line 10 of the modified side.
+    let old = numbered(0..100);
+    let new = format!(
+        "{}{}{}",
+        numbered(0..10),
+        numbered(200..210),
+        numbered(10..100)
+    );
+    window.update(cx, |window, cx| {
+        window.workbench.update(cx, |workbench, cx| {
+            workbench.open_diff_in_center(spec("HEAD", None, &old), spec("Now", None, &new), cx);
+        });
+    });
+    cx.run_until_parked();
+
+    scroll_to(&window, 0, 50., cx);
+    assert_eq!(scroll_lines(&window, cx), [50., 60.]);
+    scroll_to(&window, 1, 30., cx);
+    assert_eq!(scroll_lines(&window, cx), [20., 30.]);
+    // Before the hunk the sides are level.
+    scroll_to(&window, 1, 4., cx);
+    assert_eq!(scroll_lines(&window, cx), [4., 4.]);
+    // Past the inserted lines the original stays at the hunk's boundary.
+    scroll_to(&window, 1, 15., cx);
+    assert_eq!(scroll_lines(&window, cx), [10., 15.]);
+}

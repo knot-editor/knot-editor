@@ -203,9 +203,14 @@ impl Element for EditorElement {
             let resized = view.bounds.size != bounds.size;
             view.bounds = bounds;
             let rows = f32::from(bounds.size.height) / view.metrics.line_height;
-            let reveal_x = view
-                .editor
-                .update(cx, |editor, _| editor.lay_out(rows, resized));
+            let reveal_x = view.editor.update(cx, |editor, cx| {
+                let top = editor.scroll_top();
+                let reveal_x = editor.lay_out(rows, resized);
+                if editor.scroll_top() != top {
+                    cx.emit(Scrolled);
+                }
+                reveal_x
+            });
             if reveal_x {
                 let x = f32::from(view.caret_x(view.editor.read(cx), window, cx));
                 let width = f32::from(view.text_bounds().size.width);

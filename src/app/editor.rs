@@ -101,6 +101,12 @@ impl Default for EditorRenderingOptions {
 /// side.
 const SYNTAX_OVERSCAN: usize = 16;
 
+/// The editor's vertical scroll changed while it laid out, which notifies
+/// nobody: a caret move scrolled it into view.
+pub(crate) struct Scrolled;
+
+impl EventEmitter<Scrolled> for Editor {}
+
 /// The entity of one editor: its [`EditorState`], which it derefs to, over a
 /// shared buffer entity. Operations that read the buffer or change the editor
 /// take the gpui context; the state's own queries are reached through deref.
@@ -400,6 +406,13 @@ impl Editor {
     /// revealing it; the scroll stays within the text.
     pub(crate) fn scroll_by_rows(&mut self, rows: i64, cx: &mut Context<Self>) {
         self.state.scroll_by_rows(rows);
+        cx.notify();
+    }
+
+    /// Scroll a fractional buffer line to the top; see
+    /// [`EditorState::scroll_to_line`].
+    pub(crate) fn scroll_to_line(&mut self, line: f32, cx: &mut Context<Self>) {
+        self.state.scroll_to_line(line);
         cx.notify();
     }
 

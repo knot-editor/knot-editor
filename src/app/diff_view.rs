@@ -11,15 +11,16 @@ use std::time::Duration;
 
 use gpui::{prelude::*, *};
 
-use knot_model::diff::{DiffOptions, DiffSide, hunk_decorations, line_hunks};
+use knot_model::diff::{DiffOptions, DiffSide, LineHunk, hunk_decorations, line_hunks, map_line};
 use knot_model::workbench::{DiffViewId, DocumentId};
 use knot_protocol::{ExtensionId, ExtensionKey, ExtensionLifecycleId};
 
 use super::convert::ThemePaint as _;
-use super::editor::EditorView;
+use super::editor::{EditorView, Scrolled};
 use super::model::{Buffer, BufferModel};
 use super::theme::{color, theme};
 use super::zoom;
+use knot_model::theme::color as key;
 
 /// Owns the bands a diff view puts on its editors.
 const BAND_OWNER: ExtensionKey =
@@ -119,8 +120,15 @@ pub(crate) struct DiffView {
     /// for.
     requested: (u64, u64),
     pending: Option<Task<()>>,
-    _subscriptions: [Subscription; 2],
+    /// The hunks between the sides as of the revisions the bands describe.
+    hunks: Vec<LineHunk>,
+    /// Each editor's scroll as of the last sync, to tell which one moved.
+    synced: [f32; 2],
+    _subscriptions: Vec<Subscription>,
 }
+
+/// How wide the strip between the editors is, which joins each hunk's lines.
+const CONNECTOR_WIDTH: f32 = 32.;
 
 impl DiffView {
     pub(crate) fn new(
@@ -133,8 +141,14 @@ impl DiffView {
             ModifiedSource::Snapshot(spec) => Side::snapshot(spec, cx),
             ModifiedSource::Document { id, label, model } => Side::document(id, label, model, cx),
         };
-        let subscriptions = [&original, &modified]
-            .map(|side| cx.observe(&side.model, |this, _, cx| this.rediff_if_changed(cx)));
+        let mut subscriptions = Vec::new();
+        for side in [&original, &modified] {
+            subscriptions.push(cx.observe(&side.model, |this, _, cx| this.rediff_if_changed(cx)));
+            let editor = side.editor.read(cx).editor().clone();
+            subscriptions.push(cx.observe(&editor, |this, _, cx| this.sync_scroll(cx)));
+            subscriptions
+                .push(cx.subscribe(&editor, |this, _, _: &Scrolled, cx| this.sync_scroll(cx)));
+        }
         let mut view = Self {
             requested: (
                 original.model.read(cx).revision(),
@@ -143,6 +157,8 @@ impl DiffView {
             original,
             modified,
             pending: None,
+            hunks: Vec::new(),
+            synced: [0.; 2],
             _subscriptions: subscriptions,
         };
         view.rediff(None, cx);
@@ -198,6 +214,7 @@ impl DiffView {
                 if this.revisions(cx) != revisions {
                     return;
                 }
+                this.hunks = hunks.clone();
                 for (side, text, kind) in [
                     (&this.original, &old, DiffSide::Original),
                     (&this.modified, &new, DiffSide::Modified),
@@ -212,6 +229,100 @@ impl DiffView {
             })
             .ok();
         }));
+    }
+
+    fn scrolls(&self, cx: &App) -> [f32; 2] {
+        [&self.original, &self.modified]
+            .map(|side| side.editor.read(cx).editor().read(cx).scroll_top())
+    }
+
+    /// Scroll the other editor to where the one that moved is, through the
+    /// hunk mapping. Scrolling the other notifies this again, which finds
+    /// both where they were left and stops there.
+    fn sync_scroll(&mut self, cx: &mut Context<Self>) {
+        let scrolls = self.scrolls(cx);
+        if scrolls == self.synced {
+            return;
+        }
+        let (from, to, side) = if scrolls[0] != self.synced[0] {
+            (&self.original, &self.modified, DiffSide::Original)
+        } else {
+            (&self.modified, &self.original, DiffSide::Modified)
+        };
+        let line = from.editor.read(cx).editor().read(cx).scroll_line();
+        let target = map_line(&self.hunks, side, line);
+        to.editor
+            .read(cx)
+            .editor()
+            .clone()
+            .update(cx, |editor, cx| editor.scroll_to_line(target, cx));
+        self.synced = self.scrolls(cx);
+        cx.notify();
+    }
+
+    /// The strip between the editors, with a band joining each hunk's lines
+    /// on one side to its lines on the other.
+    fn connectors(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        let view = cx.entity();
+        let [original, modified] = [&self.original, &self.modified].map(|side| side.editor.clone());
+        canvas(
+            |_, _, _| (),
+            move |bounds, (), window, cx| {
+                let (hunks, paints) = {
+                    let theme = theme(cx);
+                    let paints = [
+                        theme.paint_color(key::DIFF_ADDED_BACKGROUND),
+                        theme.paint_color(key::DIFF_MODIFIED_BACKGROUND),
+                        theme.paint_color(key::DIFF_REMOVED_BACKGROUND),
+                    ];
+                    (view.read(cx).hunks.clone(), paints)
+                };
+                let (left, right) = (original.read(cx), modified.read(cx));
+                let text = left.text_bounds();
+                let mask = Bounds {
+                    origin: point(bounds.origin.x, text.origin.y),
+                    size: size(bounds.size.width, text.size.height),
+                };
+                window.with_content_mask(Some(ContentMask { bounds: mask }), |window| {
+                    let (x0, x1) = (bounds.left(), bounds.right());
+                    for hunk in &hunks {
+                        let [a, b] = [
+                            (
+                                left.line_top(hunk.old.start as usize, cx),
+                                left.line_top(hunk.old.end as usize, cx),
+                            ),
+                            (
+                                right.line_top(hunk.new.start as usize, cx),
+                                right.line_top(hunk.new.end as usize, cx),
+                            ),
+                        ];
+                        if (a.1 < mask.top() && b.1 < mask.top())
+                            || (a.0 > mask.bottom() && b.0 > mask.bottom())
+                        {
+                            continue;
+                        }
+                        let paint = if hunk.old.is_empty() {
+                            paints[0]
+                        } else if hunk.new.is_empty() {
+                            paints[2]
+                        } else {
+                            paints[1]
+                        };
+                        let mut path = PathBuilder::fill();
+                        path.move_to(point(x0, a.0));
+                        path.line_to(point(x1, b.0));
+                        path.line_to(point(x1, b.1));
+                        path.line_to(point(x0, a.1));
+                        path.close();
+                        if let Ok(path) = path.build() {
+                            window.paint_path(path, paint);
+                        }
+                    }
+                });
+            },
+        )
+        .w(px(CONNECTOR_WIDTH))
+        .h_full()
     }
 
     /// Replace the text of a snapshot side; a document side is left alone.
@@ -302,6 +413,8 @@ impl Render for DiffView {
             .flex()
             .flex_row()
             .child(side(&self.original.label, &self.original.editor))
+            .child(div().w(px(1.)).h_full().bg(border))
+            .child(self.connectors(cx))
             .child(div().w(px(1.)).h_full().bg(border))
             .child(side(&self.modified.label, &self.modified.editor))
     }

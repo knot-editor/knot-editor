@@ -179,6 +179,14 @@ impl EditorView {
         self.bounds
     }
 
+    /// The window y of the top of `line`'s first row as of the last paint,
+    /// following the scroll since; a line past the last is at the end.
+    pub(crate) fn line_top(&self, line: usize, cx: &App) -> Pixels {
+        let editor = self.editor.read(cx);
+        let row = editor.wrap().first_row(line) as f32;
+        self.bounds.origin.y + px((row - editor.scroll_top()) * self.metrics.line_height)
+    }
+
     /// The part of `bounds` that shows text: everything right of the gutter.
     pub(crate) fn text_bounds(&self) -> Bounds<Pixels> {
         let gutter = px(self.gutter.width).min(self.bounds.size.width);
