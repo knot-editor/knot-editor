@@ -3,13 +3,15 @@
 // differ from that backend's baseline are marked in the gutter. Marks follow
 // edits through a debounced diff against the cached baseline; the baseline
 // is fetched again when the backend reports a change, the file moves, or the
-// document is saved.
+// document is saved. File status is pulled for every known repository and
+// painted on resources; see status.ts.
 import { commands, diff, documents, keymaps, windows, workbench } from "knot";
 import type { Buffer, CommandContext, Disposable, DocumentId, EditorContribution } from "knot";
 import { backendContract, vcs } from "./contract.js";
 import { contributionsOf } from "./hunks.js";
 import { targetLine, type Direction } from "./navigation.js";
 import { createDiscovery, isGone, type Repository } from "./repositories.js";
+import { createStatuses, defineColors, keyOf } from "./status.js";
 
 /** Milliseconds after the last edit before the marks are diffed again. */
 const DELAY = 150;
@@ -65,8 +67,23 @@ export async function start(): Promise<Disposable> {
     for (const follow of follows.values()) {
       if (follow.repository?.backend === backend) invalidate(follow, { resolve: true });
     }
+    statuses.request();
   };
   const discovery = createDiscovery(() => [...registered], drop);
+  const statuses = createStatuses({
+    // The repositories of every root, and those of followed documents outside any root.
+    async known() {
+      const known = await discovery.covering(await roots());
+      for (const { repository } of follows.values()) {
+        if (repository === null || !registered.has(repository.backend)) continue;
+        if (!known.some((other) => keyOf(other) === keyOf(repository))) known.push(repository);
+      }
+      return known;
+    },
+    fetch: async (repository) => (await backendContract(repository.backend).client()).status(repository.root),
+    gone: drop,
+  });
+  await defineColors();
 
   /** The URIs of every window's roots. */
   const roots = async () => [...new Set((await windows.list()).flatMap((window) => window.workspace.roots.map((root) => root.uri)))];
@@ -104,6 +121,7 @@ export async function start(): Promise<Disposable> {
       if (!same(next, follow.repository)) {
         follow.repository = next;
         follow.fetch = true;
+        statuses.request();
       }
     }
     if (follow.fetch) {
@@ -179,6 +197,7 @@ export async function start(): Promise<Disposable> {
   }
 
   const resolveAll = () => {
+    statuses.request();
     for (const follow of follows.values()) invalidate(follow, { resolve: true });
   };
 
@@ -193,6 +212,7 @@ export async function start(): Promise<Disposable> {
     },
     changed({ backend, repository }) {
       discovery.invalidate(backend);
+      statuses.request(keyOf({ backend, root: repository }));
       for (const follow of follows.values()) {
         const mine = follow.repository?.backend === backend && follow.repository.root === repository;
         if (mine || follow.repository === null) invalidate(follow, { resolve: true, fetch: true });
@@ -242,6 +262,7 @@ export async function start(): Promise<Disposable> {
     });
     tracked.onDidClose(async () => {
       follows.delete(document.id);
+      statuses.request();
       await release(follow);
     });
     kick(follow);
@@ -281,6 +302,7 @@ export async function start(): Promise<Disposable> {
       await observation[Symbol.asyncDispose]();
       for (const command of navigation) await command[Symbol.asyncDispose]();
       await tracker[Symbol.asyncDispose]();
+      await statuses[Symbol.asyncDispose]();
       await served[Symbol.asyncDispose]();
     },
   };

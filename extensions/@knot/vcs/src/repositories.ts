@@ -24,6 +24,8 @@ export function isGone(error: unknown): boolean {
 }
 
 export type Discovery = {
+  /** Every repository covering one of the window roots. */
+  covering(roots: readonly string[]): Promise<Repository[]>;
   /** The repository of `file` given the window roots, or null. */
   find(file: string, roots: readonly string[]): Promise<Repository | null>;
   /** Forgets what a backend answered, or every backend's answers. */
@@ -60,22 +62,33 @@ export function createDiscovery(backends: () => string[], drop: (backend: string
     }
   }
 
-  return {
-    async find(file, roots) {
-      const found: Repository[] = [];
-      const ids = backends();
-      for (const backend of ids) {
-        for (const root of roots) {
-          const repositories = await ask(
-            covering,
-            `${backend}\0${root}`,
-            backend,
-            async () => (await backendContract(backend).client()).repositories(root),
-            [],
-          );
-          for (const repository of repositories) if (contains(repository, file)) found.push({ backend, root: repository });
+  /** Every repository covering one of `roots`, once each, in backend registration order. */
+  async function coveringAll(roots: readonly string[]): Promise<Repository[]> {
+    const found: Repository[] = [];
+    for (const backend of backends()) {
+      for (const root of roots) {
+        const repositories = await ask(
+          covering,
+          `${backend}\0${root}`,
+          backend,
+          async () => (await backendContract(backend).client()).repositories(root),
+          [],
+        );
+        for (const repository of repositories) {
+          if (!found.some((known) => known.backend === backend && known.root === repository)) {
+            found.push({ backend, root: repository });
+          }
         }
       }
+    }
+    return found;
+  }
+
+  return {
+    covering: coveringAll,
+    async find(file, roots) {
+      const found = (await coveringAll(roots)).filter((repository) => contains(repository.root, file));
+      const ids = backends();
       if (found.length === 0) {
         const directory = directoryOf(file);
         for (const backend of ids) {
