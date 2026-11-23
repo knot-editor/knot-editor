@@ -409,6 +409,14 @@ impl KnotWindow {
                         .unwrap_or_else(|| "Terminal".to_owned()),
                     TabSurfaceId::Tool(id) => workbench.tool(id).unwrap().title.to_owned(),
                 };
+                let decoration = match tab.surface_id() {
+                    TabSurfaceId::Document(document_id) => documents
+                        .get(document_id)
+                        .unwrap()
+                        .resource_uri()
+                        .and_then(|uri| crate::app::resource_decorations::decoration_of(uri, cx)),
+                    _ => None,
+                };
                 let dirty = match tab.surface_id() {
                     TabSurfaceId::Document(document_id) => {
                         documents.get(document_id).unwrap().is_dirty(cx)
@@ -451,11 +459,10 @@ impl KnotWindow {
                     .cursor_pointer()
                     .text_size(zoom::rems(13.))
                     .rounded(zoom::rems(chrome.tab_radius))
-                    .text_color(theme(cx).paint_color(if tab_id == active_tab {
-                        color::TAB_ACTIVE_FOREGROUND
-                    } else {
-                        color::TAB_INACTIVE_FOREGROUND
-                    }))
+                    .text_color(
+                        theme(cx)
+                            .paint_color(tab_foreground(decoration.as_ref(), tab_id == active_tab)),
+                    )
                     // Every tab sits on the tab bar's background; the selected
                     // one is filled, or underlined with the accent in a
                     // theme without pills. A lone tool shows only its title.
@@ -519,6 +526,15 @@ impl KnotWindow {
                                         .text_xs()
                                         .build(window, cx)
                                 })
+                        } else if let Some(tooltip) = decoration
+                            .and_then(|decoration| decoration.tooltip)
+                            .map(SharedString::from)
+                        {
+                            element.child(title.clone()).tooltip(move |window, cx| {
+                                gpui_component::tooltip::Tooltip::new(tooltip.clone())
+                                    .text_xs()
+                                    .build(window, cx)
+                            })
                         } else {
                             element.child(title.clone())
                         }
@@ -1264,4 +1280,17 @@ pub(super) fn command_button(
                 window.dispatch_source(ProductCommandSource::new(command).command(), cx);
             })
         })
+}
+
+/// The color key of a tab's title: its resource's decoration color, else the
+/// theme's active or inactive tab foreground.
+pub(super) fn tab_foreground(
+    decoration: Option<&crate::app::resource_decorations::ResolvedDecoration>,
+    active: bool,
+) -> &str {
+    match decoration.and_then(|decoration| decoration.color.as_deref()) {
+        Some(key) => key,
+        None if active => color::TAB_ACTIVE_FOREGROUND,
+        None => color::TAB_INACTIVE_FOREGROUND,
+    }
 }

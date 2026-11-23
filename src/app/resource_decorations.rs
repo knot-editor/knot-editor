@@ -30,3 +30,14 @@ pub(crate) fn remove_lifecycle(
         refresh(cx);
     }
 }
+
+/// The decoration painted for `uri`, if a source decorates it.
+pub(crate) fn decoration_of(
+    uri: &knot_model::resource::ResourceUri,
+    cx: &gpui::App,
+) -> Option<ResolvedDecoration> {
+    cx.try_global::<ApplicationResourceDecorations>()?
+        .0
+        .lookup(uri)
+        .cloned()
+}
