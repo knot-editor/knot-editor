@@ -240,8 +240,7 @@ await workbench.writeClipboardText(late);
     let loaded = load(&main, &["process"], cx);
     assert_eq!(answer(cx), "InvalidTarget");
     let shell = recorded_pid(&pid_file, cx);
-    crate::test_support::wait_until(cx, |_| !is_alive(shell));
-    assert!(!unsafe_group_alive(shell));
+    wait_for_group_to_end(shell, cx);
     let count = cx.read(|cx| loaded.host.read(cx).live_process_count_for_test());
     assert_eq!(count, 0);
 }
@@ -346,15 +345,21 @@ fn unloading_a_package_kills_its_processes_and_their_helpers(cx: &mut TestAppCon
     loaded
         .host
         .update(cx, |host, cx| host.unload_package_for_test(PACKAGE, cx));
-    crate::test_support::wait_until(cx, |_| !is_alive(shell));
-    // The shell's `sleep` child is in the same group, so nothing is left of
-    // the group.
-    assert!(!unsafe_group_alive(shell));
+    wait_for_group_to_end(shell, cx);
 }
 
-pub(super) fn unsafe_group_alive(group: i32) -> bool {
-    // SAFETY: signal 0 only probes for the group.
-    unsafe { libc::killpg(group, 0) == 0 }
+/// Wait until nothing is left of the process group led by `shell`.
+///
+/// Killing the group is asynchronous: the shell is reaped by the host, but its
+/// `sleep` child is reparented to init and stays a zombie, which `killpg`
+/// still counts, until init reaps it. That can take a while under load, so the
+/// group is waited for rather than checked once.
+#[track_caller]
+pub(super) fn wait_for_group_to_end(shell: i32, cx: &mut TestAppContext) {
+    crate::test_support::wait_until(cx, |_| {
+        // SAFETY: signal 0 only probes for the group.
+        !is_alive(shell) && unsafe { libc::killpg(shell, 0) != 0 }
+    });
 }
 
 #[gpui::test]
@@ -446,8 +451,7 @@ fn quitting_kills_every_process(cx: &mut TestAppContext) {
     loaded
         .host
         .update(cx, |host, _| host.kill_processes_for_quit());
-    crate::test_support::wait_until(cx, |_| !is_alive(shell));
-    assert!(!unsafe_group_alive(shell));
+    wait_for_group_to_end(shell, cx);
 }
 
 #[gpui::test]

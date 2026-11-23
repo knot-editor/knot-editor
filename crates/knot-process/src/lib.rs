@@ -13,6 +13,7 @@ use std::{
     process::{Command, Stdio},
     sync::{Arc, Mutex, mpsc},
     thread,
+    time::Duration,
 };
 
 use futures::{SinkExt as _, channel};
@@ -176,7 +177,21 @@ impl Control {
     /// necessarily start.
     pub fn kill_process_group(group: u32) {
         #[cfg(unix)]
-        signal_group(group, libc::SIGKILL);
+        {
+            signal_group(group, libc::SIGKILL);
+            // A member forking at the moment of the signal can escape it, and
+            // is then orphaned alive once its parent dies. Signal again
+            // shortly after, until the group is gone.
+            thread::spawn(move || {
+                for delay in [5, 25, 100] {
+                    thread::sleep(Duration::from_millis(delay));
+                    // SAFETY: killpg only sends a signal.
+                    if unsafe { libc::killpg(group as libc::pid_t, libc::SIGKILL) } != 0 {
+                        return;
+                    }
+                }
+            });
+        }
         #[cfg(not(unix))]
         signal_group(group, 0);
     }

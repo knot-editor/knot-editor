@@ -2,7 +2,7 @@
 
 use super::extension_restart::resolves;
 use super::operations::empty_product_window;
-use super::processes::{is_alive, recorded_pid, unsafe_group_alive};
+use super::processes::{is_alive, recorded_pid, wait_for_group_to_end};
 use super::*;
 use crate::app::extensions::consent::EntitlementConsentView;
 use crate::app::extensions::entitlements;
@@ -446,8 +446,7 @@ await processes.spawn({{ command: "sh", args: ["-c", "echo $$ > {}; sleep 300 & 
         outcome,
         LoadResult::NotLoaded("not loaded: entitlement `process` denied".into())
     );
-    crate::test_support::wait_until(cx, |_| !is_alive(shell));
-    assert!(!unsafe_group_alive(shell));
+    wait_for_group_to_end(shell, cx);
     assert_eq!(decision("@example/git", cx), Some(Decision::Denied));
     assert!(!resolves("entitled.ping", cx));
     assert_eq!(
