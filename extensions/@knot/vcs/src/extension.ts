@@ -4,13 +4,15 @@
 // edits through a debounced diff against the cached baseline; the baseline
 // is fetched again when the backend reports a change, the file moves, or the
 // document is saved. File status is pulled for every known repository and
-// painted on resources; see status.ts.
+// painted on resources (status.ts), and each window shows the current ref
+// (ref.ts).
 import { commands, diff, documents, keymaps, windows, workbench } from "knot";
 import type { Buffer, CommandContext, Disposable, DocumentId, EditorContribution } from "knot";
 import { backendContract, vcs } from "./contract.js";
 import { contributionsOf } from "./hunks.js";
 import { targetLine, type Direction } from "./navigation.js";
 import { createDiscovery, isGone, type Repository } from "./repositories.js";
+import { createRefs } from "./ref.js";
 import { createStatuses, defineColors, keyOf } from "./status.js";
 
 /** Milliseconds after the last edit before the marks are diffed again. */
@@ -68,6 +70,7 @@ export async function start(): Promise<Disposable> {
       if (follow.repository?.backend === backend) invalidate(follow, { resolve: true });
     }
     statuses.request();
+    refs.refresh();
   };
   const discovery = createDiscovery(() => [...registered], drop);
   const statuses = createStatuses({
@@ -84,6 +87,16 @@ export async function start(): Promise<Disposable> {
     gone: drop,
   });
   await defineColors();
+  const refs = await createRefs({
+    async fileOf(window) {
+      const tab = window.panes.flatMap((pane) => pane.tabs).find((candidate) => candidate.target === window.statusTarget);
+      if (tab?.document == null) return null;
+      return (await documents.get(tab.document))?.resourceUri ?? null;
+    },
+    find: (file, roots) => discovery.find(file, roots),
+    fetch: async (repository) => (await backendContract(repository.backend).client()).ref(repository.root),
+    gone: drop,
+  });
 
   /** The URIs of every window's roots. */
   const roots = async () => [...new Set((await windows.list()).flatMap((window) => window.workspace.roots.map((root) => root.uri)))];
@@ -198,6 +211,7 @@ export async function start(): Promise<Disposable> {
 
   const resolveAll = () => {
     statuses.request();
+    refs.refresh();
     for (const follow of follows.values()) invalidate(follow, { resolve: true });
   };
 
@@ -214,6 +228,7 @@ export async function start(): Promise<Disposable> {
       discovery.invalidate(backend);
       statuses.request(keyOf({ backend, root: repository }));
       statuses.request();
+      refs.refresh();
       for (const follow of follows.values()) {
         const mine = follow.repository?.backend === backend && follow.repository.root === repository;
         if (mine || follow.repository === null) invalidate(follow, { resolve: true, fetch: true });
@@ -299,6 +314,7 @@ export async function start(): Promise<Disposable> {
 
   const observation = await workbench.observe((event) => {
     if (event.type === "workspaceChanged" || event.type === "windowOpened") resolveAll();
+    else if (event.type === "activeTargetChanged") refs.refresh();
   });
 
   return {
@@ -307,6 +323,7 @@ export async function start(): Promise<Disposable> {
       for (const command of navigation) await command[Symbol.asyncDispose]();
       await tracker[Symbol.asyncDispose]();
       await statuses[Symbol.asyncDispose]();
+      await refs[Symbol.asyncDispose]();
       await served[Symbol.asyncDispose]();
     },
   };

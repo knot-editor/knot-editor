@@ -45,6 +45,7 @@ async function backend(id: string, answers: Answers) {
     repositoryOf: (directory) => (answers.repositoryOf ?? (() => null))(directory),
     baseline: ({ repository, file }) => (answers.baseline ?? (() => null))(repository, file),
     status: () => [],
+    ref: () => null,
   });
   await (await vcs.client()).register(id);
   return serving;

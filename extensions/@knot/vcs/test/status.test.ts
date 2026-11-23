@@ -24,6 +24,7 @@ const ROOT = "file:///work";
 type Answers = {
   repositories?: (root: string) => string[];
   status?: (repository: string) => Entry[] | Promise<Entry[]>;
+  ref?: (repository: string) => { label: string; tooltip?: string } | null;
 };
 
 async function backend(id: string, answers: Answers) {
@@ -33,6 +34,7 @@ async function backend(id: string, answers: Answers) {
     repositoryOf: () => null,
     baseline: () => null,
     status: (repository) => (answers.status ?? (() => []))(repository),
+    ref: (repository) => (answers.ref ?? (() => null))(repository),
   });
   await (await vcs.client()).register(id);
   return serving;
@@ -216,6 +218,7 @@ test("a document outside every root decorates its own repository", async () => {
     repositoryOf: (directory) => (directory.startsWith(OUTSIDE) ? OUTSIDE : null),
     baseline: () => null,
     status: () => [{ file: `${OUTSIDE}/f.txt`, status: "modified" }],
+    ref: () => null,
   });
   await (await vcs.client()).register("one");
   await settle();
@@ -306,6 +309,7 @@ test("statusChanged pulls status and leaves the baselines alone", async () => {
       return null;
     },
     status: () => entries,
+    ref: () => null,
   });
   await (await vcs.client()).register("one");
   await settle();

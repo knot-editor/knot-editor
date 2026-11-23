@@ -46,6 +46,8 @@ function defineBackend(id: string) {
         }),
       ),
     ),
+    /** What is checked out in the repository, or null when the backend has nothing to show. */
+    ref: s.fn(s.string(), s.nullable(s.object({ label: s.string(), tooltip: s.optional(s.string()) }))),
   });
 }
 

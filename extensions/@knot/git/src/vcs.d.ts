@@ -24,5 +24,6 @@ declare module "@knot/vcs" {
         status: "added" | "modified" | "deleted" | "renamed" | "untracked" | "conflicted";
       }[]
     >;
+    ref: FnSchema<string, { label: string; tooltip?: string } | null>;
   }>;
 }

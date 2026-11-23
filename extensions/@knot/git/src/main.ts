@@ -2,6 +2,7 @@ import { workbench } from "knot";
 import { backendContract, vcs } from "@knot/vcs";
 import { baseline } from "./baseline.js";
 import { git, isMissingProgram } from "./git.js";
+import { ref } from "./ref.js";
 import { status } from "./status.js";
 import { repositories, repositoryOf } from "./repositories.js";
 import { watch } from "./watch.js";
@@ -36,6 +37,7 @@ if (await available()) {
     },
     baseline: ({ repository, file }) => baseline(repository, file).catch(() => null),
     status: (repository) => status(repository).catch(() => []),
+    ref: (repository) => ref(repository).catch(() => null),
   });
   await (await vcs.client()).register("git");
 }
