@@ -1,6 +1,6 @@
 # D213 — VCS file status and current ref
 
-Status: 🚧 in progress; checkpoints 1 and 2 done. Source: [roadmap D213](../roadmap.md), part
+Status: 🚧 in progress; checkpoints 1 to 3 done. Source: [roadmap D213](../roadmap.md), part
 of the [version control plan](vcs.md), whose architecture section this plan
 refines without reopening. Builds on D211 ([version control](../architecture/version-control.md))
 and D212 ([resource decorations](../architecture/semantic-ui.md#resource-decorations)).
@@ -168,39 +168,26 @@ appears as one untracked folder entry, which checkpoint 2 drops.
 Done: `@knot/vcs` keeps the known-repository set (`createDiscovery().covering`
 plus the repositories of followed documents) and paints one decoration source
 (`src/status.ts`), covered by `test/status.test.ts` and
-`crates/knot-ext-vcs/tests/decorations.rs`. Status is pulled again on `changed`,
-and pulls share one global in-flight/queued slot, which checkpoint 3 makes per
-repository. Default colors, reviewed in both themes: added, modified, and
+`crates/knot-ext-vcs/tests/decorations.rs`. Default colors, reviewed in both themes: added, modified, and
 deleted follow `diff.*`; renamed is violet, untracked gold, conflicted pink.
 
-### 3. Working-tree freshness
+### 3. Working-tree freshness ✅
 
-Deliverables: `statusChanged` in `vcs`; Git's working-tree watch with the
-ignored-batch filter; status pulls coalesced per repository in `@knot/vcs`.
+Done: `statusChanged` is in `vcs`; `@knot/git` watches each repository's working
+tree (`src/watch.ts`) and skips batches that are all ignored; `@knot/vcs`
+coalesces pulls per repository (`src/status.ts`). Covered by
+`test/status.test.ts` and `crates/knot-ext-vcs/tests/decorations.rs`. Product
+tests do not count pulls, so an ignored write is only shown to leave the
+explorer correct.
 
-Validation: in-memory tests that a burst of `statusChanged` and `changed`
-notifications makes at most two pulls per repository, and that
-`statusChanged` leaves baselines alone. Product tests over Git: an edit on disk
-and a new file update the explorer without `changed` being reported, and a
-write under an ignored folder triggers no pull. Measure the status call and the
-watch on a large repository, including one with a large unignored untracked
-folder.
-
-Review gate: freshness in the running app, the cost measurements, and the
-untracked-listing decision.
-
-**Implementation context:**
-- Watching: extend `start` in `extensions/@knot/git/src/watch.ts` with a
-  recursive watch on the repository root (no `includeHidden`), filtered
-  through `files.isIgnored`, reporting `statusChanged` from the same listener
-  shape and stopped by the same `stop`.
-- Contract: `vcs` in `extensions/@knot/vcs/src/contract.ts` and its restatement
-  in `extensions/@knot/git/src/vcs.d.ts`.
-- Coalescing: mirror `Follow`'s `running`/`pending` in `extension.ts` with a
-  per-repository record.
-- Tests: `host.notifyWatchers` and `host.watchedUris` in
-  `scripts/extensions/testing/host.ts` drive in-memory watches; product tests
-  go in `crates/knot-ext-vcs/tests/status.rs`.
+Untracked-listing decision: Git lists untracked files one by one until it has
+seen 2,000 (`UNTRACKED_LIMIT`), then kills the call and uses collapsed
+folders, so each untracked folder is one colored entry without per-file
+badges. Unbounded listing overran the 32 MiB extension heap at roughly 25,000
+files. Release measurements on clones of two repositories of about 15,000
+files: a refresh after an on-disk change took about 0.2 s, and about 0.4 s with
+60,000 unignored untracked files. The cost of the working-tree watch itself was
+not measured.
 
 ### 4. Current ref and documentation
 
