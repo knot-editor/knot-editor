@@ -98,6 +98,21 @@ pub enum DiffSide {
     Modified,
 }
 
+/// The first modified line of the hunk nearest `line` in the direction
+/// asked, wrapping at the ends, or `None` without hunks. A deletion's line is
+/// the one that followed the removed lines.
+pub fn adjacent_hunk(hunks: &[LineHunk], line: u32, forward: bool) -> Option<u32> {
+    let mut starts = hunks.iter().map(|hunk| hunk.new.start);
+    if forward {
+        starts.clone().find(|&start| start > line).or(starts.next())
+    } else {
+        starts
+            .clone()
+            .rfind(|&start| start < line)
+            .or(starts.next_back())
+    }
+}
+
 /// Where the line `line` of one side's text lies in the other's, so two views
 /// scroll together. Lines outside hunks keep their distance from the nearest
 /// hunk above; lines inside a hunk map proportionally onto the other side's
@@ -264,6 +279,30 @@ mod tests {
 
     fn mapped(old: &str, new: &str, from: DiffSide, line: f32) -> f32 {
         map_line(&line_hunks(old, new, DiffOptions::default()), from, line)
+    }
+
+    #[test]
+    fn the_adjacent_hunk_starts_after_or_before_the_line_and_wraps() {
+        // Hunks start at lines 1 and 4 (a deletion) of the modified text.
+        let found = line_hunks(
+            "a\nb\nc\nd\ne\nf\n",
+            "a\nB\nc\nd\nf\n",
+            DiffOptions::default(),
+        );
+        let starts: Vec<u32> = found.iter().map(|hunk| hunk.new.start).collect();
+        assert_eq!(starts, [1, 4]);
+        let next = |line| adjacent_hunk(&found, line, true);
+        let previous = |line| adjacent_hunk(&found, line, false);
+        assert_eq!(
+            (next(0), next(1), next(2), next(4)),
+            (Some(1), Some(4), Some(4), Some(1))
+        );
+        assert_eq!(
+            (previous(5), previous(4), previous(2), previous(1)),
+            (Some(4), Some(1), Some(1), Some(4))
+        );
+        assert_eq!(adjacent_hunk(&[], 0, true), None);
+        assert_eq!(adjacent_hunk(&[], 0, false), None);
     }
 
     #[test]

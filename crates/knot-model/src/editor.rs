@@ -766,6 +766,13 @@ impl EditorState {
         self.finish_position_change(buffer);
     }
 
+    /// Put the caret at the start of `line`, clamped to the last line.
+    pub fn move_to_line(&mut self, line: usize, reveal: Reveal, buffer: &mut BufferModel) {
+        let line = line.min(buffer.line_count().saturating_sub(1));
+        let offset = buffer.line_range(line).start;
+        self.set_selection(offset, offset, reveal, buffer);
+    }
+
     /// Select from `anchor` to `caret`, a caret alone when they are equal,
     /// as a click or drag does.
     pub fn select_from(
