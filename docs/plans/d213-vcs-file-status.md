@@ -1,6 +1,6 @@
 # D213 — VCS file status and current ref
 
-Status: 🚧 in progress; checkpoint 1 done. Source: [roadmap D213](../roadmap.md), part
+Status: 🚧 in progress; checkpoints 1 and 2 done. Source: [roadmap D213](../roadmap.md), part
 of the [version control plan](vcs.md), whose architecture section this plan
 refines without reopening. Builds on D211 ([version control](../architecture/version-control.md))
 and D212 ([resource decorations](../architecture/semantic-ui.md#resource-decorations)).
@@ -163,48 +163,15 @@ the index and recreated is `modified`; a staged rename then removed from disk
 lists the old path as `deleted`; intent-to-add is `added`. A nested repository
 appears as one untracked folder entry, which checkpoint 2 drops.
 
-### 2. Status decorations
+### 2. Status decorations ✅
 
-Implemented; automated validation passes and the review gate is open. The
-known-repository set comes from `createDiscovery`'s new `covering`, plus the
-repositories of followed documents.
-
-Deliverables: the known-repository set in `@knot/vcs`; a status pull for each
-known repository when the set changes and on `changed`; the `vcs.*` color
-keys; one decoration source with the status table above, folder colors by
-priority, and removal when a repository leaves the set or its backend is
-dropped. Status is fresh after a commit, checkout, or `git add`, but not yet
-after an edit on disk.
-
-Validation: in-memory tests with fake backends for the mapping, folder colors
-and their priority, incremental updates (a file returning to unchanged loses
-its decoration and its folders recompute), nested repositories (the deepest
-one wins and the outer one's untracked-folder entry is dropped), roots
-changing, and a backend dropping. Product tests over Git: the explorer shows
-the color, badge, and tooltip for a modified and an untracked file and colors
-their folders; a document tab takes the color; a commit made with `git` clears
-them. A look at the running app in light and dark themes.
-
-Review gate: the visual result in the explorer and on tabs, and the default
-colors.
-
-**Implementation context:**
-- `extensions/@knot/vcs/src/extension.ts`: extend `changed` in `vcs.serve`;
-  hook the known-repository rebuild into `resolveAll`, `drop`, and the
-  `workbench.observe` handler. Keep the status logic in a new `src/status.ts`
-  (pure mapping, folder priority, snapshot diffing) beside `hunks.ts`.
-- `createDiscovery` in `src/repositories.ts` already caches `repositories(root)`
-  per backend and root; reuse it for the covering set, and `contains` for
-  nesting.
-- Decorations: `decorations.createSource()` and `themes.defineColor` from
-  `knot` (contract in `crates/knot-host/src/js/knot.d.ts`; color definition as
-  in `extensions/@knot/language-python/src/extension.ts`).
-- In-memory tests: a new `extensions/@knot/vcs/test/status.test.ts` modeled on
-  `gutter.test.ts` (`backend`, `rest`), reading results with
-  `host.decorationsOf` from `scripts/extensions/testing/host.ts`.
-- Product tests: `TestTree::decoration` in `src/app/product/driver/window.rs`
-  reads a row's color, badge, and tooltip; add a tab decoration accessor there
-  if none exists.
+Done: `@knot/vcs` keeps the known-repository set (`createDiscovery().covering`
+plus the repositories of followed documents) and paints one decoration source
+(`src/status.ts`), covered by `test/status.test.ts` and
+`crates/knot-ext-vcs/tests/decorations.rs`. Status is pulled again on `changed`,
+and pulls share one global in-flight/queued slot, which checkpoint 3 makes per
+repository. Default colors, reviewed in both themes: added, modified, and
+deleted follow `diff.*`; renamed is violet, untracked gold, conflicted pink.
 
 ### 3. Working-tree freshness
 
