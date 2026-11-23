@@ -1,6 +1,6 @@
 # D213 — VCS file status and current ref
 
-Status: 🚧 approved, not started. Source: [roadmap D213](../roadmap.md), part
+Status: 🚧 in progress; checkpoint 1 awaits review. Source: [roadmap D213](../roadmap.md), part
 of the [version control plan](vcs.md), whose architecture section this plan
 refines without reopening. Builds on D211 ([version control](../architecture/version-control.md))
 and D212 ([resource decorations](../architecture/semantic-ui.md#resource-decorations)).
@@ -154,7 +154,7 @@ checkpoint 2 and becomes live for edits on disk in checkpoint 3, which adds
 a notification and its handler without changing how status is mapped or
 painted.
 
-### 1. Git status in the contract
+### 1. Git status in the contract 🚧 awaiting review
 
 Deliverables: `status` in the contract module and in `@knot/git`'s restated
 declaration, and Git's implementation of it. There is no watch, no ref, and no
@@ -168,6 +168,13 @@ repository, and ignored files being absent.
 
 Review gate: the contract shape and how Git's two-column status maps to one
 HEAD-relative status.
+
+Implemented ✅: `status` in the contract and Git (`status.ts`), covered by
+`crates/knot-ext-vcs/tests/status.rs`. Settled edge cases: added to the index
+then removed from disk equals HEAD and is not listed; removed from the index
+and recreated is `modified`; a staged rename then removed from disk lists the
+old path as `deleted`; intent-to-add is `added`. A nested repository appears
+as one untracked folder entry, as the design expects.
 
 **Implementation context:**
 - Contract: `defineBackend` in `extensions/@knot/vcs/src/contract.ts`; restate

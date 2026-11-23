@@ -25,6 +25,7 @@ const serving = await backendContract("{id}").serve({{
   repositories: (root) => [`${{root}}/{id}`],
   repositoryOf: (file) => `{id}:${{file}}`,
   baseline: ({{ repository, file }}) => `{id}|${{repository}}|${{file}}`,
+  status: () => [],
 }});
 await (await vcs.client()).register("{id}");
 await commands.register("{id}.stop", async () => {{ await serving[Symbol.asyncDispose](); }});

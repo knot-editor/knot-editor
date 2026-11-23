@@ -27,6 +27,20 @@ function defineBackend(id: string) {
     repositoryOf: s.fn(s.string(), s.nullable(s.string())),
     /** The text of a file URI in a repository's baseline, or null when it has none. */
     baseline: s.fn(s.object({ repository: s.string(), file: s.string() }), s.nullable(s.string())),
+    /**
+     * A snapshot of the repository's files that differ from its baseline, as
+     * file URIs: one it does not list is unchanged, and ignored files are never
+     * listed. `renamed` is the new path.
+     */
+    status: s.fn(
+      s.string(),
+      s.array(
+        s.object({
+          file: s.string(),
+          status: s.enum(["added", "modified", "deleted", "renamed", "untracked", "conflicted"]),
+        }),
+      ),
+    ),
   });
 }
 

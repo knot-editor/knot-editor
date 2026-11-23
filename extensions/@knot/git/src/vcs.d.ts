@@ -16,5 +16,12 @@ declare module "@knot/vcs" {
     repositories: FnSchema<string, readonly string[]>;
     repositoryOf: FnSchema<string, string | null>;
     baseline: FnSchema<{ repository: string; file: string }, string | null>;
+    status: FnSchema<
+      string,
+      readonly {
+        file: string;
+        status: "added" | "modified" | "deleted" | "renamed" | "untracked" | "conflicted";
+      }[]
+    >;
   }>;
 }
