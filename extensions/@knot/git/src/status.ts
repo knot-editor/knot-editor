@@ -1,8 +1,8 @@
 // The changed files of a repository against HEAD, from Git's two-column
 // status collapsed into one HEAD-relative status. `status --porcelain=v2 -z`
 // lists tracked entries with an index column X and a worktree column Y, and
-// untracked files one by one; ignored files are not listed.
-import { git } from "./git.js";
+// untracked files one by one, up to a limit; ignored files are not listed.
+import { git, gitWhile } from "./git.js";
 import { below } from "./uri.js";
 
 export type Status = "added" | "modified" | "deleted" | "renamed" | "untracked" | "conflicted";
@@ -48,9 +48,25 @@ export function parse(output: string): Array<{ path: string; status: Status }> {
   return [...found].map(([path, status]) => ({ path, status }));
 }
 
+/**
+ * Untracked files listed one by one, at most. Past that a repository with a
+ * huge untracked folder, such as a dependency folder nobody ignored, would
+ * cost more to list and paint than it is worth, so each untracked folder is
+ * one entry instead.
+ */
+export const UNTRACKED_LIMIT = 2000;
+
+const manyUntracked = (stdout: string) => (stdout.match(/(?:^|\0)\? /g) ?? []).length > UNTRACKED_LIMIT;
+
 /** The changed files of `repository` against its HEAD. */
 export async function status(repository: string): Promise<Change[]> {
-  const result = await git(repository, ["status", "--porcelain=v2", "-z", "--untracked-files=all"]);
+  const base = ["status", "--porcelain=v2", "-z"];
+  // Tracked changes come first and untracked files last, so a long listing is cut short.
+  let result = await gitWhile(repository, [...base, "--untracked-files=all"], manyUntracked);
+  result ??= await git(repository, [...base, "--untracked-files=normal"]);
   if (result === null || result.exitCode !== 0) return [];
-  return parse(result.stdout).map(({ path, status }) => ({ file: below(repository, path), status }));
+  return parse(result.stdout).map(({ path, status }) => ({
+    file: below(repository, path.replace(/\/+$/, "")),
+    status,
+  }));
 }

@@ -214,3 +214,26 @@ fn a_repository_without_changes_or_commits_is_listed_as_it_is(cx: &mut TestAppCo
         &[("loose.txt", "untracked"), ("new.txt", "added")],
     );
 }
+
+#[gpui::test]
+fn a_huge_untracked_folder_is_one_entry_and_the_rest_is_still_listed(cx: &mut TestAppContext) {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    repository(root, &[("kept.txt", "a\n")]);
+    write(root, "kept.txt", "edited\n");
+    for index in 0..2100 {
+        write(root, &format!("vendor/f{index}.txt"), "x\n");
+    }
+    write(root, "few/one.txt", "x\n");
+
+    let (_product, window) = launch(cx);
+    // Past the limit each untracked folder is one entry, including the small one.
+    expect(
+        status(&window, root, cx),
+        &[
+            ("few", "untracked"),
+            ("kept.txt", "modified"),
+            ("vendor", "untracked"),
+        ],
+    );
+}
