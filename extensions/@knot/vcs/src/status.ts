@@ -32,9 +32,9 @@ export async function defineColors() {
     added: { description: "A file added to version control.", dark: "diff.added", light: "diff.added" },
     modified: { description: "A file that differs from the version control baseline.", dark: "diff.modified", light: "diff.modified" },
     deleted: { description: "A file removed from the working tree.", dark: "diff.removed", light: "diff.removed" },
-    renamed: { description: "A file renamed against the version control baseline.", dark: "#b392f0", light: "#7e4fc1" },
-    untracked: { description: "A file version control does not track yet.", dark: "#4fc1b0", light: "#1a8a7c" },
-    conflicted: { description: "A file with an unresolved merge conflict.", dark: "#e8934a", light: "#c4661a" },
+    renamed: { description: "A file renamed against the version control baseline.", dark: "#a78bfa", light: "#6d4bc4" },
+    untracked: { description: "A file version control does not track yet.", dark: "#d6b25e", light: "#8a6a00" },
+    conflicted: { description: "A file with an unresolved merge conflict.", dark: "#f0629f", light: "#c2256f" },
   };
   for (const status of PRIORITY) {
     const { description, dark, light } = colors[status];
