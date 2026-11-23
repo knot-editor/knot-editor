@@ -133,7 +133,7 @@ enum PresentationView {
     Editor(Entity<EditorView>),
     Terminal(Entity<TerminalView>),
     /// A diff view and the editor commands act on.
-    Diff(Entity<DiffView>, Entity<EditorView>),
+    Diff(Entity<DiffView>, super::diff_view::DiffCommandTarget),
     Tool(ToolContent),
 }
 
@@ -297,7 +297,7 @@ impl Workbench {
         Some(match self.views.get(&tab.presentation())? {
             PresentationView::Editor(editor) => CommandView::Editor(editor.clone()),
             PresentationView::Terminal(view) => CommandView::Terminal(view.clone()),
-            PresentationView::Diff(_, editor) => CommandView::Editor(editor.clone()),
+            PresentationView::Diff(_, target) => CommandView::Editor(target.editor().clone()),
             PresentationView::Tool(content) => content.command_view(),
         })
     }
@@ -501,12 +501,12 @@ impl Workbench {
         view: Entity<DiffView>,
         cx: &App,
     ) {
-        let editor = view.read(cx).command_editor().clone();
+        let target = view.read(cx).command_target();
         if let Some(document) = view.read(cx).document() {
             self.layout.set_diff_document(diff, document);
         }
         self.views
-            .insert(presentation, PresentationView::Diff(view, editor));
+            .insert(presentation, PresentationView::Diff(view, target));
     }
 
     /// Open a diff in the center and return its tab.

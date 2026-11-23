@@ -6,6 +6,8 @@
 //! modified side is a snapshot or a document, an editable view of the
 //! document's shared buffer. The bands follow edits to either side.
 
+use std::cell::Cell;
+use std::rc::Rc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
@@ -29,7 +31,7 @@ use knot_model::theme::color as key;
 const BAND_OWNER: ExtensionKey =
     ExtensionKey::new(ExtensionId::new(u64::MAX), ExtensionLifecycleId::new(1));
 
-/// The key context of a diff's modified editor, for bindings that apply only
+/// The key context of a diff's editors, for bindings that apply only
 /// in a diff.
 pub(crate) const DIFF_KEY_CONTEXT: &str = "diff";
 
@@ -120,6 +122,19 @@ impl Side {
     }
 }
 
+/// The editors of a diff and which one commands act on.
+#[derive(Clone)]
+pub(crate) struct DiffCommandTarget {
+    editors: [Entity<EditorView>; 2],
+    focused: Rc<Cell<DiffSide>>,
+}
+
+impl DiffCommandTarget {
+    pub(crate) fn editor(&self) -> &Entity<EditorView> {
+        &self.editors[usize::from(self.focused.get() == DiffSide::Modified)]
+    }
+}
+
 pub(crate) struct DiffView {
     original: Side,
     modified: Side,
@@ -132,7 +147,7 @@ pub(crate) struct DiffView {
     /// Each editor's scroll as of the last sync, to tell which one moved.
     synced: [f32; 2],
     /// The side whose editor last had focus, which hunk commands move.
-    focused: DiffSide,
+    focused: Rc<Cell<DiffSide>>,
     /// Watches each editor's focus; set up on the first render, which has
     /// the window.
     _focus_subscriptions: Vec<Subscription>,
@@ -161,14 +176,15 @@ impl DiffView {
             subscriptions
                 .push(cx.subscribe(&editor, |this, _, _: &Scrolled, cx| this.sync_scroll(cx)));
         }
-        modified
-            .editor
-            .read(cx)
-            .editor()
-            .clone()
-            .update(cx, |editor, _| {
-                editor.set_key_context(BAND_OWNER, DIFF_KEY_CONTEXT, true)
-            });
+        for side in [&original, &modified] {
+            side.editor
+                .read(cx)
+                .editor()
+                .clone()
+                .update(cx, |editor, _| {
+                    editor.set_key_context(BAND_OWNER, DIFF_KEY_CONTEXT, true)
+                });
+        }
         let mut view = Self {
             requested: (
                 original.model.read(cx).revision(),
@@ -179,7 +195,7 @@ impl DiffView {
             pending: None,
             hunks: Vec::new(),
             synced: [0.; 2],
-            focused: DiffSide::Modified,
+            focused: Rc::new(Cell::new(DiffSide::Modified)),
             _focus_subscriptions: Vec::new(),
             _subscriptions: subscriptions,
         };
@@ -373,13 +389,10 @@ impl DiffView {
     /// Put the focused side's caret on its first line of the hunk after (or
     /// before) the caret, wrapping at the ends. Without hunks it stays.
     pub(crate) fn go_to_hunk(&mut self, forward: bool, cx: &mut Context<Self>) -> bool {
-        let side = match self.focused {
-            DiffSide::Original => &self.original,
-            DiffSide::Modified => &self.modified,
-        };
-        let editor = side.editor.read(cx).editor().clone();
+        let focused = self.focused.get();
+        let editor = self.command_editor().read(cx).editor().clone();
         let line = editor.read(cx).caret().0 as u32;
-        let Some(target) = adjacent_hunk(&self.hunks, self.focused, line, forward) else {
+        let Some(target) = adjacent_hunk(&self.hunks, focused, line, forward) else {
             return false;
         };
         editor.update(cx, |editor, cx| {
@@ -415,15 +428,26 @@ impl DiffView {
         (self.original.spec(cx), modified)
     }
 
-    /// The editor that commands act on: the modified side's.
+    /// The editor that commands act on: the side that last had focus.
     pub(crate) fn command_editor(&self) -> &Entity<EditorView> {
-        &self.modified.editor
+        match self.focused.get() {
+            DiffSide::Original => &self.original.editor,
+            DiffSide::Modified => &self.modified.editor,
+        }
+    }
+
+    /// Which editor commands act on, readable without the view.
+    pub(crate) fn command_target(&self) -> DiffCommandTarget {
+        DiffCommandTarget {
+            editors: [self.original.editor.clone(), self.modified.editor.clone()],
+            focused: self.focused.clone(),
+        }
     }
 
     /// Treat `side` as the one with focus, as its editor gaining focus does.
     #[cfg(test)]
     pub(crate) fn set_focused_side(&mut self, side: DiffSide) {
-        self.focused = side;
+        self.focused.set(side);
     }
 
     #[cfg(test)]
@@ -449,7 +473,7 @@ impl Render for DiffView {
                 self._focus_subscriptions.push(cx.on_focus_in(
                     &handle,
                     window,
-                    move |this, _, _| this.focused = kind,
+                    move |this, _, _| this.focused.set(kind),
                 ));
             }
         }

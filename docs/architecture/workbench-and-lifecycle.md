@@ -206,11 +206,11 @@ terminal tab presents the sole attached view of an application-owned session,
 with no document model. A diff tab presents a `DiffView` of two read-only
 snapshot buffers, each an `EditorView` with its own label and language, outside
 document identity and counted as a view of no document; its split opens the same
-comparison in a fresh view. Commands on a diff tab act on its modified side's
-editor; `diff.next-hunk` and `diff.previous-hunk` (Alt+F5 and Alt+Shift+F5, bound
-in the editor's `diff` key context ahead of the version control package's) move the
-caret of the side that last had focus to the first line of the next or previous
-hunk on that side, wrapping at the ends.
+comparison in a fresh view. Commands on a diff tab act on the editor of the
+side that last had focus. Both editors hold the `diff` key context, in which
+Alt+F5 and Alt+Shift+F5 run `diff.next-hunk` and `diff.previous-hunk` ahead of
+the version control package's bindings; they move that caret to the first line
+of the next or previous hunk on that side, wrapping at the ends.
 A fixed tool window's tab presents its tool's native frame, whose
 definition and presentation survive hiding.
 The slots are left top and bottom, right top and bottom, and bottom left and

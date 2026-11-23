@@ -855,6 +855,31 @@ fn the_version_control_keys_move_between_hunks_in_a_diff_and_keep_their_binding_
     press_keys(&window, "alt-f5 alt-shift-f5", cx);
     assert_eq!(modified_caret_line(&window, cx), 1);
 
+    // With the original side focused, keys and commands act on it.
+    let view = cx.read(|cx| {
+        let workbench = window.read(cx).workbench.read(cx);
+        workbench
+            .diff_view(workbench.focused_pane().unwrap().active_tab())
+            .unwrap()
+            .clone()
+    });
+    view.update(cx, |view, _| {
+        view.set_focused_side(knot_model::diff::DiffSide::Original)
+    });
+    press_keys(&window, "alt-f5", cx);
+    let original_line = cx.read(|cx| {
+        view.read(cx).editors()[0]
+            .read(cx)
+            .editor()
+            .read(cx)
+            .caret()
+            .0
+    });
+    assert_eq!(original_line, 1);
+    view.update(cx, |view, _| {
+        view.set_focused_side(knot_model::diff::DiffSide::Modified)
+    });
+
     // On the document's own tab the package's binding applies.
     window.update(cx, |window, cx| {
         window.workbench.update(cx, |workbench, _| {

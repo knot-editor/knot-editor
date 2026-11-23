@@ -81,7 +81,7 @@ internal product operation until checkpoint 4 adds the extension API.
 Done and approved. The diff tab kind, `DiffView`, and its placement rules are
 described in [workbench and lifecycle](../architecture/workbench-and-lifecycle.md)
 and [its decision](../decisions/workbench-and-lifecycle.md#diff-view). Commands
-on a diff tab target the modified side's editor. Tests open a diff through
+on a diff tab target the editor of the side that last had focus. Tests open a diff through
 `Workbench::open_diff_in_center`, which stays test-only until checkpoint 4.
 There was nothing to try in the real app, since no entry point exists yet.
 
@@ -126,11 +126,13 @@ in the real app.
 
 ### 6. Hunk navigation 🚧
 
-Built, awaiting review. `diff.next-hunk` and `diff.previous-hunk` (Alt+F5
-and Alt+Shift+F5, bound in a `diff` key context the modified editor holds, so
-they win over `vcs.nextChange` there and only there) move the focused side's caret to a hunk's first line on that side, wrapping; they are
-unavailable on a diff without hunks. `workbench.openDiff` takes `line`, the
-0-based modified line the caret starts at.
+Built, awaiting review. `diff.next-hunk` and `diff.previous-hunk` (Alt+F5 and
+Alt+Shift+F5, bound in a `diff` key context both editors hold, so they win over
+`vcs.nextChange` there and only there) move the focused side's caret to a
+hunk's first line on that side, wrapping; they are unavailable on a diff
+without hunks. Commands on a diff tab now act on the focused side.
+`workbench.openDiff` takes `line`, the 0-based modified line the caret starts
+at.
 
 Validation: product tests for navigation and opening at a line.
 
