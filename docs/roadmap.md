@@ -397,7 +397,7 @@ milestones these items belong to.
   - Description: Nothing shows which files changed or which branch is checked
     out. Report file statuses through `@knot/vcs`, which maps them to resource
     decorations on tabs and in the explorer, and show the current ref's label
-    in the status bar.
+    in the status bar. Plan: [d213-vcs-file-status](plans/d213-vcs-file-status.md).
 
 - **D221 — Hunk popup** 🚧
   - Depends on: D220

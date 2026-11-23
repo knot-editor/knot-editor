@@ -67,9 +67,9 @@ gutter and change navigation. See [version control](../architecture/version-cont
 - ✅ **D212 — Resource decorations.** Color keys and badges per URI, painted on
   tabs and in trees. See
   [resource decorations](../architecture/semantic-ui.md#resource-decorations).
-- **D213 — VCS file status and current ref.** Status decorations from
+- 🚧 **D213 — VCS file status and current ref.** Status decorations from
   `@knot/vcs`, and the current ref's label in the status bar. Depends on D211,
-  D212.
+  D212. 🚧 Plan: [d213-vcs-file-status](d213-vcs-file-status.md).
 
 ### 3. Diffs
 
