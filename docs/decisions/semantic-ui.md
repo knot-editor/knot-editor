@@ -204,6 +204,32 @@ icon themes pair collapsed and expanded directory icons.
 
 Reference: [semantic UI](../architecture/semantic-ui.md#icons).
 
+## Resource decorations
+
+Packages push decorations through sources rather than answering a provider
+callback. Native painting can't call JavaScript, so a VS Code-style pull
+provider would still need an asynchronous native cache with invalidation, and
+both sides would keep the same state. A source owns its map, so disposal and
+lifecycle teardown remove exactly what it set, and sources from different
+packages merge natively.
+
+Native code decorates any row or tab that has a resource URI, instead of the
+explorer alone, so the changes view and every contributed tree gain version
+control and diagnostics colors without extra work, and the decorating package
+stays unknown to the painter. Decorations are application-wide because a URI
+means the same thing in every window.
+
+A badge is an icon name or a short text, because Lucide has no complete letter
+set and VS Code-style `M` and `U` markers are the familiar form; an icon name
+resolves through the icon registry, so packs can restyle it. Tabs show no
+badge, as in IntelliJ, because they already carry the icon, the dirty dot, and
+the pin. A selected tree row keeps its own foreground, as in IntelliJ, so the
+selection stays legible over any decoration color.
+Strikethrough and faded styles, and a setting to turn folder propagation off,
+are left out until a consumer needs them.
+
+Reference: [semantic UI](../architecture/semantic-ui.md#resource-decorations).
+
 ## Extension transient interactions
 
 Pickers, inputs, and prompts resolve with typed values, so dismissal is an

@@ -222,6 +222,45 @@ asset source; full-color icons go through gpui's `img()` with an SVG image.
 Surfaces: tree rows and disclosure icons, document tabs and their drag labels,
 tree actions, and status items.
 
+## Resource decorations
+
+A package decorates resource URIs with a color key, a badge, and a tooltip, and
+native surfaces paint them wherever a URI is shown without knowing who
+decorates or why. `DecorationRegistry` in `knot-model` holds one source per
+`decorations.createSource()`; a source keeps its own map from normalized URI to
+decoration, and `set` changes only the URIs it names. The application keeps one
+registry for every window. Disposing a source, or tearing down its lifecycle,
+removes its decorations, and any change repaints every window.
+
+The registry keeps a resolved map rebuilt on each change, so painting a row is
+one hash probe. When several sources decorate a URI, `color` and `badge` are
+picked separately: `error`, `warning`, and `info` rank first, as with gutter
+marks, then the most recently created source; a badge ranks by the severity of
+the decoration that carries it. Tooltips from every source are joined, one per
+line. A decoration with `propagate` also colors every ancestor URI of the same
+scheme and authority; that color carries no badge or tooltip, ranks below a
+color set directly on the ancestor, and fills in where the ancestor's own
+decoration has none.
+
+A badge is `{ icon }`, a name resolved through the [icon registry](#icons) so
+packs restyle it, or `{ text }` of one or two grapheme clusters. Both paint in
+the decoration's color.
+
+Surfaces:
+
+- **Tree rows**: every row whose `resource` is set, in every tree. The color
+  tints the label and the badge sits after the row's `statusText`, before its
+  own badge dot; the tooltip shows on hovering the row. A selected row keeps its
+  own foreground.
+- **Document tabs**: the color tints the title and the tooltip shows on
+  hovering the tab. Tabs paint no badge, and the dirty dot, the pin, preview
+  italics, and the " (deleted)" suffix are unchanged. Untitled documents have no
+  resource and are never decorated.
+
+Pickers, tab drag labels, the status bar, and breadcrumbs paint no decorations.
+The contract is in `knot.d.ts`; the guide is
+[Decorate resources](../extension-api/ui.md#decorate-resources).
+
 ## Extension trees
 
 Tree providers run the opposite way to editor contributions: the native view

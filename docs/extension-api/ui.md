@@ -356,6 +356,35 @@ the bar, and `statusBar.hiddenItems` lists IDs the bar skips. A hidden item
 keeps its registration and its package keeps running. To follow the editor the
 bar describes, observe `statusTarget` on each window.
 
+## Decorate resources
+
+A package can color and badge any resource URI. Trees paint a decoration on
+every row whose `resource` is that URI, and document tabs tint their title and
+show the tooltip. Create a source, then set the URIs it decorates:
+
+```js
+const source = await decorations.createSource();
+await source.set({
+  "file:///repo/src/main.rs": {
+    color: "diff.modified", // a theme color key; tints the label
+    badge: { text: "M" },   // or { icon: "square-dot" }
+    tooltip: "Modified",
+    propagate: true,        // folders above take the color
+  },
+  "file:///repo/old.rs": null, // removes that URI's decoration
+});
+await source.clear();
+```
+
+`set` changes only the URIs it names, and disposing the source, or unloading
+the package, removes everything it decorated. A decoration applies in every
+window. Every field is optional. A text badge is one or two characters, and an
+icon badge names an icon, so a pack can restyle it. When sources overlap,
+`error`, `warning`, and `info` colors win, then the most recent source.
+Decorations don't touch pickers or the status bar, and tabs show no badge. The
+rules are in
+[Resource decorations](../architecture/semantic-ui.md#resource-decorations).
+
 ## Tell the user without interrupting
 
 `workbench.showNotice` raises a notice: a popup card in the window it targets,

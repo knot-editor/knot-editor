@@ -88,6 +88,9 @@ touches.
   one frame registration; text frames reuse the editor surface; general
   gesture, reveal, speed search, and inline editing rather than explorer-only;
   drops run a command on rows only.
+- [Resource decorations](decisions/semantic-ui.md#resource-decorations): push
+  sources instead of a pull provider; native painting on any row or tab with a
+  resource; icon or text badges, none on tabs; selection keeps its foreground.
 - [Extension transient interactions](decisions/semantic-ui.md#extension-transient-interactions):
   typed results, complete lists filtered natively or rows supplied per query,
   pushed callbacks; whole-value completion items with menu accept; one native matcher
