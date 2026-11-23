@@ -1,6 +1,6 @@
 # D212 — Resource decorations
 
-Status: 🚧 in progress; checkpoint 1 is complete, checkpoint 2 is next. Source: [roadmap D212](../roadmap.md), part
+Status: 🚧 in progress; checkpoints 1 and 2 are complete, checkpoint 3 is next. Source: [roadmap D212](../roadmap.md), part
 of the [version control plan](vcs.md), whose architecture section this plan
 refines without reopening.
 
@@ -121,42 +121,14 @@ carries it; the registry keeps a resolved map rebuilt on each change, so a
 lookup per painted row is one hash probe; the in-memory `knot/testing` host
 fakes the API with `decorationsOf(uri)`.
 
-### 2. Tree rows 🚧
+### 2. Tree rows ✅
 
-Implemented, awaiting the review gate. Choices made for review: a selected row
-keeps its own foreground instead of the decoration color, as IntelliJ does;
-the badge sits after `statusText` and before the row's own dot, with the
-decoration's color; the tooltip is gpui-component's `Tooltip`, as on terminal
-tabs; the row's resource is parsed on each paint of a visible row.
-
-Deliverables: decorated rows in every tree, with label color, badge icon,
-tooltip, and propagated folder colors. The explorer is decorated without any
-change to it.
-
-Validation: product tests in which a test package decorates files under a
-root shown in the explorer: rows take the color and an icon or text badge,
-a folder takes the propagated color, a row's own `statusText` and `badge`
-coexist with the decoration, and changes and disposal repaint. Product-driver accessors for a
-row's label color, badge, and tooltip. A look at the running app in light and
-dark themes, selected and unselected.
-
-Review gate: the visual result in the explorer, which settles the deferred
-decisions on layout, tooltips, and selection.
-
-**Implementation context:**
-- Row painting in `src/app/tree_view.rs`: the label and the
-  `status_text`/`badge` children around lines 1580–1645; a text badge
-  mirrors the `status_text` element, in the decoration's color. The row's resource
-  comes from `TreeItem.resource` (`crates/knot-protocol/src/lib.rs`, line
-  512), parsed to `ResourceUri` once when the item is cached, not on every
-  paint.
-- Paint badges with `crate::app::icons::AppIcon` and `icon_definition`
-  (`src/app/icons.rs`), with `.tinted(...)` as the bell on terminal tabs does
-  in `src/app/product/render.rs`.
-- Tooltip pattern: the terminal-tab tooltip in `render.rs` (around line 518).
-- Driver accessors next to `stripe_badge` in
-  `src/app/product/driver/window.rs` (line 116); explorer fixtures as in
-  `src/app/product/tests/tree_drag.rs` and `crates/knot-ext-workbench/tests`.
+Complete. `src/app/tree_view.rs` looks up each painted row's `resource` in the
+registry: the label takes the decoration's color, a text or icon badge sits
+after `statusText` and before the row's own dot, and the tooltip is
+gpui-component's `Tooltip`. A selected row keeps its own foreground. The
+product test `tree_rows_with_a_resource_show_decorations_and_repaint_on_change`
+covers the behavior; light and dark themes were reviewed in the running app.
 
 ### 3. Tabs and documentation
 
