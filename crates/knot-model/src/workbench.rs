@@ -9,7 +9,7 @@
 //! presentations. This module models layout and lifecycle transitions
 //! independently of native windows, views, and confirmation dialogs.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct PaneId(u64);
@@ -420,6 +420,8 @@ pub struct Workbench {
     previous_pane: Option<PaneId>,
     /// Terminals that rang the bell while their tab was not shown.
     bell_marks: HashSet<TerminalSessionId>,
+    /// The document each diff view edits on its modified side.
+    diff_documents: HashMap<DiffViewId, DocumentId>,
 }
 
 impl Workbench {
@@ -437,6 +439,7 @@ impl Workbench {
             focused_pane: None,
             previous_pane: None,
             bell_marks: HashSet::new(),
+            diff_documents: HashMap::new(),
         }
     }
 
@@ -1061,11 +1064,31 @@ impl Workbench {
         tabs.into_iter().map(|(_, _, document)| document).collect()
     }
 
+    /// Record that `diff` edits `document` on its modified side, so its tab
+    /// counts as a view of the document.
+    pub fn set_diff_document(&mut self, diff: DiffViewId, document: DocumentId) {
+        self.diff_documents.insert(diff, document);
+    }
+
+    /// The document `diff` edits, if it edits one.
+    pub fn diff_document(&self, diff: DiffViewId) -> Option<DocumentId> {
+        self.diff_documents.get(&diff).copied()
+    }
+
+    /// The document `tab` shows or edits: a document tab's own, or a diff
+    /// tab's modified side.
+    pub fn shown_document(&self, tab: &WorkbenchTab) -> Option<DocumentId> {
+        match tab.surface {
+            TabSurfaceId::Diff(diff) => self.diff_document(diff),
+            _ => tab.document_id(),
+        }
+    }
+
     pub fn view_count(&self, document_id: DocumentId) -> usize {
         self.panes
             .iter()
             .flat_map(|pane| &pane.tabs)
-            .filter(|tab| tab.document_id() == Some(document_id))
+            .filter(|tab| self.shown_document(tab) == Some(document_id))
             .count()
     }
 

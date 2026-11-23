@@ -494,8 +494,17 @@ impl Workbench {
         Some(pane)
     }
 
-    fn attach_diff(&mut self, presentation: PresentationId, view: Entity<DiffView>, cx: &App) {
+    fn attach_diff(
+        &mut self,
+        diff: DiffViewId,
+        presentation: PresentationId,
+        view: Entity<DiffView>,
+        cx: &App,
+    ) {
         let editor = view.read(cx).command_editor().clone();
+        if let Some(document) = view.read(cx).document() {
+            self.layout.set_diff_document(diff, document);
+        }
         self.views
             .insert(presentation, PresentationView::Diff(view, editor));
     }
@@ -505,7 +514,7 @@ impl Workbench {
     pub(crate) fn open_diff_in_center(
         &mut self,
         original: super::diff_view::SnapshotSpec,
-        modified: super::diff_view::SnapshotSpec,
+        modified: impl Into<super::diff_view::ModifiedSource>,
         cx: &mut Context<Self>,
     ) -> (PaneId, TabId) {
         let id = super::diff_view::allocate_diff_id();
@@ -514,7 +523,7 @@ impl Workbench {
             .open_diff_in_center(id)
             .expect("a new diff has a fresh identity");
         let view = cx.new(|cx| DiffView::new(original, modified, cx));
-        self.attach_diff(self.presentation_of(pane, tab), view, cx);
+        self.attach_diff(id, self.presentation_of(pane, tab), view, cx);
         (pane, tab)
     }
 
@@ -537,7 +546,7 @@ impl Workbench {
             .split_pane_with_diff(pane_id, direction, placement, id)?;
         let view = cx.new(|cx| DiffView::new(original, modified, cx));
         let presentation = self.pane(pane).unwrap().active_tab().presentation();
-        self.attach_diff(presentation, view, cx);
+        self.attach_diff(id, presentation, view, cx);
         Some(pane)
     }
 
@@ -668,6 +677,11 @@ impl Workbench {
         };
         if let Some(view) = view {
             destination.views.insert(arrived, view);
+        }
+        if let TabSurfaceId::Diff(diff) = source.tab.surface
+            && let Some(document) = self.layout.diff_document(diff)
+        {
+            destination.layout.set_diff_document(diff, document);
         }
         Some(moved)
     }

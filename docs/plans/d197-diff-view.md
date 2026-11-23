@@ -95,21 +95,23 @@ gutter, so `ViewDecoration` can carry a gutter mark. The bands come from
 entry point opens a diff in the real app before checkpoint 4; the look in the
 default themes is first visible at the next checkpoint that opens one.
 
-### 3. Editable document side
+### 3. Editable document side ✅ (awaiting review)
 
 Deliverables:
 
-- A side can be a document: a fresh, editable `EditorView` of its shared
-  buffer.
-- Rediff after each commit of either side, debounced, and kept only if both
-  revisions still match.
-- Closure counts a diff tab with a document side as a view of that document,
-  so closing its last view prompts and hot exit protects it.
+- ✅ The modified side can be a document: a fresh, editable `EditorView` of its
+  shared buffer (`ModifiedSource::Document`). Only the modified side can be
+  one, matching "commands target the modified side's editor".
+- ✅ Rediff 150 ms after a commit of either side, kept only if both revisions
+  still match; a newer edit replaces a pending rediff.
+- ✅ Closure counts a diff tab with a document side as a view of that document
+  (`Workbench::set_diff_document`, `shown_document`, `ClosureView.document`),
+  so closing its last view prompts, and the document stays open while a diff
+  edits it. Hot exit keeps using view counts, so it protects the document.
 
-Validation: model tests for closure counting and for the debounce and
-revision checks; product tests that edit in the diff tab and see the bands
-follow, edit the document in its own tab, and close a dirty final view through
-the diff tab.
+Validation: model tests for closure counting; product tests that edit the
+document and see the bands follow after the debounce, coalesce edits, and
+close a dirty final view through the diff tab.
 
 Review gate: closure behavior and how rediffing feels while typing.
 

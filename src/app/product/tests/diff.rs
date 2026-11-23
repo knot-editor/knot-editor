@@ -300,3 +300,154 @@ fn a_diff_tab_bands_each_hunk_on_both_sides(cx: &mut TestAppContext) {
         ]
     );
 }
+
+/// A window showing one document with `text`, and a diff tab of a `HEAD`
+/// snapshot against that document focused beside it.
+fn document_diff_window(
+    text: &str,
+    cx: &mut TestAppContext,
+) -> (
+    Entity<KnotWindow>,
+    gpui::AnyWindowHandle,
+    crate::app::documents::DocumentId,
+    Entity<crate::app::model::Buffer>,
+) {
+    let documents = install_globals(cx);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    model.update(cx, |model, _| model.replace(0..0, text).unwrap());
+    let (window, native_window) = product_window(document, model.clone(), cx);
+    window.update(cx, |window, cx| {
+        window.workbench.update(cx, |workbench, cx| {
+            workbench.open_diff_in_center(
+                spec("HEAD", None, "one\ntwo\n"),
+                crate::app::diff_view::ModifiedSource::Document {
+                    id: document,
+                    label: "Working copy".to_owned(),
+                    model: model.clone(),
+                },
+                cx,
+            );
+        });
+        window.focus_active_surface(cx);
+    });
+    cx.run_until_parked();
+    (window, native_window, document, model)
+}
+
+fn edit(
+    model: &Entity<crate::app::model::Buffer>,
+    range: std::ops::Range<usize>,
+    text: &str,
+    cx: &mut TestAppContext,
+) {
+    model.update(cx, |model, cx| {
+        model.replace(range, text).unwrap();
+        cx.notify();
+    });
+}
+
+fn settle(cx: &mut TestAppContext) {
+    cx.executor()
+        .advance_clock(std::time::Duration::from_millis(200));
+    cx.run_until_parked();
+}
+
+#[gpui::test]
+fn a_document_side_is_editable_shares_the_buffer_and_keeps_the_bands_current(
+    cx: &mut TestAppContext,
+) {
+    let (window, _, document, model) = document_diff_window("one\ntwo\n", cx);
+    assert_eq!(bands(&window, cx), [(vec![], vec![]), (vec![], vec![])]);
+    cx.read(|cx| {
+        let workbench = window.read(cx).workbench.read(cx);
+        assert_eq!(workbench.view_count(document), 2);
+    });
+
+    // An edit of the document, wherever it is made, rebands both sides after
+    // the debounce, not before.
+    edit(&model, 4..7, "2", cx);
+    cx.run_until_parked();
+    assert_eq!(bands(&window, cx), [(vec![], vec![]), (vec![], vec![])]);
+    settle(cx);
+    let modified = (vec![(1, "diff.modified".to_owned())], vec![]);
+    assert_eq!(bands(&window, cx), [modified.clone(), modified]);
+    assert_eq!(
+        texts(&window, cx),
+        Some(("one\ntwo\n".to_owned(), "one\n2\n".to_owned()))
+    );
+
+    // Changes inside the debounce window coalesce into the last one.
+    edit(&model, 4..5, "two", cx);
+    cx.executor()
+        .advance_clock(std::time::Duration::from_millis(100));
+    edit(&model, 4..7, "t", cx);
+    cx.executor()
+        .advance_clock(std::time::Duration::from_millis(100));
+    cx.run_until_parked();
+    assert_eq!(
+        bands(&window, cx)[1].0,
+        vec![(1, "diff.modified".to_owned())]
+    );
+    settle(cx);
+    assert_eq!(model.read_with(cx, |model, _| model.text()), "one\nt\n");
+}
+
+#[gpui::test]
+async fn closing_the_final_dirty_view_of_a_document_through_its_diff_prompts(
+    cx: &mut TestAppContext,
+) {
+    let (window, native_window, document, _) = document_diff_window("one\n2\n", cx);
+    // Close the document's own tab first: the diff still views it.
+    cx.update_window(native_window, |_, _, cx| {
+        window.update(cx, |window, cx| {
+            window.workbench.update(cx, |workbench, _| {
+                let tabs = workbench.tabs().map(|tab| tab.id()).collect::<Vec<_>>();
+                let pane = workbench.focused_pane_id().unwrap();
+                workbench.activate_tab(pane, tabs[0]);
+            });
+        });
+    })
+    .unwrap();
+    let execution = dispatch_product_command(&window, native_window, CLOSE_TAB_COMMAND, cx);
+    assert_eq!(
+        execution.completion.await.unwrap(),
+        CommandOutcome::Completed
+    );
+    assert!(!cx.has_pending_prompt());
+    cx.read(|cx| {
+        let workbench = window.read(cx).workbench.read(cx);
+        assert_eq!(workbench.view_count(document), 1);
+        assert!(
+            workbench
+                .focused_pane()
+                .unwrap()
+                .active_tab()
+                .document_id()
+                .is_none()
+        );
+    });
+
+    // Closing the diff, the last view, asks about the dirty document.
+    let execution = dispatch_product_command(&window, native_window, CLOSE_TAB_COMMAND, cx);
+    cx.run_until_parked();
+    assert!(cx.has_pending_prompt());
+    cx.simulate_prompt_answer("Cancel");
+    assert_eq!(
+        execution.completion.await.unwrap(),
+        CommandOutcome::Cancelled
+    );
+    cx.read(|cx| {
+        assert_eq!(window.read(cx).workbench.read(cx).view_count(document), 1);
+    });
+    let execution = dispatch_product_command(&window, native_window, CLOSE_TAB_COMMAND, cx);
+    cx.run_until_parked();
+    cx.simulate_prompt_answer("Don't Save");
+    assert_eq!(
+        execution.completion.await.unwrap(),
+        CommandOutcome::Completed
+    );
+    cx.read(|cx| {
+        assert!(KnotWindow::documents(cx).read(cx).get(document).is_none());
+    });
+}

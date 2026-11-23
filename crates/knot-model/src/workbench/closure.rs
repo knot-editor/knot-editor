@@ -62,6 +62,8 @@ pub struct ClosureView {
     pub pinned: bool,
     /// The area of the view's pane.
     pub area: Area,
+    /// The document the view shows or edits, if any.
+    pub document: Option<DocumentId>,
 }
 
 /// A document's state as a close sees it.
@@ -153,14 +155,22 @@ pub fn scope(kind: CloseKind, origin: &CloseOrigin, views: &[ClosureView]) -> Ve
         .collect()
 }
 
-fn document_counts<'a>(keys: impl IntoIterator<Item = &'a ViewKey>) -> HashMap<DocumentId, usize> {
+fn document_counts<'a>(
+    views: impl IntoIterator<Item = &'a ClosureView>,
+) -> HashMap<DocumentId, usize> {
     let mut counts = HashMap::new();
-    for key in keys {
-        if let TabSurfaceId::Document(document) = key.surface {
-            *counts.entry(document).or_insert(0usize) += 1;
-        }
+    for document in views.into_iter().filter_map(|view| view.document) {
+        *counts.entry(document).or_insert(0usize) += 1;
     }
     counts
+}
+
+/// The views of `scope`, with their documents.
+fn scoped_views<'a>(
+    scope: &'a [ViewKey],
+    views: &'a [ClosureView],
+) -> impl Iterator<Item = &'a ClosureView> {
+    views.iter().filter(|view| scope.contains(&view.key))
 }
 
 /// Plan a close. `discard` approves the discard of every dirty document that
@@ -181,13 +191,13 @@ pub fn plan(
         _ => {}
     }
     let scope = scope(kind, origin, views);
-    let total = document_counts(views.iter().map(|view| &view.key));
-    let scoped = document_counts(&scope);
+    let total = document_counts(views);
+    let scoped = document_counts(scoped_views(&scope, views));
     let status = |id: DocumentId| documents.iter().find(|document| document.id == id);
     let mut prompted = HashSet::new();
     let mut prompts = Vec::new();
-    for key in &scope {
-        let TabSurfaceId::Document(document) = key.surface else {
+    for view in scoped_views(&scope, views) {
+        let (key, Some(document)) = (&view.key, view.document) else {
             continue;
         };
         let loses_final_view =
@@ -270,8 +280,8 @@ pub fn revalidate(
             .iter()
             .any(|approval| approval.document == id && approval.kind == ApprovalKind::Discarded)
     };
-    let total = document_counts(views.iter().map(|view| &view.key));
-    let scoped = document_counts(&current);
+    let total = document_counts(views);
+    let scoped = document_counts(scoped_views(&current, views));
     let loses_final_view =
         |id: DocumentId| kind == CloseKind::Quit || scoped.get(&id) == total.get(&id);
     for document in documents {
@@ -316,6 +326,10 @@ mod tests {
             key,
             pinned: false,
             area: Area::Center,
+            document: match key.surface {
+                TabSurfaceId::Document(document) => Some(document),
+                _ => None,
+            },
         }
     }
 
@@ -325,6 +339,47 @@ mod tests {
             revision: 3,
             dirty,
         }
+    }
+
+    #[test]
+    fn a_diff_tab_counts_as_a_view_of_its_document() {
+        let document_tab = key(1, 1, 1);
+        let diff_tab = ViewKey {
+            surface: TabSurfaceId::Diff(crate::workbench::DiffViewId(7)),
+            ..key(1, 2, 0)
+        };
+        let diff = ClosureView {
+            document: Some(DocumentId::new(1)),
+            ..view(diff_tab)
+        };
+        let views = [view(document_tab), diff];
+        let documents = [status(1, true)];
+
+        // The document tab is not the final view while the diff edits it.
+        let plan = plan(
+            CloseKind::Tab,
+            &document_tab.into(),
+            false,
+            &views,
+            &documents,
+        )
+        .unwrap();
+        assert!(plan.prompts.is_empty());
+        // Closing the diff tab last asks about the dirty document.
+        let only_diff = [diff];
+        let plan = super::plan(
+            CloseKind::Tab,
+            &diff_tab.into(),
+            false,
+            &only_diff,
+            &documents,
+        )
+        .unwrap();
+        assert_eq!(plan.prompts, vec![(DocumentId::new(1), diff_tab)]);
+        // Closing both asks once.
+        let plan =
+            super::plan(CloseKind::Pane, &diff_tab.into(), false, &views, &documents).unwrap();
+        assert_eq!(plan.prompts.len(), 1);
     }
 
     #[test]

@@ -1,15 +1,18 @@
 //! A center tab comparing two texts.
 //!
 //! The view presents an original and a modified side, each an ordinary
-//! [`EditorView`]. A side is a snapshot: a private read-only buffer with a
-//! label and a language, outside document identity like a text frame's.
+//! [`EditorView`]. The original is a snapshot: a private read-only buffer with
+//! a label and a language, outside document identity like a text frame's. The
+//! modified side is a snapshot or a document, an editable view of the
+//! document's shared buffer. The bands follow edits to either side.
 
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
 
 use gpui::{prelude::*, *};
 
 use knot_model::diff::{DiffOptions, DiffSide, hunk_decorations, line_hunks};
-use knot_model::workbench::DiffViewId;
+use knot_model::workbench::{DiffViewId, DocumentId};
 use knot_protocol::{ExtensionId, ExtensionKey, ExtensionLifecycleId};
 
 use super::convert::ThemePaint as _;
@@ -21,6 +24,9 @@ use super::zoom;
 /// Owns the bands a diff view puts on its editors.
 const BAND_OWNER: ExtensionKey =
     ExtensionKey::new(ExtensionId::new(u64::MAX), ExtensionLifecycleId::new(1));
+
+/// How long after an edit the bands are recomputed, as the change gutter's.
+const REDIFF_DELAY: Duration = Duration::from_millis(150);
 
 static NEXT_DIFF_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -38,9 +44,29 @@ pub(crate) struct SnapshotSpec {
     pub text: String,
 }
 
+/// What the modified side shows.
+#[derive(Clone)]
+pub(crate) enum ModifiedSource {
+    Snapshot(SnapshotSpec),
+    /// The live buffer of an application document.
+    Document {
+        id: DocumentId,
+        label: String,
+        model: Entity<Buffer>,
+    },
+}
+
+impl From<SnapshotSpec> for ModifiedSource {
+    fn from(spec: SnapshotSpec) -> Self {
+        Self::Snapshot(spec)
+    }
+}
+
 struct Side {
     label: String,
     language: Option<String>,
+    /// The document the side edits, when it is not a snapshot.
+    document: Option<DocumentId>,
     model: Entity<Buffer>,
     editor: Entity<EditorView>,
 }
@@ -55,6 +81,23 @@ impl Side {
         Self {
             label: spec.label,
             language: spec.language,
+            document: None,
+            model,
+            editor,
+        }
+    }
+
+    fn document(
+        id: DocumentId,
+        label: String,
+        model: Entity<Buffer>,
+        cx: &mut Context<DiffView>,
+    ) -> Self {
+        let editor = cx.new(|cx| EditorView::new(model.clone(), cx));
+        Self {
+            label,
+            language: None,
+            document: Some(id),
             model,
             editor,
         }
@@ -72,27 +115,79 @@ impl Side {
 pub(crate) struct DiffView {
     original: Side,
     modified: Side,
+    /// The revisions of both sides the bands describe or a pending rediff is
+    /// for.
+    requested: (u64, u64),
+    pending: Option<Task<()>>,
+    _subscriptions: [Subscription; 2],
 }
 
 impl DiffView {
     pub(crate) fn new(
         original: SnapshotSpec,
-        modified: SnapshotSpec,
+        modified: impl Into<ModifiedSource>,
         cx: &mut Context<Self>,
     ) -> Self {
-        let view = Self {
-            original: Side::snapshot(original, cx),
-            modified: Side::snapshot(modified, cx),
+        let original = Side::snapshot(original, cx);
+        let modified = match modified.into() {
+            ModifiedSource::Snapshot(spec) => Side::snapshot(spec, cx),
+            ModifiedSource::Document { id, label, model } => Side::document(id, label, model, cx),
         };
-        view.band_hunks(cx);
+        let subscriptions = [&original, &modified]
+            .map(|side| cx.observe(&side.model, |this, _, cx| this.rediff_if_changed(cx)));
+        let mut view = Self {
+            requested: (
+                original.model.read(cx).revision(),
+                modified.model.read(cx).revision(),
+            ),
+            original,
+            modified,
+            pending: None,
+            _subscriptions: subscriptions,
+        };
+        view.rediff(None, cx);
         view
     }
 
-    /// Diff the sides off the foreground, then band both editors.
-    fn band_hunks(&self, cx: &mut Context<Self>) {
-        let old = self.original.model.read(cx).text();
-        let new = self.modified.model.read(cx).text();
-        cx.spawn(async move |this, cx| {
+    /// The document the modified side edits, if it is one.
+    pub(crate) fn document(&self) -> Option<DocumentId> {
+        self.modified.document
+    }
+
+    fn revisions(&self, cx: &App) -> (u64, u64) {
+        (
+            self.original.model.read(cx).revision(),
+            self.modified.model.read(cx).revision(),
+        )
+    }
+
+    /// Rediff after a debounce when an edit changed either side. Buffers
+    /// also notify for syntax updates, which leave the revisions alone.
+    fn rediff_if_changed(&mut self, cx: &mut Context<Self>) {
+        let revisions = self.revisions(cx);
+        if revisions != self.requested {
+            self.requested = revisions;
+            self.rediff(Some(REDIFF_DELAY), cx);
+        }
+    }
+
+    /// Diff the sides off the foreground after `delay`, then band both
+    /// editors if neither side has changed since. A newer request replaces a
+    /// pending one.
+    fn rediff(&mut self, delay: Option<Duration>, cx: &mut Context<Self>) {
+        self.pending = Some(cx.spawn(async move |this, cx| {
+            if let Some(delay) = delay {
+                cx.background_executor().timer(delay).await;
+            }
+            let Ok((revisions, old, new)) = this.update(cx, |this, cx| {
+                (
+                    this.revisions(cx),
+                    this.original.model.read(cx).text(),
+                    this.modified.model.read(cx).text(),
+                )
+            }) else {
+                return;
+            };
             let (hunks, old, new) = cx
                 .background_spawn(async move {
                     let hunks = line_hunks(&old, &new, DiffOptions::default());
@@ -100,22 +195,23 @@ impl DiffView {
                 })
                 .await;
             this.update(cx, |this, cx| {
+                if this.revisions(cx) != revisions {
+                    return;
+                }
                 for (side, text, kind) in [
                     (&this.original, &old, DiffSide::Original),
                     (&this.modified, &new, DiffSide::Modified),
                 ] {
                     let items = hunk_decorations(&hunks, kind, text);
-                    let revision = side.model.read(cx).revision();
                     let editor = side.editor.read(cx).editor().clone();
+                    let revision = side.model.read(cx).revision();
                     editor.update(cx, |editor, cx| {
-                        // Snapshots are read-only, so the revision holds.
                         let _ = editor.set_decorations(BAND_OWNER, &items, revision, cx);
                     });
                 }
             })
             .ok();
-        })
-        .detach();
+        }));
     }
 
     /// The tab title, from both labels.
@@ -123,9 +219,18 @@ impl DiffView {
         format!("{} ↔ {}", self.original.label, self.modified.label)
     }
 
-    /// The sides as they are now, to open the same comparison again.
-    pub(crate) fn specs(&self, cx: &App) -> (SnapshotSpec, SnapshotSpec) {
-        (self.original.spec(cx), self.modified.spec(cx))
+    /// The sides as they are now, to open the same comparison again. A
+    /// document side stays that document.
+    pub(crate) fn specs(&self, cx: &App) -> (SnapshotSpec, ModifiedSource) {
+        let modified = match self.modified.document {
+            Some(id) => ModifiedSource::Document {
+                id,
+                label: self.modified.label.clone(),
+                model: self.modified.model.clone(),
+            },
+            None => ModifiedSource::Snapshot(self.modified.spec(cx)),
+        };
+        (self.original.spec(cx), modified)
     }
 
     /// The editor that commands act on: the modified side's.

@@ -31,6 +31,7 @@ fn closure_views(views: &[ProtectedView]) -> Vec<model::ClosureView> {
             key: view.key,
             pinned: view.pinned,
             area: view.area,
+            document: view.document,
         })
         .collect()
 }
@@ -64,15 +65,16 @@ impl KnotWindow {
             let workbench = window.read(cx).workbench.clone();
             let snapshots = workbench.read(cx).tab_snapshots();
             views.extend(snapshots.into_iter().map(|snapshot| {
-                let (has_editor, pinned, presentation) = {
+                let (has_editor, pinned, presentation, document) = {
                     let workbench = workbench.read(cx);
                     let tab = workbench
                         .tab(snapshot.pane_id, snapshot.tab_id)
                         .expect("snapshots name live tabs");
                     (
-                        workbench.editor(tab).is_some(),
+                        workbench.editor(tab).is_some() || workbench.diff_view(tab).is_some(),
                         tab.is_pinned(),
                         tab.presentation(),
+                        workbench.shown_document(tab),
                     )
                 };
                 ProtectedView {
@@ -85,6 +87,7 @@ impl KnotWindow {
                         surface: snapshot.surface,
                     },
                     pinned,
+                    document,
                     area: workbench
                         .read(cx)
                         .pane_area(snapshot.pane_id)
@@ -667,11 +670,24 @@ impl KnotWindow {
             return Ok(());
         }
         if let TabSurfaceId::Diff(diff) = surface {
-            let outcome = self.workbench.update(cx, |workbench, _| {
-                workbench.request_close_diff_tab(pane, tab, diff)
+            let (outcome, released) = self.workbench.update(cx, |workbench, _| {
+                let document = workbench
+                    .tab(pane, tab)
+                    .and_then(|t| workbench.shown_document(t));
+                let outcome = workbench.request_close_diff_tab(pane, tab, diff);
+                let released = document.filter(|document| workbench.view_count(*document) == 0);
+                (outcome, released)
             });
             if outcome.is_none() {
                 return Err(ProtectedCloseFailure::InvalidTarget);
+            }
+            // The diff was the document's last view in this workbench.
+            if let Some(document) = released
+                && cx.global::<ApplicationWindows>().view_count(document, cx) == 0
+            {
+                Self::documents(cx).update(cx, |documents, cx| {
+                    documents.remove(document, cx);
+                });
             }
             self.focus_active_surface(cx);
             cx.notify();
