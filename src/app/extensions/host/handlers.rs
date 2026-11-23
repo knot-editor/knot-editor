@@ -3760,7 +3760,11 @@ impl HostArguments for SetDecorationsArguments {
                     decoration: Some(decoration),
                     gutter: None,
                     command: None,
-                } => Ok(knot_model::editor::ViewDecoration { range, decoration }),
+                } => Ok(knot_model::editor::ViewDecoration {
+                    range,
+                    decoration: Some(decoration),
+                    gutter: None,
+                }),
                 _ => Err(DecodeError::Type(
                     "view decorations need only a range and a decoration",
                 )),

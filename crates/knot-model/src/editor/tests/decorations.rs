@@ -157,7 +157,8 @@ mod view {
                 start_byte_offset: range.start,
                 end_byte_offset: range.end,
             },
-            decoration: Decoration::new(key, Background),
+            decoration: Some(Decoration::new(key, Background)),
+            gutter: None,
         }
     }
 

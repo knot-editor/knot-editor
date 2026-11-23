@@ -85,20 +85,24 @@ on a diff tab target the modified side's editor. Tests open a diff through
 `Workbench::open_diff_in_center`, which stays test-only until checkpoint 4.
 There was nothing to try in the real app, since no entry point exists yet.
 
-### 2. Hunk bands
+### 2. Hunk bands ✅ (awaiting review)
 
 Deliverables:
 
-- Diff the two sides on open with `line_hunks` on the background executor.
-- Line bands for each hunk: `diff.removed` and `diff.modified` on the original
+- ✅ Diff the two sides on open with `line_hunks` on the background executor.
+- ✅ Line bands for each hunk: `diff.removed` and `diff.modified` on the original
   side, `diff.added` and `diff.modified` on the modified side, and a marker at
-  the boundary where one side has no lines.
+  the boundary where one side has no lines. The marker is a deletion wedge in
+  the gutter, in the color of what the other side holds there, so view
+  decorations (`ViewDecoration`) can now carry a gutter mark.
 
 Validation: model tests that turn hunks into bands and markers, including
 empty sides and a final line without a newline; a product test of the
 decorations a diff tab shows.
 
-Review gate: how the bands look in the default themes.
+Review gate: how the bands look in the default themes. No entry point opens
+a diff in the real app before checkpoint 4, so this can be judged from the
+product test only, or deferred to the first checkpoint that opens one.
 
 **Implementation context**
 

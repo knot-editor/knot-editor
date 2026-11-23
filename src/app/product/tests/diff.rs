@@ -246,3 +246,57 @@ fn run_command(
     cx.run_until_parked();
     outcome
 }
+
+type Marks = (Vec<(usize, String)>, Vec<(usize, String)>);
+
+/// The line bands and gutter wedges of the active diff's two sides, as
+/// (line, key) pairs.
+fn bands(window: &Entity<KnotWindow>, cx: &TestAppContext) -> [Marks; 2] {
+    cx.read(|cx| {
+        let workbench = window.read(cx).workbench.read(cx);
+        let view = workbench
+            .diff_view(workbench.focused_pane().unwrap().active_tab())
+            .unwrap();
+        view.read(cx).editors().map(|editor| {
+            let editor = editor.read(cx).editor().read(cx);
+            (
+                editor
+                    .decorations()
+                    .iter()
+                    .map(|band| (band.line, band.key.clone()))
+                    .collect(),
+                editor
+                    .gutter_bars()
+                    .iter()
+                    .map(|wedge| (wedge.line, wedge.key.clone()))
+                    .collect(),
+            )
+        })
+    })
+}
+
+#[gpui::test]
+fn a_diff_tab_bands_each_hunk_on_both_sides(cx: &mut TestAppContext) {
+    let (window, _, _) = diff_window(cx);
+    let modified = (vec![(1, "diff.modified".to_owned())], vec![]);
+    assert_eq!(bands(&window, cx), [modified.clone(), modified]);
+
+    // A line only the modified side has leaves a wedge on the original side.
+    window.update(cx, |window, cx| {
+        window.workbench.update(cx, |workbench, cx| {
+            workbench.open_diff_in_center(
+                spec("HEAD", None, "one\nthree\n"),
+                spec("Working copy", None, "one\ntwo\nthree\n"),
+                cx,
+            );
+        });
+    });
+    cx.run_until_parked();
+    assert_eq!(
+        bands(&window, cx),
+        [
+            (vec![], vec![(1, "diff.added".to_owned())]),
+            (vec![(1, "diff.added".to_owned())], vec![]),
+        ]
+    );
+}

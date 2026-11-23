@@ -3,22 +3,24 @@
 //! only this editor paints it, merged with the buffer's contributions.
 //! Presentation state, never recorded.
 
-use knot_protocol::{Decoration, ExtensionKey};
+use knot_protocol::{Decoration, ExtensionKey, GutterMark};
 
 use super::*;
 use crate::buffer::ContributionError;
 
-/// One decoration of a view's set: `decoration` painted over `range`.
+/// One decoration of a view's set: `decoration` painted and `gutter` marked
+/// over `range`.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ViewDecoration {
     pub range: ByteRange,
-    pub decoration: Decoration,
+    pub decoration: Option<Decoration>,
+    pub gutter: Option<GutterMark>,
 }
 
 /// One lifecycle's decorations on this view, as anchored ranges.
 pub(super) struct ViewDecorationSet {
     owner: ExtensionKey,
-    items: Vec<(AnchoredRangeId, Decoration)>,
+    items: Vec<(AnchoredRangeId, Option<Decoration>, Option<GutterMark>)>,
 }
 
 impl EditorState {
@@ -39,7 +41,13 @@ impl EditorState {
             let items = ranges
                 .into_iter()
                 .zip(items)
-                .map(|(range, item)| (buffer.add_view_range(range), item.decoration.clone()))
+                .map(|(range, item)| {
+                    (
+                        buffer.add_view_range(range),
+                        item.decoration.clone(),
+                        item.gutter.clone(),
+                    )
+                })
                 .collect();
             self.view_decorations
                 .push(ViewDecorationSet { owner, items });
@@ -54,7 +62,7 @@ impl EditorState {
             if set.owner != owner {
                 return true;
             }
-            for (id, _) in &set.items {
+            for (id, ..) in &set.items {
                 buffer.remove_view_position(Some(*id));
             }
             false
@@ -64,7 +72,7 @@ impl EditorState {
     /// Release every view decoration's anchor, as the editor goes away.
     pub(super) fn release_decorations(&mut self, buffer: &mut BufferModel) {
         for set in std::mem::take(&mut self.view_decorations) {
-            for (id, _) in set.items {
+            for (id, ..) in set.items {
                 buffer.remove_view_position(Some(id));
             }
         }
@@ -81,7 +89,7 @@ impl EditorState {
                 lifecycle: set.owner.lifecycle,
             };
             // A deletion that consumed a range's text removed its anchor.
-            contributions.extend(set.items.iter().filter_map(|(id, decoration)| {
+            contributions.extend(set.items.iter().filter_map(|(id, decoration, gutter)| {
                 let range = model.resolve_view_position(Some(*id))?;
                 Some(ResolvedEditorContribution {
                     range: ByteRange {
@@ -89,8 +97,8 @@ impl EditorState {
                         end_byte_offset: range.end,
                     },
                     source,
-                    decoration: Some(decoration.clone()),
-                    gutter: None,
+                    decoration: decoration.clone(),
+                    gutter: gutter.clone(),
                     command: None,
                 })
             }));

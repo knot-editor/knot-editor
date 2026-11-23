@@ -6,6 +6,10 @@ use std::hash::{Hash, Hasher};
 use std::ops::Range;
 
 use imara_diff::{Algorithm, Diff, InternedInput, sources::lines};
+use knot_protocol::{ByteRange, Decoration, DecorationStyle, GutterMark, GutterStyle};
+
+use crate::editor::ViewDecoration;
+use crate::theme::color;
 
 /// How lines are compared.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -83,6 +87,63 @@ pub fn line_hunks(old: &str, new: &str, options: DiffOptions) -> Vec<LineHunk> {
         .map(|hunk| LineHunk {
             old: hunk.before,
             new: hunk.after,
+        })
+        .collect()
+}
+
+/// Which text of a comparison a view shows.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DiffSide {
+    Original,
+    Modified,
+}
+
+/// The decorations that mark `hunks` on one side's `text`: a `line` band per
+/// hunk, `diff.removed` for lines only the original has, `diff.added` for
+/// lines only the modified text has, and `diff.modified` for lines both have.
+/// Where the side has no lines of a hunk, a deletion wedge in the gutter marks
+/// the boundary the other side's lines belong to.
+pub fn hunk_decorations(hunks: &[LineHunk], side: DiffSide, text: &str) -> Vec<ViewDecoration> {
+    let mut starts = vec![0];
+    starts.extend(text.match_indices('\n').map(|(index, _)| index + 1));
+    if text.ends_with('\n') || text.is_empty() {
+        starts.pop();
+    }
+    // The byte offset where `line` begins; the end of the text past the last.
+    let offset = |line: u32| starts.get(line as usize).copied().unwrap_or(text.len());
+    hunks
+        .iter()
+        .map(|hunk| {
+            let (lines, other) = match side {
+                DiffSide::Original => (&hunk.old, &hunk.new),
+                DiffSide::Modified => (&hunk.new, &hunk.old),
+            };
+            let range = ByteRange {
+                start_byte_offset: offset(lines.start),
+                end_byte_offset: offset(lines.end),
+            };
+            if lines.is_empty() {
+                // The wedge takes the color of what the other side holds here.
+                let key = match side {
+                    DiffSide::Original => color::DIFF_ADDED,
+                    DiffSide::Modified => color::DIFF_REMOVED,
+                };
+                return ViewDecoration {
+                    range,
+                    decoration: None,
+                    gutter: Some(GutterMark::new(key, GutterStyle::Deletion)),
+                };
+            }
+            let key = match (other.is_empty(), side) {
+                (false, _) => color::DIFF_MODIFIED,
+                (true, DiffSide::Original) => color::DIFF_REMOVED,
+                (true, DiffSide::Modified) => color::DIFF_ADDED,
+            };
+            ViewDecoration {
+                range,
+                decoration: Some(Decoration::new(key, DecorationStyle::Line)),
+                gutter: None,
+            }
         })
         .collect()
 }
@@ -172,6 +233,114 @@ mod tests {
         assert_eq!(
             hunks_ignoring_whitespace("a b\nc\nd\n", "a  b\nC\nd\n"),
             [(1..2, 1..2)]
+        );
+    }
+
+    /// The bands and wedges as (byte range, decoration key, wedge key).
+    fn marks(
+        old: &str,
+        new: &str,
+        side: DiffSide,
+    ) -> Vec<(Range<usize>, Option<String>, Option<String>)> {
+        let hunks = line_hunks(old, new, DiffOptions::default());
+        let text = if side == DiffSide::Original { old } else { new };
+        hunk_decorations(&hunks, side, text)
+            .into_iter()
+            .map(|item| {
+                (
+                    item.range.start_byte_offset..item.range.end_byte_offset,
+                    item.decoration.map(|decoration| decoration.color),
+                    item.gutter.map(|mark| mark.color),
+                )
+            })
+            .collect()
+    }
+
+    fn band(range: Range<usize>, key: &str) -> (Range<usize>, Option<String>, Option<String>) {
+        (range, Some(key.to_owned()), None)
+    }
+
+    fn wedge(offset: usize, key: &str) -> (Range<usize>, Option<String>, Option<String>) {
+        (offset..offset, None, Some(key.to_owned()))
+    }
+
+    #[test]
+    fn a_replaced_line_is_modified_on_both_sides() {
+        let (old, new) = ("a\nb\nc\n", "a\nB\nc\n");
+        assert_eq!(
+            marks(old, new, DiffSide::Original),
+            [band(2..4, "diff.modified")]
+        );
+        assert_eq!(
+            marks(old, new, DiffSide::Modified),
+            [band(2..4, "diff.modified")]
+        );
+    }
+
+    #[test]
+    fn an_insertion_is_added_with_a_wedge_on_the_original() {
+        let (old, new) = ("a\nc\n", "a\nb\nc\n");
+        assert_eq!(
+            marks(old, new, DiffSide::Original),
+            [wedge(2, "diff.added")]
+        );
+        assert_eq!(
+            marks(old, new, DiffSide::Modified),
+            [band(2..4, "diff.added")]
+        );
+    }
+
+    #[test]
+    fn a_deletion_is_removed_with_a_wedge_on_the_modified_side() {
+        let (old, new) = ("a\nb\nc\n", "a\nc\n");
+        assert_eq!(
+            marks(old, new, DiffSide::Original),
+            [band(2..4, "diff.removed")]
+        );
+        assert_eq!(
+            marks(old, new, DiffSide::Modified),
+            [wedge(2, "diff.removed")]
+        );
+    }
+
+    #[test]
+    fn an_empty_side_gets_a_wedge_at_the_start() {
+        assert_eq!(
+            marks("", "a\nb\n", DiffSide::Original),
+            [wedge(0, "diff.added")]
+        );
+        assert_eq!(
+            marks("", "a\nb\n", DiffSide::Modified),
+            [band(0..4, "diff.added")]
+        );
+        assert_eq!(
+            marks("a\n", "", DiffSide::Modified),
+            [wedge(0, "diff.removed")]
+        );
+    }
+
+    #[test]
+    fn a_final_line_without_a_newline_ends_at_the_text() {
+        let (old, new) = ("a\nb", "a\nb\nc");
+        assert_eq!(
+            marks(old, new, DiffSide::Original),
+            [band(2..3, "diff.modified")]
+        );
+        assert_eq!(
+            marks(old, new, DiffSide::Modified),
+            [band(2..5, "diff.modified")]
+        );
+        assert_eq!(
+            marks("a", "a\nb", DiffSide::Original),
+            [band(0..1, "diff.modified")]
+        );
+        assert_eq!(
+            marks("a\nb", "a\nb\n", DiffSide::Original),
+            [band(2..3, "diff.modified")]
+        );
+        assert_eq!(
+            marks("a\n", "a\nb", DiffSide::Original),
+            [wedge(2, "diff.added")]
         );
     }
 }
