@@ -99,10 +99,11 @@ pub enum DiffSide {
 }
 
 /// The decorations that mark `hunks` on one side's `text`: a `line` band per
-/// hunk, `diff.removed` for lines only the original has, `diff.added` for
-/// lines only the modified text has, and `diff.modified` for lines both have.
-/// Where the side has no lines of a hunk, a deletion wedge in the gutter marks
-/// the boundary the other side's lines belong to.
+/// hunk, in `diff.removed.background` for lines only the original has,
+/// `diff.added.background` for lines only the modified text has, and
+/// `diff.modified.background` for lines both have. Where the side has no lines
+/// of a hunk, a deletion wedge in the gutter, in the solid `diff.added` or
+/// `diff.removed`, marks the boundary the other side's lines belong to.
 pub fn hunk_decorations(hunks: &[LineHunk], side: DiffSide, text: &str) -> Vec<ViewDecoration> {
     let mut starts = vec![0];
     starts.extend(text.match_indices('\n').map(|(index, _)| index + 1));
@@ -135,9 +136,9 @@ pub fn hunk_decorations(hunks: &[LineHunk], side: DiffSide, text: &str) -> Vec<V
                 };
             }
             let key = match (other.is_empty(), side) {
-                (false, _) => color::DIFF_MODIFIED,
-                (true, DiffSide::Original) => color::DIFF_REMOVED,
-                (true, DiffSide::Modified) => color::DIFF_ADDED,
+                (false, _) => color::DIFF_MODIFIED_BACKGROUND,
+                (true, DiffSide::Original) => color::DIFF_REMOVED_BACKGROUND,
+                (true, DiffSide::Modified) => color::DIFF_ADDED_BACKGROUND,
             };
             ViewDecoration {
                 range,
@@ -269,11 +270,11 @@ mod tests {
         let (old, new) = ("a\nb\nc\n", "a\nB\nc\n");
         assert_eq!(
             marks(old, new, DiffSide::Original),
-            [band(2..4, "diff.modified")]
+            [band(2..4, "diff.modified.background")]
         );
         assert_eq!(
             marks(old, new, DiffSide::Modified),
-            [band(2..4, "diff.modified")]
+            [band(2..4, "diff.modified.background")]
         );
     }
 
@@ -286,7 +287,7 @@ mod tests {
         );
         assert_eq!(
             marks(old, new, DiffSide::Modified),
-            [band(2..4, "diff.added")]
+            [band(2..4, "diff.added.background")]
         );
     }
 
@@ -295,7 +296,7 @@ mod tests {
         let (old, new) = ("a\nb\nc\n", "a\nc\n");
         assert_eq!(
             marks(old, new, DiffSide::Original),
-            [band(2..4, "diff.removed")]
+            [band(2..4, "diff.removed.background")]
         );
         assert_eq!(
             marks(old, new, DiffSide::Modified),
@@ -311,7 +312,7 @@ mod tests {
         );
         assert_eq!(
             marks("", "a\nb\n", DiffSide::Modified),
-            [band(0..4, "diff.added")]
+            [band(0..4, "diff.added.background")]
         );
         assert_eq!(
             marks("a\n", "", DiffSide::Modified),
@@ -324,19 +325,19 @@ mod tests {
         let (old, new) = ("a\nb", "a\nb\nc");
         assert_eq!(
             marks(old, new, DiffSide::Original),
-            [band(2..3, "diff.modified")]
+            [band(2..3, "diff.modified.background")]
         );
         assert_eq!(
             marks(old, new, DiffSide::Modified),
-            [band(2..5, "diff.modified")]
+            [band(2..5, "diff.modified.background")]
         );
         assert_eq!(
             marks("a", "a\nb", DiffSide::Original),
-            [band(0..1, "diff.modified")]
+            [band(0..1, "diff.modified.background")]
         );
         assert_eq!(
             marks("a\nb", "a\nb\n", DiffSide::Original),
-            [band(2..3, "diff.modified")]
+            [band(2..3, "diff.modified.background")]
         );
         assert_eq!(
             marks("a\n", "a\nb", DiffSide::Original),

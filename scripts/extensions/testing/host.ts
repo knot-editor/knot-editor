@@ -2027,7 +2027,7 @@ export const CAPTURE_NAMES: readonly string[] = [
 /** The color keys native code defines, as the native table lists them. */
 export const NATIVE_COLOR_KEYS: readonly string[] = [
   "background", "border", "border.hover", "button.background", "button.hover.background",
-  "card.background", "card.focusedBorder", "diff.added", "diff.modified", "diff.removed", "dropTarget.background", "editor.background", "editor.bar.background", "editor.bar.border", "editor.bracketMatch", "editor.cursor", "editor.findMatch", "editor.findMatchCurrent", "editor.findScope", "editor.foldPlaceholder", "editor.foreground",
+  "card.background", "card.focusedBorder", "diff.added", "diff.added.background", "diff.modified", "diff.modified.background", "diff.removed", "diff.removed.background", "dropTarget.background", "editor.background", "editor.bar.background", "editor.bar.border", "editor.bracketMatch", "editor.cursor", "editor.findMatch", "editor.findMatchCurrent", "editor.findScope", "editor.foldPlaceholder", "editor.foreground",
   "editor.gutter.background", "editor.lineHighlight", "editor.lineNumber", "editor.lineNumber.active",
   "editor.markedText", "editor.selection", "editor.selectionHighlight", "editor.wordHighlight", "error", "icon", "info", "input.background", "input.border", "input.focused.border", "list.group.background",
   "list.hover.background", "list.match.foreground", "list.selected.background", "list.selected.foreground",

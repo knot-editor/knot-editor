@@ -1,6 +1,6 @@
 // One Dark, from Atom's one-dark-syntax and one-dark-ui.
 import type { ThemeDefinition } from "knot";
-import { FLAT_CHROME } from "../chrome.js";
+import { FLAT_CHROME, tint } from "../chrome.js";
 import { syntax } from "../syntax.js";
 
 const bg = "#282c34";
@@ -24,8 +24,11 @@ export const ONE_DARK: ThemeDefinition = {
     "card.background": bg,
     "card.focusedBorder": "#7f8aa3",
     "diff.added": green,
+    "diff.added.background": tint(green, 22),
     "diff.modified": blue,
+    "diff.modified.background": tint(blue, 22),
     "diff.removed": red,
+    "diff.removed.background": tint(red, 22),
     "tab.accent": accent,
     "toolbar.background": panel,
     "window.background": panel,

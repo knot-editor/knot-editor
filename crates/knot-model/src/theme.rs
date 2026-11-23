@@ -225,8 +225,11 @@ native_colors! {
     BUTTON_BACKGROUND = "button.background", "Inline action buttons.", Rgb(0x393b40), Rgb(0xebecf0);
     BUTTON_HOVER_BACKGROUND = "button.hover.background", "An inline action button under the pointer.", Rgb(0x43454a), Rgb(0xdfe1e5);
     DIFF_ADDED = "diff.added", "Lines a text added, in the gutter and in diffs.", Key(SUCCESS), Key(SUCCESS);
+    DIFF_ADDED_BACKGROUND = "diff.added.background", "Lines a diff view's other side lacks, behind the text.", Rgba(0x4caf5030), Rgba(0x4caf5038);
     DIFF_MODIFIED = "diff.modified", "Lines a text changed, in the gutter and in diffs.", Key(INFO), Key(INFO);
+    DIFF_MODIFIED_BACKGROUND = "diff.modified.background", "Lines a diff view's sides differ in, behind the text.", Rgba(0x3574f038), Rgba(0x3574f030);
     DIFF_REMOVED = "diff.removed", "Lines a text removed, in the gutter and in diffs.", Key(ERROR), Key(ERROR);
+    DIFF_REMOVED_BACKGROUND = "diff.removed.background", "Lines only a diff view's original side has, behind the text.", Rgba(0xf4433638), Rgba(0xf4433630);
     DROP_TARGET_BACKGROUND = "dropTarget.background", "Where a dragged tab would land.", Rgba(0x3574f055), Rgba(0x3574f040);
     EDITOR_BRACKET_MATCH = "editor.bracketMatch", "Background of the bracket at the cursor and its partner.", Rgba(0x3574f040), Rgba(0x3574f033);
     EDITOR_BACKGROUND = "editor.background", "Text editor background.", Key(BACKGROUND), Key(BACKGROUND);

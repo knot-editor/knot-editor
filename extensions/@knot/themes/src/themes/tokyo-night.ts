@@ -1,6 +1,6 @@
 // Tokyo Night and Tokyo Night Light, from enkia's Tokyo Night editor themes.
 import type { ThemeDefinition } from "knot";
-import { ISLANDS_CHROME } from "../chrome.js";
+import { ISLANDS_CHROME, tint } from "../chrome.js";
 import { syntax } from "../syntax.js";
 
 export const TOKYO_NIGHT: ThemeDefinition = {
@@ -12,8 +12,11 @@ export const TOKYO_NIGHT: ThemeDefinition = {
     "card.background": "#1a1b26",
     "card.focusedBorder": "#9aa5ce",
     "diff.added": "#9ece6a",
+    "diff.added.background": tint("#9ece6a", 22),
     "diff.modified": "#7aa2f7",
+    "diff.modified.background": tint("#7aa2f7", 22),
     "diff.removed": "#f7768e",
+    "diff.removed.background": tint("#f7768e", 22),
     "tab.accent": "#7aa2f7",
     "toolbar.background": "#16161e",
     "window.background": "#16161e",
@@ -125,8 +128,11 @@ export const TOKYO_NIGHT_LIGHT: ThemeDefinition = {
     "card.background": "#d5d6db",
     "card.focusedBorder": "#8990b3",
     "diff.added": "#485e30",
+    "diff.added.background": tint("#485e30", 18),
     "diff.modified": "#34548a",
+    "diff.modified.background": tint("#34548a", 18),
     "diff.removed": "#8c4351",
+    "diff.removed.background": tint("#8c4351", 18),
     "tab.accent": "#34548a",
     "toolbar.background": "#cbccd1",
     "window.background": "#cbccd1",

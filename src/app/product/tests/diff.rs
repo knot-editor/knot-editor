@@ -278,7 +278,7 @@ fn bands(window: &Entity<KnotWindow>, cx: &TestAppContext) -> [Marks; 2] {
 #[gpui::test]
 fn a_diff_tab_bands_each_hunk_on_both_sides(cx: &mut TestAppContext) {
     let (window, _, _) = diff_window(cx);
-    let modified = (vec![(1, "diff.modified".to_owned())], vec![]);
+    let modified = (vec![(1, "diff.modified.background".to_owned())], vec![]);
     assert_eq!(bands(&window, cx), [modified.clone(), modified]);
 
     // A line only the modified side has leaves a wedge on the original side.
@@ -296,7 +296,7 @@ fn a_diff_tab_bands_each_hunk_on_both_sides(cx: &mut TestAppContext) {
         bands(&window, cx),
         [
             (vec![], vec![(1, "diff.added".to_owned())]),
-            (vec![(1, "diff.added".to_owned())], vec![]),
+            (vec![(1, "diff.added.background".to_owned())], vec![]),
         ]
     );
 }
@@ -370,7 +370,7 @@ fn a_document_side_is_editable_shares_the_buffer_and_keeps_the_bands_current(
     cx.run_until_parked();
     assert_eq!(bands(&window, cx), [(vec![], vec![]), (vec![], vec![])]);
     settle(cx);
-    let modified = (vec![(1, "diff.modified".to_owned())], vec![]);
+    let modified = (vec![(1, "diff.modified.background".to_owned())], vec![]);
     assert_eq!(bands(&window, cx), [modified.clone(), modified]);
     assert_eq!(
         texts(&window, cx),
@@ -387,7 +387,7 @@ fn a_document_side_is_editable_shares_the_buffer_and_keeps_the_bands_current(
     cx.run_until_parked();
     assert_eq!(
         bands(&window, cx)[1].0,
-        vec![(1, "diff.modified".to_owned())]
+        vec![(1, "diff.modified.background".to_owned())]
     );
     settle(cx);
     assert_eq!(model.read_with(cx, |model, _| model.text()), "one\nt\n");
@@ -558,7 +558,7 @@ fn an_extension_opens_updates_and_closes_a_diff_snapshot(cx: &mut TestAppContext
     );
     assert_eq!(
         bands(&window, cx)[0].0,
-        vec![(1, "diff.modified".to_owned())]
+        vec![(1, "diff.modified.background".to_owned())]
     );
 
     run("diff.setOriginal", cx);
@@ -567,7 +567,10 @@ fn an_extension_opens_updates_and_closes_a_diff_snapshot(cx: &mut TestAppContext
         texts(&window, cx),
         Some(("a\nc\n".to_owned(), "a\nc\nd\n".to_owned()))
     );
-    assert_eq!(bands(&window, cx)[1].0, vec![(2, "diff.added".to_owned())]);
+    assert_eq!(
+        bands(&window, cx)[1].0,
+        vec![(2, "diff.added.background".to_owned())]
+    );
 
     run("diff.invalid", cx);
     // Run from the document's tab, since closing the diff closes its own.

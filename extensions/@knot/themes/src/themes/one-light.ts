@@ -1,6 +1,6 @@
 // One Light, from Atom's one-light-syntax and one-light-ui.
 import type { ThemeDefinition } from "knot";
-import { FLAT_CHROME } from "../chrome.js";
+import { FLAT_CHROME, tint } from "../chrome.js";
 import { syntax } from "../syntax.js";
 
 const bg = "#fafafa";
@@ -24,8 +24,11 @@ export const ONE_LIGHT: ThemeDefinition = {
     "card.background": bg,
     "card.focusedBorder": "#a0a1a7",
     "diff.added": green,
+    "diff.added.background": tint(green, 18),
     "diff.modified": blue,
+    "diff.modified.background": tint(blue, 18),
     "diff.removed": red,
+    "diff.removed.background": tint(red, 18),
     "tab.accent": accent,
     "toolbar.background": panel,
     "window.background": panel,

@@ -25,3 +25,9 @@ export const FLAT_CHROME: ThemeChrome = {
   tabInset: 0,
   tabRadius: 0,
 };
+
+/** `color`, a `#rrggbb` value, at `percent` opacity: a band behind text. */
+export function tint(color: string, percent: number): string {
+  const alpha = Math.round((percent / 100) * 255).toString(16).padStart(2, "0");
+  return `${color}${alpha}`;
+}

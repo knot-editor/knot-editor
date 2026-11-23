@@ -1,7 +1,7 @@
 // Catppuccin Mocha and Latte, from the published Catppuccin palette and its
 // style guide.
 import type { ThemeDefinition } from "knot";
-import { ISLANDS_CHROME } from "../chrome.js";
+import { ISLANDS_CHROME, tint } from "../chrome.js";
 import { syntax } from "../syntax.js";
 
 const mocha = {
@@ -35,8 +35,11 @@ function catppuccin(name: string, appearance: "dark" | "light", p: Flavor): Them
       "card.background": p.base,
       "card.focusedBorder": dark ? p.overlay2 : p.overlay1,
       "diff.added": p.green,
+      "diff.added.background": tint(p.green, dark ? 22 : 18),
       "diff.modified": p.blue,
+      "diff.modified.background": tint(p.blue, dark ? 22 : 18),
       "diff.removed": p.red,
+      "diff.removed.background": tint(p.red, dark ? 22 : 18),
       "tab.accent": p.blue,
       "toolbar.background": p.mantle,
       "window.background": p.mantle,

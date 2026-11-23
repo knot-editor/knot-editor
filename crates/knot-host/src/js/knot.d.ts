@@ -615,10 +615,16 @@ declare module "knot" {
     readonly "card.focusedBorder"?: string;
     /** Lines a text added, in the gutter and in diffs. */
     readonly "diff.added"?: string;
+    /** Lines a diff view's other side lacks, behind the text. */
+    readonly "diff.added.background"?: string;
     /** Lines a text changed, in the gutter and in diffs. */
     readonly "diff.modified"?: string;
+    /** Lines a diff view's sides differ in, behind the text. */
+    readonly "diff.modified.background"?: string;
     /** Lines a text removed, in the gutter and in diffs. */
     readonly "diff.removed"?: string;
+    /** Lines only a diff view's original side has, behind the text. */
+    readonly "diff.removed.background"?: string;
     /** Where a dragged tab would land. */
     readonly "dropTarget.background"?: string;
     /** Text editor background. */

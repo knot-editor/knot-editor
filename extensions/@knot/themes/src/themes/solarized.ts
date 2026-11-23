@@ -1,7 +1,7 @@
 // Solarized Dark and Light, from Ethan Schoonover's Solarized palette, with
 // its canonical sixteen terminal colors.
 import type { ThemeDefinition } from "knot";
-import { FLAT_CHROME } from "../chrome.js";
+import { FLAT_CHROME, tint } from "../chrome.js";
 import { syntax } from "../syntax.js";
 
 const base03 = "#002b36";
@@ -44,8 +44,11 @@ const accents = {
   "border.hover": blue,
   "card.focusedBorder": blue,
   "diff.added": green,
+  "diff.added.background": tint(green, 20),
   "diff.modified": blue,
+  "diff.modified.background": tint(blue, 20),
   "diff.removed": red,
+  "diff.removed.background": tint(red, 20),
   "error": red,
   "info": blue,
   "notification.error": red,

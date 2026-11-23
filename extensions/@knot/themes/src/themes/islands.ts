@@ -1,6 +1,6 @@
 // Knot Islands Dark and Light, after IntelliJ's new UI palette.
 import type { ThemeDefinition } from "knot";
-import { ISLANDS_CHROME } from "../chrome.js";
+import { ISLANDS_CHROME, tint } from "../chrome.js";
 import { syntax } from "../syntax.js";
 
 const accent = "#3574f0";
@@ -57,8 +57,11 @@ export const ISLANDS_DARK: ThemeDefinition = {
     "card.background": "#191a1c",
     "card.focusedBorder": "#8aa2c4",
     "diff.added": "#6db083",
+    "diff.added.background": tint("#6db083", 22),
     "diff.modified": "#71a1fe",
+    "diff.modified.background": tint("#71a1fe", 22),
     "diff.removed": "#f57e84",
+    "diff.removed.background": tint("#f57e84", 22),
     "dropTarget.background": "#366acf4d",
     "editor.background": "#191a1c",
     "editor.bar.background": "#191a1c",
@@ -155,8 +158,11 @@ export const ISLANDS_LIGHT: ThemeDefinition = {
     "card.background": "#ffffff",
     "card.focusedBorder": "#9db2d6",
     "diff.added": "#369650",
+    "diff.added.background": tint("#369650", 18),
     "diff.modified": "#3574f0",
+    "diff.modified.background": tint("#3574f0", 18),
     "diff.removed": "#db5c5c",
+    "diff.removed.background": tint("#db5c5c", 18),
     "dropTarget.background": "#3574f040",
     "editor.background": "#ffffff",
     "editor.bar.background": "#ffffff",

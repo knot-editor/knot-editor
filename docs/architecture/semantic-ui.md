@@ -75,7 +75,8 @@ when they fail, and extensions define more through `themes.defineColor`. A
 registered theme sets values for any keys, including ones nobody has defined
 yet, and styles capture names or their dotted prefixes. The native table
 includes `diff.added`, `diff.modified`, and `diff.removed`, which the change
-gutter and diff views share.
+gutter and diff views share, and translucent `.background` variants of each
+that diff views band lines with.
 
 `ApplicationThemes` owns lifecycle-owned registrations, where the latest
 registration of a name wins, and extension color definitions. The
