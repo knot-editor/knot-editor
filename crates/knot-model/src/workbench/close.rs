@@ -1,4 +1,6 @@
-use super::{DiffViewId, PaneId, TabId, TabSurfaceId, TerminalSessionId, Workbench};
+use super::{
+    CompositeViewId, DiffViewId, PaneId, TabId, TabSurfaceId, TerminalSessionId, Workbench,
+};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DocumentCloseDisposition {
@@ -93,6 +95,16 @@ impl Workbench {
         diff: DiffViewId,
     ) -> Option<CloseTransition> {
         self.contains_surface(pane_id, tab_id, TabSurfaceId::Diff(diff))
+            .then(|| self.close_tab_now(pane_id, tab_id, None))
+    }
+
+    pub fn request_close_composite_tab(
+        &mut self,
+        pane_id: PaneId,
+        tab_id: TabId,
+        composite: CompositeViewId,
+    ) -> Option<CloseTransition> {
+        self.contains_surface(pane_id, tab_id, TabSurfaceId::Composite(composite))
             .then(|| self.close_tab_now(pane_id, tab_id, None))
     }
 

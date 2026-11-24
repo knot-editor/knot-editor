@@ -67,11 +67,16 @@ pub struct TerminalSessionId(pub u64);
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct DiffViewId(pub u64);
 
+/// The identity of a composite view, unique across the application.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct CompositeViewId(pub u64);
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TabSurfaceId {
     Document(DocumentId),
     Terminal(TerminalSessionId),
     Diff(DiffViewId),
+    Composite(CompositeViewId),
     Tool(ToolFrameId),
 }
 
@@ -261,6 +266,7 @@ pub enum TabKind {
     Document,
     Terminal,
     Diff,
+    Composite,
     Tool,
 }
 
@@ -270,6 +276,7 @@ impl TabSurfaceId {
             Self::Document(_) => TabKind::Document,
             Self::Terminal(_) => TabKind::Terminal,
             Self::Diff(_) => TabKind::Diff,
+            Self::Composite(_) => TabKind::Composite,
             Self::Tool(_) => TabKind::Tool,
         }
     }
@@ -309,7 +316,10 @@ impl WorkbenchTab {
     pub fn document_id(&self) -> Option<DocumentId> {
         match self.surface {
             TabSurfaceId::Document(document_id) => Some(document_id),
-            TabSurfaceId::Terminal(_) | TabSurfaceId::Diff(_) | TabSurfaceId::Tool(_) => None,
+            TabSurfaceId::Terminal(_)
+            | TabSurfaceId::Diff(_)
+            | TabSurfaceId::Composite(_)
+            | TabSurfaceId::Tool(_) => None,
         }
     }
 }
@@ -481,10 +491,14 @@ impl Workbench {
     /// Whether tabs of `surface` may occupy `area`. Documents live in the
     /// center, a fixed tool's tab only in its own window, and a terminal in the
     /// center or a container tool window. Every placement, relocation, and
-    /// restore checks this declaration. A diff lives only in the center.
+    /// restore checks this declaration. A diff or a composite view lives only
+    /// in the center.
     pub fn allows(&self, surface: TabSurfaceId, area: Area) -> bool {
         match (surface, area) {
-            (TabSurfaceId::Document(_) | TabSurfaceId::Diff(_), area) => area == Area::Center,
+            (
+                TabSurfaceId::Document(_) | TabSurfaceId::Diff(_) | TabSurfaceId::Composite(_),
+                area,
+            ) => area == Area::Center,
             (TabSurfaceId::Terminal(_), Area::Center) => true,
             (TabSurfaceId::Terminal(_), Area::Tool(id)) => self
                 .tool(id)
@@ -869,6 +883,20 @@ impl Workbench {
         self.open_diff_tab(pane, diff).map(|tab| (pane, tab))
     }
 
+    /// Open a composite view in the center pane, creating the center's first
+    /// pane when the center is empty.
+    pub fn open_composite_in_center(
+        &mut self,
+        composite: CompositeViewId,
+    ) -> Option<(PaneId, TabId)> {
+        if self.has_composite(composite) {
+            return None;
+        }
+        let pane = self.ensure_center_pane();
+        self.insert_tab(pane, TabSurfaceId::Composite(composite))
+            .map(|tab| (pane, tab))
+    }
+
     /// Append a fresh tab to a pane whose area allows its kind, and activate
     /// it.
     fn insert_tab(&mut self, pane_id: PaneId, surface: TabSurfaceId) -> Option<TabId> {
@@ -1097,6 +1125,11 @@ impl Workbench {
             .any(|tab| tab.surface_id() == TabSurfaceId::Diff(diff))
     }
 
+    fn has_composite(&self, composite: CompositeViewId) -> bool {
+        self.tabs()
+            .any(|tab| tab.surface_id() == TabSurfaceId::Composite(composite))
+    }
+
     fn has_terminal_session(&self, session_id: TerminalSessionId) -> bool {
         self.panes
             .iter()
@@ -1139,9 +1172,10 @@ impl Workbench {
                     .expect("a tool tab shows a registered tool")
                     .presentation
             }
-            TabSurfaceId::Document(_) | TabSurfaceId::Terminal(_) | TabSurfaceId::Diff(_) => {
-                self.allocate_presentation()
-            }
+            TabSurfaceId::Document(_)
+            | TabSurfaceId::Terminal(_)
+            | TabSurfaceId::Diff(_)
+            | TabSurfaceId::Composite(_) => self.allocate_presentation(),
         };
         WorkbenchTab {
             id: self.allocate_tab_id(),
@@ -1487,6 +1521,45 @@ mod tests {
             .is_none();
         assert!(transition);
         let transition = workbench.request_close_diff_tab(pane, tab, diff).unwrap();
+        assert_eq!(transition.document, None);
+        assert!(workbench.tab(pane, tab).is_none());
+    }
+
+    #[test]
+    fn composite_tabs_live_only_in_the_center_and_close_by_identity() {
+        let document = DocumentId::new(1);
+        let workbench = &mut Workbench::new_for_document(document);
+        let pane = workbench.focused_pane_id().unwrap();
+        let container = workbench.register_tool(
+            "terminals",
+            "Terminals",
+            Slot::BottomLeft,
+            ToolKind::Container,
+        );
+        let composite = CompositeViewId(3);
+
+        assert!(!workbench.allows(TabSurfaceId::Composite(composite), Area::Tool(container)));
+        assert!(workbench.allows(TabSurfaceId::Composite(composite), Area::Center));
+        assert_eq!(
+            TabSurfaceId::Composite(composite).kind(),
+            TabKind::Composite
+        );
+
+        let (opened_pane, tab) = workbench.open_composite_in_center(composite).unwrap();
+        assert_eq!(opened_pane, pane);
+        assert!(workbench.open_composite_in_center(composite).is_none());
+        assert_eq!(workbench.pane(pane).unwrap().active_tab_id(), tab);
+        assert_eq!(workbench.tab(pane, tab).unwrap().document_id(), None);
+        assert_eq!(workbench.view_count(document), 1);
+
+        assert!(
+            workbench
+                .request_close_composite_tab(pane, tab, CompositeViewId(4))
+                .is_none()
+        );
+        let transition = workbench
+            .request_close_composite_tab(pane, tab, composite)
+            .unwrap();
         assert_eq!(transition.document, None);
         assert!(workbench.tab(pane, tab).is_none());
     }
