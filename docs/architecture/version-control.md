@@ -85,8 +85,8 @@ a baseline or changes leaves the caret where it is.
 
 ## Showing changes
 
-`vcs.showChanges`, titled Compare with Last Commit and bound to Cmd+Shift+D
-(Ctrl+Shift+D elsewhere) in editors, opens the focused file's diff in a diff tab: the baseline as
+`vcs.showChanges`, titled Compare with Last Commit and bound to Cmd+D
+(Ctrl+D elsewhere) in editors, opens the focused file's diff in a diff tab: the baseline as
 a snapshot labeled with the backend's ref (or "Baseline" without one), against
 the document, which stays editable. It starts the caret at the clicked mark's
 line, or the caret's line from the palette. A file without a baseline leaves
