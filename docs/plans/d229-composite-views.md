@@ -163,20 +163,15 @@ handle survives the move. Vim attaches only to document tabs whose root is an
 editor until checkpoint 6. The extension guide's
 [editor handle](../extension-api/commands-and-keys.md) section describes it.
 
-#### 4. Command captures
+#### 4. Command captures ✅
 
-Deliverables: a command captures the focused leaf view, its editor, and the
-chain of views above the leaf up to the tab's root view, so a package finds its
-composite instance there; `DiffCommandTarget` no longer follows focus for
-extension authority.
-
-Validation: tests for captures on each diff side and on document tabs.
-
-Review gate: capture semantics.
-
-Implementation context: `validate_tab`, `command_view`, and `diff_view` in
-`src/app/commands/dispatch.rs`; `CommandTarget` in `knot.d.ts` and its
-conversion in `bootstrap.ts`.
+A command captures the view that had focus in its tab at admission; its
+`context.editor` is that exact editor, and the target becomes invalid once the
+view leaves the tab. `CommandTarget.focusedView` and `viewChain` (the views
+above it, parent first, the tab's root last) are described in the extension
+guide's [commands](../extension-api/commands-and-keys.md) section. Targets
+captured without a focused view (closes) still resolve the tab's live focused
+editor.
 
 #### 5. The lookup and its consumers
 
