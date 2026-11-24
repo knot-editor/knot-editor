@@ -31,6 +31,7 @@ point.
 The [version control plan](plans/vcs.md) comes first, in its milestone order:
 
 - D197 — Diff view.
+- D229 — Editor targets for diff tabs.
 - D220 — Anchored floating panels.
 - D221 — Hunk popup.
 - D214 — VCS changes view.
@@ -439,6 +440,18 @@ milestones these items belong to.
     [version control plan](plans/vcs.md): list conflicted files, accept ours,
     theirs, or both per conflict from the editor, and a three-way merge view
     built on the diff view.
+
+- **D229 — Editor targets for diff tabs** 🚧
+  - Depends on: D197
+  - Description: Vim mode does not work in a diff tab, which makes the diff
+    hard to use for anyone who runs it. Extensions follow only tabs that
+    expose a document and an editor handle, and a diff tab's editors are
+    native views with neither. Give a diff tab's editors, at least the
+    modified side's, targets that extensions can reach with
+    `workbench.editor`, so Vim and other editor-driven packages attach to
+    them. Decide how the targets relate to the document when the modified
+    side is one, and what a snapshot side exposes. Part of the
+    [version control plan](plans/vcs.md).
 
 - **D228 — Diff toolbar design**
   - Depends on: D197

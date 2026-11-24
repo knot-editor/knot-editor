@@ -179,9 +179,10 @@ Review gate: whether block rows are general enough for later consumers.
 
 ### 10. Inline layout ✅
 
-Implemented, awaiting review of the look. `diff.layout` sets how a diff tab
+Done and approved. `diff.layout` sets how a diff tab
 opens and `diff.toggle-layout`, also a toolbar button, switches one; see
 [workbench and lifecycle](../architecture/workbench-and-lifecycle.md).
+Vim mode does not attach to a diff's editors; [D229](../roadmap.md) tracks it.
 
 Deliverables:
 

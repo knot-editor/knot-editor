@@ -1,7 +1,7 @@
 # Version control
 
-Status: 🚧 in progress; milestone 1 and D213 are done, D214 is next. Replaces D126 from the [roadmap](../roadmap.md)
-with D209–D216, D220, and D221, and sequences D087, D199, and D197 into it.
+Status: 🚧 in progress; milestone 1 and D213 are done, D229 is next. Replaces D126 from the [roadmap](../roadmap.md)
+with D209–D216, D220, D221, and D229, and sequences D087, D199, and D197 into it.
 
 ## Goal
 
@@ -75,6 +75,9 @@ gutter and change navigation. See [version control](../architecture/version-cont
 
 - 🚧 **D197 — Diff view.** [Plan](d197-diff-view.md). Opening a file's changes from the
   gutter and from `@knot/vcs` is part of it.
+- 🚧 **D229 — Editor targets for diff tabs.** Next, since the diff is hardly
+  usable without Vim mode, which attaches only to editors extensions can
+  reach. Depends on D197.
 - **D220 — Anchored floating panels.** Split from D145, which keeps virtual
   text for later consumers.
 - **D221 — Hunk popup.** The hunk's baseline against the current lines, with
