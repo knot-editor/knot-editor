@@ -37,8 +37,8 @@ Edits rediff the buffer against the cached baseline after a fixed 150 ms
 debounce, using the extension API's `diff`. Each hunk becomes one contribution:
 a `diff.added` bar for an insertion, a `diff.modified` bar for a replacement,
 and a `diff.removed` wedge for a removal. The contributions are replaced at the
-revision that was diffed, and a diff an edit raced is repeated. The marks run no
-command.
+revision that was diffed, and a diff an edit raced is repeated. A click on a
+mark runs `vcs.showChanges`.
 
 ## File status
 
@@ -83,6 +83,18 @@ and move the caret to the first line of the nearest hunk, wrapping at the ends.
 A removal's line is the one that followed the removed lines. A document without
 a baseline or changes leaves the caret where it is.
 
+## Showing changes
+
+`vcs.showChanges` opens the focused file's diff in a diff tab: the baseline as
+a snapshot labeled with the backend's ref (or "Baseline" without one), against
+the document, which stays editable. It starts the caret at the clicked mark's
+line, or the caret's line from the palette. A file without a baseline leaves
+the command unavailable. Each document keeps at most one such diff: a second
+request closes the open one and opens a new tab. The open diff's original side
+is replaced when the baseline is fetched again, and the tab closes when the file
+has no baseline any more or the document closes. The tab is a regular tab, not a
+preview.
+
 ## Git
 
 `@knot/git` declares the `process` entitlement, implicitly granted to a bundled
@@ -119,5 +131,5 @@ not register.
 `extensions/@knot/vcs/test` runs `@knot/vcs` over an in-memory host, including
 moves and saves, which the product harness cannot drive. `crates/knot-ext-vcs/tests`
 runs the packages in the launched product: `gutter.rs` over a fixed-baseline
-backend, and `git.rs`, `status.rs`, `decorations.rs`, and `ref.rs` over
+backend, and `git.rs`, `diff.rs`, `status.rs`, `decorations.rs`, and `ref.rs` over
 temporary repositories. A missing `git` is untested.

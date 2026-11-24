@@ -68,8 +68,6 @@ each one records it in `docs/decisions/`.
   existing `documents` and `workbench` namespaces.
 - Key bindings for hunk navigation and the layout toggle, settled in
   checkpoint 6 next to `vcs.nextChange`'s Alt+F5.
-- Whether a diff tab can be a preview tab, settled in checkpoint 7, when the
-  version control entry points show how often a diff is opened in passing.
 
 ## Checkpoints
 
@@ -134,7 +132,12 @@ focus ([workbench and lifecycle](../architecture/workbench-and-lifecycle.md)).
 `workbench.openDiff` takes `line`
 ([guide](../extension-api/application.md#show-the-differences)).
 
-### 7. Version control entry points
+### 7. Version control entry points ✅
+
+Implemented; see [version control](../architecture/version-control.md#showing-changes).
+Diff tabs from these entry points are regular tabs, not previews, since they are
+opened on purpose. A second request closes the open tab and opens a new one,
+because the API cannot focus an open diff. Awaiting the review gate below.
 
 Deliverables:
 
