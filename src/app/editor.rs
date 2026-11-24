@@ -698,7 +698,6 @@ impl Editor {
 
     /// Show read-only `blocks` above their lines; see
     /// [`EditorState::set_blocks`].
-    #[allow(dead_code)] // Until the diff view's inline layout shows them.
     pub(crate) fn set_blocks(&mut self, blocks: Vec<Block>, cx: &App) {
         self.state.set_blocks(blocks, self.model.read(cx));
     }

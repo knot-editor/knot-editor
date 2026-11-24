@@ -37,6 +37,12 @@ values take effect.
 | `editor.folding` | boolean | `true` | Any | native | Show the fold lane in the editor gutter. |
 | `editor.showFoldingControls` | string: `mouseover`, `always` | `"mouseover"` | Any; other text means `mouseover` | native | When the fold lane shows chevrons on foldable lines; collapsed folds always show one. |
 
+## Diff
+
+| Key | Type | Default | Scope | Owner | Description |
+| --- | --- | --- | --- | --- | --- |
+| `diff.layout` | string: `sideBySide`, `inline` | `"sideBySide"` | Global; other text means `sideBySide` | native | How a diff tab opens; Toggle Diff Layout changes one open tab. |
+
 ## Files
 
 | Key | Type | Default | Scope | Owner | Description |

@@ -958,3 +958,156 @@ fn the_toolbar_glyphs_exist() {
         assert!(crate::app::icons::glyph_exists(glyph), "{glyph}");
     }
 }
+
+/// The active diff tab's view.
+fn active_diff(
+    window: &Entity<KnotWindow>,
+    cx: &TestAppContext,
+) -> Entity<crate::app::diff_view::DiffView> {
+    cx.read(|cx| {
+        let workbench = window.read(cx).workbench.read(cx);
+        workbench
+            .diff_view(workbench.focused_pane().unwrap().active_tab())
+            .unwrap()
+            .clone()
+    })
+}
+
+/// The modified editor's block lines and its row count.
+fn blocks(
+    view: &Entity<crate::app::diff_view::DiffView>,
+    cx: &TestAppContext,
+) -> (Vec<(usize, Vec<String>)>, usize) {
+    cx.read(|cx| {
+        let editor = view.read(cx).editors()[1].read(cx).editor().read(cx);
+        (
+            editor
+                .wrap()
+                .blocks()
+                .map(|block| {
+                    (
+                        block.line,
+                        block.lines.iter().map(|line| line.text.clone()).collect(),
+                    )
+                })
+                .collect(),
+            editor.wrap().row_count(),
+        )
+    })
+}
+
+#[gpui::test]
+fn the_inline_layout_shows_each_hunks_original_lines_above_the_modified_text(
+    cx: &mut TestAppContext,
+) {
+    use crate::app::diff_view::TOGGLE_LAYOUT_COMMAND;
+    use crate::app::settings::DiffLayout;
+    let (window, native_window, _) = diff_window(cx);
+    window.update(cx, |window, cx| {
+        window.workbench.update(cx, |workbench, cx| {
+            workbench.open_diff_in_center(
+                spec("HEAD", None, "a\nb\nc\nd\ne\n"),
+                spec("Now", None, "a\nB\nc\ne\nf\n"),
+                cx,
+            );
+        });
+        window.focus_active_surface(cx);
+    });
+    cx.run_until_parked();
+    settle(cx);
+    let view = active_diff(&window, cx);
+    assert_eq!(blocks(&view, cx), (vec![], 6));
+    assert_eq!(cx.read(|cx| view.read(cx).layout()), DiffLayout::SideBySide);
+
+    assert_eq!(
+        run_command(&window, native_window, TOGGLE_LAYOUT_COMMAND, cx),
+        CommandOutcome::Completed
+    );
+    assert_eq!(cx.read(|cx| view.read(cx).layout()), DiffLayout::Inline);
+    // b is replaced by B, and d removed above e; f is added with no original
+    // lines.
+    let expected = vec![(1, vec!["b".to_owned()]), (3, vec!["d".to_owned()])];
+    assert_eq!(blocks(&view, cx), (expected, 6 + 2));
+    // The bands on the modified text stay.
+    let [_, (modified, _)] = bands(&window, cx);
+    assert!(modified.iter().any(|(line, _)| *line == 1));
+
+    // Toggling back removes the rows.
+    run_command(&window, native_window, TOGGLE_LAYOUT_COMMAND, cx);
+    assert_eq!(cx.read(|cx| view.read(cx).layout()), DiffLayout::SideBySide);
+    assert_eq!(blocks(&view, cx), (vec![], 6));
+}
+
+#[gpui::test]
+fn editing_and_hunk_navigation_work_in_the_inline_layout(cx: &mut TestAppContext) {
+    use crate::app::diff_view::{NEXT_HUNK_COMMAND, TOGGLE_LAYOUT_COMMAND};
+    let (window, native_window, _, model) = document_diff_window("one\n2\nthree\n", cx);
+    let view = active_diff(&window, cx);
+    // The original had focus; the layout change must leave commands on the
+    // modified side.
+    view.update(cx, |view, _| {
+        view.set_focused_side(knot_model::diff::DiffSide::Original)
+    });
+    run_command(&window, native_window, TOGGLE_LAYOUT_COMMAND, cx);
+    settle(cx);
+    // "two" is replaced by "2" and "three" added: four text lines and one
+    // block row.
+    assert_eq!(blocks(&view, cx), (vec![(1, vec!["two".to_owned()])], 5));
+    assert_eq!(
+        run_command(&window, native_window, NEXT_HUNK_COMMAND, cx),
+        CommandOutcome::Completed
+    );
+    assert_eq!(modified_caret_line(&window, cx), 1);
+
+    // Typing edits the document through the inline editor, and the original
+    // lines follow their line and are recomputed.
+    cx.simulate_keystrokes(native_window, "x");
+    assert_eq!(
+        model.read_with(cx, |model, _| model.text()),
+        "one\nx2\nthree\n"
+    );
+    settle(cx);
+    assert_eq!(blocks(&view, cx).0, vec![(1, vec!["two".to_owned()])]);
+    // A line added above moves the block with its line.
+    edit(&model, 0..0, "top\n", cx);
+    assert_eq!(blocks(&view, cx).0[0].0, 2);
+    settle(cx);
+    assert_eq!(blocks(&view, cx).0[0].0, 2);
+}
+
+#[gpui::test]
+fn the_diff_layout_setting_decides_how_a_diff_opens(cx: &mut TestAppContext) {
+    use crate::app::settings::{ApplicationSettings, DIFF_LAYOUT, DiffLayout, SettingsScope};
+    let documents = install_globals(cx);
+    cx.update(|cx| {
+        let mut settings = ApplicationSettings::default();
+        settings
+            .0
+            .set(DIFF_LAYOUT, "inline".into(), SettingsScope::default())
+            .unwrap();
+        cx.set_global(settings);
+    });
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (window, _) = product_window(document, model, cx);
+    window.update(cx, |window, cx| {
+        window.workbench.update(cx, |workbench, cx| {
+            workbench.open_diff_in_center(
+                spec("HEAD", None, "a\nb\n"),
+                spec("Now", None, "a\nc\n"),
+                cx,
+            );
+        });
+    });
+    cx.run_until_parked();
+    let view = active_diff(&window, cx);
+    assert_eq!(cx.read(|cx| view.read(cx).layout()), DiffLayout::Inline);
+    assert_eq!(blocks(&view, cx).0, vec![(1, vec!["b".to_owned()])]);
+}
+
+#[test]
+fn the_layout_glyphs_exist() {
+    for glyph in ["rows-2", "columns-2"] {
+        assert!(crate::app::icons::glyph_exists(glyph), "{glyph}");
+    }
+}

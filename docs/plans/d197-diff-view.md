@@ -177,7 +177,11 @@ Review gate: whether block rows are general enough for later consumers.
   to mirror. Painting and hit-testing are in `src/app/editor/paint.rs` and
   `src/app/editor/layout.rs`.
 
-### 10. Inline layout
+### 10. Inline layout ✅
+
+Implemented, awaiting review of the look. `diff.layout` sets how a diff tab
+opens and `diff.toggle-layout`, also a toolbar button, switches one; see
+[workbench and lifecycle](../architecture/workbench-and-lifecycle.md).
 
 Deliverables:
 

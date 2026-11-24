@@ -16,7 +16,7 @@ use gpui::{prelude::*, *};
 use knot_model::diff::{
     DiffOptions, DiffSide, LineHunk, adjacent_hunk, hunk_decorations, line_hunks, map_line,
 };
-use knot_model::editor::Reveal;
+use knot_model::editor::{Block, BlockLine, Reveal};
 use knot_model::workbench::{DiffViewId, DocumentId};
 use knot_protocol::{ExtensionId, ExtensionKey, ExtensionLifecycleId};
 
@@ -24,6 +24,7 @@ use super::convert::ThemePaint as _;
 use super::editor::{EditorView, Scrolled};
 use super::icons::AppIcon;
 use super::model::{Buffer, BufferModel};
+use super::settings::{self, DiffLayout};
 use super::theme::{color, theme};
 use super::zoom;
 use knot_model::icons::IconDefinition;
@@ -146,6 +147,12 @@ pub(crate) struct DiffView {
     pending: Option<Task<()>>,
     /// The hunks between the sides as of the revisions the bands describe.
     hunks: Vec<LineHunk>,
+    /// The revisions of both sides `hunks` describes.
+    hunk_revisions: (u64, u64),
+    layout: DiffLayout,
+    /// The modified editor takes focus on the next render, as the layout
+    /// change removed the one that had it.
+    refocus: bool,
     /// Each editor's scroll as of the last sync, to tell which one moved.
     synced: [f32; 2],
     /// The side whose editor last had focus, which hunk commands move.
@@ -180,6 +187,9 @@ impl DiffView {
             subscriptions
                 .push(cx.subscribe(&editor, |this, _, _: &Scrolled, cx| this.sync_scroll(cx)));
         }
+        // The original's syntax can arrive after its text, which recolors the
+        // lines shown above the modified text.
+        subscriptions.push(cx.observe(&original.model, |this, _, cx| this.refresh_blocks(cx)));
         for side in [&original, &modified] {
             side.editor
                 .read(cx)
@@ -198,12 +208,18 @@ impl DiffView {
             modified,
             pending: None,
             hunks: Vec::new(),
+            hunk_revisions: (0, 0),
+            layout: settings::diff_layout(cx),
+            refocus: false,
             synced: [0.; 2],
             focused: Rc::new(Cell::new(DiffSide::Modified)),
             locked: false,
             _focus_subscriptions: Vec::new(),
             _subscriptions: subscriptions,
         };
+        if view.layout == DiffLayout::Inline {
+            view.focused.set(DiffSide::Modified);
+        }
         view.rediff(None, cx);
         view
     }
@@ -258,6 +274,7 @@ impl DiffView {
                     return;
                 }
                 this.hunks = hunks.clone();
+                this.hunk_revisions = revisions;
                 for (side, text, kind) in [
                     (&this.original, &old, DiffSide::Original),
                     (&this.modified, &new, DiffSide::Modified),
@@ -269,9 +286,91 @@ impl DiffView {
                         let _ = editor.set_decorations(BAND_OWNER, &items, revision, cx);
                     });
                 }
+                this.refresh_blocks(cx);
             })
             .ok();
         }));
+    }
+
+    /// Show each hunk's original lines above the modified text, in the inline
+    /// layout, once the hunks describe the current texts.
+    fn refresh_blocks(&mut self, cx: &mut Context<Self>) {
+        if self.layout != DiffLayout::Inline || self.hunk_revisions != self.revisions(cx) {
+            return;
+        }
+        let original = self.original.model.read(cx);
+        let blocks = self
+            .hunks
+            .iter()
+            .filter(|hunk| !hunk.old.is_empty())
+            .map(|hunk| Block {
+                line: hunk.new.start as usize,
+                lines: (hunk.old.start..hunk.old.end)
+                    .map(|line| {
+                        let range = original.line_range(line as usize);
+                        let text = original.read(range.clone());
+                        let text = text.trim_end_matches(['\n', '\r']);
+                        BlockLine {
+                            highlights: original
+                                .syntax_highlights(range.start..range.start + text.len())
+                                .into_iter()
+                                .map(|(span, highlight)| {
+                                    (span.start - range.start..span.end - range.start, highlight)
+                                })
+                                .collect(),
+                            text: text.to_owned(),
+                            key: Some(key::DIFF_REMOVED_BACKGROUND.to_owned()),
+                        }
+                    })
+                    .collect(),
+            })
+            .collect();
+        self.set_blocks(blocks, cx);
+    }
+
+    fn set_blocks(&self, blocks: Vec<Block>, cx: &mut Context<Self>) {
+        let editor = self.modified.editor.read(cx).editor().clone();
+        editor.update(cx, |editor, cx| editor.set_blocks(blocks, cx));
+    }
+
+    /// How the texts are laid out.
+    #[cfg(test)]
+    pub(crate) fn layout(&self) -> DiffLayout {
+        self.layout
+    }
+
+    /// Lay the texts out side by side or inline. Inline shows only the
+    /// modified editor, so it is the one hunk commands act on.
+    pub(crate) fn set_layout(&mut self, layout: DiffLayout, cx: &mut Context<Self>) {
+        if layout == self.layout {
+            return;
+        }
+        self.layout = layout;
+        match layout {
+            DiffLayout::Inline => {
+                self.refocus = self.focused.replace(DiffSide::Modified) == DiffSide::Original;
+                self.refresh_blocks(cx);
+            }
+            DiffLayout::SideBySide => {
+                self.set_blocks(Vec::new(), cx);
+                // The modified editor is the one to follow, as the original's
+                // scroll was not tracked while it was hidden.
+                self.synced[1] = f32::NAN;
+                self.sync_scroll(cx);
+            }
+        }
+        cx.notify();
+    }
+
+    /// Switch to the other layout.
+    pub(crate) fn toggle_layout(&mut self, cx: &mut Context<Self>) {
+        self.set_layout(
+            match self.layout {
+                DiffLayout::SideBySide => DiffLayout::Inline,
+                DiffLayout::Inline => DiffLayout::SideBySide,
+            },
+            cx,
+        );
     }
 
     fn scrolls(&self, cx: &App) -> [f32; 2] {
@@ -283,6 +382,9 @@ impl DiffView {
     /// hunk mapping. Scrolling the other notifies this again, which finds
     /// both where they were left and stops there.
     fn sync_scroll(&mut self, cx: &mut Context<Self>) {
+        if self.layout == DiffLayout::Inline {
+            return;
+        }
         let scrolls = self.scrolls(cx);
         if scrolls == self.synced {
             return;
@@ -533,6 +635,15 @@ impl DiffView {
             .child(button("diff-next-hunk", "arrow-down", false, |this, cx| {
                 this.go_to_hunk(true, cx);
             }))
+            .child(button(
+                "diff-layout",
+                match self.layout {
+                    DiffLayout::SideBySide => "rows-2",
+                    DiffLayout::Inline => "columns-2",
+                },
+                false,
+                |this, cx| this.toggle_layout(cx),
+            ))
             .when(self.modified.document.is_some(), |bar| {
                 let glyph = if self.locked { "lock" } else { "lock-open" };
                 bar.child(button("diff-lock", glyph, self.locked, |this, cx| {
@@ -557,6 +668,10 @@ impl Render for DiffView {
                 ));
             }
         }
+        if std::mem::take(&mut self.refocus) {
+            let handle = self.modified.editor.focus_handle(cx);
+            window.focus(&handle, cx);
+        }
         let border = theme(cx).paint_color(color::BORDER);
         let muted = theme(cx).paint_color(color::TEXT_MUTED);
         let side = |label: &str, editor: &Entity<EditorView>| {
@@ -580,24 +695,23 @@ impl Render for DiffView {
                 .child(div().flex_1().min_h_0().child(editor.clone()))
         };
         let toolbar = self.toolbar(cx);
+        let content = div().flex_1().min_h_0().flex().flex_row();
+        let content = match self.layout {
+            DiffLayout::Inline => content.child(side(&self.title(), &self.modified.editor)),
+            DiffLayout::SideBySide => content
+                .child(side(&self.original.label, &self.original.editor))
+                .child(div().w(px(1.)).h_full().bg(border))
+                .child(self.connectors(cx))
+                .child(div().w(px(1.)).h_full().bg(border))
+                .child(side(&self.modified.label, &self.modified.editor)),
+        };
         div()
             .size_full()
             .flex()
             .flex_col()
             .child(toolbar)
             .child(div().h(px(1.)).w_full().bg(border))
-            .child(
-                div()
-                    .flex_1()
-                    .min_h_0()
-                    .flex()
-                    .flex_row()
-                    .child(side(&self.original.label, &self.original.editor))
-                    .child(div().w(px(1.)).h_full().bg(border))
-                    .child(self.connectors(cx))
-                    .child(div().w(px(1.)).h_full().bg(border))
-                    .child(side(&self.modified.label, &self.modified.editor)),
-            )
+            .child(content)
     }
 }
 
@@ -606,8 +720,28 @@ pub(crate) const NEXT_HUNK_COMMAND: &str = "diff.next-hunk";
 /// The command that moves to the previous changed hunk of a diff.
 pub(crate) const PREVIOUS_HUNK_COMMAND: &str = "diff.previous-hunk";
 
+/// The command that switches a diff between side by side and inline.
+pub(crate) const TOGGLE_LAYOUT_COMMAND: &str = "diff.toggle-layout";
+
 /// The command that toggles whether a diff's modified side refuses edits.
 pub(crate) const TOGGLE_READ_ONLY_COMMAND: &str = "diff.toggle-read-only";
+
+/// Switch a diff tab between side by side and inline; `diff.layout` is how new
+/// diff tabs open.
+#[crate::app::commands::declarations::command(TOGGLE_LAYOUT_COMMAND, title = "Toggle Diff Layout", description = "Switch the diff between side by side and inline.", participant = Editor)]
+pub(crate) async fn toggle_layout(
+    context: crate::app::commands::declarations::CommandContext,
+    (): (),
+) -> Result<(), knot_protocol::CommandOutcome> {
+    use knot_protocol::CommandOutcome;
+    context
+        .foreground(move |target, cx| {
+            let view = target.diff_view(cx).ok_or(CommandOutcome::InvalidTarget)?;
+            view.update(cx, |view, cx| view.toggle_layout(cx));
+            Ok(())
+        })
+        .await
+}
 
 /// Lock or unlock the modified side of a diff tab. A diff whose modified side
 /// is a snapshot is read-only already, so the command is unavailable there.

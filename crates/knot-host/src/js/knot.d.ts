@@ -426,6 +426,11 @@ declare module "knot" {
      * the pointer is over the gutter, or "always". A collapsed fold always
      * shows one. Native default "mouseover"; other text means "mouseover". */
     "editor.showFoldingControls": "mouseover" | "always";
+    /** How a diff tab opens: "sideBySide", with the original and modified
+     * texts in two editors, or "inline", with the original's changed lines
+     * above the modified text. Native default "sideBySide"; other text means
+     * "sideBySide". */
+    "diff.layout": "sideBySide" | "inline";
     /** Whether saving trims trailing spaces and tabs from every line except
      * the cursor's: "all" or "off". Native default "all". */
     "files.trimTrailingWhitespace": "all" | "off";

@@ -214,7 +214,12 @@ of the next or previous hunk on that side, wrapping at the ends. A bar above
 the sides holds buttons for those two commands and, when the modified side is a
 document, a lock that runs `diff.toggle-read-only`: it makes that side's editor
 refuse edits through a per-view read-only flag on the editor, so the document's
-other views stay editable.
+other views stay editable. A diff lays out side by side or inline, as `diff.layout`
+sets for a new tab and `diff.toggle-layout` switches one open tab. Inline shows
+only the modified editor, with each hunk's original lines above it as
+[block rows](editor-and-languages.md#editor-views) banded in
+`diff.removed.background`; it stops scroll syncing and leaves hunk commands on
+the modified side.
 A fixed tool window's tab presents its tool's native frame, whose
 definition and presentation survive hiding.
 The slots are left top and bottom, right top and bottom, and bottom left and
