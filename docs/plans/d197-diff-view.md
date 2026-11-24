@@ -153,7 +153,9 @@ other views stay editable. The look was judged minimal and unattractive;
 
 ### 9. Virtual block rows ✅
 
-Implemented, awaiting review.
+Done and approved on the tests, since nothing shows block rows before
+checkpoint 10. `EditorState::set_blocks` adds read-only rows above buffer lines;
+see [editor views](../architecture/editor-and-languages.md#editor-views).
 
 Deliverables:
 
