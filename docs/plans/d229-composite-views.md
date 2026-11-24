@@ -202,7 +202,8 @@ request-count test is unchanged. Checked by hand in a diff.
 
 Deliverables: Vim refuses edits and insert mode on a read-only editor with the
 `'modifiable'` error, also on a `BufferReadOnly` rejection. Phase B
-documentation.
+documentation. Entering insert mode asks the host whether the editor is
+read-only, one more request pinned in the request-count test.
 
 Validation: Vim cases on a snapshot side.
 

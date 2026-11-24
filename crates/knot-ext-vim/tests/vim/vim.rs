@@ -922,6 +922,41 @@ fn vim_follows_both_sides_of_a_diff_and_keeps_each_sides_marks(cx: &mut TestAppC
     diff_keys(&window, false, "` a", "one\nt‸wo\nthree\n", cx);
 }
 
+/// Vim refuses every change in a snapshot side with `'modifiable'`'s error
+/// and never enters insert mode there, while the document side takes them.
+#[gpui::test]
+fn vim_refuses_changes_in_a_read_only_diff_side(cx: &mut TestAppContext) {
+    let (_product, window, _directory) = show_diff(ENABLE, cx);
+    let refused = "E21: Cannot make changes, 'modifiable' is off";
+    let shows_refusal =
+        |window: &knot::test_support::TestWindow, cx: &mut TestAppContext| -> bool {
+            window.status_bar(cx).0.iter().any(|item| item == refused)
+        };
+
+    window.focus_diff_side(false, cx);
+    let unchanged = "one\ntwo\nthree\n";
+    for (keys, caret) in [
+        ("x", "‸one\ntwo\nthree\n"),
+        ("d d", "‸one\ntwo\nthree\n"),
+        ("i", "‸one\ntwo\nthree\n"),
+        ("o", "‸one\ntwo\nthree\n"),
+        ("c w", "‸one\ntwo\nthree\n"),
+        ("y y p", "‸one\ntwo\nthree\n"),
+    ] {
+        diff_keys(&window, false, keys, caret, cx);
+        wait_until(cx, |cx| shows_refusal(&window, cx));
+        window.press_each("l", cx);
+        window.press_each("h", cx);
+        assert_eq!(window.diff_texts(cx)[0].0, unchanged, "after {keys}");
+    }
+    // The side is still in normal mode, so motions work.
+    diff_keys(&window, false, "j", "one\n‸two\nthree\n", cx);
+
+    // The document side is editable.
+    window.focus_diff_side(true, cx);
+    diff_keys(&window, true, "j x", "one\n‸WO\nthree\n", cx);
+}
+
 /// The inline layout shows the modified editor alone, and Vim follows it.
 #[gpui::test]
 fn vim_follows_the_modified_editor_of_an_inline_diff(cx: &mut TestAppContext) {
@@ -934,7 +969,8 @@ fn vim_follows_the_modified_editor_of_an_inline_diff(cx: &mut TestAppContext) {
 
 /// A key costs a few draws and the host requests its behavior needs: the
 /// package's reads and writes, the selection notifications, and the status
-/// bar package's position. Unchanged status items send nothing.
+/// bar package's position; entering insert mode also asks whether the editor
+/// is read-only. Unchanged status items send nothing.
 #[gpui::test]
 fn a_key_costs_few_draws_and_requests(cx: &mut TestAppContext) {
     let product = start(cx);
@@ -944,7 +980,7 @@ fn a_key_costs_few_draws_and_requests(cx: &mut TestAppContext) {
     test_editor.work_per_key(&["l"], cx);
     let keys = ["w", "d", "w", "i", "a", "<esc>"];
     // At most (draws, requests) per key.
-    let bounds = [(3, 16), (3, 3), (7, 26), (3, 10), (3, 7), (6, 20)];
+    let bounds = [(3, 16), (3, 3), (7, 26), (3, 11), (3, 7), (6, 20)];
     let counts = test_editor.work_per_key(&keys, cx);
     let report = keys
         .iter()

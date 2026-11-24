@@ -137,7 +137,9 @@ key however fast it is typed. A mode usually also sets
 `editor.setCursorStyle("block")` and clears it on leaving, and may read the
 clipboard with `workbench.readClipboardText()`, which resolves to `null` when it
 holds no text. The bundled [Vim package](../../extensions/@knot/vim/) is a
-complete modal editor on these primitives.
+complete modal editor on these primitives. It follows an editor at any depth of a
+view tree, such as a side of a diff, and in an editor that refuses edits it
+answers a change or insert mode with `E21`, as Vim does for `'modifiable'`.
 
 Keybinding registration through `keymaps.bind` and `keymaps.unbind` is
 synchronous; mutations from one V8 turn apply as one atomic batch, and invalid

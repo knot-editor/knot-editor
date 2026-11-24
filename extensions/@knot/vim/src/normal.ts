@@ -2,7 +2,7 @@
 // motions, text objects, and lines, and the commands that edit directly.
 // Text math is done here over line snapshots; indentation, joining, bracket
 // matching, and visual-row movement are the native editor commands.
-import { commands, documents, languages, settings, workbench } from "knot";
+import { commands, documents, languages, settings, windows, workbench } from "knot";
 import type {
   Buffer, Disposable, DocumentId, EditorHandle, EditorSelection, FoldRange, Mark, RecordedCommand, Recording, ViewNodeTarget, ViewTarget,
 } from "knot";
@@ -21,6 +21,14 @@ import type { Register, Registers } from "./registers.js";
 import {
   columnAtByte, firstNonBlank, lastColumn, nextColumn, previousColumn, utf8Length,
 } from "./text.js";
+
+/** Vim's answer to a change in an editor that refuses edits. */
+export const READ_ONLY = "E21: Cannot make changes, 'modifiable' is off";
+
+/** Whether `error` is a buffer refusing an edit. */
+export function isReadOnlyError(error: unknown): boolean {
+  return (error as { code?: string }).code === "BufferReadOnly";
+}
 
 export const NORMAL = "vim.normal";
 export const INSERT = "vim.insert";
@@ -1307,6 +1315,11 @@ async function showCharacter(state: State) {
 }
 
 async function enterInsert(state: State, at: InsertAt, count: number) {
+  // Native typing would be refused one key at a time; Vim never enters insert mode.
+  const info = await windows.get(state.target.window);
+  if (info !== null && windows.findView(info, state.view)?.view.readOnly === true) {
+    throw Object.assign(new Error(READ_ONLY), { code: "BufferReadOnly" });
+  }
   state.group = await openGroup(state);
   state.opened = at === "o" || at === "O";
   state.repeat = { count, open: state.opened };

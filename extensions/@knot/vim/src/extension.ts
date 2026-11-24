@@ -16,7 +16,7 @@ import { EMPTY, feed, type Pending, pendingText, type WindowAction } from "./key
 import { BufferLines } from "./lines.js";
 import { lineStart } from "./motions.js";
 import {
-  INSERT, invokeRecorded, isTyping, isVisual, leaveInsert, type Mode, moveOnto, NORMAL, type Player, REPLACE, replaceKey, run, setMode,
+  INSERT, invokeRecorded, isReadOnlyError, isTyping, isVisual, leaveInsert, type Mode, moveOnto, NORMAL, type Player, READ_ONLY, REPLACE, replaceKey, run, setMode,
   type Shared, type State,
 } from "./normal.js";
 import { Registers } from "./registers.js";
@@ -422,34 +422,40 @@ class Vim {
         await showOperator(state, false);
         const command = fed.command;
         if (command === null) continue;
-        if (command.kind === "window") {
-          await whileOpen(() => windowCommand(command.action, command.count));
+        try {
+          if (command.kind === "window") {
+            await whileOpen(() => windowCommand(command.action, command.count));
+            if (this.states.get(state.view) !== state) return false;
+            continue;
+          }
+          if (command.kind === "ex") {
+            // A command such as `:q` may close the editor.
+            await whileOpen(async () => {
+              // `:` in a visual mode leaves it and ranges over its lines.
+              if (visual) await runVisual(state, { kind: "leave-visual" });
+              state.message = await commandLine(state, visual ? "'<,'>" : "");
+            });
+            if (this.states.get(state.view) !== state) return false;
+            continue;
+          }
+          if (command.kind === "record") {
+            state.macro = { register: command.register, entries: [], recording: await state.handle.record() };
+            continue;
+          }
+          if (command.kind === "macro") {
+            await this.play(state, command.register, command.count);
+            if (this.states.get(state.view) !== state) return false;
+            continue;
+          }
+          if (visual || command.kind === "visual" || command.kind === "reselect") {
+            await runVisual(state, command);
+          } else {
+            await run(state, command);
+          }
+        } catch (error) {
+          if (!isReadOnlyError(error)) throw error;
+          state.message = READ_ONLY;
           if (this.states.get(state.view) !== state) return false;
-          continue;
-        }
-        if (command.kind === "ex") {
-          // A command such as `:q` may close the editor.
-          await whileOpen(async () => {
-            // `:` in a visual mode leaves it and ranges over its lines.
-            if (visual) await runVisual(state, { kind: "leave-visual" });
-            state.message = await commandLine(state, visual ? "'<,'>" : "");
-          });
-          if (this.states.get(state.view) !== state) return false;
-          continue;
-        }
-        if (command.kind === "record") {
-          state.macro = { register: command.register, entries: [], recording: await state.handle.record() };
-          continue;
-        }
-        if (command.kind === "macro") {
-          await this.play(state, command.register, command.count);
-          if (this.states.get(state.view) !== state) return false;
-          continue;
-        }
-        if (visual || command.kind === "visual" || command.kind === "reselect") {
-          await runVisual(state, command);
-        } else {
-          await run(state, command);
         }
       }
     }
