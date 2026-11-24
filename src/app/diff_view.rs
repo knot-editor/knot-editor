@@ -450,6 +450,7 @@ impl DiffView {
         self.focused.set(side);
     }
 
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn editors(&self) -> [&Entity<EditorView>; 2] {
         [&self.original.editor, &self.modified.editor]
     }
