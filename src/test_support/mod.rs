@@ -25,3 +25,14 @@ pub mod editing {
 }
 
 pub use crate::app::driver::wait_until;
+
+/// A temporary directory named by its resolved path, for a test that watches
+/// a Git repository made in it. The system's temporary directory can be
+/// reached through a symlink (on macOS `/var` is `/private/var`), while Git
+/// reports resolved paths: a repository's metadata would then lie outside the
+/// workspace root as spelled, and each watch of it would start an operating
+/// system watch of its own instead of sharing the root's.
+pub fn resolved_tempdir() -> tempfile::TempDir {
+    let parent = std::fs::canonicalize(std::env::temp_dir()).unwrap();
+    tempfile::tempdir_in(parent).unwrap()
+}

@@ -4,7 +4,7 @@ use std::path::Path;
 use std::process::Command;
 
 use gpui::TestAppContext;
-use knot::test_support::{CommandOutcome, TestProduct, wait_until};
+use knot::test_support::{CommandOutcome, TestProduct, resolved_tempdir, wait_until};
 
 fn git(directory: &Path, args: &[&str]) {
     let output = Command::new("git")
@@ -27,7 +27,7 @@ fn uri(path: &Path) -> String {
 
 #[gpui::test]
 fn the_diff_of_a_file_follows_a_commit(cx: &mut TestAppContext) {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = resolved_tempdir();
     let root = directory.path();
     git(root, &["init", "-q", "-b", "main"]);
     std::fs::write(root.join("a.txt"), "one\n").unwrap();

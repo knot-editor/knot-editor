@@ -5,7 +5,7 @@ use std::path::Path;
 use std::process::Command;
 
 use gpui::TestAppContext;
-use knot::test_support::{CommandOutcome, TestProduct, TestWindow, wait_until};
+use knot::test_support::{CommandOutcome, TestProduct, TestWindow, resolved_tempdir, wait_until};
 
 fn git(directory: &Path, args: &[&str]) -> String {
     let output = Command::new("git")
@@ -103,7 +103,7 @@ fn a_detached_head_is_the_short_commit(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn the_status_bar_follows_a_checkout_made_with_git(cx: &mut TestAppContext) {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = resolved_tempdir();
     let root = directory.path();
     repository(root);
     let (product, window) = launch(cx);

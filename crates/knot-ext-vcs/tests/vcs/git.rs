@@ -4,7 +4,7 @@ use std::path::Path;
 use std::process::Command;
 
 use gpui::TestAppContext;
-use knot::test_support::{TestProduct, TestWindow, wait_until};
+use knot::test_support::{TestProduct, TestWindow, resolved_tempdir, wait_until};
 
 const BASE: &str = "a\nb\nc\nd\n";
 
@@ -250,7 +250,7 @@ fn open_with_added_line(directory: &Path, cx: &mut TestAppContext) -> (TestProdu
 fn a_commit_made_outside_knot_clears_the_marks_and_a_soft_reset_brings_them_back(
     cx: &mut TestAppContext,
 ) {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = resolved_tempdir();
     let (_product, window) = open_with_added_line(directory.path(), cx);
     git(directory.path(), &["commit", "-q", "-a", "-m", "more"]);
     wait_until(cx, |cx| bars(&window, 0, cx).is_empty());
@@ -260,7 +260,7 @@ fn a_commit_made_outside_knot_clears_the_marks_and_a_soft_reset_brings_them_back
 
 #[gpui::test]
 fn a_branch_switch_outside_knot_changes_the_baseline(cx: &mut TestAppContext) {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = resolved_tempdir();
     let (_product, window) = open_with_added_line(directory.path(), cx);
     // A branch whose file already has the added line, reached without
     // touching the working tree.
@@ -277,7 +277,7 @@ fn a_branch_switch_outside_knot_changes_the_baseline(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn staging_a_file_outside_knot_gives_a_new_file_its_baseline(cx: &mut TestAppContext) {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = resolved_tempdir();
     let (_product, window) = open_with_added_line(directory.path(), cx);
     std::fs::write(directory.path().join("new.txt"), "x\ny\n").unwrap();
     window.open_path(&directory.path().join("new.txt"), cx);
@@ -291,7 +291,7 @@ fn staging_a_file_outside_knot_gives_a_new_file_its_baseline(cx: &mut TestAppCon
 
 #[gpui::test]
 fn deleting_the_repository_ends_the_gutter(cx: &mut TestAppContext) {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = resolved_tempdir();
     let (_product, window) = open_with_added_line(directory.path(), cx);
     std::fs::remove_dir_all(directory.path().join(".git")).unwrap();
     wait_until(cx, |cx| bars(&window, 0, cx).is_empty());

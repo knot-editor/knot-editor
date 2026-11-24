@@ -4,7 +4,7 @@ use std::path::Path;
 use std::process::Command;
 
 use gpui::TestAppContext;
-use knot::test_support::{TestProduct, TestTree, TestWindow, wait_until};
+use knot::test_support::{TestProduct, TestTree, TestWindow, resolved_tempdir, wait_until};
 
 fn git(directory: &Path, args: &[&str]) {
     let output = Command::new("git")
@@ -76,7 +76,7 @@ fn show_with(
     watch: bool,
     cx: &mut TestAppContext,
 ) -> (TestProduct, TestWindow, TestTree, tempfile::TempDir) {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = resolved_tempdir();
     let root = directory.path();
     std::fs::create_dir_all(root).unwrap();
     git(root, &["init", "-q", "-b", "main"]);
