@@ -143,6 +143,8 @@ Windows and Linux was not tried on those platforms.
 
 ### 8. Diff toolbar
 
+Implemented; awaiting the review gate below.
+
 Deliverables:
 
 - A minimal bar at the top of a diff tab with previous hunk, next hunk, and a

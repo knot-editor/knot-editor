@@ -243,7 +243,11 @@ const SHARED_BINDINGS: &[PresetEntry] = &[
     ("secondary-o", OPEN_COMMAND, None),
     ("secondary-p", GO_TO_FILE_COMMAND, None),
     ("secondary-alt-p", GO_TO_BUFFER_COMMAND, None),
-    ("secondary-d", COMPARE_WITH_LAST_COMMIT_COMMAND, Some("editor")),
+    (
+        "secondary-d",
+        COMPARE_WITH_LAST_COMMIT_COMMAND,
+        Some("editor"),
+    ),
     ("secondary-e", OPEN_RECENT_COMMAND, None),
     ("secondary-s", SAVE_COMMAND, None),
     ("secondary-shift-s", SAVE_AS_COMMAND, None),

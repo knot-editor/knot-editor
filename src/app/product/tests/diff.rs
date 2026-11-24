@@ -906,3 +906,55 @@ fn the_version_control_keys_move_between_hunks_in_a_diff_and_keep_their_binding_
     press_keys(&window, "alt-f5", cx);
     wait_for_api_condition(cx, |cx| editor.read(cx).editor().read(cx).caret() == (0, 0));
 }
+
+#[gpui::test]
+fn the_toolbar_lock_stops_typing_in_the_diff_but_not_in_the_document(cx: &mut TestAppContext) {
+    use crate::app::diff_view::TOGGLE_READ_ONLY_COMMAND;
+    let (window, native_window, _, model) = document_diff_window("one\ntwo\n", cx);
+    let text = |cx: &mut TestAppContext| model.read_with(cx, |model, _| model.text());
+    let locked = |cx: &mut TestAppContext| {
+        cx.read(|cx| {
+            let workbench = window.read(cx).workbench.read(cx);
+            let view = workbench.diff_view(workbench.focused_pane().unwrap().active_tab());
+            view.unwrap().read(cx).is_locked()
+        })
+    };
+    assert!(!locked(cx));
+
+    cx.simulate_keystrokes(native_window, "x");
+    assert_eq!(text(cx), "xone\ntwo\n");
+
+    assert_eq!(
+        run_command(&window, native_window, TOGGLE_READ_ONLY_COMMAND, cx),
+        CommandOutcome::Completed
+    );
+    assert!(locked(cx));
+    cx.simulate_keystrokes(native_window, "y backspace");
+    assert_eq!(text(cx), "xone\ntwo\n");
+
+    // The document's own view is a different editor and stays editable.
+    edit(&model, 0..0, "z", cx);
+    assert_eq!(text(cx), "zxone\ntwo\n");
+
+    run_command(&window, native_window, TOGGLE_READ_ONLY_COMMAND, cx);
+    assert!(!locked(cx));
+    cx.simulate_keystrokes(native_window, "y");
+    assert_eq!(text(cx), "zxyone\ntwo\n");
+}
+
+#[gpui::test]
+fn the_lock_is_unavailable_when_the_modified_side_is_a_snapshot(cx: &mut TestAppContext) {
+    use crate::app::diff_view::TOGGLE_READ_ONLY_COMMAND;
+    let (window, native_window, _) = diff_window(cx);
+    assert_eq!(
+        run_command(&window, native_window, TOGGLE_READ_ONLY_COMMAND, cx),
+        CommandOutcome::Unavailable
+    );
+}
+
+#[test]
+fn the_toolbar_glyphs_exist() {
+    for glyph in ["arrow-up", "arrow-down", "lock", "lock-open"] {
+        assert!(crate::app::icons::glyph_exists(glyph), "{glyph}");
+    }
+}

@@ -22,9 +22,11 @@ use knot_protocol::{ExtensionId, ExtensionKey, ExtensionLifecycleId};
 
 use super::convert::ThemePaint as _;
 use super::editor::{EditorView, Scrolled};
+use super::icons::AppIcon;
 use super::model::{Buffer, BufferModel};
 use super::theme::{color, theme};
 use super::zoom;
+use knot_model::icons::IconDefinition;
 use knot_model::theme::color as key;
 
 /// Owns the bands a diff view puts on its editors.
@@ -148,6 +150,8 @@ pub(crate) struct DiffView {
     synced: [f32; 2],
     /// The side whose editor last had focus, which hunk commands move.
     focused: Rc<Cell<DiffSide>>,
+    /// The modified side's editor refuses edits.
+    locked: bool,
     /// Watches each editor's focus; set up on the first render, which has
     /// the window.
     _focus_subscriptions: Vec<Subscription>,
@@ -196,6 +200,7 @@ impl DiffView {
             hunks: Vec::new(),
             synced: [0.; 2],
             focused: Rc::new(Cell::new(DiffSide::Modified)),
+            locked: false,
             _focus_subscriptions: Vec::new(),
             _subscriptions: subscriptions,
         };
@@ -401,6 +406,30 @@ impl DiffView {
         true
     }
 
+    /// Whether the modified side's editor refuses edits.
+    pub(crate) fn is_locked(&self) -> bool {
+        self.locked
+    }
+
+    /// Make the modified side's editor refuse edits, or accept them again.
+    /// Only this view is affected; the document's other views stay editable.
+    /// A snapshot side is read-only already, so this reports whether the side
+    /// is a document.
+    pub(crate) fn set_locked(&mut self, locked: bool, cx: &mut Context<Self>) -> bool {
+        if self.modified.document.is_none() {
+            return false;
+        }
+        self.locked = locked;
+        self.modified
+            .editor
+            .read(cx)
+            .editor()
+            .clone()
+            .update(cx, |editor, _| editor.set_read_only(locked));
+        cx.notify();
+        true
+    }
+
     /// Put the modified side's caret at the start of `line`, 0-based.
     pub(crate) fn go_to_line(&mut self, line: usize, cx: &mut Context<Self>) {
         let editor = self.modified.editor.read(cx).editor().clone();
@@ -462,6 +491,57 @@ impl Focusable for DiffView {
     }
 }
 
+impl DiffView {
+    /// The bar above the sides: previous and next hunk, and a lock for the
+    /// modified side when it is a document.
+    fn toolbar(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        let theme = theme(cx);
+        let text = theme.paint_color(color::TEXT);
+        let hover = theme.paint_color(color::BUTTON_HOVER_BACKGROUND);
+        let active = theme.paint_color(color::LIST_SELECTED_BACKGROUND);
+        let button = |id: &'static str,
+                      glyph: &'static str,
+                      pressed: bool,
+                      on_click: fn(&mut DiffView, &mut Context<DiffView>)| {
+            div()
+                .id(id)
+                .p(zoom::rems(3.))
+                .rounded(zoom::rems(4.))
+                .text_color(text)
+                .cursor_pointer()
+                .when(pressed, |button| button.bg(active))
+                .hover(|style| style.bg(hover))
+                .child(AppIcon::new(IconDefinition::lucide(glyph)))
+                .on_click(cx.listener(move |this, _, _, cx| on_click(this, cx)))
+        };
+        div()
+            .id("diff-toolbar")
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap(zoom::rems(2.))
+            .px(zoom::rems(6.))
+            .py(zoom::rems(2.))
+            .child(button(
+                "diff-previous-hunk",
+                "arrow-up",
+                false,
+                |this, cx| {
+                    this.go_to_hunk(false, cx);
+                },
+            ))
+            .child(button("diff-next-hunk", "arrow-down", false, |this, cx| {
+                this.go_to_hunk(true, cx);
+            }))
+            .when(self.modified.document.is_some(), |bar| {
+                let glyph = if self.locked { "lock" } else { "lock-open" };
+                bar.child(button("diff-lock", glyph, self.locked, |this, cx| {
+                    this.set_locked(!this.locked, cx);
+                }))
+            })
+    }
+}
+
 impl Render for DiffView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if self._focus_subscriptions.is_empty() {
@@ -499,15 +579,25 @@ impl Render for DiffView {
                 )
                 .child(div().flex_1().min_h_0().child(editor.clone()))
         };
+        let toolbar = self.toolbar(cx);
         div()
             .size_full()
             .flex()
-            .flex_row()
-            .child(side(&self.original.label, &self.original.editor))
-            .child(div().w(px(1.)).h_full().bg(border))
-            .child(self.connectors(cx))
-            .child(div().w(px(1.)).h_full().bg(border))
-            .child(side(&self.modified.label, &self.modified.editor))
+            .flex_col()
+            .child(toolbar)
+            .child(div().h(px(1.)).w_full().bg(border))
+            .child(
+                div()
+                    .flex_1()
+                    .min_h_0()
+                    .flex()
+                    .flex_row()
+                    .child(side(&self.original.label, &self.original.editor))
+                    .child(div().w(px(1.)).h_full().bg(border))
+                    .child(self.connectors(cx))
+                    .child(div().w(px(1.)).h_full().bg(border))
+                    .child(side(&self.modified.label, &self.modified.editor)),
+            )
     }
 }
 
@@ -515,6 +605,29 @@ impl Render for DiffView {
 pub(crate) const NEXT_HUNK_COMMAND: &str = "diff.next-hunk";
 /// The command that moves to the previous changed hunk of a diff.
 pub(crate) const PREVIOUS_HUNK_COMMAND: &str = "diff.previous-hunk";
+
+/// The command that toggles whether a diff's modified side refuses edits.
+pub(crate) const TOGGLE_READ_ONLY_COMMAND: &str = "diff.toggle-read-only";
+
+/// Lock or unlock the modified side of a diff tab. A diff whose modified side
+/// is a snapshot is read-only already, so the command is unavailable there.
+#[crate::app::commands::declarations::command(TOGGLE_READ_ONLY_COMMAND, title = "Toggle Diff Read-Only", description = "Make the diff's modified side refuse edits, or accept them again.", participant = Editor)]
+pub(crate) async fn toggle_read_only(
+    context: crate::app::commands::declarations::CommandContext,
+    (): (),
+) -> Result<(), knot_protocol::CommandOutcome> {
+    use knot_protocol::CommandOutcome;
+    context
+        .foreground(move |target, cx| {
+            let view = target.diff_view(cx).ok_or(CommandOutcome::InvalidTarget)?;
+            if view.update(cx, |view, cx| view.set_locked(!view.is_locked(), cx)) {
+                Ok(())
+            } else {
+                Err(CommandOutcome::Unavailable)
+            }
+        })
+        .await
+}
 
 /// Move the modified side's caret to the next or previous hunk, wrapping.
 /// Only a diff tab has hunks; a diff without any leaves the caret.
