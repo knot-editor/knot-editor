@@ -141,29 +141,15 @@ diff is a regular tab, not a preview, and a second request closes the open tab
 and opens a new one, since the API cannot focus an open diff. Ctrl+D on
 Windows and Linux was not tried on those platforms.
 
-### 8. Diff toolbar
+### 8. Diff toolbar ✅
 
-Implemented; awaiting the review gate below.
-
-Deliverables:
-
-- A minimal bar at the top of a diff tab with previous hunk, next hunk, and a
-  read-only toggle for the modified side, which is editable by default.
-- A per-editor read-only flag in `knot-model`'s `Editor`, checked beside
-  `BufferModel::is_editable` at each edit site, so locking the diff's side
-  leaves the document's other views editable. The toggle is also a command.
-
-Validation: model tests that a read-only editor refuses edits its buffer would
-accept; product tests that the buttons move between hunks and the toggle blocks
-and restores typing.
-
-Review gate: the toolbar's look and placement in the real app.
-
-**Implementation context**
-
-- `DiffView::render` in `src/app/diff_view.rs`; `go_to_hunk` already serves the
-  hunk buttons. Edit sites are the `is_editable` checks in
-  `crates/knot-model/src/editor.rs` and `editor/`.
+Done and approved as functional. A bar at the top of a diff tab has previous
+hunk, next hunk, and a read-only lock for a document side, also the command
+`diff.toggle-read-only`; see
+[workbench and lifecycle](../architecture/workbench-and-lifecycle.md). The lock
+is a per-editor read-only flag in `knot-model`'s `Editor`, so the document's
+other views stay editable. The look was judged minimal and unattractive;
+[D228](../roadmap.md) tracks the redesign. The hunk buttons have no click test.
 
 ### 9. Virtual block rows
 

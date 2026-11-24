@@ -13,7 +13,7 @@ Every item has the same shape:
 - **Description** says what is missing today and when it becomes worth doing,
   then what to build.
 
-The next unused ID is **D228**, and for bugs **B002**; take it for a new item and bump this line.
+The next unused ID is **D229**, and for bugs **B002**; take it for a new item and bump this line.
 
 Each section is ordered so that an item comes after the items it depends on,
 wherever the sections allow it. Items with no dependencies are ordered by
@@ -439,6 +439,15 @@ milestones these items belong to.
     [version control plan](plans/vcs.md): list conflicted files, accept ours,
     theirs, or both per conflict from the editor, and a three-way merge view
     built on the diff view.
+
+- **D228 — Diff toolbar design**
+  - Depends on: D197
+  - Description: The diff tab's bar is a bare row of three small icon buttons
+    (previous hunk, next hunk, read-only lock) with no labels, state, or
+    grouping, and looks unfinished next to the rest of the workbench. Do it
+    after the diff view ships: design the bar like the other tab toolbars,
+    with clear button states, tooltips, a hunk position indicator, and room
+    for the layout toggle.
 
 ### Package manager
 
