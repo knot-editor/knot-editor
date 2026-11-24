@@ -262,6 +262,7 @@ impl Element for EditorElement {
             colors,
             focus_handle,
             entity,
+            blocks,
         ): EditorPaintState = {
             let view = self.entity.read(cx);
             let editor = view.editor.read(cx);
@@ -274,7 +275,13 @@ impl Element for EditorElement {
             // Each line is read and highlighted once, then sliced per row.
             let mut vis: Vec<PaintRow> = Vec::new();
             let mut line: Option<(usize, String, Vec<TextRun>)> = None;
+            let mut blocks: Vec<BlockPaint> = Vec::new();
             for index in rows.clone() {
+                // Block rows belong to no line: they paint apart from the text.
+                if let Some(block) = editor.wrap().block_row(index) {
+                    blocks.push(view.block_paint(index, &block, theme));
+                    continue;
+                }
                 let row = editor.row(model, index);
                 if line.as_ref().is_none_or(|(at, ..)| *at != row.line) {
                     let text = line_text(model, row.line);
@@ -399,6 +406,7 @@ impl Element for EditorElement {
                 },
                 view.focus.clone(),
                 self.entity.clone(),
+                blocks,
             )
         };
 
@@ -521,6 +529,32 @@ impl Element for EditorElement {
                 window.paint_quad(fill(rect, *color));
             }
 
+            // Block rows: their bands, then their text, which stays clear of
+            // the selection, the caret, and every decoration.
+            let block_text: Vec<_> = blocks
+                .iter()
+                .map(|block| {
+                    if let Some(color) = block.band {
+                        let rect = Bounds {
+                            origin: point(bounds.origin.x, top(block.index)),
+                            size: size(pane_w, line_height),
+                        };
+                        window.paint_quad(fill(rect, color));
+                    }
+                    let shaped = (!block.text.is_empty()).then(|| {
+                        shape_editor_line(
+                            window,
+                            SharedString::from(block.text.clone()),
+                            font_size,
+                            &block.runs,
+                            tab_size,
+                        )
+                    });
+                    let x = px(block.indent as f32 * cell_width) - px(scroll_x);
+                    (block.index, shaped, x)
+                })
+                .collect();
+
             // Selection highlight, painted BEHIND the text: the selected span
             // of each row, reaching the pane's edges where the selection
             // continues, so it reads as contiguous across rows and blank
@@ -553,6 +587,13 @@ impl Element for EditorElement {
                     size: size(hi - lo, line_height),
                 };
                 window.paint_quad(fill(rect, colors.bracket_match));
+            }
+
+            for (index, s, x_off) in &block_text {
+                if let Some(s) = s {
+                    let origin = point(bounds.origin.x + *x_off, top(*index));
+                    let _ = s.paint(origin, line_height, TextAlign::Left, None, window, cx);
+                }
             }
 
             // Text, reusing the shaped rows from above.
@@ -812,6 +853,7 @@ pub(super) type EditorPaintState = (
     PaintColors,
     FocusHandle,
     Entity<EditorView>,
+    Vec<BlockPaint>,
 );
 
 /// One visible row's text and runs, copied out for one paint.
@@ -821,6 +863,17 @@ pub(super) struct PaintRow {
     runs: Vec<TextRun>,
     /// Whether the row ends the first line of a collapsed fold.
     folded: bool,
+}
+
+/// One visible block row's text and runs, copied out for one paint.
+pub(super) struct BlockPaint {
+    /// The document row it paints at.
+    pub(super) index: usize,
+    pub(super) text: String,
+    pub(super) runs: Vec<TextRun>,
+    pub(super) indent: usize,
+    /// The color banding the row.
+    pub(super) band: Option<Hsla>,
 }
 
 /// Pointer regions inserted before paint: the text area and each visible

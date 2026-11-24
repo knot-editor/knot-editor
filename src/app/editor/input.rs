@@ -204,6 +204,10 @@ impl EditorView {
         let row = (f32::from(p.y - origin.y) / self.metrics.line_height + editor.scroll_top())
             .floor()
             .max(0.) as usize;
+        // A block holds no caret: a point on one is the start of its line.
+        if let Some(block) = editor.wrap().block_row(row) {
+            return (block.line, 0);
+        }
         self.column_for_x(
             editor,
             row,

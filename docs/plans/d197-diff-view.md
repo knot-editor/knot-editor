@@ -151,7 +151,9 @@ is a per-editor read-only flag in `knot-model`'s `Editor`, so the document's
 other views stay editable. The look was judged minimal and unattractive;
 [D228](../roadmap.md) tracks the redesign. The hunk buttons have no click test.
 
-### 9. Virtual block rows
+### 9. Virtual block rows ✅
+
+Implemented, awaiting review.
 
 Deliverables:
 

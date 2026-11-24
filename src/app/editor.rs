@@ -696,6 +696,13 @@ impl Editor {
         self.state.set_wrap(wrap, self.model.read(cx));
     }
 
+    /// Show read-only `blocks` above their lines; see
+    /// [`EditorState::set_blocks`].
+    #[allow(dead_code)] // Until the diff view's inline layout shows them.
+    pub(crate) fn set_blocks(&mut self, blocks: Vec<Block>, cx: &App) {
+        self.state.set_blocks(blocks, self.model.read(cx));
+    }
+
     /// Lay out as a view `rows` rows tall and `columns` cells wide would,
     /// wrapping when `editor.softWrap` is on, for a test without a window.
     #[cfg(any(test, feature = "test-support"))]

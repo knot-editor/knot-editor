@@ -1,6 +1,7 @@
 //! Row shaping and the geometry shared by caret, selection, hit testing,
 //! and painting.
 
+use super::paint::BlockPaint;
 use super::*;
 use crate::app::convert::ThemePaint as _;
 
@@ -147,6 +148,29 @@ impl EditorView {
         let mut layers = vec![syntax.as_slice()];
         layers.extend(decorations.iter().map(Vec::as_slice));
         runs_for(text, &layers, theme, &self.font)
+    }
+
+    /// The text, runs, and band of block row `index`.
+    pub(super) fn block_paint(&self, index: usize, row: &BlockRow, theme: &Theme) -> BlockPaint {
+        let line = row.block_line;
+        let text = line.text[row.range.clone()].to_owned();
+        let spans: Vec<HighlightSpan> = line
+            .highlights
+            .iter()
+            .filter(|(range, _)| range.start < row.range.end && range.end > row.range.start)
+            .map(|(range, highlight)| HighlightSpan {
+                range: range.start.max(row.range.start) - row.range.start
+                    ..range.end.min(row.range.end) - row.range.start,
+                style: theme.highlight_style(*highlight),
+            })
+            .collect();
+        BlockPaint {
+            index,
+            runs: runs_for(&text, &[spans.as_slice()], theme, &self.font),
+            text,
+            indent: row.indent,
+            band: line.key.as_deref().map(|key| theme.paint_color(key)),
+        }
     }
 
     /// Shape `line`, whose content is `text`, with its highlight runs.

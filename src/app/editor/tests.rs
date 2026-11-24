@@ -1123,6 +1123,7 @@ fn the_caret_blinks_while_focused_and_shows_again_after_typing(cx: &mut TestAppC
 
 type Position = (usize, usize);
 
+mod blocks;
 mod gutter;
 mod indentation;
 mod wrap;

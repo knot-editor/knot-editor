@@ -202,6 +202,15 @@ A view without a gutter and a terminal leave a small inset before the text.
 Editors and terminals draw a thin overlay scrollbar at the right edge that
 shows while the content moves and fades out shortly after.
 
+A view can show read-only blocks above buffer lines, as `EditorState::set_blocks`
+takes them: each block line carries its text, syntax highlights, and a
+decoration key that bands the row, and wraps with the editor. Block rows are
+the counterpart of folds' zero-row lines: rows in the wrap map that belong to no
+buffer line. They count in the rows and scroll like any other, hide with a
+folded anchor line, and follow their line through edits. They hold no caret:
+`position` reports a block row as the first row of the line below, vertical
+moves step over them, and a point on one is the start of that line.
+
 A view folds line regions, which stay per view. A collapsed fold keeps its
 first line visible, with an `editor.foldPlaceholder` `…` after it, and gives
 its other lines no rows: the wrap map treats hidden lines as zero-row lines, so
