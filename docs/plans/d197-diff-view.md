@@ -124,26 +124,15 @@ between the editors joins each hunk's lines in the `diff.*.background` colors,
 with straight edges. The connectors have no automated test; they were judged
 in the real app.
 
-### 6. Hunk navigation 🚧
+### 6. Hunk navigation ✅
 
-Built, awaiting review. `diff.next-hunk` and `diff.previous-hunk` (Alt+F5 and
-Alt+Shift+F5, bound in a `diff` key context both editors hold, so they win over
-`vcs.nextChange` there and only there) move the focused side's caret to a
-hunk's first line on that side, wrapping; they are unavailable on a diff
-without hunks. Commands on a diff tab now act on the focused side.
-`workbench.openDiff` takes `line`, the 0-based modified line the caret starts
-at.
-
-Validation: product tests for navigation and opening at a line.
-
-Review gate: command names and keys.
-
-**Implementation context**
-
-- Follow the native editor commands in `src/app/editor/native_commands.rs`
-  and the command catalog's view scopes
-  ([commands](../architecture/commands.md)). Mirror `vcs.nextChange`'s
-  wrapping in `extensions/@knot/vcs/src/navigation.ts`.
+Done and approved. `diff.next-hunk` and `diff.previous-hunk` move the focused
+side's caret between hunks, wrapping, and are bound to Alt+F5 and Alt+Shift+F5
+in the `diff` key context both editors hold, which wins over `vcs.nextChange`
+there only. Commands on a diff tab act on the editor of the side that last had
+focus ([workbench and lifecycle](../architecture/workbench-and-lifecycle.md)).
+`workbench.openDiff` takes `line`
+([guide](../extension-api/application.md#show-the-differences)).
 
 ### 7. Version control entry points
 
