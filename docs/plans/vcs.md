@@ -75,7 +75,8 @@ gutter and change navigation. See [version control](../architecture/version-cont
 
 - ✅ **D197 — Diff view.** See [the workbench's diff view](../architecture/workbench-and-lifecycle.md#diff-view)
   and [version control](../architecture/version-control.md#showing-changes).
-- 🚧 **D229 — Editor targets for diff tabs.** Next, since the diff is hardly
+- 🚧 **D229 — Composite views and the diff as a package.** [Plan](d229-composite-views.md).
+  Next, since the diff is hardly
   usable without Vim mode, which attaches only to editors extensions can
   reach. Depends on D197.
 - **D220 — Anchored floating panels.** Split from D145, which keeps virtual

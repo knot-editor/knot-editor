@@ -13,7 +13,7 @@ Every item has the same shape:
 - **Description** says what is missing today and when it becomes worth doing,
   then what to build.
 
-The next unused ID is **D229**, and for bugs **B002**; take it for a new item and bump this line.
+The next unused ID is **D230**, and for bugs **B002**; take it for a new item and bump this line.
 
 Each section is ordered so that an item comes after the items it depends on,
 wherever the sections allow it. Items with no dependencies are ordered by
@@ -30,7 +30,7 @@ point.
 
 The [version control plan](plans/vcs.md) comes first, in its milestone order:
 
-- D229 — Editor targets for diff tabs.
+- D229 — Composite views and the diff as a package.
 - D220 — Anchored floating panels.
 - D221 — Hunk popup.
 - D214 — VCS changes view.
@@ -431,17 +431,15 @@ milestones these items belong to.
     theirs, or both per conflict from the editor, and a three-way merge view
     built on the diff view.
 
-- **D229 — Editor targets for diff tabs** 🚧
+- **D229 — Composite views and the diff as a package** 🚧
   - Depends on: none
-  - Description: Vim mode does not work in a diff tab, which makes the diff
-    hard to use for anyone who runs it. Extensions follow only tabs that
-    expose a document and an editor handle, and a diff tab's editors are
-    native views with neither. Give a diff tab's editors, at least the
-    modified side's, targets that extensions can reach with
-    `workbench.editor`, so Vim and other editor-driven packages attach to
-    them. Decide how the targets relate to the document when the modified
-    side is one, and what a snapshot side exposes. Part of the
-    [version control plan](plans/vcs.md).
+  - Description: The diff view is native and privileged: extensions cannot
+    build anything like it, and they see only tabs, so Vim cannot reach its
+    editors. Expose the views inside a tab as a tree with editors reachable at
+    any depth, add declarative composite views, extension buffers, block rows,
+    and linked editor scrolling, and rebuild the diff as `@knot/diff` on them.
+    Part of the [version control plan](plans/vcs.md). Plan:
+    [d229-composite-views.md](plans/d229-composite-views.md).
 
 - **D228 — Diff toolbar design**
   - Depends on: none
