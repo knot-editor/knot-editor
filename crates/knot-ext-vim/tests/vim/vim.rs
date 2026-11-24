@@ -928,10 +928,9 @@ fn vim_follows_both_sides_of_a_diff_and_keeps_each_sides_marks(cx: &mut TestAppC
 fn vim_refuses_changes_in_a_read_only_diff_side(cx: &mut TestAppContext) {
     let (_product, window, _directory) = show_diff(ENABLE, cx);
     let refused = "E21: Cannot make changes, 'modifiable' is off";
-    let shows_refusal =
-        |window: &knot::test_support::TestWindow, cx: &mut TestAppContext| -> bool {
-            window.status_bar(cx).0.iter().any(|item| item == refused)
-        };
+    let shows_refusal = |window: &knot::test_support::TestWindow,
+                         cx: &mut TestAppContext|
+     -> bool { window.status_bar(cx).0.iter().any(|item| item == refused) };
 
     window.focus_diff_side(false, cx);
     let unchanged = "one\ntwo\nthree\n";

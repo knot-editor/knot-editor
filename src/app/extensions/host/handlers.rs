@@ -4786,6 +4786,108 @@ async fn storage_list(context: HostContext, _: ()) -> Result<Vec<String>, Record
 }
 
 #[derive(Debug, HostError)]
+pub(crate) enum CreateBufferError {
+    #[error(transparent)]
+    Access(AccessError),
+    #[error(code = "StorageUnavailable", message = "Storage {database}: {cause}")]
+    Unavailable { database: String, cause: String },
+    #[error(code = "PersistKeyInUse", message = "PersistKeyInUse")]
+    PersistKeyInUse,
+}
+
+impl From<AccessError> for CreateBufferError {
+    fn from(error: AccessError) -> Self {
+        Self::Access(error)
+    }
+}
+
+impl From<RecordError> for CreateBufferError {
+    fn from(error: RecordError) -> Self {
+        match error {
+            RecordError::Access(error) => Self::Access(error),
+            RecordError::Unavailable { database, cause } => Self::Unavailable { database, cause },
+        }
+    }
+}
+
+impl From<StorageError> for CreateBufferError {
+    fn from(error: StorageError) -> Self {
+        RecordError::from(error).into()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct CreateBufferArguments {
+    text: String,
+    language: Option<String>,
+    read_only: bool,
+    persist: Option<String>,
+}
+impl HostArguments for CreateBufferArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self {
+            text: reader.text(2, "buffer text must be text")?,
+            language: reader.optional_text(3, "language must be text or null")?,
+            read_only: reader
+                .optional_boolean(4, "readOnly must be a boolean")?
+                .unwrap_or(false),
+            persist: reader.optional_text(5, "persist must be text or null")?,
+        })
+    }
+}
+
+/// Create a buffer outside document identity, owned by the calling
+/// lifecycle. A persist key starts it from the text stored under that key.
+#[host_operation("createBuffer")]
+async fn create_buffer(
+    context: HostContext,
+    arguments: CreateBufferArguments,
+) -> Result<u64, CreateBufferError> {
+    let stored = match &arguments.persist {
+        Some(key) => context
+            .records()?
+            .read(crate::app::extensions::host::extension_buffers::persist_record(key))
+            .await?
+            .and_then(|value| match value {
+                serde_json::Value::String(text) => Some(text),
+                _ => None,
+            }),
+        None => None,
+    };
+    let request = context.request;
+    let spec = crate::app::extensions::host::extension_buffers::BufferSpec {
+        text: arguments.text,
+        language: arguments.language,
+        read_only: arguments.read_only,
+        persist: arguments.persist,
+    };
+    context
+        .foreground(|host, cx| host.create_extension_buffer(&request, spec, stored, cx))?
+        .map(|handle| handle.value())
+        .map_err(|_| CreateBufferError::PersistKeyInUse)
+}
+
+/// End a buffer a package created, keeping its persisted text.
+#[host_operation("disposeBuffer")]
+async fn dispose_buffer(
+    context: HostContext,
+    arguments: BufferArguments,
+) -> Result<(), BufferError> {
+    let request = context.request;
+    context.foreground(|host, cx| host.dispose_extension_buffer(&request, arguments.buffer, cx))?
+}
+
+/// Remove the text a buffer persisted.
+#[host_operation("clearPersistedBuffer")]
+async fn clear_persisted_buffer(
+    context: HostContext,
+    arguments: BufferArguments,
+) -> Result<(), BufferError> {
+    let request = context.request;
+    context.foreground(|host, cx| host.clear_persisted_buffer(&request, arguments.buffer, cx))?
+}
+
+#[derive(Debug, HostError)]
 pub(crate) enum RecoveryError {
     #[error(transparent)]
     Open(OpenError),

@@ -4,6 +4,7 @@
 mod declaration_tests;
 #[cfg(test)]
 mod engine_tests;
+pub(crate) mod extension_buffers;
 pub(crate) mod handlers;
 
 use crate::app::documents::DocumentDirty;
@@ -359,7 +360,10 @@ pub(crate) fn quit_after_storage(cx: &mut App) {
     };
     // Each process runs in its own group, so none ends with Knot unless killed.
     host.update(cx, |host, _| host.kill_processes_for_quit());
-    let Some(drain) = host.update(cx, |host, _| host.shutdown_storage()) else {
+    let Some(drain) = host.update(cx, |host, cx| {
+        host.flush_persisted_buffers(cx);
+        host.shutdown_storage()
+    }) else {
         return;
     };
     let window_flush = cx.spawn(async move |cx| {
@@ -787,6 +791,9 @@ pub(crate) struct ProductExtensionHost {
     _application_window_closed: Subscription,
     _application_signal: Subscription,
     buffer_observers: HashMap<knot_protocol::BufferHandle, Subscription>,
+    /// The buffers packages created, by handle.
+    extension_buffers:
+        HashMap<knot_protocol::BufferHandle, extension_buffers::ExtensionBufferState>,
     commands: ExtensionCommandBridge,
     completion_editors: Vec<gpui::WeakEntity<crate::app::editor::Editor>>,
     command_targets: HashMap<CommandInvocationId, ProductCommandTarget>,
@@ -880,6 +887,7 @@ impl ProductExtensionHost {
                 host.refresh_application_observation(cx)
             }),
             buffer_observers: HashMap::new(),
+            extension_buffers: HashMap::new(),
             commands,
             completion_editors: Vec::new(),
             command_targets: HashMap::new(),
@@ -3135,6 +3143,7 @@ impl ProductExtensionHost {
             let _ = self.buffers.drain_model_changes(model, cx);
             cx.observe(model, move |this, model, cx| {
                 this.route_model_changes(&model, cx);
+                this.persist_buffer_changed(buffer, cx);
                 if !model.read(cx).is_open() {
                     this.buffer_observers.remove(&buffer);
                 }
@@ -3808,6 +3817,7 @@ impl ProductExtensionHost {
         if !self.lifecycles.remove(&key) {
             return;
         }
+        self.release_extension_buffers_of(key, cx);
         self.package_keys.retain(|_, live| *live != key);
         self.declared_entitlements.remove(&key);
         self.processes.kill_owned_by(key);
@@ -4197,5 +4207,7 @@ mod tests {
     }
 }
 
+#[cfg(test)]
+mod extension_buffer_tests;
 #[cfg(test)]
 mod storage_tests;

@@ -111,6 +111,8 @@ function emptyState() {
   return {
     nextId: 1,
     records: new Map<string, string>(),
+    /** The persist keys of live extension buffers. */
+    persistKeys: new Set<string>(),
     documents: new Map<Knot.DocumentId, FakeDocument>(),
     windows: [] as FakeWindow[],
     focused: null as Knot.WindowTarget | null,
@@ -2769,6 +2771,64 @@ export const api: KnotApi = {
           state.menuItems = state.menuItems.filter((candidate) => candidate !== entry);
         }),
       };
+    },
+  },
+  buffers: {
+    create: async (options = {}) => {
+      const { text = "", language = null, readOnly = false, persist } = options;
+      if (typeof text !== "string") throw new TypeError("buffer text must be text");
+      if (language !== null && typeof language !== "string") throw new TypeError("buffer language must be text");
+      if (typeof readOnly !== "boolean") throw new TypeError("buffer readOnly must be a boolean");
+      if (persist !== undefined && typeof persist !== "string") throw new TypeError("buffer persist key must be text");
+      if (persist !== undefined && readOnly) throw new TypeError("a read-only buffer cannot persist its text");
+      if (persist !== undefined && state.persistKeys.has(persist)) throw hostError("PersistKeyInUse");
+      const record = persist === undefined ? undefined : `knot.buffer:${persist}`;
+      const stored = record === undefined ? undefined : state.records.get(record);
+      const document: FakeDocument = {
+        id: nextId("buffer") as Knot.DocumentId,
+        title: "",
+        kind: "untitled",
+        resourceUri: null,
+        dirty: false,
+        revision: 0,
+        text: stored === undefined ? text : (JSON.parse(stored) as string),
+        language: language ?? "plaintext",
+      };
+      if (persist !== undefined) state.persistKeys.add(persist);
+      let closed = false;
+      const store = () => {
+        if (record === undefined) return;
+        if (document.text === "") state.records.delete(record);
+        else state.records.set(record, JSON.stringify(document.text));
+      };
+      const inner = createBuffer(document) as unknown as Record<string, unknown>;
+      const guarded: Record<string | symbol, unknown> = {};
+      for (const [name, member] of Object.entries(inner)) {
+        if (typeof member !== "function") {
+          guarded[name] = member;
+          continue;
+        }
+        const edits = name === "applyEdits" || name === "replace";
+        guarded[name] = async (...args: unknown[]) => {
+          if (closed) throw hostError("BufferClosed");
+          if (edits && readOnly) throw hostError("BufferReadOnly");
+          const result = await (member as (...values: unknown[]) => Promise<unknown>)(...args);
+          if (edits) store();
+          return result;
+        };
+      }
+      guarded.clearPersisted = async () => {
+        if (closed) throw hostError("BufferClosed");
+        if (record !== undefined) state.records.delete(record);
+      };
+      guarded[Symbol.asyncDispose] = async () => {
+        if (closed) return;
+        closed = true;
+        if (persist !== undefined) state.persistKeys.delete(persist);
+      };
+      const result = guarded as unknown as Knot.ExtensionBuffer;
+      bufferDocuments.set(result, document);
+      return result;
     },
   },
   storage: {

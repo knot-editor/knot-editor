@@ -1467,7 +1467,7 @@ declare module "knot" {
     | "ViewNotFound" | "ViewIdInUse" | "InvalidViewId"
     | "ViewRegistrationNotFound" | "ContentKindMismatch" | "TreeItemNotFound"
     | "ProviderRegistrationNotFound"
-    | "ContractNotFound" | "ContractViolation"
+    | "ContractNotFound" | "ContractViolation" | "PersistKeyInUse"
     | "CommandNameInUse" | "CommandNotFound"
     | "InvalidUri" | "DocumentNotFound" | "OperationInProgress" | "PersistenceFailed" | "ResourceNotFound" | "ResourceWrongKind" | "ResourceAlreadyExists" | "InvalidUtf8" | "ProviderFailure" | "StorageUnavailable"
     | "CaptureNotFound" | "RecoveryUnavailable" | "SessionConflict"
@@ -1824,6 +1824,45 @@ declare module "knot" {
     /** Lifecycle-owned semantic data; disposing it does not dispose this buffer. */
     readonly contributions: EditorContributions;
   }
+
+  /** Options of `buffers.create`. */
+  export interface CreateBufferOptions {
+    /** The initial text. Defaults to empty. A stored `persist` text replaces it. */
+    readonly text?: string;
+    /** A language ID, as `documents.setLanguage` takes. Defaults to plaintext. */
+    readonly language?: string | null;
+    /** Rejects every edit with BufferReadOnly. Defaults to false. */
+    readonly readOnly?: boolean;
+    /** A key, private to this package, under which the text persists across
+     * restarts. Not for a read-only buffer. */
+    readonly persist?: string;
+  }
+  /**
+   * A buffer this package owns. It belongs to no document: it is never dirty,
+   * has no closing prompt, and Save does not touch it. Ending it, by disposal
+   * or by the package's unload, makes its operations reject with BufferClosed.
+   */
+  export interface ExtensionBuffer extends Buffer, AsyncDisposable {
+    /**
+     * Removes the text stored under the `persist` key and cancels a pending
+     * write; later edits persist again. Does nothing without a key. Disposal
+     * keeps the stored text.
+     * @throws HostError with BufferClosed, or Cancelled on teardown.
+     */
+    clearPersisted(): Promise<void>;
+  }
+  export const buffers: Readonly<{
+    /**
+     * Creates a buffer outside document identity, owned by this lifecycle.
+     * With `persist`, the text is kept in this package's storage, written
+     * shortly after edits and at shutdown, and a buffer created with the same
+     * key later starts from it. An empty buffer stores nothing.
+     * @throws TypeError for invalid options or `persist` with `readOnly`;
+     * HostError with PersistKeyInUse when a live buffer of this package has the
+     * key, StorageUnavailable, or Cancelled on teardown.
+     */
+    create(options?: CreateBufferOptions): Promise<ExtensionBuffer>;
+  }>;
   /**
    * The 0-based first row wholly inside an editor's viewport and how many rows
    * are. A row is one screen line of a possibly wrapped line, so without soft

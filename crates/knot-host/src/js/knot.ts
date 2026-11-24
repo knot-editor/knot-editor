@@ -1,6 +1,6 @@
 import type * as Declared from "knot";
 import {
-  activeBuffer,
+  activeBuffer, createBuffer,
   storageRead, storageWrite, storageDelete, storageList,
   historyRecent, historyRecord, historyForget, historyOrder,
   recoveryList, recoveryRetain, recoveryRelease, recoveryRestore,
@@ -114,6 +114,7 @@ export const files = Object.freeze({ readText: readFileText, list: listFiles, se
 export const processes = Object.freeze({ run: runProcess, spawn: spawnProcess }) satisfies typeof Declared.processes;
 export const workspaces = Object.freeze({ get: getWorkspace, openFolder, replaceRoots: replaceWorkspaceRoots, pickFolder }) satisfies typeof Declared.workspaces;
 
+export const buffers = Object.freeze({ create: createBuffer }) satisfies typeof Declared.buffers;
 export const history = Object.freeze({ recent: historyRecent, record: historyRecord, forget: historyForget, order: historyOrder }) satisfies typeof Declared.history;
 export const storage = Object.freeze({ read: storageRead, write: storageWrite, delete: storageDelete, list: storageList }) satisfies typeof Declared.storage;
 export const recovery = Object.freeze({ list: recoveryList, retain: recoveryRetain, release: recoveryRelease, restore: recoveryRestore }) satisfies typeof Declared.recovery;

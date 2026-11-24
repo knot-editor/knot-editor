@@ -2,7 +2,7 @@ use super::*;
 use gpui::TestAppContext;
 use std::{future::Future, path::Path};
 
-fn host(root: &Path, cx: &mut TestAppContext) -> Entity<ProductExtensionHost> {
+pub(super) fn host(root: &Path, cx: &mut TestAppContext) -> Entity<ProductExtensionHost> {
     cx.update(|cx| {
         let commands = cx.new(crate::app::commands::dispatch::ProductCommandDispatcher::new);
         cx.set_global(ApplicationProductCommands(commands));
@@ -14,7 +14,7 @@ fn host(root: &Path, cx: &mut TestAppContext) -> Entity<ProductExtensionHost> {
     })
 }
 
-fn finish<F: Future + 'static>(future: F, cx: &mut TestAppContext) -> F::Output {
+pub(super) fn finish<F: Future + 'static>(future: F, cx: &mut TestAppContext) -> F::Output {
     let (sender, receiver) = std::sync::mpsc::channel();
     cx.spawn(async move |_| {
         let _ = sender.send(future.await);

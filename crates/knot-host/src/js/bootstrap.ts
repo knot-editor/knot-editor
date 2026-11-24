@@ -720,6 +720,26 @@ function snapshotFromNative(snapshot: Native) {
   });
 }
 
+/** A buffer the package owns, outside document identity. */
+export async function createBuffer(options?: unknown) {
+  const given = options == null ? {} : record(options, "buffer options must be an object");
+  const text = given.text == null ? "" : string(given.text, "buffer text must be text");
+  const language = given.language == null ? null : string(given.language, "buffer language must be text");
+  const readOnly = given.readOnly == null ? false : flag(given.readOnly, "buffer readOnly must be a boolean");
+  const persist = given.persist == null ? null : string(given.persist, "buffer persist key must be text");
+  if (persist !== null && readOnly) throw new TypeError("a read-only buffer cannot persist its text");
+  const handle = await request("createBuffer", text, language, readOnly, persist);
+  const owned = ownership(() => {}, () => request("disposeBuffer", handle));
+  const buffer = Object.freeze({
+    ...bufferFor(handle),
+    clearPersisted: () => request("clearPersistedBuffer", handle),
+    [Symbol.asyncDispose]: () => owned.dispose(),
+  });
+  buffers.set(handle, buffer);
+  bufferHandles.set(buffer, handle);
+  return buffer;
+}
+
 function bufferFor(handle: Native) {
   let buffer = buffers.get(handle);
   if (buffer) return buffer;

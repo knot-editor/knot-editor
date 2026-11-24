@@ -7,6 +7,7 @@ import { api, homeUri } from "./host.js";
 export { homeUri };
 
 export const {
+  buffers,
   commands,
   completion,
   completionContract,
