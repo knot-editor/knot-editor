@@ -73,8 +73,8 @@ gutter and change navigation. See [version control](../architecture/version-cont
 
 ### 3. Diffs
 
-- 🚧 **D197 — Diff view.** [Plan](d197-diff-view.md). Opening a file's changes from the
-  gutter and from `@knot/vcs` is part of it.
+- ✅ **D197 — Diff view.** See [the workbench's diff view](../architecture/workbench-and-lifecycle.md#diff-view)
+  and [version control](../architecture/version-control.md#showing-changes).
 - 🚧 **D229 — Editor targets for diff tabs.** Next, since the diff is hardly
   usable without Vim mode, which attaches only to editors extensions can
   reach. Depends on D197.

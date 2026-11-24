@@ -167,10 +167,23 @@ contributed text frame: it holds live documents and needs its own scrolling and
 painting. Its identity sits in the workbench like a terminal session's, so
 placement, relocation, drag, and split follow the tab kind's rules. Snapshot
 sides are private read-only buffers outside document identity, as text frames
-are. Diff tabs are left out of window layouts and Reopen Closed Tab: native code
-cannot recreate a snapshot without the package that supplied it.
+are; the modified side can instead be a document, sharing its buffer and
+history. Diff tabs are left out of window layouts and Reopen Closed Tab: native
+code cannot recreate a snapshot without the package that supplied it.
 
-Reference: [workbench](../architecture/workbench-and-lifecycle.md).
+The view rediffs itself with the native line diff after a short debounce, off
+the foreground, keeping the result only if both revisions still match. Rejected:
+a package that diffs and pushes hunks to the view, which adds latency and state
+for no policy gain.
+
+Side by side follows IntelliJ: no filler rows, a strip joining each hunk to its
+counterpart, and scrolling mapped through the hunks. Rejected: VS Code's filler
+rows, which need virtual rows in both editors just to keep the sides level.
+Inline shows the modified document with each hunk's original lines as read-only
+block rows in the wrap map, the counterpart of the zero-row lines folds already
+use, so the text stays one editable editor.
+
+Reference: [diff view](../architecture/workbench-and-lifecycle.md#diff-view).
 
 ## Window layouts and restoration by position
 

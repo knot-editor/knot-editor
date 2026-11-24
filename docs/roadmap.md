@@ -30,7 +30,6 @@ point.
 
 The [version control plan](plans/vcs.md) comes first, in its milestone order:
 
-- D197 — Diff view.
 - D229 — Editor targets for diff tabs.
 - D220 — Anchored floating panels.
 - D221 — Hunk popup.
@@ -153,15 +152,6 @@ hold the analyses that support some items.
     preview tab; cancelling a superseded search; and refresh. Decide here how
     results recover when edits make their targets stale.
 
-- **D197 — Diff view** 🚧
-  - Depends on: none
-  - Description: Knot cannot compare two texts. Build a native side-by-side and
-    inline diff of two buffers or snapshots that stays current while one side
-    is edited, with navigation between hunks, and an extension API to open one,
-    so version control can show a file's changes and D174 can diff the
-    buffer against the file. Part of the [version control plan](plans/vcs.md);
-    see the [plan](plans/d197-diff-view.md).
-
 - **D124 — Workspace trust**
   - Depends on: D089
   - Description: Project-local settings start as data that runs no code, and
@@ -231,10 +221,10 @@ hold the analyses that support some items.
     decide row identity, reveal, and actions on a joined row.
 
 - **D174 — Show Difference for files changed on disk**
-  - Depends on: D197
+  - Depends on: none
   - Description: The Reload or Keep prompt for a document changed on disk
-    offers no comparison. Do it with D197: add Show Difference to the prompt,
-    comparing the buffer with the file.
+    offers no comparison. Add Show Difference to the prompt,
+    comparing the buffer with the file in the diff view.
 
 - **D006 — File drag and drop**
   - Depends on: none
@@ -401,7 +391,7 @@ milestones these items belong to.
     hunk in D216.
 
 - **D214 — VCS changes view** 🚧
-  - Depends on: D197
+  - Depends on: none
   - Description: There is no list of changed files. Add a changes view that
     shows the provider's groups of changed files (for Git: staged, unstaged,
     untracked) with the actions the provider defines, and opens a file's
@@ -428,21 +418,21 @@ milestones these items belong to.
     gutter column for the whole file, with the commit's details on hover.
 
 - **D218 — Log, graph, and file history**
-  - Depends on: D216, D197
+  - Depends on: D216
   - Description: There is no view of a repository's history. Do it after the
     [version control plan](plans/vcs.md): a log view of commits with the
     branch graph, each commit's changed files opening in the diff view, and
     the same view filtered to one file's history across renames.
 
 - **D219 — Merge conflict resolution**
-  - Depends on: D216, D197
+  - Depends on: D216
   - Description: Conflicted files show only their markers. Do it after the
     [version control plan](plans/vcs.md): list conflicted files, accept ours,
     theirs, or both per conflict from the editor, and a three-way merge view
     built on the diff view.
 
 - **D229 — Editor targets for diff tabs** 🚧
-  - Depends on: D197
+  - Depends on: none
   - Description: Vim mode does not work in a diff tab, which makes the diff
     hard to use for anyone who runs it. Extensions follow only tabs that
     expose a document and an editor handle, and a diff tab's editors are
@@ -454,7 +444,7 @@ milestones these items belong to.
     [version control plan](plans/vcs.md).
 
 - **D228 — Diff toolbar design**
-  - Depends on: D197
+  - Depends on: none
   - Description: The diff tab's bar is a bare row of three small icon buttons
     (previous hunk, next hunk, read-only lock) with no labels, state, or
     grouping, and looks unfinished next to the rest of the workbench. Do it

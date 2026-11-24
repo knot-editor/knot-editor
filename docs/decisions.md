@@ -196,7 +196,9 @@ touches.
   title; user
   preferences as new-session defaults, scrollback deferred for engine support.
 - [Diff view](decisions/workbench-and-lifecycle.md#diff-view): a native
-  center-only tab of two ordinary editors, not a text frame; not restored.
+  center-only tab of two ordinary editors, not a text frame; not restored;
+  rediffs itself; IntelliJ-style alignment without filler rows; inline as block
+  rows.
 - [Window layouts and restoration by position](decisions/workbench-and-lifecycle.md#window-layouts-and-restoration-by-position):
   one versioned JSON layout for hot exit and project sessions.
 - [Session replacement contract](decisions/workbench-and-lifecycle.md#session-replacement-contract):
