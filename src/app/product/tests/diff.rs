@@ -1462,3 +1462,78 @@ fn commands_capture_the_focused_diff_side_and_the_views_above_it(cx: &mut TestAp
         });
     }
 }
+
+const LOOKUP_SOURCE: &str = r#"
+import { commands, windows, workbench } from "knot";
+const observe = async () => {
+  const { snapshot } = await workbench.observe(() => {});
+  const window = snapshot.windows[0];
+  return { window, diff: window.panes.flatMap((pane) => pane.tabs).find((tab) => tab.kind === "diff") };
+};
+let sides = [];
+await commands.register("lookup.report", async () => {
+  const { window, diff } = await observe();
+  sides = diff.root.children.map((child) => child.target);
+  const found = sides.map((side) => windows.findView(window, side));
+  const root = windows.findView(window, diff.root.target);
+  const tab = windows.findView(window, diff.target);
+  const status = windows.findView(window, window.statusView);
+  await workbench.writeClipboardText([
+    found.every((place, index) =>
+      place.view.target === sides[index] && place.parents.length === 1
+        && place.parents[0] === diff.root && place.tab === diff && place.pane === window.panes[0]),
+    root.view === diff.root && root.parents.length === 0 && root.tab === diff,
+    tab.view === diff.root && tab.parents.length === 0,
+    status.view.target === window.focusedView && status.view.readOnly,
+    status.view.target === sides[1],
+  ].join(","));
+});
+await commands.register("lookup.hidden", async () => {
+  const { window } = await observe();
+  await workbench.writeClipboardText(String(windows.findView(window, sides[0])));
+});
+"#;
+
+#[gpui::test]
+fn the_lookup_finds_a_view_with_its_parents_and_the_status_follows_a_diff_side(
+    cx: &mut TestAppContext,
+) {
+    use knot_protocol::{ExtensionId, ExtensionKey, ExtensionLifecycleId};
+    let (window, native_window, _) = diff_window(cx);
+    let host = cx.update(crate::app::extensions::host::install);
+    let key = ExtensionKey::new(ExtensionId::new(733), ExtensionLifecycleId::new(1));
+    host.update(cx, |host, cx| {
+        let execution = host.load_test_source(key, LOOKUP_SOURCE).unwrap();
+        cx.spawn(async move |_, _| execution.await.unwrap())
+            .detach();
+    });
+    wait_for_api_condition(cx, |cx| {
+        cx.global::<ApplicationProductCommands>()
+            .0
+            .read(cx)
+            .catalog()
+            .borrow()
+            .resolve("lookup.hidden")
+            .is_ok()
+    });
+    let view = active_diff(&window, cx);
+    view.update(cx, |view, cx| {
+        view.set_focused_side(knot_model::diff::DiffSide::Modified, cx)
+    });
+    assert_eq!(
+        run_command(&window, native_window, "lookup.report", cx),
+        CommandOutcome::Completed
+    );
+    assert_eq!(clipboard_text(cx), "true,true,true,true,true");
+
+    // The inline layout hides the original side, which the window no longer shows.
+    view.update(cx, |view, cx| {
+        view.set_layout(crate::app::settings::DiffLayout::Inline, cx)
+    });
+    cx.run_until_parked();
+    assert_eq!(
+        run_command(&window, native_window, "lookup.hidden", cx),
+        CommandOutcome::Completed
+    );
+    assert_eq!(clipboard_text(cx), "null");
+}

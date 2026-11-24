@@ -1037,6 +1037,15 @@ function rootTarget(window: FakeWindow, tab: FakeTab): Knot.ViewNodeTarget {
   return target;
 }
 
+function viewPath(node: Knot.ViewNodeInfo, target: Knot.ViewNodeTarget): Knot.ViewNodeInfo[] | null {
+  if (node.target === target) return [node];
+  for (const child of node.children) {
+    const path = viewPath(child, target);
+    if (path !== null) return [node, ...path];
+  }
+  return null;
+}
+
 function windowInfo(window: FakeWindow): Knot.WindowInfo {
   const tabs = window.tabs.map((tab) => {
     const document = state.documents.get(tab.document);
@@ -2471,6 +2480,19 @@ export const api: KnotApi = {
   },
   windows: {
     list: async () => state.windows.map(windowInfo),
+    findView: (window, target) => {
+      if ((target as { window: unknown }).window !== window.target) return null;
+      for (const pane of window.panes) {
+        for (const tab of pane.tabs) {
+          const path = viewPath(tab.root, target as Knot.ViewNodeTarget);
+          if (tab.target === target) return { view: tab.root, parents: [], tab, pane };
+          if (path !== null) {
+            return { view: path[path.length - 1]!, parents: path.slice(0, -1).reverse(), tab, pane };
+          }
+        }
+      }
+      return null;
+    },
     get: async (target) => {
       const window = state.windows.find((candidate) => candidate.target === target);
       return window === undefined ? null : windowInfo(window);

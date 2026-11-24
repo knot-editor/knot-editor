@@ -21,9 +21,7 @@ export function chooseRoot(roots: readonly string[], document: string | null): s
  * root containing the last focused document, else the first root, else
  * undefined, which starts the shell in the home directory. */
 async function startDirectory(window: WindowInfo): Promise<string | undefined> {
-  const focused = window.panes
-    .flatMap((pane) => pane.tabs)
-    .find((tab) => tab.target === window.currentTarget);
+  const focused = window.currentTarget === null ? undefined : windows.findView(window, window.currentTarget)?.tab;
   if (focused?.kind === "terminal" && focused.directory !== null) return focused.directory;
   const roots: string[] = [];
   for (const { uri } of window.workspace.roots) {

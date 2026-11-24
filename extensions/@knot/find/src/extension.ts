@@ -91,7 +91,7 @@ function isInvalid(error: unknown) {
 async function sessionOf(context: CommandContext, editor: Editor, buffer: Buffer): Promise<Session> {
   const info = await windows.get(context.target.windowTarget);
   const target = info?.currentTarget;
-  const view = info?.panes.flatMap((pane) => pane.tabs).find((tab) => tab.target === target)?.root;
+  const view = info === null || info === undefined || target == null ? undefined : windows.findView(info, target)?.view;
   if (target == null || view?.kind !== "editor") commands.unavailable();
   let session = sessions.get(target);
   if (session === undefined) {

@@ -1,4 +1,4 @@
-import type { PaneTarget, ViewNodeInfo, ViewNodeTarget, ViewTarget, WindowTarget } from "knot";
+import type { PaneTarget, ViewNodeInfo, ViewNodeTarget, ViewTarget, WindowInfo, WindowTarget } from "knot";
 import type * as DeclaredContract from "knot/contract";
 import { defineContract as defineSchemaContract, s } from "knot/contract";
 
@@ -2575,6 +2575,30 @@ export async function listDocuments() {
 export async function getDocument(id: unknown) {
   const value = await request("getDocument", string(id, "document identity must be text"));
   return value === null ? null : documentFromNative(value);
+}
+export function findView(window: unknown, target: unknown) {
+  const info = window as WindowInfo;
+  if (!isObject(info) || !Array.isArray(info.panes)) throw new TypeError("findView takes a window info");
+  if (!isObject(target) || (target as { window?: unknown }).window !== info.target) return null;
+  for (const pane of info.panes) {
+    for (const tab of pane.tabs) {
+      if (tab.target === target) return Object.freeze({ view: tab.root, parents: Object.freeze([]), tab, pane });
+      const path = pathTo(tab.root, target as ViewNodeTarget);
+      if (path !== null) {
+        const view = path[path.length - 1]!;
+        return Object.freeze({ view, parents: Object.freeze(path.slice(0, -1).reverse()), tab, pane });
+      }
+    }
+  }
+  return null;
+}
+function pathTo(node: ViewNodeInfo, target: ViewNodeTarget): ViewNodeInfo[] | null {
+  if (node.target === target) return [node];
+  for (const child of node.children) {
+    const path = pathTo(child, target);
+    if (path !== null) return [node, ...path];
+  }
+  return null;
 }
 export async function listWindows() {
   return Object.freeze((await request("listWindows")).map(windowFromNative));

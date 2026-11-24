@@ -1,22 +1,22 @@
 // Revealing a file in the explorer.
 import { documents, settings, windows, workspaces } from "knot";
-import type { CommandContext, DocumentInfo, ViewTarget, WindowTarget } from "knot";
+import type { CommandContext, DocumentInfo, ViewNodeTarget, ViewTarget, WindowTarget } from "knot";
 import { idPath, parentOf, rootOf, rowId } from "./rows.js";
 import { AUTO_REVEAL } from "./settings.js";
 import type { ExplorerState } from "./state.js";
 
-/** The URI of the file a tab shows, or null for any other tab. */
-export async function fileOf(target: ViewTarget): Promise<string | null> {
+/** The URI of the file a tab or editor view shows, or null for any other view. */
+export async function fileOf(target: ViewTarget | ViewNodeTarget): Promise<string | null> {
   const window = await windows.get(target.window);
-  const tab = window?.panes.flatMap((pane) => pane.tabs).find((tab) => tab.target === target);
-  if (tab === undefined || tab.document === null) return null;
-  return (await documents.get(tab.document))?.resourceUri ?? null;
+  const document = window === null ? null : windows.findView(window, target)?.view.document;
+  if (document == null) return null;
+  return (await documents.get(document))?.resourceUri ?? null;
 }
 
 /** The file of the editor `window` last focused, or null. */
 export async function activeFile(window: WindowTarget): Promise<string | null> {
   const info = await windows.get(window);
-  return info?.statusTarget ? fileOf(info.statusTarget) : null;
+  return info?.statusView ? fileOf(info.statusView) : null;
 }
 
 /** The URI of the document the command's captured tab shows, or null for any
@@ -59,7 +59,7 @@ export async function followActive(state: ExplorerState, target: ViewTarget) {
 export async function followMoved(state: ExplorerState, document: DocumentInfo) {
   if (document.resourceUri === null || !(await settings.get(AUTO_REVEAL))) return;
   for (const window of await windows.list()) {
-    if (window.statusTarget !== null && (await fileOf(window.statusTarget)) === document.resourceUri) {
+    if (window.statusView !== null && (await fileOf(window.statusView)) === document.resourceUri) {
       // The file is new to the tree, so its folder reloads first.
       const root = rootOf((await workspaces.get(window.target))?.roots ?? [], document.resourceUri);
       if (root !== null) {

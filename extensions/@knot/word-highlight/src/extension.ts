@@ -4,14 +4,14 @@
 // that editor's own, so other views of the buffer never show them. An edit
 // clears them and they stay away until the caret is moved on purpose, so the
 // word being typed is never highlighted.
-import { settings, workbench } from "knot";
-import type { Buffer, ByteRange, Disposable, EditorHandle, EditorSelection, ViewTarget, WindowInfo, WindowTarget } from "knot";
+import { settings, windows, workbench } from "knot";
+import type { Buffer, ByteRange, Disposable, EditorHandle, EditorSelection, ViewNodeTarget, WindowInfo, WindowTarget } from "knot";
 import { SELECTION_COLOR, WORD_COLOR, decorations, selectionQuery, SELECTION_LIMIT } from "./highlight.js";
 import { DELAY, SELECTION_ENABLED, WORD_ENABLED, defineSettings } from "./settings.js";
 
 /** The editor one window describes and what it shows. */
 type Follow = {
-  target: ViewTarget | null;
+  target: ViewNodeTarget | null;
   buffer: Buffer | null;
   handle: EditorHandle | null;
   disposables: Disposable[];
@@ -171,22 +171,20 @@ export async function start() {
   delay = (await settings.get(DELAY)) ?? 250;
   const follows = new Map<WindowTarget, Follow>();
 
-  // Follows the window's status target, the editor its caret belongs to.
+  // Follows the window's status view, the editor its caret belongs to.
   const follow = async (info: WindowInfo) => {
     const window = info.target;
     const current: Follow = follows.get(window) ?? {
       target: null, buffer: null, handle: null, disposables: [], selection: null, edited: false, hidden: false, timer: null, running: false, pending: false, shown: null,
     };
     follows.set(window, current);
-    if (current.target === info.statusTarget) return;
+    if (current.target === info.statusView) return;
     await release(current);
     current.target = null;
-    if (info.statusTarget !== null) {
-      const tab = info.panes
-        .flatMap((pane) => pane.tabs)
-        .find((candidate) => candidate.target === info.statusTarget);
-      if (tab?.buffer != null && info.statusView !== null) {
-        const buffer = tab.buffer;
+    if (info.statusView !== null) {
+      const view = windows.findView(info, info.statusView)?.view;
+      if (view?.buffer != null) {
+        const buffer = view.buffer;
         const handle = await workbench.editor(info.statusView);
         current.buffer = buffer;
         current.handle = handle;
@@ -217,7 +215,7 @@ export async function start() {
         schedule(current);
       }
     }
-    current.target = info.statusTarget;
+    current.target = info.statusView;
   };
 
   const observation = await workbench.observe(async (event) => {

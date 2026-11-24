@@ -16,7 +16,7 @@ export interface WindowLists {
   readonly roots: readonly string[];
   /** The last focused editor of the window, if any. */
   readonly shown: ViewTarget | null;
-  /** The editor view of `shown`. */
+  /** The editor view `shown` presents. */
   readonly shownView: ViewNodeTarget | null;
   readonly current: DocumentInfo | null;
   readonly available: readonly CommandInfo[];
@@ -28,19 +28,20 @@ export interface WindowLists {
 export async function windowLists(window: WindowTarget): Promise<WindowLists> {
   const workspace = await workspaces.get(window);
   const info = await windows.get(window);
-  const shown = info?.statusTarget ?? null;
-  const editorTab = info?.panes.flatMap((pane) => pane.tabs).find((tab) => tab.target === shown);
+  const shownView = info?.statusView ?? null;
+  const location = info === undefined || info === null || shownView === null ? null : windows.findView(info, shownView);
+  const shown = location?.tab.target ?? null;
   return {
     window,
     roots: (workspace?.roots ?? []).map((root) => root.uri),
     shown,
-    shownView: info?.statusView ?? null,
-    current: shown === null ? null : await documentOf(shown),
+    shownView,
+    current: shownView === null ? null : await documentOf(shownView),
     available: (await commands.list(info?.currentTarget ?? shown ?? undefined)).filter(
       (command) => !PICKER_COMMANDS.has(command.name),
     ),
-    hasEditor: editorTab !== undefined,
-    editorBuffer: editorTab?.buffer ?? null,
+    hasEditor: location !== null,
+    editorBuffer: location?.view.buffer ?? null,
   };
 }
 

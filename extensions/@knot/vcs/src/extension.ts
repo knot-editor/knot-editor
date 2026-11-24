@@ -93,9 +93,9 @@ export async function start(): Promise<Disposable> {
   await defineColors();
   const refs = await createRefs({
     async fileOf(window) {
-      const tab = window.panes.flatMap((pane) => pane.tabs).find((candidate) => candidate.target === window.statusTarget);
-      if (tab?.document == null) return null;
-      return (await documents.get(tab.document))?.resourceUri ?? null;
+      const view = window.statusView === null ? null : windows.findView(window, window.statusView)?.view;
+      if (view?.document == null) return null;
+      return (await documents.get(view.document))?.resourceUri ?? null;
     },
     find: (file, roots) => discovery.find(file, roots),
     fetch: async (repository) => (await backendContract(repository.backend).client()).ref(repository.root),

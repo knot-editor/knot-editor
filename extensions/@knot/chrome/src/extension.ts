@@ -1,12 +1,12 @@
 // Window chrome: the context menu items, the Terminal window, and the status bar items for the
 // editor a window describes: the cursor position and selection size, the
-// indentation, and the language. Each window follows its own `statusTarget`
+// indentation, and the language. Each window follows its own `statusView`
 // and sets its items as that window's values, so two windows show their own
 // editors.
 import { commands, documents, languages, settings, workbench, windows } from "knot";
 import type {
   Buffer, CommandContext, Disposable, DocumentId, DocumentInfo, EditorHandle, EditorSelectionWithLines, StatusItem,
-  StatusItemOptions, ViewTarget, WindowInfo, WindowTarget,
+  StatusItemOptions, ViewNodeTarget, WindowInfo, WindowTarget,
 } from "knot";
 import { registerMenus } from "./menus.js";
 import { registerTerminal } from "./terminal.js";
@@ -20,7 +20,7 @@ const SET_LANGUAGE_COMMAND = "editor.set-language-mode";
 
 /** The editor one window's items describe. */
 type Follow = {
-  target: ViewTarget | null;
+  target: ViewNodeTarget | null;
   document: DocumentId | null;
   buffer: Buffer | null;
   handle: EditorHandle | null;
@@ -129,7 +129,7 @@ export async function start() {
     await follow.handle?.[Symbol.asyncDispose]();
   };
 
-  // Follows the window's status target, moving the selection listener to a
+  // Follows the window's status view, moving the selection listener to a
   // new editor when the target changes.
   const follow = async (info: WindowInfo) => {
     const window = info.target;
@@ -140,23 +140,21 @@ export async function start() {
       };
       follows.set(window, current);
     }
-    if (current.target !== info.statusTarget) {
+    if (current.target !== info.statusView) {
       await release(current);
-      const tab = info.panes
-        .flatMap((pane) => pane.tabs)
-        .find((candidate) => candidate.target === info.statusTarget);
-      current.document = tab?.document ?? null;
-      current.buffer = tab?.buffer ?? null;
+      const view = info.statusView === null ? null : windows.findView(info, info.statusView)?.view;
+      current.document = view?.document ?? null;
+      current.buffer = view?.buffer ?? null;
       current.handle = null;
       current.selection = null;
       // The target is recorded last, so a failed attach is retried by the
       // next event instead of leaving the window without a listener.
       current.target = null;
-      if (info.statusTarget !== null && info.statusView !== null) {
+      if (info.statusView !== null) {
         current.handle = await workbench.editor(info.statusView);
         current.selection = await current.handle.onDidChangeSelection((selection) => refreshPosition(window, selection), { lines: 0 });
       }
-      current.target = info.statusTarget;
+      current.target = info.statusView;
     }
     await refreshPosition(window);
     await refreshDocument(window);
@@ -194,11 +192,9 @@ export async function start() {
 /** The document the window's status bar describes. */
 async function statusDocument(context: CommandContext): Promise<DocumentId> {
   const window = await windows.get(context.target.windowTarget);
-  const tab = window?.panes
-    .flatMap((pane) => pane.tabs)
-    .find((candidate) => candidate.target === window.statusTarget);
-  if (tab?.document == null) commands.unavailable();
-  return tab.document;
+  const view = window?.statusView == null ? null : windows.findView(window, window.statusView)?.view;
+  if (view?.document == null) commands.unavailable();
+  return view.document;
 }
 
 /** The indentation actions, in VS Code's order and wording without its

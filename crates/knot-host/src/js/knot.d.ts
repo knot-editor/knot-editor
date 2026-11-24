@@ -973,11 +973,27 @@ declare module "knot" {
     /** Every registered pack name, sorted. */
     listPacks(): Promise<readonly string[]>;
   }>;
+  /** Where a view sits in a window: the view itself, the views above it, and
+   * its tab and pane. */
+  export interface ViewNodeLocation {
+    readonly view: ViewNodeInfo;
+    /** The views containing `view`, its parent first and the tab's root last;
+     * empty for a root. */
+    readonly parents: readonly ViewNodeInfo[];
+    readonly tab: PresentationInfo;
+    readonly pane: PaneInfo;
+  }
   /** Only application windows; diagnostic and startup-error windows are excluded.
    * get returns null after closure; fabricated/command targets reject InvalidTarget. */
   export const windows: Readonly<{
     list(): Promise<readonly WindowInfo[]>;
     get(target: WindowTarget): Promise<WindowInfo | null>;
+    /** Finds a view in a window's information, whatever its depth: a
+     * `ViewNodeTarget` from the window or a tab's `ViewTarget`, which
+     * locates the tab's root view. Reads `window` only, so the result is as
+     * current as it is; null when the window shows no such view, including a
+     * target of another window. */
+    findView(window: WindowInfo, target: ViewNodeTarget | ViewTarget): ViewNodeLocation | null;
     /** Opens a focused blank window, as New Blank Window does, then applies the
      * roots like workspaces.replaceRoots. When the roots are rejected the window
      * is closed again.

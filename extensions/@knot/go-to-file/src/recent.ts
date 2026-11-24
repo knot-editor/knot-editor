@@ -1,22 +1,21 @@
 // Recently active files and documents: recorded when an editor tab becomes
 // active, whatever opened it, and ordered for the picker.
 import { completion, documents, history, windows } from "knot";
-import type { ApplicationEvent, DocumentInfo, ViewTarget, WindowTarget } from "knot";
+import type { ApplicationEvent, DocumentInfo, ViewNodeTarget, ViewTarget, WindowTarget } from "knot";
 
 export const HISTORY = "recent-files";
 export const BUFFER_HISTORY = "recent-buffers";
 export const ACTION_HISTORY = "recent-actions";
 
-/** The document a tab presents, or null for anything else. */
-export async function documentOf(target: ViewTarget): Promise<DocumentInfo | null> {
+/** The document a tab or an editor view presents, or null for anything else. */
+export async function documentOf(target: ViewTarget | ViewNodeTarget): Promise<DocumentInfo | null> {
   const window = await windows.get(target.window);
-  const tab = window?.panes.flatMap((pane) => pane.tabs).find((tab) => tab.target === target);
-  if (tab === undefined || tab.document === null) return null;
-  return documents.get(tab.document);
+  const document = window === null ? null : windows.findView(window, target)?.view.document;
+  return document == null ? null : documents.get(document);
 }
 
-/** The URI of the file a tab presents, or null for anything else. */
-async function fileOf(target: ViewTarget): Promise<string | null> {
+/** The URI of the file a tab or an editor view presents, or null for anything else. */
+async function fileOf(target: ViewTarget | ViewNodeTarget): Promise<string | null> {
   return (await documentOf(target))?.resourceUri ?? null;
 }
 
@@ -52,7 +51,7 @@ export interface RecentFile {
  */
 export async function recentFiles(window: WindowTarget, roots: readonly string[]): Promise<RecentFile[]> {
   const info = await windows.get(window);
-  const current = info?.statusTarget ? await fileOf(info.statusTarget) : null;
+  const current = info?.statusView ? await fileOf(info.statusView) : null;
   const found: RecentFile[] = [];
   for (const uri of await history.recent(HISTORY)) {
     if (uri === current) continue;

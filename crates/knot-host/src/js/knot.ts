@@ -5,7 +5,7 @@ import {
   historyRecent, historyRecord, historyForget, historyOrder,
   recoveryList, recoveryRetain, recoveryRelease, recoveryRestore,
   observeWorkbench, trackDocuments, closePresentation, openDiff, openEditor, replaceWindows, captureLayout,
-  openDocument, createUntitled, presentDocument, reloadDocument, saveDocument, listDocuments, getDocument, setDocumentLanguage, listWindows, getWindow, openWindow, focusWindow, getWorkspace, openFolder, replaceWorkspaceRoots, pickFolder, readFileText, listFiles, searchFiles, isFileIgnored, statFile, writeFileText, createFile, createDirectory, renameFile, copyFile, revealFile, deleteFile, watchFiles, runProcess, spawnProcess, openTerminal,
+  openDocument, createUntitled, presentDocument, reloadDocument, saveDocument, listDocuments, getDocument, setDocumentLanguage, listWindows, getWindow, findView, openWindow, focusWindow, getWorkspace, openFolder, replaceWorkspaceRoots, pickFolder, readFileText, listFiles, searchFiles, isFileIgnored, statFile, writeFileText, createFile, createDirectory, renameFile, copyFile, revealFile, deleteFile, watchFiles, runProcess, spawnProcess, openTerminal,
   invalidCommandArguments,
   unavailableCommand,
   keybinding,
@@ -109,7 +109,7 @@ export const settings = Object.freeze({ define: defineSetting, set: setSettings,
 export const terminals = Object.freeze({ open: openTerminal }) satisfies typeof Declared.terminals;
 export const themes = Object.freeze({ register: registerTheme, get: getTheme, list: listThemes, defineColor }) satisfies typeof Declared.themes;
 export const icons = Object.freeze({ define: defineIcon, override: overrideIcon, associate: associateIcons, registerPack: registerIconPack, listPacks: listIconPacks }) satisfies typeof Declared.icons;
-export const windows = Object.freeze({ list: listWindows, get: getWindow, open: openWindow, focus: focusWindow }) satisfies typeof Declared.windows;
+export const windows = Object.freeze({ list: listWindows, get: getWindow, findView, open: openWindow, focus: focusWindow }) satisfies typeof Declared.windows;
 export const files = Object.freeze({ readText: readFileText, list: listFiles, search: searchFiles, isIgnored: isFileIgnored, stat: statFile, writeText: writeFileText, createFile, createDirectory, rename: renameFile, copy: copyFile, reveal: revealFile, delete: deleteFile, watch: watchFiles }) satisfies typeof Declared.files;
 export const processes = Object.freeze({ run: runProcess, spawn: spawnProcess }) satisfies typeof Declared.processes;
 export const workspaces = Object.freeze({ get: getWorkspace, openFolder, replaceRoots: replaceWorkspaceRoots, pickFolder }) satisfies typeof Declared.workspaces;
