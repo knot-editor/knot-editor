@@ -156,23 +156,12 @@ also writes the reference docs.
 
 #### 3. Exact editor handles ✅
 
-Deliverables: `workbench.editor` binds to an editor view at any depth, never
-following focus; handles go stale when their view leaves the tree.
-`@knot/chrome` and `word-highlight`, which pass `statusTarget` today, pass
-editor views instead, so they keep working until checkpoint 5. `find`,
-`go-to-file`, and `vim` pass the root view of the tab they used to name; moving
-a tab keeps its views, so a handle survives the move. Vim attaches only to
-document tabs whose root is an editor until checkpoint 6.
-
-Validation: tests for binding across focus changes, stale handles on close and
-on the layout toggle, and rejection of non-editor views, including tab
-targets; the `chrome` and `word-highlight` tests.
-
-Review gate: the handle API change.
-
-Implementation context: `EditorTab::editor`/`capture_editor_tab` in
-`src/app/product/operations.rs`; `EditorHandle` and the stale-handle refresh in
-`src/app/extensions/host.rs`.
+`workbench.editor` takes a `ViewNodeTarget` of an editor view at any depth and
+never follows focus; a handle goes stale when its view leaves the tree, and a
+tab target or non-editor view is rejected. Moving a tab keeps its views, so a
+handle survives the move. Vim attaches only to document tabs whose root is an
+editor until checkpoint 6. The extension guide's
+[editor handle](../extension-api/commands-and-keys.md) section describes it.
 
 #### 4. Command captures
 
