@@ -135,3 +135,20 @@ fn navigation_does_nothing_without_changes(cx: &mut TestAppContext) {
     window.press("alt-f5", cx);
     assert_eq!(window.editors(cx)[0].caret, 2);
 }
+
+#[gpui::test]
+fn show_changes_opens_the_baseline_against_the_file_and_follows_edits(cx: &mut TestAppContext) {
+    let (_product, window, _directory) = show("a\nB\nc\nd\n", cx);
+    wait_until(cx, |cx| !bars(&window, cx).is_empty());
+    window.focus_document(cx);
+
+    assert_eq!(
+        window.run_command("vcs.showChanges", cx),
+        knot::test_support::CommandOutcome::Completed
+    );
+    wait_until(cx, |cx| !window.diff_texts(cx).is_empty());
+    assert_eq!(
+        window.diff_texts(cx),
+        [("a\nb\nc\nd\n".to_owned(), "a\nB\nc\nd\n".to_owned())]
+    );
+}

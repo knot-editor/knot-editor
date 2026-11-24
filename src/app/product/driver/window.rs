@@ -522,6 +522,24 @@ impl TestWindow {
         })
     }
 
+    /// The original and modified text of each diff tab, in layout order.
+    pub fn diff_texts(&self, cx: &mut TestAppContext) -> Vec<(String, String)> {
+        cx.read(|cx| {
+            let workbench = self.window.read(cx).workbench.read(cx);
+            workbench
+                .tabs()
+                .filter_map(|tab| workbench.diff_view(tab))
+                .map(|view| {
+                    let [original, modified] = view.read(cx).editors();
+                    (
+                        original.read(cx).model().read(cx).text(),
+                        modified.read(cx).model().read(cx).text(),
+                    )
+                })
+                .collect()
+        })
+    }
+
     /// The gutter's bar lane of the editor tab at `index`, in layout order,
     /// as line, style, and color key; a wedge drawn below its line is
     /// reported on the line after it.
