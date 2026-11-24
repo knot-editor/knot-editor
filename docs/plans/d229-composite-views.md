@@ -136,36 +136,14 @@ guide, and decisions for that phase, so documentation never lags a phase.
 
 ### Phase A — The view tree
 
-#### 1. View identity 🔍 implemented, awaiting the review gate
+#### 1. View identity ✅
 
-Built: `view_tree.rs` (`ViewTree` interface, `ViewTreeChanged` event); each
-tab's `PresentationInfo.root` is a `ViewNodeInfo` (`ViewNodeTarget` identity =
-the view's entity, `kind`, `children`, and for editors `document`, `buffer`,
-`language`, `readOnly`); the diff reports layout changes through its
-subscription. Names proposed for the gate: `ViewNodeTarget`, `ViewNodeInfo`,
-`PresentationInfo.root`; `ViewTarget` stays the tab's target and `ViewId` the
-contributed view instance.
-
-Deliverables: a native interface through which any view lists its child
-views, reports its focused child, and signals changes to its children; the
-snapshot, focus, handles, and captures (1–4) use only this interface, never
-`DiffView` directly. Each tab in the snapshot carries its view tree; a native
-diff implements the interface and lists its two editors as children (only the modified one while inline); editor
-views carry document, buffer, language, and read-only state; layout changes
-report `presentationsChanged`.
-
-Validation: product extension API tests for the trees of document, terminal,
-tool, and diff tabs in both layouts.
-
-Review gate: the identity model and names.
-
-Implementation context: `PresentationTarget`/`PresentationInfo` in
-`crates/knot-protocol/src/lib.rs`; the window snapshot in `src/app/product.rs`
-(around line 1230) and the presentation builders in
-`src/app/extensions/host/handlers.rs` and `src/app/extensions/host.rs`;
-interning in `presentationTarget`/`presentationFromNative` in
-`crates/knot-host/src/js/bootstrap.ts`; `knot.d.ts`. Snapshot buffers through
-`ExtensionHost::track_buffer`. Tests in `src/app/product/tests/extension_api.rs`.
+Each tab's `PresentationInfo.root` is a `ViewNodeInfo` tree. Views list their
+children through the `ViewTree` interface in `src/app/view_tree.rs` and emit
+`ViewTreeChanged`. `ViewNodeTarget` is the view's identity, `ViewTarget` stays
+the tab's target, and `ViewId` the contributed view instance. `"diff"` leaves
+the `ViewKind` and `kind` union with the native diff (21). Reference docs
+follow in checkpoint 5.
 
 #### 2. Focused view
 
