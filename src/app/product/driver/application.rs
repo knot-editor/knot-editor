@@ -67,7 +67,18 @@ impl TestProduct {
         cx: &mut TestAppContext,
     ) -> Self {
         cx.set_global(HeadlessWindows::default());
-        Self::launch_windows(packages, None, cx)
+        Self::launch_windows(packages, None, None, cx)
+    }
+
+    /// [Launch](Self::launch) under a personal config whose `post-init.js`
+    /// is `post_init`.
+    pub fn launch_with_post_init(
+        packages: &'static [knot_bundled::BundledSource],
+        post_init: &str,
+        cx: &mut TestAppContext,
+    ) -> Self {
+        cx.set_global(HeadlessWindows::default());
+        Self::launch_windows(packages, None, Some(post_init), cx)
     }
 
     /// [Launch](Self::launch) with native windows, for tests of painting,
@@ -76,7 +87,7 @@ impl TestProduct {
         packages: &'static [knot_bundled::BundledSource],
         cx: &mut TestAppContext,
     ) -> Self {
-        Self::launch_windows(packages, None, cx)
+        Self::launch_windows(packages, None, None, cx)
     }
 
     /// [Launch](Self::launch) as `knot` does with `paths` on its command
@@ -88,7 +99,7 @@ impl TestProduct {
         cx: &mut TestAppContext,
     ) -> Self {
         cx.set_global(HeadlessWindows::default());
-        Self::launch_windows(packages, Some(launch_batch(paths)), cx)
+        Self::launch_windows(packages, Some(launch_batch(paths)), None, cx)
     }
 
     /// Deliver `paths` as a later `knot` invocation does to the running
@@ -103,9 +114,13 @@ impl TestProduct {
     fn launch_windows(
         packages: &'static [knot_bundled::BundledSource],
         batch: Option<LaunchBatch>,
+        post_init: Option<&str>,
         cx: &mut TestAppContext,
     ) -> Self {
         let product = Self::new_directories();
+        if let Some(source) = post_init {
+            std::fs::write(product.config.path().join("post-init.js"), source).unwrap();
+        }
         install_globals(cx);
         product.install_durable_state(cx);
         cx.update(crate::app::product::launch::bind_product_keys);

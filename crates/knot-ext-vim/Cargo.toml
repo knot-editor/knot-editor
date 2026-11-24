@@ -16,5 +16,7 @@ gpui = { workspace = true, features = ["test-support"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 knot-ext-languages = { path = "../knot-ext-languages" }
+knot-ext-vcs = { path = "../knot-ext-vcs" }
 knot-ext-workbench = { path = "../knot-ext-workbench" }
 tempfile = { workspace = true }
+url = { workspace = true }

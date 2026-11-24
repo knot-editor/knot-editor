@@ -3916,10 +3916,12 @@ dependencies = [
  "knot",
  "knot-bundled",
  "knot-ext-languages",
+ "knot-ext-vcs",
  "knot-ext-workbench",
  "serde",
  "serde_json",
  "tempfile",
+ "url",
 ]
 
 [[package]]

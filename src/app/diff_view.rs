@@ -578,7 +578,7 @@ impl DiffView {
     }
 
     /// Treat `side` as the one with focus, as its editor gaining focus does.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn set_focused_side(&mut self, side: DiffSide, cx: &mut Context<Self>) {
         if self.focused.replace(side) != side {
             cx.emit(ViewFocusChanged);
