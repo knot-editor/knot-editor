@@ -1313,7 +1313,7 @@ fn editor_notifications_before_their_watch_reply_reach_the_new_listeners() {
 import { workbench } from "knot";
 globalThis.log = [];
 const { snapshot } = await workbench.observe(() => {});
-const handle = await workbench.editor(snapshot.activeTarget);
+const handle = await workbench.editor(snapshot.windows[0].focusedView);
 await handle.onDidChangeSelection(({ caret }) => { log.push(`selection ${caret}`); });
 log.push("selection subscribed");
 await handle.onDidEditBar(({ bar }) => { log.push(`bar ${bar}`); });
@@ -1345,6 +1345,23 @@ log.push("bars subscribed");
         success::<declared::observe_workbench>(WorkbenchObservation {
             subscription: WorkbenchSubscriptionId::new(912),
             snapshot: ApplicationSnapshot {
+                windows: vec![knot_protocol::WindowInfo {
+                    target: target.pane.window.clone(),
+                    panes: Vec::new(),
+                    current_target: Some(target.clone()),
+                    status_target: None,
+                    focused_view: Some(knot_protocol::ViewNodeTarget {
+                        window: target.pane.window.clone(),
+                        view: "7".into(),
+                    }),
+                    status_view: None,
+                    last_focused_document: None,
+                    workspace: knot_protocol::WorkspaceInfo {
+                        window: target.pane.window.clone(),
+                        roots: Vec::new(),
+                        generation: 0,
+                    },
+                }],
                 active_target: Some(target),
                 ..ApplicationSnapshot::default()
             },

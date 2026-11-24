@@ -3462,12 +3462,31 @@ impl HostArguments for EditorArguments {
     }
 }
 
-/// Bind a long-lived editor handle to the document tab a view target names,
-/// returning its authority.
+/// The editor view an editor handle binds to.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct EditorViewArguments {
+    pub target: knot_protocol::ViewNodeTarget,
+}
+
+impl HostArguments for EditorViewArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self {
+            target: knot_protocol::ViewNodeTarget {
+                window: knot_protocol::WindowTarget {
+                    window: reader.text(2, "window must be text")?,
+                },
+                view: reader.text(3, "view must be text")?,
+            },
+        })
+    }
+}
+
+/// Bind a long-lived editor handle to the editor view a view node target
+/// names, returning its authority.
 #[host_operation("openEditor")]
 pub(crate) async fn open_editor(
     context: HostContext,
-    arguments: ViewTargetArguments,
+    arguments: EditorViewArguments,
 ) -> Result<u64, AccessError> {
     let owner = ExtensionKey::new(context.request.extension, context.request.lifecycle);
     context.foreground(|host, cx| host.open_editor(owner, &arguments.target, cx))?

@@ -315,8 +315,8 @@ export async function exerciseEditor(context) {
   await rejectsWith(() => workbench.selectedText(context.target), "UnsupportedOperation");
   await rejectsWith(() => workbench.selectedTreeItem(context.target), "UnsupportedOperation");
   check((await editor.selection()).caret >= 0, "selection after the edits");
-  const view = (await windows.list())[0]?.currentTarget ?? null;
-  check(view !== null, "a focused tab");
+  const view = (await windows.list())[0]?.focusedView ?? null;
+  check(view !== null, "a focused view");
   const handle = await workbench.editor(view);
   const closed = handle.onDidClose(() => {});
   const barListener = await handle.onDidEditBar(() => {});

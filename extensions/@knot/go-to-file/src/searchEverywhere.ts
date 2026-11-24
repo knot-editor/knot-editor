@@ -3,7 +3,7 @@
 // buffer or file shows it, choosing an action runs it in the window the
 // picker opened from, and `:N` (alone, or after the text) goes to line N.
 import { commands, documents, history, workbench } from "knot";
-import type { Buffer, CommandContext, DocumentInfo, PickerRow, ViewTarget } from "knot";
+import type { Buffer, CommandContext, DocumentInfo, PickerRow, ViewNodeTarget } from "knot";
 import { actionRows, buffersRows, filesRows, windowLists } from "./lists.js";
 import { ACTION_HISTORY } from "./recent.js";
 
@@ -40,7 +40,7 @@ export function parseQuery(query: string): { text: string; line: number | null; 
 }
 
 /** Puts the caret at the start of the 1-based `line`, clamped to the text. */
-async function goToLine(target: ViewTarget, buffer: Buffer | null, line: number) {
+async function goToLine(target: ViewNodeTarget, buffer: Buffer | null, line: number) {
   if (buffer === null) return;
   const index = Math.min(Math.max(line, 1), await buffer.lineCount()) - 1;
   const { startByteOffset } = await buffer.lineRange(index);
@@ -56,7 +56,7 @@ function requestedTab(argument: CommandContext["arguments"]): string | undefined
 
 export async function searchEverywhere({ target, arguments: argument }: CommandContext) {
   const lists = await windowLists(target.windowTarget);
-  const { shown, hasEditor } = lists;
+  const { shown, shownView, hasEditor } = lists;
 
   const rows = async (query: string, tab: string | null): Promise<PickerRow[]> => {
     const { text, line, jump } = parseQuery(query);
@@ -101,10 +101,10 @@ export async function searchEverywhere({ target, arguments: argument }: CommandC
     await history.record(ACTION_HISTORY, chosen);
     await commands.invoke(chosen);
   } else if (kind === "line") {
-    if (shown !== null && line !== null) await goToLine(shown, lists.editorBuffer, line);
+    if (shownView !== null && line !== null) await goToLine(shownView, lists.editorBuffer, line);
   } else {
     const opened =
       kind === "buffer" ? await documents.present(chosen as DocumentInfo["id"]) : await documents.open(chosen);
-    if (line !== null) await goToLine(opened.presentation.target, opened.presentation.buffer, line);
+    if (line !== null) await goToLine(opened.presentation.root.target, opened.presentation.buffer, line);
   }
 }

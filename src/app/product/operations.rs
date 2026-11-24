@@ -384,40 +384,51 @@ pub(crate) fn close_presentation_unattended(presentation: PresentationTarget, cx
     );
 }
 
-/// An exact document tab presentation retained beyond one command. It never
-/// resolves to a replacement tab, or to the tab after a move.
+/// An exact editor view retained beyond one command. It resolves only while
+/// the view is in a tab's view tree, and never follows focus or a
+/// replacement.
 #[derive(Clone)]
-pub(crate) struct EditorTab(OpenTarget);
+pub(crate) struct EditorViewHandle {
+    window: WeakEntity<KnotWindow>,
+    view: String,
+}
 
-impl EditorTab {
-    /// The tab's editor, while this exact presentation is live.
+impl EditorViewHandle {
+    /// The view's editor, while the view is live.
     pub(crate) fn editor(&self, cx: &App) -> Option<Entity<crate::app::editor::Editor>> {
-        let target = &self.0;
-        let workbench = target.workbench.upgrade()?;
-        if !window_is_live(&target.window, &workbench, cx)
-            || !target.matches_presentation(&workbench, cx)
-        {
+        let window = self.window.upgrade()?;
+        let workbench = window.read(cx).workbench.clone();
+        if !window_is_live(&self.window, &workbench, cx) {
             return None;
         }
         let workbench = workbench.read(cx);
-        let captured = target.tab?;
-        match workbench.command_view(workbench.tab(captured.pane, captured.tab)?)? {
-            crate::app::workbench::CommandView::Editor(view) => {
-                Some(view.read(cx).editor().clone())
-            }
-            _ => None,
-        }
+        workbench
+            .panes()
+            .iter()
+            .flat_map(|pane| pane.tabs())
+            .filter_map(|tab| workbench.view_node(tab, cx))
+            .find_map(|root| {
+                root.descendants()
+                    .into_iter()
+                    .find(|node| node.id.as_u64().to_string() == self.view)
+                    .and_then(|node| node.editor.clone())
+            })
+            .map(|view| view.read(cx).editor().clone())
     }
 }
 
-pub(crate) fn capture_editor_tab(
-    target: &PresentationTarget,
+/// Bind the editor view `view` of `window` for the caller.
+pub(crate) fn capture_editor_view(
+    window: &WindowTarget,
+    view: &str,
     cx: &mut App,
-) -> Result<EditorTab, AccessError> {
-    let (_, target) = capture_destination(&DocumentDestination::View(target.clone()), cx)?;
-    let tab = EditorTab(target);
-    tab.editor(cx).ok_or(AccessError::InvalidTarget)?;
-    Ok(tab)
+) -> Result<EditorViewHandle, AccessError> {
+    let handle = EditorViewHandle {
+        window: capture_window(window, cx)?.downgrade(),
+        view: view.to_owned(),
+    };
+    handle.editor(cx).ok_or(AccessError::InvalidTarget)?;
+    Ok(handle)
 }
 
 /// The keymap view kind of the tab a presentation target names.

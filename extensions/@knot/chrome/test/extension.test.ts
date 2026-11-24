@@ -24,7 +24,7 @@ async function changed(window: ReturnType<typeof host.openWindow>) {
 }
 
 async function editorOf(window: ReturnType<typeof host.openWindow>) {
-  return workbench.editor(host.tabTarget(window, 0));
+  return workbench.editor(host.viewTarget(window, 0));
 }
 
 test("a window shows its editor's position, indentation, and language, right to left by priority", async () => {

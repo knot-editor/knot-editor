@@ -62,15 +62,17 @@ the handle works only while its command runs and rejects `InvalidTarget` once
 the editor's tab closes or moves.
 
 An editor can also outlive the command: `workbench.editor(target)` takes the
-`ViewTarget` of a document tab, from observation, and returns the same editor
-bound to that exact tab. It never follows a replacement, so a mode obtains a
-new handle from the next observation, and `onDidClose` runs once when the tab
-closes or moves. A handle also sets the editor's key context and cursor style,
-as a modal package does, and listens for selection changes.
+`ViewNodeTarget` of an editor view, at any depth of a tab's view tree, from
+observation, and returns the same editor bound to that exact view. It never
+follows focus or a replacement, and rejects a tab target or a view that is not
+an editor, so a mode obtains a new handle from the next observation, and
+`onDidClose` runs once when the view leaves its tab's tree or its tab closes.
+A handle also sets the editor's key context and cursor style, as a modal
+package does, and listens for selection changes.
 
 ```js
 const { snapshot } = await workbench.observe(() => {});
-const editor = await workbench.editor(snapshot.windows[0].panes[0].selected);
+const editor = await workbench.editor(snapshot.windows[0].focusedView);
 await editor.setKeyContext("normal", true);
 editor.onDidClose(() => { /* drop per-editor state */ });
 ```

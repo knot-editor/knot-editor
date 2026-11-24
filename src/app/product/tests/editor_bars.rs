@@ -22,7 +22,7 @@ let edits = 0;
 const editor = async () => {
   if (!handle) {
     const { snapshot } = await workbench.observe(() => {});
-    handle = await workbench.editor(snapshot.windows[0].panes[0].selected);
+    handle = await workbench.editor(snapshot.windows[0].panes[0].tabs.find((tab) => tab.target === snapshot.windows[0].panes[0].selected).root.target);
     await handle.onDidEditBar(async ({ bar, fields }) => {
       edits += 1;
       await workbench.writeClipboardText(`LABEL:${bar}:${fields.query}:${edits}`);
@@ -385,7 +385,7 @@ const bar = (active) => ({
 await commands.register("controls.open", async () => {
   if (!handle) {
     const { snapshot } = await workbench.observe(() => {});
-    handle = await workbench.editor(snapshot.windows[0].panes[0].selected);
+    handle = await workbench.editor(snapshot.windows[0].panes[0].tabs.find((tab) => tab.target === snapshot.windows[0].panes[0].selected).root.target);
   }
   await handle.openBar("find", bar(false));
 });
@@ -473,7 +473,7 @@ let handle = null;
 const editor = async () => {
   if (!handle) {
     const { snapshot } = await workbench.observe(() => {});
-    handle = await workbench.editor(snapshot.windows[0].panes[0].selected);
+    handle = await workbench.editor(snapshot.windows[0].panes[0].tabs.find((tab) => tab.target === snapshot.windows[0].panes[0].selected).root.target);
   }
   return handle;
 };

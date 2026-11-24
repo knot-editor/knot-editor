@@ -24,7 +24,7 @@ async function setup() {
   const document = host.addDocument({ text: TEXT });
   const window = host.openWindow({ documents: [document] });
   await start();
-  const editor = await workbench.editor(host.tabTarget(window, 0));
+  const editor = await workbench.editor(host.viewTarget(window, 0));
   return { window, editor };
 }
 

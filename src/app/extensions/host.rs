@@ -694,7 +694,7 @@ fn test_storage(
 /// A lifecycle's long-lived editor, bound to one exact tab presentation.
 struct EditorHandle {
     owner: ExtensionKey,
-    tab: crate::app::product::operations::EditorTab,
+    view: crate::app::product::operations::EditorViewHandle,
     selection: Option<SelectionWatch>,
     bars: Option<BarWatch>,
 }
@@ -2092,7 +2092,7 @@ impl ProductExtensionHost {
                 .filter(|handle| {
                     handle.owner == ExtensionKey::new(request.extension, request.lifecycle)
                 })
-                .and_then(|handle| handle.tab.editor(cx))
+                .and_then(|handle| handle.view.editor(cx))
                 .ok_or(AccessError::InvalidTarget),
         }
     }
@@ -2102,17 +2102,18 @@ impl ProductExtensionHost {
     pub(super) fn open_editor(
         &mut self,
         owner: ExtensionKey,
-        target: &knot_protocol::PresentationTarget,
+        target: &knot_protocol::ViewNodeTarget,
         cx: &mut App,
     ) -> Result<u64, handlers::AccessError> {
-        let tab = crate::app::product::operations::capture_editor_tab(target, cx)?;
+        let view =
+            crate::app::product::operations::capture_editor_view(&target.window, &target.view, cx)?;
         self.next_editor_handle += 1;
         let id = self.next_editor_handle;
         self.editor_handles.insert(
             id,
             EditorHandle {
                 owner,
-                tab,
+                view,
                 selection: None,
                 bars: None,
             },
@@ -2192,7 +2193,7 @@ impl ProductExtensionHost {
             .get_mut(&id)
             .filter(|handle| handle.owner == owner)?;
         handle.selection.as_mut()?.pending = false;
-        let editor = handle.tab.editor(cx)?;
+        let editor = handle.view.editor(cx)?;
         Some(handlers::read_selection(&editor, lines, cx))
     }
 
@@ -2272,7 +2273,7 @@ impl ProductExtensionHost {
         };
         watch.pending = false;
         let edited = std::mem::take(&mut watch.edited);
-        let Some(editor) = handle.tab.editor(cx) else {
+        let Some(editor) = handle.view.editor(cx) else {
             return Vec::new();
         };
         let editor = editor.read(cx);
@@ -2461,7 +2462,7 @@ impl ProductExtensionHost {
         let stale = self
             .editor_handles
             .iter()
-            .filter(|(_, handle)| handle.tab.editor(cx).is_none())
+            .filter(|(_, handle)| handle.view.editor(cx).is_none())
             .map(|(id, handle)| (*id, handle.owner))
             .collect::<Vec<_>>();
         for (id, owner) in stale {

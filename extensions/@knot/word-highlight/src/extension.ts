@@ -185,9 +185,9 @@ export async function start() {
       const tab = info.panes
         .flatMap((pane) => pane.tabs)
         .find((candidate) => candidate.target === info.statusTarget);
-      if (tab?.buffer != null) {
+      if (tab?.buffer != null && info.statusView !== null) {
         const buffer = tab.buffer;
-        const handle = await workbench.editor(info.statusTarget);
+        const handle = await workbench.editor(info.statusView);
         current.buffer = buffer;
         current.handle = handle;
         // A caret move right after an edit is typing or another edit moving

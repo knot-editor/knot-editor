@@ -423,7 +423,7 @@ let handle;
 let closed = 0;
 await commands.register("handle.attach", async () => {
   const { snapshot } = await workbench.observe(() => {});
-  handle = await workbench.editor(snapshot.windows[0].panes[0].selected);
+  handle = await workbench.editor(snapshot.windows[0].panes[0].tabs.find((tab) => tab.target === snapshot.windows[0].panes[0].selected).root.target);
   handle.onDidClose(() => { closed += 1; });
   await handle.setKeyContext("held", true);
 });
@@ -551,7 +551,7 @@ fn handle_report(
 }
 
 #[gpui::test]
-fn editor_handle_outlives_its_command_and_rejects_once_its_tab_is_gone(cx: &mut TestAppContext) {
+fn editor_handle_outlives_its_command_and_rejects_once_its_view_is_gone(cx: &mut TestAppContext) {
     let documents = install_globals(cx);
     let (_host, _) = load_handle_extension(cx);
     let document = cx.update(|cx| create_untitled_document(&documents, cx));
@@ -588,9 +588,18 @@ fn editor_handle_outlives_its_command_and_rejects_once_its_tab_is_gone(cx: &mut 
         "ok:0:InvalidTarget"
     );
 
-    // Moving the tab to another pane invalidates the handle, once.
+    // Moving the tab to another pane keeps its view, so the handle holds.
     let execution =
         dispatch_product_command(&window, native_window, "workbench.move-tab-right", cx);
+    assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
+    cx.run_until_parked();
+    assert_eq!(
+        handle_report(&window, native_window, cx),
+        "ok:0:InvalidTarget"
+    );
+
+    // Closing the tab ends the handle, once.
+    let execution = dispatch_product_command(&window, native_window, "workbench.close-tab", cx);
     assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
     cx.run_until_parked();
     assert_eq!(
@@ -883,7 +892,7 @@ import { commands, workbench } from "knot";
 const log = [];
 await commands.register("selection.attach", async () => {
   const { snapshot } = await workbench.observe(() => {});
-  const handle = await workbench.editor(snapshot.windows[0].panes[0].selected);
+  const handle = await workbench.editor(snapshot.windows[0].panes[0].tabs.find((tab) => tab.target === snapshot.windows[0].panes[0].selected).root.target);
   // Logs the payload's caret beside the caret read after a held request. The
   // first turn takes one more round trip, so a turn running beside it would
   // log first.
@@ -981,7 +990,7 @@ fn measure_selection_notification_latency(cx: &mut TestAppContext) {
         let count = 0;
         await commands.register("probe.attach", async () => {
           const { snapshot } = await workbench.observe(() => {});
-          handle = await workbench.editor(snapshot.windows[0].panes[0].selected);
+          handle = await workbench.editor(snapshot.windows[0].panes[0].tabs.find((tab) => tab.target === snapshot.windows[0].panes[0].selected).root.target);
           await handle.onDidChangeSelection(async () => {
             count += 1;
             await handle.selection();
@@ -1090,7 +1099,7 @@ let group;
 let result = "";
 await commands.register("group.attach", async () => {
   const { snapshot } = await workbench.observe(() => {});
-  handle = await workbench.editor(snapshot.windows[0].panes[0].selected);
+  handle = await workbench.editor(snapshot.windows[0].panes[0].tabs.find((tab) => tab.target === snapshot.windows[0].panes[0].selected).root.target);
 });
 await commands.register("group.begin", async () => {
   group = await handle.beginUndoGroup();
@@ -1243,7 +1252,7 @@ const recordings = {};
 let last = [];
 await commands.register("rec.attach", async () => {
   const { snapshot } = await workbench.observe(() => {});
-  handle = await workbench.editor(snapshot.windows[0].panes[0].selected);
+  handle = await workbench.editor(snapshot.windows[0].panes[0].tabs.find((tab) => tab.target === snapshot.windows[0].panes[0].selected).root.target);
 });
 await commands.register("rec.start", async ({ arguments: { name } }) => {
   recordings[name] = await handle.record();

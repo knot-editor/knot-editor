@@ -4,7 +4,7 @@
 // Replace adds a second bar beneath it that replaces the current match or
 // every match, natively, in one undo step.
 import { commands, icons, keymaps, platform, storage, windows, workbench } from "knot";
-import type { Buffer, ByteRange, CommandContext, Disposable, Editor, EditorHandle, ViewTarget } from "knot";
+import type { Buffer, ByteRange, CommandContext, Disposable, Editor, EditorHandle, ViewNodeTarget, ViewTarget } from "knot";
 import { endOf, highlights, invalidPattern, matchBefore, matchFrom, rebase, sameRange, summary } from "./search.js";
 import type { Options } from "./search.js";
 
@@ -89,19 +89,21 @@ function isInvalid(error: unknown) {
 }
 
 async function sessionOf(context: CommandContext, editor: Editor, buffer: Buffer): Promise<Session> {
-  const target = (await windows.get(context.target.windowTarget))?.currentTarget;
-  if (target == null) commands.unavailable();
+  const info = await windows.get(context.target.windowTarget);
+  const target = info?.currentTarget;
+  const view = info?.panes.flatMap((pane) => pane.tabs).find((tab) => tab.target === target)?.root;
+  if (target == null || view?.kind !== "editor") commands.unavailable();
   let session = sessions.get(target);
   if (session === undefined) {
-    session = follow(target, buffer);
+    session = follow(target, view.target, buffer);
     sessions.set(target, session);
     session.catch(() => sessions.delete(target));
   }
   return session;
 }
 
-async function follow(target: ViewTarget, buffer: Buffer): Promise<Session> {
-  const handle = await workbench.editor(target);
+async function follow(target: ViewTarget, view: ViewNodeTarget, buffer: Buffer): Promise<Session> {
+  const handle = await workbench.editor(view);
   const session: Session = {
     editor: handle,
     buffer,

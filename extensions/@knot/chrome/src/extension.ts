@@ -152,8 +152,8 @@ export async function start() {
       // The target is recorded last, so a failed attach is retried by the
       // next event instead of leaving the window without a listener.
       current.target = null;
-      if (info.statusTarget !== null) {
-        current.handle = await workbench.editor(info.statusTarget);
+      if (info.statusTarget !== null && info.statusView !== null) {
+        current.handle = await workbench.editor(info.statusView);
         current.selection = await current.handle.onDidChangeSelection((selection) => refreshPosition(window, selection), { lines: 0 });
       }
       current.target = info.statusTarget;

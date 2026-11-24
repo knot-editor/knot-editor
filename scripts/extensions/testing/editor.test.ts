@@ -151,7 +151,7 @@ test("an editor handle outlives commands and rejects after its tab closes", asyn
   const document = host.addDocument({ text: "one\ntwo\n" });
   const window = host.openWindow({ documents: [document, document] });
   const [first, second] = [host.tabTarget(window, 0), host.tabTarget(window, 1)];
-  const editor = await workbench.editor(first);
+  const editor = await workbench.editor(host.viewTarget(window, 0));
   await editor.setKeyContext("normal", true);
   await editor.setSelection({ anchor: 2, caret: 2 });
   assert.deepEqual(await editor.selection(), { anchor: 2, caret: 2 });
@@ -164,14 +164,14 @@ test("an editor handle outlives commands and rejects after its tab closes", asyn
   await host.closeTab(first);
   assert.equal(closed, 1);
   await assert.rejects(editor.selection(), { code: "InvalidTarget" });
-  await assert.rejects(workbench.editor(first), { code: "InvalidTarget" });
+  await assert.rejects(workbench.editor(first as never), { code: "InvalidTarget" });
 });
 
 test("an editor handle sets and clears its cursor style", async () => {
   const document = host.addDocument({ text: "x" });
   const window = host.openWindow({ documents: [document] });
   const target = host.tabTarget(window, 0);
-  const editor = await workbench.editor(target);
+  const editor = await workbench.editor(host.viewTarget(window, 0));
   assert.equal(host.cursorStyle(window), "bar");
   await editor.setCursorStyle("block");
   assert.equal(host.cursorStyle(window), "block");
@@ -186,7 +186,7 @@ test("an editor handle sets and clears its cursor style", async () => {
 test("an editor handle opens bars, focuses fields, and hears typing", async () => {
   const document = host.addDocument({ text: "x" });
   const window = host.openWindow({ documents: [document] });
-  const editor = await workbench.editor(host.tabTarget(window, 0));
+  const editor = await workbench.editor(host.viewTarget(window, 0));
   const edits: unknown[] = [];
   await editor.onDidEditBar((edit) => {
     edits.push(edit);
@@ -228,7 +228,7 @@ test("an editor handle reports the viewport, maps rows, and scrolls without movi
   const document = host.addDocument({ text });
   const window = host.openWindow({ documents: [document] });
   host.setViewportLines(10, window);
-  const editor = await workbench.editor(host.tabTarget(window, 0));
+  const editor = await workbench.editor(host.viewTarget(window, 0));
   assert.deepEqual(await editor.viewport(), { first: 0, rows: 10 });
   await editor.scrollBy(4);
   assert.deepEqual(await editor.viewport(), { first: 4, rows: 10 });
@@ -249,7 +249,7 @@ test("an editor handle reports the viewport, maps rows, and scrolls without movi
 test("an editor handle folds and unfolds line ranges", async () => {
   const document = host.addDocument({ text: Array.from({ length: 10 }, (_, line) => `line ${line}\n`).join("") });
   const window = host.openWindow({ documents: [document] });
-  const editor = await workbench.editor(host.tabTarget(window, 0));
+  const editor = await workbench.editor(host.viewTarget(window, 0));
   await editor.fold({ start: 4, end: 6 });
   await editor.fold({ start: 1, end: 8 });
   await editor.fold({ start: 4, end: 6 });
@@ -268,7 +268,7 @@ test("reveal top and bottom put the caret's line at that edge of the viewport", 
   const document = host.addDocument({ text });
   const window = host.openWindow({ documents: [document] });
   host.setViewportLines(10, window);
-  const editor = await workbench.editor(host.tabTarget(window, 0));
+  const editor = await workbench.editor(host.viewTarget(window, 0));
   const lineStart = (line: number) => text.split("\n").slice(0, line).join("\n").length + (line > 0 ? 1 : 0);
   const caret = lineStart(7);
   await editor.setSelection({ anchor: caret, caret }, { reveal: "bottom" });
@@ -315,7 +315,7 @@ test("a disposed handle stops listening and acting", async () => {
   const document = host.addDocument({ text: "x" });
   const window = host.openWindow({ documents: [document] });
   const target = host.tabTarget(window, 0);
-  const editor = await workbench.editor(target);
+  const editor = await workbench.editor(host.viewTarget(window, 0));
   let closed = 0;
   editor.onDidClose(() => {
     closed += 1;
@@ -329,7 +329,7 @@ test("a disposed handle stops listening and acting", async () => {
 test("a handle reports selection changes until the listener or handle is disposed", async () => {
   const document = host.addDocument({ text: "one\ntwo\n" });
   const window = host.openWindow({ documents: [document] });
-  const editor = await workbench.editor(host.tabTarget(window, 0));
+  const editor = await workbench.editor(host.viewTarget(window, 0));
   const seen: number[] = [];
   const subscription = await editor.onDidChangeSelection(async ({ caret }) => {
     seen.push(caret);
@@ -347,7 +347,7 @@ test("a handle reports selection changes until the listener or handle is dispose
 test("a selection read and a notification carry the caret's line and its neighbors when asked", async () => {
   const document = host.addDocument({ text: "one\r\ntwo\nthree" });
   const window = host.openWindow({ documents: [document] });
-  const editor = await workbench.editor(host.tabTarget(window, 0));
+  const editor = await workbench.editor(host.viewTarget(window, 0));
   const shown = (items: readonly { line: number; startByteOffset: number; text: string }[]) =>
     items.map((item) => `${item.line}@${item.startByteOffset}:${item.text}`);
   const heard: string[][] = [];
@@ -369,7 +369,7 @@ test("a selection read and a notification carry the caret's line and its neighbo
 test("an undo group is open until disposed, and a second one is rejected", async () => {
   const document = host.addDocument({ text: "x" });
   const window = host.openWindow({ documents: [document] });
-  const editor = await workbench.editor(host.tabTarget(window, 0));
+  const editor = await workbench.editor(host.viewTarget(window, 0));
   const group = await editor.beginUndoGroup();
   assert.equal(host.undoGroupOpen(window), true);
   await assert.rejects(editor.beginUndoGroup(), { code: "OperationInProgress" });

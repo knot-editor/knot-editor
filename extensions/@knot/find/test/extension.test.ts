@@ -30,7 +30,7 @@ async function setup(text = TEXT) {
   const document = host.addDocument({ text });
   const window = host.openWindow({ documents: [document] });
   await start();
-  const editor = await workbench.editor(host.tabTarget(window, 0));
+  const editor = await workbench.editor(host.viewTarget(window, 0));
   const tab = (await windows.get(window))!.panes[0]!.tabs[0]!;
   return { document, window, editor, buffer: tab.buffer! };
 }
@@ -213,7 +213,7 @@ test("find fills the field from a single-line selection, else from the last quer
   await host.run(CLOSE, { window });
 
   await host.run(FIND, { window });
-  assert.deepEqual(await (await workbench.editor(host.tabTarget(window, 0))).barFields("find"), { query: "baz" });
+  assert.deepEqual(await (await workbench.editor(host.viewTarget(window, 0))).barFields("find"), { query: "baz" });
 
   await host.run(CLOSE, { window });
   const start = offset("foo bar\nFoo ");

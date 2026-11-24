@@ -1305,3 +1305,103 @@ fn switching_diff_sides_moves_the_focused_view_and_reports_it(cx: &mut TestAppCo
             .is_empty()
     );
 }
+
+const BINDING_SOURCE: &str = r#"
+import { commands, workbench } from "knot";
+const handles = [];
+const diffTab = async () => {
+  const { snapshot } = await workbench.observe(() => {});
+  return snapshot.windows[0].panes.flatMap((pane) => pane.tabs).find((tab) => tab.kind === "diff");
+};
+const probe = async (call) => {
+  try { return String((await call()) ?? "ok"); } catch (error) { return error.code; }
+};
+await commands.register("binding.bind", async () => {
+  const diff = await diffTab();
+  for (const side of diff.root.children) handles.push(await workbench.editor(side.target));
+  const rejected = [
+    await probe(() => workbench.editor(diff.root.target)),
+    await probe(() => workbench.editor(diff.target)),
+  ];
+  await workbench.writeClipboardText(rejected.join(","));
+});
+await commands.register("binding.report", async () => {
+  const states = [];
+  for (const [index, handle] of handles.entries()) {
+    states.push(await probe(async () => {
+      await handle.setSelection({ anchor: index + 1, caret: index + 1 });
+      return (await handle.selection()).caret;
+    }));
+  }
+  await workbench.writeClipboardText(states.join(","));
+});
+"#;
+
+fn load_binding(cx: &mut TestAppContext) {
+    use knot_protocol::{ExtensionId, ExtensionKey, ExtensionLifecycleId};
+    let host = cx.update(crate::app::extensions::host::install);
+    let key = ExtensionKey::new(ExtensionId::new(731), ExtensionLifecycleId::new(1));
+    host.update(cx, |host, cx| {
+        let execution = host.load_test_source(key, BINDING_SOURCE).unwrap();
+        cx.spawn(async move |_, _| execution.await.unwrap())
+            .detach();
+    });
+    wait_for_api_condition(cx, |cx| {
+        cx.global::<ApplicationProductCommands>()
+            .0
+            .read(cx)
+            .catalog()
+            .borrow()
+            .resolve("binding.report")
+            .is_ok()
+    });
+}
+
+fn clipboard_text(cx: &TestAppContext) -> String {
+    cx.read(|cx| cx.read_from_clipboard().unwrap().text().unwrap())
+}
+
+#[gpui::test]
+fn editor_handles_bind_each_diff_side_exactly_and_go_stale_with_their_view(
+    cx: &mut TestAppContext,
+) {
+    use knot_model::diff::DiffSide;
+    let (window, native_window, _) = diff_window(cx);
+    load_binding(cx);
+    let run = |name: &'static str, cx: &mut TestAppContext| {
+        assert_eq!(
+            run_command(&window, native_window, name, cx),
+            CommandOutcome::Completed,
+            "{name}"
+        );
+    };
+    run("binding.bind", cx);
+    // A diff view and a tab target are not editor views.
+    assert_eq!(clipboard_text(cx), "InvalidTarget,InvalidTarget");
+
+    // Each handle keeps its side as focus moves between the sides.
+    let view = active_diff(&window, cx);
+    let [original, modified] = cx.read(|cx| view.read(cx).editors().map(Clone::clone));
+    view.update(cx, |view, cx| view.set_focused_side(DiffSide::Original, cx));
+    run("binding.report", cx);
+    assert_eq!(clipboard_text(cx), "1,2");
+    cx.read(|cx| {
+        assert_eq!(original.read(cx).editor().read(cx).selection(cx), (1, 1));
+        assert_eq!(modified.read(cx).editor().read(cx).selection(cx), (2, 2));
+    });
+
+    // The inline layout hides the original side's view, and only its handle
+    // goes stale.
+    view.update(cx, |view, cx| {
+        view.set_layout(crate::app::settings::DiffLayout::Inline, cx)
+    });
+    cx.run_until_parked();
+    run("binding.report", cx);
+    assert_eq!(clipboard_text(cx), "InvalidTarget,2");
+
+    // Closing the tab ends the other.
+    run("workbench.close-tab", cx);
+    assert_eq!(diff_tabs(&window, cx), 0);
+    run("binding.report", cx);
+    assert_eq!(clipboard_text(cx), "InvalidTarget,InvalidTarget");
+}

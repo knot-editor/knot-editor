@@ -981,6 +981,13 @@ export function tabTarget(window: Knot.WindowTarget, index: number): Knot.ViewTa
   return tab.target;
 }
 
+/** The root view target of the tab at `index` in the window. */
+export function viewTarget(window: Knot.WindowTarget, index: number): Knot.ViewNodeTarget {
+  const tab = fakeWindow(window).tabs[index];
+  if (tab === undefined) throw new Error(`the window has no tab ${index}`);
+  return rootTarget(fakeWindow(window), tab);
+}
+
 /** Closes a window; documents no longer presented anywhere close with it. */
 export function closeWindow(target: Knot.WindowTarget) {
   state.windows = state.windows.filter((window) => window.target !== target);
@@ -1021,14 +1028,19 @@ function workspaceInfo(window: FakeWindow): Knot.WorkspaceInfo {
 
 const rootTargets = new WeakMap<FakeTab, Knot.ViewNodeTarget>();
 
+function rootTarget(window: FakeWindow, tab: FakeTab): Knot.ViewNodeTarget {
+  let target = rootTargets.get(tab);
+  if (target === undefined) {
+    target = { window: window.target } as unknown as Knot.ViewNodeTarget;
+    rootTargets.set(tab, target);
+  }
+  return target;
+}
+
 function windowInfo(window: FakeWindow): Knot.WindowInfo {
   const tabs = window.tabs.map((tab) => {
     const document = state.documents.get(tab.document);
-    let target = rootTargets.get(tab);
-    if (target === undefined) {
-      target = { window: window.target } as unknown as Knot.ViewNodeTarget;
-      rootTargets.set(tab, target);
-    }
+    const target = rootTarget(window, tab);
     return {
       target: tab.target,
       kind: "document" as const,
@@ -1812,8 +1824,8 @@ async function notifySelection(tab: FakeTab) {
   for (const listener of [...tab.selectionListeners.keys()]) await listener(selection);
 }
 
-function editorHandle(target: Knot.ViewTarget): Knot.EditorHandle {
-  const tab = state.windows.flatMap((window) => window.tabs).find((candidate) => candidate.target === target);
+function editorHandle(target: Knot.ViewNodeTarget): Knot.EditorHandle {
+  const tab = state.windows.flatMap((window) => window.tabs).find((candidate) => rootTargets.get(candidate) === target);
   if (tab === undefined) throw hostError("InvalidTarget");
   const listeners = new Set<() => void | Promise<void>>();
   const selectionListeners = new Set<(selection: Knot.EditorSelectionWithLines) => void | Promise<void>>();

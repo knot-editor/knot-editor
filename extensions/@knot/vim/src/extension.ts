@@ -269,7 +269,7 @@ class Vim {
     const tab = (await windows.get(target.window))?.panes
       .flatMap((pane) => pane.tabs)
       .find((candidate) => candidate.target === target);
-    if (tab?.document == null || tab.buffer === null) return null;
+    if (tab?.document == null || tab.buffer === null || tab.root.kind !== "editor") return null;
     const info = await documents.get(tab.document);
     if (info == null) return null;
     active.document = tab.document;
@@ -277,7 +277,7 @@ class Vim {
     if (!(await enabledFor(tab.document, info.language))) return null;
     let handle: EditorHandle;
     try {
-      handle = await workbench.editor(target);
+      handle = await workbench.editor(tab.root.target);
     } catch (error) {
       // The tab may have closed meanwhile.
       if ((error as { code?: string }).code === "InvalidTarget") return null;

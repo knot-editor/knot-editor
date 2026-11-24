@@ -3,7 +3,7 @@
 // rows here, with plain row IDs: a file URI, a document ID, a command name.
 import { commands, completion, documents, history, windows, workspaces } from "knot";
 import type { ContractCallContext } from "knot/contract";
-import type { Buffer, CommandInfo, DocumentInfo, PickerRow, ViewTarget, WindowTarget } from "knot";
+import type { Buffer, CommandInfo, DocumentInfo, PickerRow, ViewNodeTarget, ViewTarget, WindowTarget } from "knot";
 import { fileRows } from "./fileRows.js";
 import { ACTION_HISTORY, BUFFER_HISTORY, documentOf } from "./recent.js";
 
@@ -16,6 +16,8 @@ export interface WindowLists {
   readonly roots: readonly string[];
   /** The last focused editor of the window, if any. */
   readonly shown: ViewTarget | null;
+  /** The editor view of `shown`. */
+  readonly shownView: ViewNodeTarget | null;
   readonly current: DocumentInfo | null;
   readonly available: readonly CommandInfo[];
   /** Whether the window has an editor tab, so a line can be jumped to. */
@@ -32,6 +34,7 @@ export async function windowLists(window: WindowTarget): Promise<WindowLists> {
     window,
     roots: (workspace?.roots ?? []).map((root) => root.uri),
     shown,
+    shownView: info?.statusView ?? null,
     current: shown === null ? null : await documentOf(shown),
     available: (await commands.list(info?.currentTarget ?? shown ?? undefined)).filter(
       (command) => !PICKER_COMMANDS.has(command.name),

@@ -1023,8 +1023,9 @@ type EditorEntry = {
 const editorHandles = new Map<Native, EditorEntry>();
 
 export async function openEditor(target: unknown) {
-  if (!isLive(livePresentations, target)) hostError("InvalidTarget");
-  const authority = await request("openEditor", destinationAuthority({ target }));
+  const view = isObject(target) ? liveViewNodes.get(target) : undefined;
+  if (!view) hostError("InvalidTarget");
+  const authority = await request("openEditor", view.window.window, view.view);
   const entry: EditorEntry = {
     closed: false, listeners: new Set(), selectionListeners: new Map(), watching: null,
     barListeners: new Set(), watchingBars: null,
