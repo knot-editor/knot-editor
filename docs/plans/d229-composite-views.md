@@ -145,29 +145,14 @@ the tab's target, and `ViewId` the contributed view instance. `"diff"` leaves
 the `ViewKind` and `kind` union with the native diff (21). Reference docs
 follow in checkpoint 5.
 
-#### 2. Focused view
+#### 2. Focused view ✅
 
-Implemented, awaiting the review gate: `WindowInfo.focusedView` is the focused leaf view of the focused tab
-and `statusView` the editor view a status display describes, at any depth and
-for any editor, not only document editors (a snapshot side counts). A diff
-emits `ViewFocusChanged` when its focused side changes, which publishes
-`presentationsChanged`; a view reports the child with focus through
-`ViewNode::focus`. `statusTarget` is unchanged until checkpoint 5.
-Reference docs follow in checkpoint 5.
-
-Deliverables: the snapshot and `activeTargetChanged` name the focused leaf
-view; switching diff sides commits an observed change; `statusTarget`'s
-counterpart covers a focused document editor at any depth.
-
-Validation: tests for focus across tabs and across diff sides.
-
-Review gate: the focus fields' shape.
-
-Implementation context: the focus subscriptions and `focused` in
-`src/app/diff_view.rs` must signal the
-[application observer](../architecture/workbench-and-lifecycle.md#observing-product-state);
-the `current_target`/`status_target` computation in the window snapshot in
-`src/app/product.rs` (around line 1217).
+`WindowInfo.focusedView` is the focused leaf view of the focused tab and
+`statusView` the editor view a status display describes, at any depth and for
+any editor, not only document editors (a snapshot side counts). A diff emits
+`ViewFocusChanged` when its focused side changes, which publishes
+`presentationsChanged`. `statusTarget` is unchanged until checkpoint 5, which
+also writes the reference docs.
 
 #### 3. Exact editor handles
 
