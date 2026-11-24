@@ -173,19 +173,18 @@ guide's [commands](../extension-api/commands-and-keys.md) section. Targets
 captured without a focused view (closes) still resolve the tab's live focused
 editor.
 
-#### 5. The lookup and its consumers
+#### 5. The lookup and its consumers ✅
 
-Deliverables: the shared lookup, which returns a view with its chain of
-parents; `@knot/chrome`, `word-highlight`,
-`go-to-file`, `explorer`, and `vcs` use it; the status bar follows a focused
-diff editor. Phase A documentation.
-
-Validation: lookup tests; the packages' tests; a status bar test in a diff.
-
-Review gate: the lookup; the status bar in a diff by hand; phase A docs.
-
-Implementation context: `grep -rn "pane.tabs\|statusTarget" extensions/@knot`;
-tests in `crates/knot-ext-workbench/tests`.
+`windows.findView(window, target)` resolves a `ViewNodeTarget` or a tab's
+`ViewTarget` in a `WindowInfo` and returns `{ view, parents, tab, pane }`.
+`@knot/chrome`, `word-highlight`, `go-to-file`, `explorer`, `vcs`, and `find`
+use it and follow `statusView`, so the status bar follows a focused diff side.
+Vim's `pane.tabs` searches wait for checkpoint 6. The status bar text in a
+diff was checked by hand: the fake host has no diff tabs, and the Rust test
+covers the lookup and `statusView`. Documented in the
+[view tree](../architecture/workbench-and-lifecycle.md#view-tree) and
+[application metadata](../architecture/extension-host.md#application-metadata-queries)
+references and the [extension guide](../extension-api/application.md).
 
 ### Phase B — Vim
 
