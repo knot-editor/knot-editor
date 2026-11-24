@@ -2,7 +2,7 @@
 // and document-scoped settings, and returns the message it leaves.
 import { type FileRow, workspace } from "@knot/go-to-file";
 import { commands, completion, documents, files, settings, windows, workbench, workspaces } from "knot";
-import type { InputCompletion, ViewTarget } from "knot";
+import type { DocumentId, InputCompletion, ViewTarget } from "knot";
 import {
   type Address, type BooleanOption, bufferCompletionTarget, completeEx, directoryOf, type ExCommand, fileCompletionTarget, parseEx, pathOfUri, resolvePath,
   type ExRange, type SetArgument,
@@ -91,7 +91,14 @@ export async function commandLine(state: State, initial: string): Promise<string
   return runEx(state, command);
 }
 
+/** An editor with a document, which the commands that write, open, or set
+ * options need. */
+type Documented = State & { readonly document: DocumentId };
+
+const NO_DOCUMENT = "E32: No file name";
+
 async function runEx(state: State, command: ExCommand): Promise<string | null> {
+  const documented = state.document === null ? null : (state as Documented);
   switch (command.kind) {
     case "none":
       return null;
@@ -102,14 +109,16 @@ async function runEx(state: State, command: ExCommand): Promise<string | null> {
       await run(state, { kind: "motion", motion: "last-line", count: command.line });
       return null;
     case "write":
-      return command.path === null ? save(state) : writeTo(state, command.path, command.force);
+      if (documented === null) return NO_DOCUMENT;
+      return command.path === null ? save(state) : writeTo(documented, command.path, command.force);
     case "save-as":
-      return saveAs(state, command.path, command.force);
+      return documented === null ? NO_DOCUMENT : saveAs(documented, command.path, command.force);
     case "quit":
       await workbench.close(state.target, { discard: command.force });
       return null;
     case "write-quit": {
-      const dirty = (await documents.get(state.document))?.dirty ?? false;
+      if (documented === null) return NO_DOCUMENT;
+      const dirty = (await documents.get(documented.document))?.dirty ?? false;
       if (!command.ifChanged || dirty) {
         if ((await commands.invoke("file.save")).kind !== "completed") return null;
       }
@@ -126,9 +135,9 @@ async function runEx(state: State, command: ExCommand): Promise<string | null> {
       await commands.invoke("application.quit");
       return null;
     case "edit":
-      return edit(state, command.path, command.force);
+      return documented === null ? NO_DOCUMENT : edit(documented, command.path, command.force);
     case "set":
-      return set(state, command.arguments);
+      return documented === null ? NO_DOCUMENT : set(documented, command.arguments);
     case "substitute":
       return substitute(state, command);
     case "split":
@@ -439,7 +448,7 @@ async function substitute(state: State, command: Extract<ExCommand, { kind: "sub
 /** The directory `:e` resolves relative paths in: the document's, or for an
  * untitled document the window's first root. */
 async function baseDirectory(state: State): Promise<string | null> {
-  const uri = (await documents.get(state.document))?.resourceUri ?? null;
+  const uri = (state.document === null ? null : (await documents.get(state.document))?.resourceUri) ?? null;
   if (uri !== null) return directoryOf(uri);
   return (await workspaces.get(state.target.window))?.roots[0]?.uri ?? null;
 }
@@ -456,7 +465,7 @@ async function save(state: State): Promise<null> {
 
 /** The URI `path` names for a write, or a message when it cannot be resolved
  * or exists and `force` is off, as Vim's `E13`. */
-async function writeTarget(state: State, path: string, force: boolean): Promise<{ uri: string } | string> {
+async function writeTarget(state: Documented, path: string, force: boolean): Promise<{ uri: string } | string> {
   const uri = resolvePath(path, await baseDirectory(state));
   if (uri === null) return `No directory to write ${path} in`;
   if (!force && (await files.stat(uri)) !== null && uri !== (await documents.get(state.document))?.resourceUri) {
@@ -467,7 +476,7 @@ async function writeTarget(state: State, path: string, force: boolean): Promise<
 
 /** `:w <file>`: writes a copy and leaves a document that has a file as it is;
  * an untitled document becomes the file's. */
-async function writeTo(state: State, path: string, force: boolean): Promise<string | null> {
+async function writeTo(state: Documented, path: string, force: boolean): Promise<string | null> {
   const target = await writeTarget(state, path, force);
   if (typeof target === "string") return target;
   const document = await documents.get(state.document);
@@ -483,7 +492,7 @@ async function writeTo(state: State, path: string, force: boolean): Promise<stri
 }
 
 /** `:sav <file>`: writes the document to the file, which it then is. */
-async function saveAs(state: State, path: string, force: boolean): Promise<string | null> {
+async function saveAs(state: Documented, path: string, force: boolean): Promise<string | null> {
   const target = await writeTarget(state, path, force);
   if (typeof target === "string") return target;
   try {
@@ -497,7 +506,7 @@ async function saveAs(state: State, path: string, force: boolean): Promise<strin
 /** `:e`: opens `path` in the base directory; without one it does nothing. `:e!`
  * discards the document's changes: it reverts to its file, or is closed once
  * `path` is open. */
-async function edit(state: State, path: string | null, force: boolean): Promise<string | null> {
+async function edit(state: Documented, path: string | null, force: boolean): Promise<string | null> {
   if (path === null) return force ? revert(state) : null;
   const resolved = resolvePath(path, await baseDirectory(state));
   if (resolved === null) return `No directory to open ${path} in`;
@@ -509,7 +518,7 @@ async function edit(state: State, path: string | null, force: boolean): Promise<
 }
 
 /** `:e!` alone: the document's text becomes its file's, undoably. */
-async function revert(state: State): Promise<string | null> {
+async function revert(state: Documented): Promise<string | null> {
   try {
     await documents.reload(state.document);
   } catch (error) {
@@ -568,7 +577,7 @@ const LINE_NUMBERS = "editor.lineNumbers";
 
 /** `:set`: writes each option scoped to the document; returns the values
  * shown, if any. */
-async function set(state: State, args: readonly SetArgument[]): Promise<string | null> {
+async function set(state: Documented, args: readonly SetArgument[]): Promise<string | null> {
   const scope = { document: state.document };
   const shown: string[] = [];
   for (const argument of args) {
@@ -599,7 +608,7 @@ async function set(state: State, args: readonly SetArgument[]): Promise<string |
 
 /** A boolean option's value for the document. Relative line numbers count
  * as `number` too, as Vim's hybrid numbering shows the caret's line. */
-async function booleanValue(state: State, option: BooleanOption): Promise<boolean> {
+async function booleanValue(state: Documented, option: BooleanOption): Promise<boolean> {
   const scope = { document: state.document, view: "editor" } as const;
   switch (option) {
     case "number": return (await settings.get(LINE_NUMBERS, scope)) !== "off";

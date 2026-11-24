@@ -4,7 +4,7 @@
 // matching, and visual-row movement are the native editor commands.
 import { commands, documents, languages, settings, workbench } from "knot";
 import type {
-  Buffer, Disposable, DocumentId, EditorHandle, EditorSelection, FoldRange, Mark, RecordedCommand, Recording, ViewTarget,
+  Buffer, Disposable, DocumentId, EditorHandle, EditorSelection, FoldRange, Mark, RecordedCommand, Recording, ViewNodeTarget, ViewTarget,
 } from "knot";
 import { JumpList, type LineOf } from "./jumps.js";
 import { closedAt, createFold, foldMotion, intoShownLine, lastLine, linesDown, linesUp, runFold, shownLine } from "./folds.js";
@@ -54,8 +54,8 @@ export type Shared = {
   lastChange: Change | null;
   /** The register `@@` plays again. */
   lastMacro: string | null;
-  /** Buffer marks `a`–`z`, by document. */
-  readonly marks: Map<DocumentId, Map<string, Mark>>;
+  /** Buffer marks `a`–`z`, by document, or by view for an editor without one. */
+  readonly marks: Map<DocumentId | ViewNodeTarget, Map<string, Mark>>;
   /** Global marks `A`–`Z`, each in some open document. */
   readonly globalMarks: Map<string, GlobalMark>;
   /** Shows a document's editor in the command's window with the caret at
@@ -86,10 +86,13 @@ export type GlobalMark = Readonly<{ document: DocumentId; mark: Mark }>;
 
 /** One followed editor. */
 export type State = {
+  /** The tab of the editor's view. */
   readonly target: ViewTarget;
+  readonly view: ViewNodeTarget;
   readonly handle: EditorHandle;
   readonly buffer: Buffer;
-  readonly document: DocumentId;
+  /** The editor's document, null for a buffer outside document identity. */
+  readonly document: DocumentId | null;
   readonly shared: Shared;
   language: string;
   mode: Mode;
@@ -697,7 +700,7 @@ export async function markOffset(state: State, name: string): Promise<number | n
   if (name === "'" || name === "`") {
     mark = state.context ?? undefined;
   } else if (name === name.toLowerCase()) {
-    mark = state.shared.marks.get(state.document)?.get(name);
+    mark = state.shared.marks.get(state.document ?? state.view)?.get(name);
   } else {
     const global = state.shared.globalMarks.get(name);
     if (global?.document === state.document) mark = global.mark;
@@ -729,11 +732,12 @@ async function setMarkAt(state: State, name: string, offset: number) {
   if (mark === null) return;
   const { marks, globalMarks } = state.shared;
   if (name === name.toLowerCase()) {
-    let buffer = marks.get(state.document);
-    if (buffer === undefined) marks.set(state.document, buffer = new Map());
+    const key = state.document ?? state.view;
+    let buffer = marks.get(key);
+    if (buffer === undefined) marks.set(key, buffer = new Map());
     buffer.get(name)?.[Symbol.asyncDispose]();
     buffer.set(name, mark);
-  } else {
+  } else if (state.document !== null) {
     globalMarks.get(name)?.mark[Symbol.asyncDispose]();
     globalMarks.set(name, { document: state.document, mark });
   }
@@ -1208,7 +1212,7 @@ export async function readRegister(state: State, register: string | null): Promi
   }
   if (register === "_") return null;
   if (register === "%") {
-    const uri = (await documents.get(state.document))?.resourceUri ?? null;
+    const uri = (state.document === null ? null : (await documents.get(state.document))?.resourceUri) ?? null;
     if (uri === null) return null;
     return { text: uri.startsWith("file://") ? decodeURIComponent(uri.slice(7)) : uri, linewise: false };
   }

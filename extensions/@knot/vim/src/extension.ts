@@ -7,7 +7,7 @@
 // keys that edit come here to type over the text.
 import { commands, documents, keymaps, settings, storage, windows, workbench } from "knot";
 import type {
-  CommandContext, DocumentId, EditorHandle, EditorSelection, JsonValue, RecordedCommand, StatusItem, ViewTarget, WindowTarget,
+  CommandContext, DocumentId, EditorHandle, EditorSelection, JsonValue, RecordedCommand, StatusItem, ViewNodeTarget, ViewTarget, WindowInfo, WindowTarget,
 } from "knot";
 import { commandLine } from "./command-line.js";
 import { Highlights } from "./highlight.js";
@@ -84,9 +84,10 @@ type Followed = State & {
   operatorShown: boolean;
 };
 
-/** The tab a window last activated, and the document and language it was
- * last checked against, so a language change rechecks it. */
-type Active = { target: ViewTarget; document: DocumentId | null; language: string | null };
+/** The editor view a window's status describes, with its tab, and the
+ * document and language it was last checked against, so a language change
+ * rechecks it. */
+type Active = { tab: ViewTarget; view: ViewNodeTarget; document: DocumentId | null; language: string | null };
 
 export async function start() {
   await settings.define({
@@ -184,8 +185,9 @@ export async function start() {
 
   const observation = await workbench.observe(async (event) => {
     switch (event.type) {
-      case "activeTargetChanged":
-        if (event.activeTarget !== null) await vim.activate(event.activeTarget);
+      case "windowOpened":
+      case "presentationsChanged":
+        await vim.focus(event.window);
         break;
       case "windowClosed":
         vim.closeWindow(event.window);
@@ -199,11 +201,11 @@ export async function start() {
     }
   });
   await settings.observe(ENABLED, () => vim.refresh());
-  if (observation.snapshot.activeTarget !== null) await vim.activate(observation.snapshot.activeTarget);
+  for (const window of observation.snapshot.windows) await vim.focus(window);
 }
 
 class Vim {
-  private readonly states = new Map<ViewTarget, Followed>();
+  private readonly states = new Map<ViewNodeTarget, Followed>();
   private readonly active = new Map<WindowTarget, Active>();
   /** The mode and keys texts each window shows, null when cleared, so an
    * unchanged status sends nothing. */
@@ -215,12 +217,17 @@ class Vim {
     private readonly keysItem: StatusItem,
   ) {}
 
-  /** Follows a newly active tab when Vim applies to it. */
-  async activate(target: ViewTarget) {
-    const active: Active = { target, document: null, language: null };
-    this.active.set(target.window, active);
-    await this.attach(active);
-    await this.showStatus(target.window);
+  /** Follows the editor view a window's status describes, when it has
+   * changed and Vim applies to it. */
+  async focus(info: WindowInfo) {
+    const view = info.statusView;
+
+    if (view === null || this.active.get(info.target)?.view === view) return;
+    const location = windows.findView(info, view);
+    if (location === null) return;
+    this.active.set(info.target, { tab: location.tab.target, view, document: null, language: null });
+    await this.attach(this.active.get(info.target)!);
+    await this.showStatus(info.target);
   }
 
   closeWindow(window: WindowTarget) {
@@ -258,34 +265,33 @@ class Vim {
     for (const active of this.active.values()) {
       if (active.document !== document || active.language === language) continue;
       await this.attach(active);
-      await this.showStatus(active.target.window);
+      await this.showStatus(active.tab.window);
     }
   }
 
   private async attach(active: Active): Promise<Followed | null> {
-    const { target } = active;
+    const { view: target } = active;
     const existing = this.states.get(target);
     if (existing !== undefined) return existing;
-    const tab = (await windows.get(target.window))?.panes
-      .flatMap((pane) => pane.tabs)
-      .find((candidate) => candidate.target === target);
-    if (tab?.document == null || tab.buffer === null || tab.root.kind !== "editor") return null;
-    const info = await documents.get(tab.document);
-    if (info == null) return null;
-    active.document = tab.document;
-    active.language = info.language;
-    if (!(await enabledFor(tab.document, info.language))) return null;
+    const info = await windows.get(active.tab.window);
+    const location = info === null ? null : windows.findView(info, target);
+    const node = location?.view;
+    if (node === undefined || node.kind !== "editor" || node.buffer === null) return null;
+    const language = node.language ?? "plaintext";
+    active.document = node.document;
+    active.language = language;
+    if (!(await enabledFor(node.document, language))) return null;
     let handle: EditorHandle;
     try {
-      handle = await workbench.editor(tab.root.target);
+      handle = await workbench.editor(target);
     } catch (error) {
-      // The tab may have closed meanwhile.
+      // The view may have closed meanwhile.
       if ((error as { code?: string }).code === "InvalidTarget") return null;
       throw error;
     }
     const state: Followed = {
-      target, handle, buffer: tab.buffer, document: tab.document, shared: this.shared,
-      language: info.language, mode: "normal", pending: EMPTY, operatorShown: false, message: null,
+      target: location!.tab.target, view: target, handle, buffer: node.buffer, document: node.document, shared: this.shared,
+      language, mode: "normal", pending: EMPTY, operatorShown: false, message: null,
       want: null, caret: null, replaced: null, group: null, recording: null, change: null, replaying: null,
       macro: null, player: null, failed: false,
       repeat: { count: 1, open: false }, opened: false, visual: null, selected: null, previous: null,
@@ -295,6 +301,7 @@ class Vim {
     await this.shared.highlights.follow(state);
     handle.onDidClose(() => {
       this.states.delete(target);
+      if (node.document === null) this.shared.marks.delete(target);
       this.shared.highlights.unfollow(state);
       disposeMarks(state);
     });
@@ -315,7 +322,7 @@ class Vim {
   }
 
   private async detach(state: Followed) {
-    this.states.delete(state.target);
+    this.states.delete(state.view);
     this.shared.highlights.unfollow(state);
     await this.shared.highlights.draw(state, null, null);
     await state.group?.[Symbol.asyncDispose]();
@@ -329,15 +336,17 @@ class Vim {
     await state.handle[Symbol.asyncDispose]();
   }
 
-  /** The followed editor a command was invoked in: the tab it was captured on. */
+  /** The followed editor a command was invoked in: the view focused when it
+   * was captured. */
   private async stateOf(context: CommandContext): Promise<Followed | null> {
     const window = context.target.windowTarget;
-    const current = context.target.viewTarget;
-    if (current === null) return null;
-    const known = this.states.get(current);
+    const tab = context.target.viewTarget;
+    const view = context.target.focusedView;
+    if (tab === null || view === null) return null;
+    const known = this.states.get(view);
     if (known !== undefined) return known;
-    // A key can arrive before its tab's activation is observed.
-    const active: Active = { target: current, document: null, language: null };
+    // A key can arrive before its view's focus is observed.
+    const active: Active = { tab, view, document: null, language: null };
     this.active.set(window, active);
     const attached = await this.attach(active);
     await this.showStatus(window);
@@ -348,7 +357,7 @@ class Vim {
    * document jumps, with the caret at `offset` or its line's first non-blank. */
   async jumpToDocument(document: DocumentId, offset: number, exact: boolean) {
     const { presentation } = await documents.present(document);
-    const active: Active = { target: presentation.target, document: null, language: null };
+    const active: Active = { tab: presentation.target, view: presentation.root.target, document: null, language: null };
     this.active.set(presentation.target.window, active);
     const state = await this.attach(active);
     if (state !== null) {
@@ -383,7 +392,7 @@ class Vim {
     // once the outermost keys are done.
     const missed = keyed.depth === 0 ? keyed.missed : null;
     if (
-      open && missed !== null && this.states.get(state.target) === state && !isTyping(state.mode) &&
+      open && missed !== null && this.states.get(state.view) === state && !isTyping(state.mode) &&
       (missed.anchor !== missed.caret || missed.caret !== state.caret)
     ) {
       await whileOpen(() => followSelection(state));
@@ -415,7 +424,7 @@ class Vim {
         if (command === null) continue;
         if (command.kind === "window") {
           await whileOpen(() => windowCommand(command.action, command.count));
-          if (this.states.get(state.target) !== state) return false;
+          if (this.states.get(state.view) !== state) return false;
           continue;
         }
         if (command.kind === "ex") {
@@ -425,7 +434,7 @@ class Vim {
             if (visual) await runVisual(state, { kind: "leave-visual" });
             state.message = await commandLine(state, visual ? "'<,'>" : "");
           });
-          if (this.states.get(state.target) !== state) return false;
+          if (this.states.get(state.view) !== state) return false;
           continue;
         }
         if (command.kind === "record") {
@@ -434,7 +443,7 @@ class Vim {
         }
         if (command.kind === "macro") {
           await this.play(state, command.register, command.count);
-          if (this.states.get(state.target) !== state) return false;
+          if (this.states.get(state.view) !== state) return false;
           continue;
         }
         if (visual || command.kind === "visual" || command.kind === "reselect") {
@@ -512,12 +521,12 @@ class Vim {
       if (code !== "InvalidTarget" && code !== "BufferClosed") throw error;
       return false;
     }
-    return this.states.get(state.target) === state;
+    return this.states.get(state.view) === state;
   }
 
   /** Whether the window still shows the editor a macro plays in. */
   private async stillShown(state: Followed): Promise<boolean> {
-    return (await windows.get(state.target.window))?.statusTarget === state.target;
+    return (await windows.get(state.target.window))?.statusView === state.view;
   }
 
   async leaveInsert(context: CommandContext) {
@@ -536,8 +545,8 @@ class Vim {
   /** Shows the mode and pending keys of the window's active editor, or
    * nothing when Vim does not follow it. */
   private async showStatus(window: WindowTarget) {
-    const target = this.active.get(window)?.target;
-    const state = target === undefined ? undefined : this.states.get(target);
+    const view = this.active.get(window)?.view;
+    const state = view === undefined ? undefined : this.states.get(view);
     const mode = state === undefined ? null : state.message ?? MODE_TEXT[state.mode] + recordingText(state);
     const keys = state === undefined ? null : pendingText(state.pending);
     const shown = this.shown.get(window);
@@ -634,8 +643,9 @@ async function whileOpen(body: () => Promise<void>) {
   }
 }
 
-async function enabledFor(document: DocumentId, language: string): Promise<boolean> {
-  return (await settings.get(ENABLED, { document, language, view: "editor" })) === true;
+async function enabledFor(document: DocumentId | null, language: string): Promise<boolean> {
+  const scope = { language, view: "editor" } as const;
+  return (await settings.get(ENABLED, document === null ? scope : { ...scope, document })) === true;
 }
 
 /** Draws the caret as an underline while an operator waits for its motion. */

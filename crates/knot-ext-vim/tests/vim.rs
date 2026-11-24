@@ -834,6 +834,105 @@ fn a_global_mark_jumps_to_another_open_document(cx: &mut TestAppContext) {
     assert_eq!(test_editor.marked(cx), "‸one\ntwo");
 }
 
+fn git(directory: &Path, args: &[&str]) {
+    let output = std::process::Command::new("git")
+        .args(["-c", "user.name=T", "-c", "user.email=t@example.com"])
+        .args(["-c", "commit.gpgsign=false"])
+        .args(args)
+        .current_dir(directory)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+/// A repository whose `a.txt` differs from its commit in line 1, shown as a
+/// diff in a window where Vim follows `post_init`'s settings.
+fn show_diff(
+    post_init: &str,
+    cx: &mut TestAppContext,
+) -> (
+    TestProduct,
+    knot::test_support::TestWindow,
+    tempfile::TempDir,
+) {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    git(root, &["init", "-q", "-b", "main"]);
+    std::fs::write(root.join("a.txt"), "one\ntwo\nthree\n").unwrap();
+    git(root, &["add", "."]);
+    git(root, &["commit", "-q", "-m", "base"]);
+    std::fs::write(root.join("a.txt"), "one\nTWO\nthree\n").unwrap();
+
+    let mut packages = vim_and_go_to_file();
+    packages.extend(knot_ext_vcs::PACKAGES);
+    let packages: &'static [knot_bundled::BundledSource] = Box::leak(packages.into_boxed_slice());
+    let product = TestProduct::launch_with_post_init(packages, post_init, cx);
+    product.watch_files(cx);
+    let window = product.active_window(cx);
+    window.set_roots(&[url::Url::from_file_path(root).unwrap().as_str()], cx);
+    window.open_path(&root.join("a.txt"), cx);
+    wait_until(cx, |cx| !window.gutter_bars(0, cx).is_empty());
+    window.focus_document(cx);
+    window.run_command("vcs.showChanges", cx);
+    wait_until(cx, |cx| !window.diff_texts(cx).is_empty());
+    (product, window, directory)
+}
+
+/// Press `keys` one at a time in a side of the diff, and wait for it to show
+/// `expected`, the text with the caret marked.
+fn diff_keys(
+    window: &knot::test_support::TestWindow,
+    modified: bool,
+    keys: &str,
+    expected: &str,
+    cx: &mut TestAppContext,
+) {
+    window.press_each(keys, cx);
+    let shown = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        wait_until(cx, |cx| window.diff_marked(modified, cx) == expected)
+    }));
+    assert!(
+        shown.is_ok(),
+        "after {keys}: expected {expected:?}, have {:?}",
+        window.diff_marked(modified, cx)
+    );
+}
+
+/// Vim follows each editor of a diff, a document or a snapshot, and keeps
+/// each one's marks while the other has focus.
+#[gpui::test]
+fn vim_follows_both_sides_of_a_diff_and_keeps_each_sides_marks(cx: &mut TestAppContext) {
+    let (_product, window, _directory) = show_diff(ENABLE, cx);
+
+    // The snapshot side has no document, and Vim follows it all the same.
+    window.focus_diff_side(false, cx);
+    diff_keys(&window, false, "j l m a", "one\nt‸wo\nthree\n", cx);
+    diff_keys(&window, false, "g g", "‸one\ntwo\nthree\n", cx);
+    // The modified side is a document, and takes the edit.
+    window.focus_diff_side(true, cx);
+    diff_keys(&window, true, "j x", "one\n‸WO\nthree\n", cx);
+    diff_keys(&window, true, "m a j", "one\nWO\n‸three\n", cx);
+    diff_keys(&window, true, "` a", "one\n‸WO\nthree\n", cx);
+
+    // Each side keeps its own mark and its own caret.
+    window.focus_diff_side(false, cx);
+    diff_keys(&window, false, "` a", "one\nt‸wo\nthree\n", cx);
+}
+
+/// The inline layout shows the modified editor alone, and Vim follows it.
+#[gpui::test]
+fn vim_follows_the_modified_editor_of_an_inline_diff(cx: &mut TestAppContext) {
+    let post_init = format!("{ENABLE}await settings.set(\"diff.layout\", \"inline\");\n");
+    let (_product, window, _directory) = show_diff(&post_init, cx);
+    window.focus_diff_side(true, cx);
+    diff_keys(&window, true, "j x", "one\n‸WO\nthree\n", cx);
+    diff_keys(&window, true, "u", "one\n‸TWO\nthree\n", cx);
+}
+
 /// A key costs a few draws and the host requests its behavior needs: the
 /// package's reads and writes, the selection notifications, and the status
 /// bar package's position. Unchanged status items send nothing.
