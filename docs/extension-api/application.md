@@ -13,6 +13,23 @@ reconstructing them. `windows.focus(target)` activates a window, and
 `windows.open({ roots })` opens a new one with those roots, closing it again if
 a root is rejected.
 
+A tab's `root` is its tree of views: each `ViewNodeInfo` has a `target`, a
+`kind`, its `children`, and for an editor its `document` (null for a buffer
+outside document identity), `buffer`, `language`, and `readOnly`. A diff lists
+its visible editors as children. `WindowInfo.focusedView` is the focused leaf of
+the focused tab and `statusView` the editor a status display describes, so
+follow `statusView` rather than `statusTarget` to see a diff side. Never search
+`pane.tabs` for a view: `windows.findView(info, target)` takes a `ViewNodeTarget`
+or a tab's `ViewTarget` and returns `{ view, parents, tab, pane }`, with
+`parents` nearest first and the tab's root last, or null when the window does
+not show it.
+
+```js
+const info = await windows.get(window);
+const place = info.statusView && windows.findView(info, info.statusView);
+const file = place?.view.document ?? null;
+```
+
 Use `documents.open` for files, `createUntitled` for new documents, and `present`
 for another presentation of a live document. These return committed document and
 presentation data. `documents.save(id, { uri? })` saves without a dialog, as Save

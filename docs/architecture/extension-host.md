@@ -357,12 +357,21 @@ with the workbench and exact presentation so replacement or transfer cannot
 retarget them. Queries require a live lifecycle, honor command cancellation, and
 work without command context; returned targets reserve no future validity.
 
-A window's `statusTarget` is the editor a status display describes, computed
-by the window, which already tracks focus: the focused document tab; else the
-last focused document tab while it is the selected tab of its pane; none while
-a terminal has focus. Tools and focus outside tabs keep the previous editor,
-as in VS Code, so a consumer follows one value and never reimplements the
-rule. A change publishes `presentationsChanged` like `currentTarget`.
+Each tab's `PresentationInfo.root` is its [view tree](workbench-and-lifecycle.md#view-tree)
+as `ViewNodeInfo`: kind, children, and for an editor its document (null for a
+snapshot), buffer, language, and read-only state. A window's `focusedView` is
+the focused leaf of the focused tab. Its `statusView` is the editor view a
+status display describes, at any depth, computed by the window, which already
+tracks focus: the focused editor; else the last focused editor while its tab is
+the selected tab of its pane; none while a terminal has focus. Tools and focus
+outside tabs keep the previous editor, as in VS Code, so a consumer follows one
+value and never reimplements the rule; `statusTarget` is the tab of that
+editor. A change publishes `presentationsChanged` like `currentTarget`.
+
+`windows.findView(window, target)` is the one lookup of a view in a
+`WindowInfo`, for a `ViewNodeTarget` or a tab's `ViewTarget`. It reads the
+information it is given, with no host call, and returns the view, its parents
+nearest first, and its tab and pane, so a package never searches `pane.tabs`.
 
 ## Application observation
 

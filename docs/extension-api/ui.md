@@ -354,7 +354,8 @@ config can replace a bundled item by registering the same ID in `post-init`.
 The `statusBar.visible` setting and the Toggle Status Bar command show or hide
 the bar, and `statusBar.hiddenItems` lists IDs the bar skips. A hidden item
 keeps its registration and its package keeps running. To follow the editor the
-bar describes, observe `statusTarget` on each window.
+bar describes, observe `statusView` on each window, and locate it with
+[`windows.findView`](application.md#inspect-and-change-application-state).
 
 ## Decorate resources
 

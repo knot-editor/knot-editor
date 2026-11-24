@@ -126,7 +126,7 @@ Bar command, and `statusBar.hiddenItems` are settings, and lifecycle teardown
 removes a package's items. An item's `placement` puts it in the status bar or
 in the toolbar row at the window's top, which renders the same items, per-window
 values, and click commands; hidden IDs skip both. The row shows on macOS
-always and elsewhere only with toolbar items. The editor a bar describes is `WindowInfo.statusTarget`
+always and elsewhere only with toolbar items. The editor a bar describes is `WindowInfo.statusView`
 ([extension host](extension-host.md#application-metadata-queries)).
 
 Right-clicking a tab header opens the tab context menu from the `tab` items of
@@ -137,7 +137,7 @@ and Paste for editors, and Copy and Paste for terminals.
 
 The same package registers the built-in status items on the right:
 the cursor position with the selection size, counted in characters up to
-1 MiB and in kilobytes beyond, the document's indentation, and its language. It follows each window's `statusTarget` with an editor handle and
+1 MiB and in kilobytes beyond, the document's indentation, and its language. It follows each window's `statusView` with an editor handle and
 sets the three items as that window's own values, so two windows show their own
 editors; a window with no target has no values, and the items' empty shared
 text hides them. Position updates from selection notifications, and indentation
@@ -346,6 +346,20 @@ Extension closure additionally revalidates caller lifecycle/cancellation before
 save and close admission. Completion follows the foreground transition without
 awaiting observation listeners.
 
+## View tree
+
+A tab presents one root view, and a view that contains others lists them
+through the `ViewTree` interface (`src/app/view_tree.rs`), so the snapshot,
+focus, handles, and command captures walk the tree without naming a container.
+A view emits `ViewTreeChanged` when its children change and `ViewFocusChanged`
+when focus moves between them; both publish `presentationsChanged`. A view's
+identity is its gpui entity, which extensions see as a `ViewNodeTarget`, while
+the tab keeps its `ViewTarget` for tab operations. Moving a tab keeps its views,
+and a view that leaves the tree invalidates its targets.
+`Workbench::focused_leaf` is the leaf view focused in a tab, and a window's
+`focusedView` and `statusView` are the leaves of the focused tab and of the
+[status editor](extension-host.md#application-metadata-queries).
+
 ## Diff view
 
 A `DiffView` (`src/app/diff_view.rs`) is a center-only tab of two ordinary
@@ -373,7 +387,7 @@ how a new tab opens and `diff.toggle-layout`, also a toolbar button, switches
 an open one.
 
 Commands on a diff tab act on the editor of the side that last had focus; inline
-that is the modified side. Both editors hold the `diff` key context, in which
+that is the modified side, and the status bar follows that side. Both editors hold the `diff` key context, in which
 Alt+F5 and Alt+Shift+F5 run `diff.next-hunk` and `diff.previous-hunk` ahead of
 the version control package's bindings; they move that caret to the first line
 of the next or previous hunk on that side, wrapping at the ends. A bar above the

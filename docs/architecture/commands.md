@@ -277,15 +277,19 @@ capture. The context carries the captured tab as `target.viewTarget`, so a
 command needs no `windows.get` to learn which tab it runs in. Activation and
 unrelated callbacks cannot borrow command focus. A valid
 nontext target has a null buffer; contributed-view selection support is
-limited to admitted contributed-view handlers. A document-editor target also
-receives an editor handle whose selection and view-state operations resolve the
-captured presentation on every call, so they reject once the tab closes, moves,
-or the invocation tree ends. `workbench.editor(target)` instead binds a
-long-lived handle to the exact document tab a `ViewTarget` names: the host
-keeps the tab's identity (window, pane, tab, surface, presentation) per
-lifecycle, and each call resolves it, rejecting `InvalidTarget` once the tab
-closes, moves to another pane or window, or is replaced, and never following a
-replacement. A handle is the same editor interface under another authority,
+limited to admitted contributed-view handlers. The capture also holds the
+[view](workbench-and-lifecycle.md#view-tree) focused in the tab at admission, as
+`target.focusedView`, and the views above it as `target.viewChain`. An editor
+target receives an editor handle on that exact editor, whose selection and
+view-state operations resolve the captured view on every call, so they reject
+once the view leaves its tab, the tab closes, or the invocation tree ends. A
+target captured without a focused view, such as a tab close, resolves the tab's
+live focused editor. `workbench.editor(target)` instead binds a long-lived
+handle to the exact editor view a `ViewNodeTarget` names, at any depth: the host
+keeps the view's identity per lifecycle, and each call resolves it, rejecting
+`InvalidTarget` once the view leaves its tab's tree or the tab closes, and never
+following focus or a replacement. A tab moving to another pane or window keeps
+its views, so the handle survives. A handle is the same editor interface under another authority,
 carried to the native operations as one integer that cannot collide with
 invocation IDs. After each committed application change the host drops the
 handles whose tab is gone and queues one `onDidClose` notification, as a
