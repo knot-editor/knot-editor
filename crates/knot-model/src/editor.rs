@@ -34,7 +34,9 @@ pub use paste::PasteRequest;
 pub use recording::RecordedCommand;
 pub use rows::{DecorationFill, Row, decoration_fills};
 pub use text::*;
-pub use wrap::{WrapWidth, cells_before, index_at_cells, index_at_or_before_cells};
+pub use wrap::{
+    Block, BlockLine, BlockRow, WrapWidth, cells_before, index_at_cells, index_at_or_before_cells,
+};
 
 use std::{
     cell::RefCell,
@@ -1037,6 +1039,17 @@ impl EditorState {
         let sub = sub.min(self.wrap.rows(line).len().saturating_sub(1));
         let start = self.wrap.row_range(line, sub, line_end(model, line)).start;
         to_flat_byte(model, line, start)
+    }
+
+    /// Show read-only `blocks` above their lines, keeping the top row's text
+    /// at the top. They follow their lines through edits.
+    pub fn set_blocks(&mut self, blocks: Vec<Block>, model: &BufferModel) {
+        self.sync_wrap(model);
+        let top = self.top_offset(model);
+        if self.wrap.set_blocks(blocks) {
+            let (line, col) = flat_byte_to_position(model, top);
+            self.scroll_top = self.wrap.row_of(line, col) as f32;
+        }
     }
 
     /// Bring the wrap map up to the model's revision, rewrapping the lines

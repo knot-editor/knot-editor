@@ -14,6 +14,7 @@ use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
 use crate::buffer::LineChange;
+use crate::theme::Highlight;
 
 /// What a view wraps lines to.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -137,9 +138,74 @@ pub fn wrap_line(text: &str, width: WrapWidth) -> LineWrap {
     }
 }
 
+/// One line of a read-only block.
+#[derive(Clone, Debug, PartialEq)]
+pub struct BlockLine {
+    pub text: String,
+    /// Sorted, non-overlapping syntax highlights, as byte ranges of `text`.
+    pub highlights: Vec<(Range<usize>, Highlight)>,
+    /// The decoration key whose background bands the line, if any.
+    pub key: Option<String>,
+}
+
+/// Read-only lines shown above buffer line `line`, in rows that belong to no
+/// buffer line.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Block {
+    pub line: usize,
+    pub lines: Vec<BlockLine>,
+}
+
+/// A block with the wrapping of each of its lines.
+struct BlockEntry {
+    block: Block,
+    wraps: Vec<LineWrap>,
+}
+
+impl BlockEntry {
+    fn new(block: Block, width: Option<WrapWidth>) -> Self {
+        let mut entry = Self {
+            block,
+            wraps: Vec::new(),
+        };
+        entry.rewrap(width);
+        entry
+    }
+
+    fn rewrap(&mut self, width: Option<WrapWidth>) {
+        self.wraps = self
+            .block
+            .lines
+            .iter()
+            .map(|line| width.map_or_else(LineWrap::default, |width| wrap_line(&line.text, width)))
+            .collect();
+    }
+
+    fn rows(&self) -> usize {
+        self.wraps.iter().map(|wrap| wrap.breaks.len() + 1).sum()
+    }
+}
+
+/// One row of a block, as [`WrapMap::block_row`] reports it.
+#[derive(Debug, PartialEq)]
+pub struct BlockRow<'a> {
+    /// The buffer line the block sits above.
+    pub line: usize,
+    pub block_line: &'a BlockLine,
+    /// The bytes of the block line's text that this row shows.
+    pub range: Range<usize>,
+    /// How many cells right of the text area's edge the row's text starts.
+    pub indent: usize,
+}
+
 /// The rows of every line of one view's buffer. Lines a fold hides have no
-/// rows. Without a width or hidden lines, each line is one row and nothing is
-/// stored per line.
+/// rows. Without a width, hidden lines, or blocks, each line is one row and
+/// nothing is stored per line.
+///
+/// A line's rows are its block's rows, if it has one, then the rows of its
+/// text. Block rows belong to no line: [`Self::position`] reports them as the
+/// first row of the line below, and [`Self::first_row`] and [`Self::rows`]
+/// cover only a line's text.
 pub struct WrapMap {
     width: Option<WrapWidth>,
     line_count: usize,
@@ -150,6 +216,8 @@ pub struct WrapMap {
     first_rows: Vec<usize>,
     /// The lines that have no rows, as ascending disjoint ranges.
     hidden: Vec<Range<usize>>,
+    /// The blocks above lines, ascending by line, at most one per line.
+    blocks: Vec<BlockEntry>,
 }
 
 impl WrapMap {
@@ -160,12 +228,97 @@ impl WrapMap {
             lines: Vec::new(),
             first_rows: Vec::new(),
             hidden: Vec::new(),
+            blocks: Vec::new(),
         }
     }
 
     /// Whether `first_rows` is stored, because rows are not the lines.
     fn mapped(&self) -> bool {
-        self.width.is_some() || !self.hidden.is_empty()
+        self.width.is_some() || !self.hidden.is_empty() || !self.blocks.is_empty()
+    }
+
+    fn entry(&self, line: usize) -> Option<&BlockEntry> {
+        let at = self.blocks.partition_point(|entry| entry.block.line < line);
+        self.blocks.get(at).filter(|entry| entry.block.line == line)
+    }
+
+    /// The rows of the block above `line`; none while `line` is hidden.
+    fn block_rows(&self, line: usize) -> usize {
+        if self.blocks.is_empty() || self.is_hidden(line) {
+            return 0;
+        }
+        self.entry(line).map_or(0, BlockEntry::rows)
+    }
+
+    /// The blocks, ascending by line.
+    pub fn blocks(&self) -> impl Iterator<Item = &Block> {
+        self.blocks.iter().map(|entry| &entry.block)
+    }
+
+    /// Show `blocks` above their lines: lines past the last clamp to it, and
+    /// blocks on one line join in the order given. Returns whether the blocks
+    /// changed.
+    pub fn set_blocks(&mut self, blocks: Vec<Block>) -> bool {
+        let entries = self.normalized(
+            blocks
+                .into_iter()
+                .map(|block| BlockEntry::new(block, self.width))
+                .collect(),
+        );
+        if entries.iter().map(|entry| &entry.block).eq(self.blocks()) {
+            return false;
+        }
+        self.blocks = entries;
+        self.rebuild_rows(0);
+        true
+    }
+
+    /// `entries` clamped to the lines, ascending, and one per line.
+    fn normalized(&self, mut entries: Vec<BlockEntry>) -> Vec<BlockEntry> {
+        let last = self.line_count.saturating_sub(1);
+        for entry in &mut entries {
+            entry.block.line = entry.block.line.min(last);
+        }
+        entries.retain(|entry| !entry.block.lines.is_empty());
+        entries.sort_by_key(|entry| entry.block.line);
+        let mut merged: Vec<BlockEntry> = Vec::new();
+        for entry in entries {
+            match merged.last_mut() {
+                Some(last) if last.block.line == entry.block.line => {
+                    last.block.lines.extend(entry.block.lines);
+                    last.wraps.extend(entry.wraps);
+                }
+                _ => merged.push(entry),
+            }
+        }
+        merged
+    }
+
+    /// Move the blocks with the lines they sit above when `change` took
+    /// `old_count` lines to `line_count`: a block above a replaced line stays
+    /// at the start of the replacement.
+    fn follow_blocks(&mut self, old_count: usize, change: Option<LineChange>) {
+        if self.blocks.is_empty() {
+            return;
+        }
+        let line_count = self.line_count;
+        let change = change.filter(|change| {
+            change.old_end <= old_count
+                && change.new_end <= line_count
+                && old_count - change.old_end == line_count - change.new_end
+        });
+        if let Some(change) = change {
+            for entry in &mut self.blocks {
+                let line = &mut entry.block.line;
+                if *line >= change.old_end {
+                    *line = *line + change.new_end - change.old_end;
+                } else if *line > change.first {
+                    *line = change.first;
+                }
+            }
+        }
+        let entries = std::mem::take(&mut self.blocks);
+        self.blocks = self.normalized(entries);
     }
 
     /// Whether `line` has no rows.
@@ -197,13 +350,18 @@ impl WrapMap {
             self.first_rows = Vec::new();
             return;
         }
-        let first = if self.hidden.is_empty() { first } else { 0 };
+        // Hidden lines and blocks are not tracked by the lines that changed.
+        let first = if self.hidden.is_empty() && self.blocks.is_empty() {
+            first
+        } else {
+            0
+        };
         self.first_rows.resize(self.line_count + 1, 0);
         for line in first..self.line_count {
             let rows = if self.is_hidden(line) {
                 0
             } else {
-                self.lines.get(line).map_or(0, |wrap| wrap.breaks.len()) + 1
+                self.block_rows(line) + self.lines.get(line).map_or(0, |wrap| wrap.breaks.len()) + 1
             };
             self.first_rows[line + 1] = self.first_rows[line] + rows;
         }
@@ -217,7 +375,18 @@ impl WrapMap {
         self.first_rows.last().copied().unwrap_or(self.line_count)
     }
 
+    /// The first row of `line`'s text, below its block.
     pub fn first_row(&self, line: usize) -> usize {
+        if self.mapped() {
+            let line = line.min(self.line_count);
+            self.first_rows[line] + self.block_rows(line)
+        } else {
+            line
+        }
+    }
+
+    /// Where `line`'s rows begin, its block's first.
+    fn group_start(&self, line: usize) -> usize {
         if self.mapped() {
             self.first_rows[line.min(self.line_count)]
         } else {
@@ -225,19 +394,69 @@ impl WrapMap {
         }
     }
 
-    /// The rows `line` occupies.
+    /// The rows of `line`'s text.
     pub fn rows(&self, line: usize) -> Range<usize> {
-        self.first_row(line)..self.first_row(line + 1)
+        self.first_row(line)..self.group_start(line + 1)
     }
 
-    /// The line `row` belongs to and its index among that line's rows.
+    /// The line `row` belongs to and its index among that line's text rows.
+    /// A block row reports the first row of the line below it.
     pub fn position(&self, row: usize) -> (usize, usize) {
         let row = row.min(self.row_count().saturating_sub(1));
         if !self.mapped() {
             return (row, 0);
         }
         let line = self.first_rows[..self.line_count].partition_point(|first| *first <= row) - 1;
-        (line, row - self.first_rows[line])
+        (line, row.saturating_sub(self.first_row(line)))
+    }
+
+    /// The part of a block that `row` shows, or `None` for a row of text.
+    pub fn block_row(&self, row: usize) -> Option<BlockRow<'_>> {
+        if self.blocks.is_empty() || row >= self.row_count() {
+            return None;
+        }
+        let (line, _) = self.position(row);
+        let mut index = row.checked_sub(self.group_start(line))?;
+        let entry = self.entry(line).filter(|_| index < self.block_rows(line))?;
+        for (block_line, wrap) in entry.block.lines.iter().zip(&entry.wraps) {
+            let rows = wrap.breaks.len() + 1;
+            if index < rows {
+                let start = if index == 0 {
+                    0
+                } else {
+                    wrap.breaks[index - 1]
+                };
+                return Some(BlockRow {
+                    line,
+                    block_line,
+                    range: start
+                        ..wrap
+                            .breaks
+                            .get(index)
+                            .copied()
+                            .unwrap_or(block_line.text.len()),
+                    indent: if index == 0 { 0 } else { wrap.indent },
+                });
+            }
+            index -= rows;
+        }
+        None
+    }
+
+    /// The row of text nearest `row`: `row` itself unless it shows a block,
+    /// then the first row of the line below it, or with `forward` false the
+    /// last row of the line above, falling back to the first when none.
+    pub fn text_row(&self, row: usize, forward: bool) -> usize {
+        let row = row.min(self.row_count().saturating_sub(1));
+        if self.block_row(row).is_none() {
+            return row;
+        }
+        let (line, _) = self.position(row);
+        match self.group_start(line) {
+            0 => self.first_row(line),
+            start if !forward => start - 1,
+            _ => self.first_row(line),
+        }
     }
 
     /// The row showing byte `col` of `line`. An offset where a row breaks
@@ -278,6 +497,9 @@ impl WrapMap {
             return false;
         }
         self.width = width;
+        for entry in &mut self.blocks {
+            entry.rewrap(width);
+        }
         self.edit(line_count, None, text);
         true
     }
@@ -292,6 +514,7 @@ impl WrapMap {
     ) {
         let old_count = self.line_count;
         self.line_count = line_count;
+        self.follow_blocks(old_count, change);
         let Some(width) = self.width else {
             self.lines = Vec::new();
             self.rebuild_rows(0);
@@ -480,6 +703,119 @@ mod tests {
         map.set_hidden(Vec::new());
         map.set_width(None, 4, |line| text[line].into());
         assert_eq!((map.row_count(), map.position(2)), (4, (2, 0)));
+    }
+
+    fn block(line: usize, texts: &[&str]) -> Block {
+        Block {
+            line,
+            lines: texts
+                .iter()
+                .map(|text| BlockLine {
+                    text: (*text).into(),
+                    highlights: Vec::new(),
+                    key: None,
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn block_rows_sit_above_their_line_and_belong_to_none() {
+        let mut map = WrapMap::new(4);
+        assert!(map.set_blocks(vec![block(2, &["x", "y"]), block(0, &["z"])]));
+        assert!(!map.set_blocks(vec![block(0, &["z"]), block(2, &["x", "y"])]));
+        // z, l0, l1, x, y, l2, l3
+        assert_eq!(map.row_count(), 7);
+        assert_eq!((map.first_row(0), map.rows(0)), (1, 1..2));
+        assert_eq!(map.rows(1), 2..3);
+        assert_eq!((map.first_row(2), map.rows(2)), (5, 5..6));
+        assert_eq!(map.rows(3), 6..7);
+        assert_eq!(map.row_of(2, 0), 5);
+        let positions: Vec<_> = (0..7).map(|row| map.position(row)).collect();
+        assert_eq!(
+            positions,
+            [(0, 0), (0, 0), (1, 0), (2, 0), (2, 0), (2, 0), (3, 0)]
+        );
+        let shown: Vec<_> = (0..7)
+            .map(|row| map.block_row(row).map(|row| row.block_line.text.as_str()))
+            .collect();
+        assert_eq!(
+            shown,
+            [Some("z"), None, None, Some("x"), Some("y"), None, None]
+        );
+        // A step onto a block row goes on in its direction.
+        assert_eq!(map.text_row(3, true), 5);
+        assert_eq!(map.text_row(4, false), 2);
+        assert_eq!(map.text_row(0, false), 1);
+        assert_eq!(map.text_row(2, false), 2);
+        // Blocks past the last line clamp to it, and ones on a line join.
+        map.set_blocks(vec![block(9, &["a"]), block(3, &["b"])]);
+        assert_eq!(map.blocks().map(|b| b.line).collect::<Vec<_>>(), [3]);
+        assert_eq!(map.blocks().next().unwrap().lines.len(), 2);
+        map.set_blocks(Vec::new());
+        assert_eq!((map.row_count(), map.rows(2)), (4, 2..3));
+    }
+
+    #[test]
+    #[allow(clippy::single_range_in_vec_init)]
+    fn block_rows_wrap_and_hide_with_their_line() {
+        let text = ["one", "two", "three", "four"];
+        let width = WrapWidth {
+            columns: 8,
+            tab_size: 4,
+        };
+        let mut map = WrapMap::new(4);
+        map.set_blocks(vec![block(1, &["aaa bbb ccc ddd", "e"]), block(3, &["f"])]);
+        map.set_width(Some(width), 4, |line| text[line].into());
+        // The first block line wraps into two rows.
+        assert_eq!(map.row_count(), 4 + 3 + 1);
+        let rows: Vec<_> = (1..4)
+            .map(|row| map.block_row(row).map(|row| row.range))
+            .collect();
+        assert_eq!(rows, [Some(0..8), Some(8..15), Some(0..1)]);
+        assert_eq!(map.rows(1), 4..5);
+        // A fold hides the blocks above its lines.
+        map.set_hidden([1..3].into());
+        assert_eq!(map.row_count(), 1 + 2);
+        assert_eq!((map.rows(1), map.rows(3)), (1..1, 2..3));
+        assert!(map.block_row(1).is_some());
+        assert_eq!(map.position(1), (3, 0));
+        map.set_hidden(Vec::new());
+        assert_eq!(map.row_count(), 8);
+        // Narrowing the width rewraps blocks.
+        map.set_width(None, 4, |line| text[line].into());
+        assert_eq!(map.row_count(), 4 + 2 + 1);
+    }
+
+    #[test]
+    fn blocks_follow_their_lines_through_edits() {
+        let text = ["a", "b", "c", "d", "e"];
+        let at = |map: &WrapMap| map.blocks().map(|block| block.line).collect::<Vec<_>>();
+        let change = |first, old_end, new_end| {
+            Some(LineChange {
+                first,
+                old_end,
+                new_end,
+            })
+        };
+        let mut map = WrapMap::new(5);
+        map.set_blocks(vec![block(1, &["x"]), block(3, &["y"])]);
+        // A line inserted above shifts both; one inserted in between, only
+        // the lower.
+        map.edit(6, change(0, 1, 2), |line| text[line.min(4)].into());
+        assert_eq!(at(&map), [2, 4]);
+        map.edit(7, change(3, 3, 4), |line| text[line.min(4)].into());
+        assert_eq!(at(&map), [2, 5]);
+        // Lines replaced under a block keep it at the replacement's start.
+        map.edit(5, change(1, 3, 1), |line| text[line.min(4)].into());
+        assert_eq!(at(&map), [1, 3]);
+        // Merging replaced lines joins their blocks.
+        map.edit(3, change(0, 4, 2), |line| text[line.min(4)].into());
+        assert_eq!(at(&map), [0]);
+        assert_eq!(map.blocks().next().unwrap().lines.len(), 2);
+        // An edit that is not described clamps them to the text.
+        map.edit(1, None, |line| text[line].into());
+        assert_eq!((at(&map), map.row_count()), (vec![0], 3));
     }
 
     #[test]

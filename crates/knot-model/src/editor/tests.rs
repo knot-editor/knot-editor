@@ -3,6 +3,7 @@ use std::sync::Arc;
 use super::*;
 use crate::syntax::{LanguageResolver, SyntaxLanguage, SyntaxState};
 
+mod blocks;
 mod brackets;
 mod comments;
 mod decorations;

@@ -285,7 +285,9 @@ impl EditorState {
                     let line = self.step_visible_line(self.cursor_line, line, forward);
                     self.wrap.first_row(line)
                 } else {
-                    step(row.index, self.wrap.row_count() - 1)
+                    // Block rows hold no caret, so a step onto one goes on.
+                    let target = step(row.index, self.wrap.row_count() - 1);
+                    self.wrap.text_row(target, forward)
                 };
                 let column = self
                     .preferred_column
