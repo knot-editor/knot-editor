@@ -13,7 +13,7 @@ Every item has the same shape:
 - **Description** says what is missing today and when it becomes worth doing,
   then what to build.
 
-The next unused ID is **D230**, and for bugs **B002**; take it for a new item and bump this line.
+The next unused ID is **D231**, and for bugs **B002**; take it for a new item and bump this line.
 
 Each section is ordered so that an item comes after the items it depends on,
 wherever the sections allow it. Items with no dependencies are ordered by
@@ -110,6 +110,18 @@ hold the analyses that support some items.
 ## Features
 
 ### Workspace, projects, and files
+
+- **D230 — Go to Line inside Search Everywhere**
+  - Depends on: none
+  - Description: Go to Line is its own `@knot/go-to-line` package with a live
+    preview input, apart from the Search Everywhere picker of `@knot/go-to-file`,
+    though both are "go to" navigation and the picker already parameterizes a
+    row with `:N`. Fold line navigation into the picker as a mode that moves
+    the caret in the current buffer with the same preview and restore on
+    dismiss, and remove the separate package. Decide how the mode is entered
+    without the prefix syntax the Search Everywhere decision rejected, and
+    whether Go to Line keeps its own command and binding that start the picker
+    in that mode.
 
 - **D222 — HTTP client for extensions**
   - Depends on: none
