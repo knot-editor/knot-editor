@@ -188,21 +188,15 @@ references and the [extension guide](../extension-api/application.md).
 
 ### Phase B — Vim
 
-#### 6. Vim follows editor views
+#### 6. Vim follows editor views ✅
 
-Deliverables: Vim attaches to the focused editor view at any depth, including
-one without a document (language-scoped `vim.enabled`, per-editor marks), and
-keeps per-editor state across side switches.
-
-Validation: Vim cases in a native diff, both sides and both layouts; the pinned
-request-count test.
-
-Review gate: Vim in a diff by hand.
-
-Implementation context: `Vim.attach`, `activate`, `enabledFor`, and `Followed`
-in `extensions/@knot/vim/src/extension.ts`; tests in
-`crates/knot-ext-vim/tests/vim.rs`, diffs opened as in
-`crates/knot-ext-vcs/tests/diff.rs`.
+Vim follows the window's `statusView` and a key's captured `focusedView`, so an
+editor at any depth is followed, including one without a document (a snapshot
+diff side). Each followed editor keeps its own state across side switches, and
+a document-less editor's marks are per view. Global marks and the Ex commands
+that need a file (`:w`, `:sav`, `:e`, `:set`, `:wq`) do nothing or answer
+`E32` there. Covered by Rust tests on a real diff in both layouts; the pinned
+request-count test is unchanged. Checked by hand in a diff.
 
 #### 7. Read-only editors
 
