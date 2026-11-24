@@ -141,6 +141,8 @@ function emptyState() {
     fileWatches: [] as { uri: string; recursive: boolean; listener: (uris: readonly string[]) => void | Promise<void> }[],
     /** The `documents.open` calls, oldest first. */
     opens: [] as { uri: string; options: Knot.OpenDocumentOptions }[],
+    /** The `workbench.openDiff` calls, oldest first. */
+    diffs: [] as FakeDiff[],
     selectedText: null as string | null,
     selectedTreeItem: null as string | null,
     failures: new Map<string, HostErrorCode[]>(),
@@ -259,6 +261,16 @@ export function bindContract(key: string, methods: string[]) {
 export function contractClient(key: string): Promise<any> {
   return bindContract(key, []).client();
 }
+
+/** A diff tab opened through `workbench.openDiff`; the fake keeps it outside the window's tabs. */
+export type FakeDiff = {
+  options: Knot.OpenDiffOptions;
+  /** The text of the original side now, after any `setText`. */
+  original: string;
+  /** The text of the modified side now when it is a snapshot, else null. */
+  modified: string | null;
+  closed: boolean;
+};
 
 type FakeMenuItem = { location: Knot.MenuLocation; item: Knot.MenuItemOptions };
 
@@ -1384,6 +1396,16 @@ export function clipboard() {
 }
 
 /** The `documents.open` calls so far. */
+/** The diffs opened through `workbench.openDiff`, oldest first, closed ones included. */
+export function diffs(): readonly FakeDiff[] {
+  return state.diffs;
+}
+
+/** Closes a diff tab as the user would; its handle then rejects `setText`. */
+export function closeDiff(diff: FakeDiff) {
+  diff.closed = true;
+}
+
 export function opens(): readonly { uri: string; options: Knot.OpenDocumentOptions }[] {
   return state.opens;
 }
@@ -2775,7 +2797,31 @@ export const api: KnotApi = {
       };
     },
     close: notFaked("workbench.close"),
-    openDiff: notFaked("workbench.openDiff"),
+    openDiff: async (options) => {
+      const window = destinationWindow(options.target);
+      const diff: FakeDiff = {
+        options,
+        original: options.original.text,
+        modified: "text" in options.modified ? options.modified.text : null,
+        closed: false,
+      };
+      state.diffs.push(diff);
+      const target = { window: window.target, pane: window.pane } as unknown as Knot.ViewTarget;
+      const close = async () => {
+        diff.closed = true;
+        return { kind: "closed" } as const;
+      };
+      return {
+        target,
+        setText: async (side, text) => {
+          if (diff.closed || (side === "modified" && diff.modified === null)) throw hostError("InvalidTarget");
+          if (side === "original") diff.original = text;
+          else diff.modified = text;
+        },
+        close,
+        [Symbol.asyncDispose]: async () => void (await close()),
+      };
+    },
     editor: async (target) => editorHandle(target),
     replaceWindows: async (options) => replaceWindows(options),
     captureLayout: async (target) => {

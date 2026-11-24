@@ -7,9 +7,9 @@
 // painted on resources (status.ts), and each window shows the current ref
 // (ref.ts).
 import { commands, diff, documents, keymaps, windows, workbench } from "knot";
-import type { Buffer, CommandContext, Disposable, DocumentId, EditorContribution } from "knot";
+import type { Buffer, CommandContext, DiffHandle, Disposable, DocumentId, EditorContribution } from "knot";
 import { backendContract, vcs } from "./contract.js";
-import { contributionsOf } from "./hunks.js";
+import { contributionsOf, SHOW_CHANGES } from "./hunks.js";
 import { targetLine, type Direction } from "./navigation.js";
 import { createDiscovery, isGone, type Repository } from "./repositories.js";
 import { createRefs } from "./ref.js";
@@ -24,7 +24,11 @@ const ATTEMPTS = 5;
 /** What the gutter knows about one open document. */
 type Follow = {
   readonly buffer: Buffer;
+  readonly id: DocumentId;
+  language: string;
   uri: string | null;
+  /** The open diff of the baseline against the document, if any. */
+  diff: DiffHandle | null;
   repository: Repository | null;
   /** The baseline text, null when the file has none. */
   baseline: string | null;
@@ -137,6 +141,7 @@ export async function start(): Promise<Disposable> {
         statuses.request();
       }
     }
+    let fetched = false;
     if (follow.fetch) {
       follow.fetch = false;
       follow.baseline = null;
@@ -147,6 +152,7 @@ export async function start(): Promise<Disposable> {
             repository: repository.root,
             file: uri,
           });
+          fetched = true;
         } catch (error) {
           // A backend that stopped is dropped, and the file looked up again.
           if (!isGone(error)) throw error;
@@ -157,7 +163,28 @@ export async function start(): Promise<Disposable> {
         }
       }
     }
+    if (fetched || (follow.repository === null && !follow.pending && follow.diff !== null)) await syncDiff(follow);
     await paint(follow);
+  }
+
+  /** Closes the follow's diff, if open. */
+  async function closeDiff(follow: Follow) {
+    const { diff: handle } = follow;
+    follow.diff = null;
+    await handle?.close().catch(() => {});
+  }
+
+  /** Brings an open diff up to the baseline just fetched, or closes it when the file has none. */
+  async function syncDiff(follow: Follow) {
+    const { diff: handle, baseline } = follow;
+    if (handle === null) return;
+    if (baseline === null) return closeDiff(follow);
+    try {
+      await handle.setText("original", baseline);
+    } catch {
+      // The tab was closed.
+      follow.diff = null;
+    }
   }
 
   async function run(follow: Follow) {
@@ -198,6 +225,7 @@ export async function start(): Promise<Disposable> {
 
   async function release(follow: Follow) {
     follow.closed = true;
+    await closeDiff(follow);
     if (follow.timer !== null) clearTimeout(follow.timer);
     follow.timer = null;
     for (const disposable of follow.disposables) await disposable[Symbol.asyncDispose]().catch(() => {});
@@ -253,6 +281,9 @@ export async function start(): Promise<Disposable> {
   const tracker = await documents.track(async (document, tracked) => {
     const follow: Follow = {
       buffer: document.buffer,
+      id: document.id,
+      language: document.language,
+      diff: null,
       uri: document.resourceUri,
       repository: null,
       baseline: null,
@@ -272,6 +303,7 @@ export async function start(): Promise<Disposable> {
       if (!isBufferGone(error)) throw error;
     }
     tracked.onDidChange((now, before) => {
+      follow.language = now.language;
       if (now.resourceUri !== before.resourceUri) {
         follow.uri = now.resourceUri;
         invalidate(follow, { resolve: true, fetch: true });
@@ -299,7 +331,41 @@ export async function start(): Promise<Disposable> {
     const { startByteOffset } = await buffer.lineRange(Math.min(line, (await buffer.lineCount()) - 1));
     await editor.setSelection({ anchor: startByteOffset, caret: startByteOffset }, { reveal: "center" });
   };
+
+  /** Opens the diff of the focused file's baseline against it, at the clicked mark or the caret. */
+  const showChanges = async ({ editor, buffer, arguments: given }: CommandContext) => {
+    if (editor === null || buffer === null) commands.unavailable();
+    const follow = [...follows.values()].find((candidate) => candidate.buffer === buffer);
+    if (follow === undefined || follow.baseline === null) commands.unavailable();
+    const range = (given as { range?: { startByteOffset?: number } } | null)?.range;
+    const offset = typeof range?.startByteOffset === "number" ? range.startByteOffset : (await editor.selection()).caret;
+    const line = await buffer.lineAt(offset);
+    await closeDiff(follow);
+    const label = await refLabel(follow);
+    follow.diff = await workbench.openDiff({
+      original: { label, text: follow.baseline, language: follow.language },
+      modified: { label: "Working Copy", document: follow.id },
+      line,
+    });
+  };
+
+  /** What the backend shows as the ref of the file's repository. */
+  async function refLabel({ repository }: Follow) {
+    if (repository === null) return "Baseline";
+    try {
+      return (await (await backendContract(repository.backend).client()).ref(repository.root))?.label ?? "Baseline";
+    } catch (error) {
+      if (!isGone(error)) throw error;
+      drop(repository.backend);
+      return "Baseline";
+    }
+  }
+
   const navigation = [
+    await commands.register(SHOW_CHANGES, showChanges, {
+      title: "Show Changes",
+      description: "Open the file's differences from the version control baseline.",
+    }),
     await commands.register(NEXT_CHANGE, go("next"), {
       title: "Go to Next Change",
       description: "Move the cursor to the next line changed from the version control baseline.",

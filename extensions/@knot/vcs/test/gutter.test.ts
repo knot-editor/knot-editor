@@ -35,6 +35,7 @@ type Answers = {
   /** The repository of a directory. */
   repositoryOf?: (directory: string) => string | null;
   baseline?: (repository: string, file: string) => string | null;
+  ref?: (repository: string) => { label: string } | null;
 };
 
 /** Serves a backend `id` and registers it; returns what stops it. */
@@ -45,7 +46,7 @@ async function backend(id: string, answers: Answers) {
     repositoryOf: (directory) => (answers.repositoryOf ?? (() => null))(directory),
     baseline: ({ repository, file }) => (answers.baseline ?? (() => null))(repository, file),
     status: () => [],
-    ref: () => null,
+    ref: (repository) => (answers.ref ?? (() => null))(repository),
   });
   await (await vcs.client()).register(id);
   return serving;
@@ -324,4 +325,65 @@ test("an untitled document shows nothing", async () => {
   await running();
   await settle();
   assert.deepEqual(marks(id), []);
+});
+
+test("Show Changes opens the baseline against the document at the caret line", async () => {
+  const id = open("a\nB\nc\n");
+  await backend("one", { repositories: () => [ROOT], baseline: () => "a\nb\nc\n", ref: () => ({ label: "main" }) });
+  await rest();
+  host.setEditorView({ anchor: 2, caret: 2, top: 0, scrollX: 0 });
+  assert.equal(await host.run("vcs.showChanges"), "completed");
+  const [diff] = host.diffs();
+  assert.deepEqual(diff!.options.original, { label: "main", text: "a\nb\nc\n", language: "plaintext" });
+  assert.deepEqual(diff!.options.modified, { label: "Working Copy", document: id });
+  assert.equal(diff!.options.line, 1);
+});
+
+test("Show Changes is unavailable for a file without a baseline", async () => {
+  open("a\n");
+  await backend("one", { repositories: () => [ROOT], baseline: () => null });
+  await rest();
+  assert.equal(await host.run("vcs.showChanges"), "unavailable");
+  assert.equal(host.diffs().length, 0);
+});
+
+test("clicking a change mark opens the diff at that hunk, replacing an open one", async () => {
+  const id = open("a\nb\nc\nD\n");
+  await backend("one", { repositories: () => [ROOT], baseline: () => "a\nb\nc\nd\n" });
+  await rest();
+  await host.clickContribution(id, 0);
+  await host.clickContribution(id, 0);
+  const [first, second] = host.diffs();
+  assert.equal(first!.closed, true);
+  assert.equal(second!.closed, false);
+  assert.equal(second!.options.line, 3);
+});
+
+test("an open diff follows the baseline and closes when the baseline is gone", async () => {
+  const id = open("a\nB\n");
+  let baseline: string | null = "a\nb\n";
+  await backend("one", { repositories: () => [ROOT], baseline: () => baseline });
+  await rest();
+  await host.run("vcs.showChanges");
+  const [diff] = host.diffs();
+  baseline = "a\nx\n";
+  await (await vcs.client()).changed({ backend: "one", repository: ROOT });
+  await rest();
+  assert.equal(diff!.original, "a\nx\n");
+  assert.equal(diff!.closed, false);
+  baseline = null;
+  await (await vcs.client()).changed({ backend: "one", repository: ROOT });
+  await rest();
+  assert.equal(diff!.closed, true);
+  void id;
+});
+
+test("an open diff closes with its document", async () => {
+  const id = open("a\nB\n");
+  await backend("one", { repositories: () => [ROOT], baseline: () => "a\nb\n" });
+  await rest();
+  await host.run("vcs.showChanges");
+  await host.emit({ type: "documentClosed", document: id } as never);
+  await settle();
+  assert.equal(host.diffs()[0]!.closed, true);
 });
