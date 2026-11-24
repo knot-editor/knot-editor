@@ -914,6 +914,13 @@ pub struct WindowInfo {
     /// last focused editor while its tab is shown, and none while a terminal
     /// has focus.
     pub status_target: Option<PresentationTarget>,
+    /// The focused leaf view of the focused tab: the editor on the side of a
+    /// diff that has focus. None for focus outside tabs.
+    pub focused_view: Option<ViewNodeTarget>,
+    /// The editor view a status display describes, at any depth: the focused
+    /// editor view, else the last focused one while its tab is shown, and
+    /// none while a terminal has focus.
+    pub status_view: Option<ViewNodeTarget>,
     /// The identity of the document whose tab most recently had focus.
     pub last_focused_document: Option<String>,
     pub workspace: WorkspaceInfo,

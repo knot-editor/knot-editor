@@ -746,8 +746,8 @@ fn hunk_commands_move_the_caret_between_hunks_and_wrap(cx: &mut TestAppContext) 
             .unwrap()
             .clone()
     });
-    view.update(cx, |view, _| {
-        view.set_focused_side(knot_model::diff::DiffSide::Original)
+    view.update(cx, |view, cx| {
+        view.set_focused_side(knot_model::diff::DiffSide::Original, cx)
     });
     let original_caret = |cx: &mut TestAppContext| {
         cx.read(|cx| {
@@ -870,8 +870,8 @@ fn the_version_control_keys_move_between_hunks_in_a_diff_and_keep_their_binding_
             .unwrap()
             .clone()
     });
-    view.update(cx, |view, _| {
-        view.set_focused_side(knot_model::diff::DiffSide::Original)
+    view.update(cx, |view, cx| {
+        view.set_focused_side(knot_model::diff::DiffSide::Original, cx)
     });
     press_keys(&window, "alt-f5", cx);
     let original_line = cx.read(|cx| {
@@ -883,8 +883,8 @@ fn the_version_control_keys_move_between_hunks_in_a_diff_and_keep_their_binding_
             .0
     });
     assert_eq!(original_line, 1);
-    view.update(cx, |view, _| {
-        view.set_focused_side(knot_model::diff::DiffSide::Modified)
+    view.update(cx, |view, cx| {
+        view.set_focused_side(knot_model::diff::DiffSide::Modified, cx)
     });
 
     // On the document's own tab the package's binding applies.
@@ -1052,8 +1052,8 @@ fn editing_and_hunk_navigation_work_in_the_inline_layout(cx: &mut TestAppContext
     let view = active_diff(&window, cx);
     // The original had focus; the layout change must leave commands on the
     // modified side.
-    view.update(cx, |view, _| {
-        view.set_focused_side(knot_model::diff::DiffSide::Original)
+    view.update(cx, |view, cx| {
+        view.set_focused_side(knot_model::diff::DiffSide::Original, cx)
     });
     run_command(&window, native_window, TOGGLE_LAYOUT_COMMAND, cx);
     settle(cx);
@@ -1240,4 +1240,68 @@ fn switching_the_layout_reports_the_changed_view_tree(cx: &mut TestAppContext) {
         })
         .expect("the layout change is reported");
     assert_eq!(tree, 1);
+}
+
+#[gpui::test]
+fn switching_diff_sides_moves_the_focused_view_and_reports_it(cx: &mut TestAppContext) {
+    use knot_model::diff::DiffSide;
+    use knot_protocol::{ApplicationChange, SurfaceKind};
+    let (window, _, _) = diff_window(cx);
+    let host = cx.update(crate::app::extensions::host::install);
+    cx.run_until_parked();
+    host.update(cx, |host, _| host.take_test_application_events());
+    let view = cx.read(|cx| {
+        let workbench = window.read(cx).workbench.read(cx);
+        workbench
+            .diff_view(workbench.focused_pane().unwrap().active_tab())
+            .unwrap()
+            .clone()
+    });
+    let info = |cx: &TestAppContext| {
+        cx.read(|cx| {
+            window.read(cx).application_window(
+                window.entity_id(),
+                &std::collections::HashMap::new(),
+                cx,
+            )
+        })
+    };
+    let sides = |info: &knot_protocol::WindowInfo| {
+        info.panes
+            .iter()
+            .flat_map(|pane| &pane.tabs)
+            .find(|tab| tab.kind == SurfaceKind::Diff)
+            .map(|tab| {
+                tab.root
+                    .children
+                    .iter()
+                    .map(|c| c.target.clone())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap()
+    };
+    let before = info(cx);
+    let sides_before = sides(&before);
+    assert_eq!(before.focused_view.as_ref(), Some(&sides_before[1]));
+    assert_eq!(before.status_view, before.focused_view);
+
+    view.update(cx, |view, cx| view.set_focused_side(DiffSide::Original, cx));
+    cx.run_until_parked();
+    let after = info(cx);
+    assert_eq!(after.focused_view.as_ref(), Some(&sides_before[0]));
+    assert_eq!(after.status_view, after.focused_view);
+    let events = host.update(cx, |host, _| host.take_test_application_events());
+    assert!(events.iter().any(|event| matches!(
+        &event.change,
+        ApplicationChange::PresentationsChanged { window }
+            if window.focused_view.as_ref() == Some(&sides_before[0])
+    )));
+
+    // Setting the side already focused reports nothing.
+    view.update(cx, |view, cx| view.set_focused_side(DiffSide::Original, cx));
+    cx.run_until_parked();
+    assert!(
+        host.update(cx, |host, _| host.take_test_application_events())
+            .is_empty()
+    );
 }

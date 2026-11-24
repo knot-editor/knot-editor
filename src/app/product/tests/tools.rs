@@ -366,6 +366,8 @@ fn status_target_follows_the_focused_or_last_visible_editor(cx: &mut TestAppCont
     focus_editor(cx);
     let editor = state(cx).current_target.expect("focused editor");
     assert_eq!(state(cx).status_target, Some(editor.clone()));
+    let editor_view = state(cx).focused_view.expect("focused leaf view");
+    assert_eq!(state(cx).status_view, Some(editor_view.clone()));
 
     // A tool keeps the editor it was focused from.
     cx.update_window(native_window, |_, native_window, cx| {
@@ -379,6 +381,8 @@ fn status_target_follows_the_focused_or_last_visible_editor(cx: &mut TestAppCont
     let with_tool = state(cx);
     assert_ne!(with_tool.current_target, Some(editor.clone()));
     assert_eq!(with_tool.status_target, Some(editor.clone()));
+    assert_ne!(with_tool.focused_view, Some(editor_view.clone()));
+    assert_eq!(with_tool.status_view, Some(editor_view.clone()));
 
     // A focused terminal clears the editor items, and its tab hides the
     // editor, so the editor does not return when focus moves to the tool.
@@ -393,6 +397,7 @@ fn status_target_follows_the_focused_or_last_visible_editor(cx: &mut TestAppCont
     .unwrap();
     assert!(state(cx).current_target.is_some());
     assert_eq!(state(cx).status_target, None);
+    assert_eq!(state(cx).status_view, None);
     cx.update_window(native_window, |_, native_window, cx| {
         focus_view(&tree.focus_handle(cx), native_window, cx);
     })
@@ -409,6 +414,7 @@ fn status_target_follows_the_focused_or_last_visible_editor(cx: &mut TestAppCont
         });
     });
     assert_eq!(state(cx).status_target, Some(editor));
+    assert_eq!(state(cx).status_view, Some(editor_view));
 }
 
 #[gpui::test]

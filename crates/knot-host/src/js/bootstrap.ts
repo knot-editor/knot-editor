@@ -2065,6 +2065,8 @@ function windowFromNative(value: Native) {
   return Object.freeze({ target: windowTarget(value.target),
     currentTarget: value.currentTarget === null ? null : presentationTarget(value.currentTarget),
     statusTarget: value.statusTarget === null ? null : presentationTarget(value.statusTarget),
+    focusedView: value.focusedView === null ? null : viewNodeTarget(value.focusedView),
+    statusView: value.statusView === null ? null : viewNodeTarget(value.statusView),
     workspace: workspaceFromNative(value.workspace),
     panes: Object.freeze(value.panes.map((pane: Native) => Object.freeze({
       target: paneTarget(pane.target), selected: presentationTarget(pane.selected),

@@ -172,6 +172,13 @@ declare module "knot" {
      * last focused editor while its tab is shown; null while a terminal has
      * focus or before any editor was. */
     readonly statusTarget: ViewTarget | null;
+    /** The focused leaf view of the focused tab, such as the editor on the
+     * side of a diff that has focus; null for focus outside tabs. */
+    readonly focusedView: ViewNodeTarget | null;
+    /** The editor view a status display describes, at any depth: the focused
+     * editor view, else the last focused one while its tab is shown; null
+     * while a terminal has focus or before any editor was. */
+    readonly statusView: ViewNodeTarget | null;
     readonly workspace: WorkspaceInfo;
   }
   /** Current metadata queries do not grant future target validity. Valid during

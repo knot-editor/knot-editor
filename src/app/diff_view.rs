@@ -26,7 +26,7 @@ use super::icons::AppIcon;
 use super::model::{Buffer, BufferModel};
 use super::settings::{self, DiffLayout};
 use super::theme::{color, theme};
-use super::view_tree::ViewTreeChanged;
+use super::view_tree::{ViewFocusChanged, ViewTreeChanged};
 use super::zoom;
 use knot_model::icons::IconDefinition;
 use knot_model::theme::color as key;
@@ -579,8 +579,10 @@ impl DiffView {
 
     /// Treat `side` as the one with focus, as its editor gaining focus does.
     #[cfg(test)]
-    pub(crate) fn set_focused_side(&mut self, side: DiffSide) {
-        self.focused.set(side);
+    pub(crate) fn set_focused_side(&mut self, side: DiffSide, cx: &mut Context<Self>) {
+        if self.focused.replace(side) != side {
+            cx.emit(ViewFocusChanged);
+        }
     }
 
     /// The editors on screen: both sides, or only the modified one inline.
@@ -598,6 +600,7 @@ impl DiffView {
 }
 
 impl EventEmitter<ViewTreeChanged> for DiffView {}
+impl EventEmitter<ViewFocusChanged> for DiffView {}
 
 impl Focusable for DiffView {
     fn focus_handle(&self, cx: &App) -> FocusHandle {
@@ -676,7 +679,11 @@ impl Render for DiffView {
                 self._focus_subscriptions.push(cx.on_focus_in(
                     &handle,
                     window,
-                    move |this, _, _| this.focused.set(kind),
+                    move |this, _, cx| {
+                        if this.focused.replace(kind) != kind {
+                            cx.emit(ViewFocusChanged);
+                        }
+                    },
                 ));
             }
         }

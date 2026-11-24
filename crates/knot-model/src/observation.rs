@@ -59,6 +59,8 @@ impl ApplicationObservation {
                     if old.panes != window.panes
                         || old.current_target != window.current_target
                         || old.status_target != window.status_target
+                        || old.focused_view != window.focused_view
+                        || old.status_view != window.status_view
                     {
                         changes.push(ApplicationChange::PresentationsChanged {
                             window: window.clone(),
@@ -258,6 +260,8 @@ mod tests {
             target: target.clone(),
             current_target: Some(view.clone()),
             status_target: None,
+            focused_view: None,
+            status_view: None,
             last_focused_document: None,
             panes: vec![PaneInfo {
                 target: pane,

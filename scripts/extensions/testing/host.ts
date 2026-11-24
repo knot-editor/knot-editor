@@ -1048,11 +1048,14 @@ function windowInfo(window: FakeWindow): Knot.WindowInfo {
     };
   });
   const selected = window.tabs[window.selected]?.target ?? null;
+  const root = tabs[window.selected]?.root.target ?? null;
   return {
     target: window.target,
     panes: [{ target: window.pane, tabs, selected: selected as Knot.ViewTarget }],
     currentTarget: selected,
     statusTarget: selected,
+    focusedView: root,
+    statusView: root,
     workspace: workspaceInfo(window),
   };
 }

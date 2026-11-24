@@ -26,7 +26,7 @@ use super::{
     terminal::view::TerminalView,
     text_view::TextView,
     tree_view::TreeView,
-    view_tree::{ViewNode, ViewTree, ViewTreeChanged},
+    view_tree::{ViewFocusChanged, ViewNode, ViewTree, ViewTreeChanged},
 };
 
 /// Native content owned by one contributed view instance.
@@ -134,11 +134,12 @@ enum PresentationView {
     Editor(Entity<EditorView>),
     Terminal(Entity<TerminalView>),
     /// A diff view and the editor commands act on.
-    /// Its subscription reports layout changes to the application observer.
+    /// Its subscriptions report layout and focus changes to the application
+    /// observer.
     Diff(
         Entity<DiffView>,
         super::diff_view::DiffCommandTarget,
-        #[allow(dead_code)] Subscription,
+        #[allow(dead_code)] (Subscription, Subscription),
     ),
     Tool(ToolContent),
 }
@@ -518,9 +519,14 @@ impl Workbench {
         cx: &mut Context<Self>,
     ) {
         let target = view.read(cx).command_target();
-        let subscription = cx.subscribe(&view, |_, _, _: &ViewTreeChanged, cx| {
-            super::extensions::host::application_changed(cx);
-        });
+        let subscription = (
+            cx.subscribe(&view, |_, _, _: &ViewTreeChanged, cx| {
+                super::extensions::host::application_changed(cx);
+            }),
+            cx.subscribe(&view, |_, _, _: &ViewFocusChanged, cx| {
+                super::extensions::host::application_changed(cx);
+            }),
+        );
         if let Some(document) = view.read(cx).document() {
             self.layout.set_diff_document(diff, document);
         }

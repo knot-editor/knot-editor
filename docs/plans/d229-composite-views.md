@@ -147,6 +147,14 @@ follow in checkpoint 5.
 
 #### 2. Focused view
 
+Implemented, awaiting the review gate: `WindowInfo.focusedView` is the focused leaf view of the focused tab
+and `statusView` the editor view a status display describes, at any depth and
+for any editor, not only document editors (a snapshot side counts). A diff
+emits `ViewFocusChanged` when its focused side changes, which publishes
+`presentationsChanged`; a view reports the child with focus through
+`ViewNode::focus`. `statusTarget` is unchanged until checkpoint 5.
+Reference docs follow in checkpoint 5.
+
 Deliverables: the snapshot and `activeTargetChanged` name the focused leaf
 view; switching diff sides commits an observed change; `statusTarget`'s
 counterpart covers a focused document editor at any depth.

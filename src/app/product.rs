@@ -1104,16 +1104,25 @@ impl KnotWindow {
     /// a click gives a view the same way.
     pub(crate) fn focus_view(&mut self, handle: &FocusHandle, cx: &mut Context<Self>) {
         let workbench = self.workbench.read(cx);
-        let Some((pane, tab, document)) = workbench.panes().iter().find_map(|pane| {
-            pane.tabs()
-                .iter()
-                .find(|tab| {
-                    workbench
-                        .command_view(tab)
-                        .is_some_and(|view| &view.focus_handle(cx) == handle)
-                })
-                .map(|tab| (pane.id(), tab.id(), tab.document_id()))
-        }) else {
+        let Some((pane, tab, document, leaf_is_editor)) =
+            workbench.panes().iter().find_map(|pane| {
+                pane.tabs()
+                    .iter()
+                    .find(|tab| {
+                        workbench
+                            .command_view(tab)
+                            .is_some_and(|view| &view.focus_handle(cx) == handle)
+                    })
+                    .map(|tab| {
+                        (
+                            pane.id(),
+                            tab.id(),
+                            tab.document_id(),
+                            self.leaf_is_editor(tab, cx),
+                        )
+                    })
+            })
+        else {
             return;
         };
         // A menu inside the view holds focus there, so the layer stays.
@@ -1125,6 +1134,8 @@ impl KnotWindow {
         });
         if document.is_some() {
             self.last_focused_document = document;
+        }
+        if leaf_is_editor {
             self.last_focused_editor_tab = Some(tab);
         }
         self.follow_focus(cx);
@@ -1218,6 +1229,9 @@ impl KnotWindow {
         let mut current_target = None;
         let mut current_kind = None;
         let mut last_editor_target = None;
+        let mut focused_view = None;
+        let mut last_editor_view = None;
+        let mut focused_leaf_is_editor = false;
         let panes = workbench
             .panes()
             .iter()
@@ -1237,20 +1251,30 @@ impl KnotWindow {
                             tab: tab.id().value().to_string(),
                             presentation,
                         };
-                        if focused == Some((pane.id(), tab.id())) {
-                            current_target = Some(view_target.clone());
-                            current_kind = Some(tab.surface_id());
-                        }
-                        if self.last_focused_editor_tab == Some(tab.id())
-                            && tab.document_id().is_some()
-                            && tab.id() == pane.active_tab_id()
-                        {
-                            last_editor_target = Some(view_target.clone());
-                        }
-                        let document = tab.document_id();
                         let root = workbench
                             .view_node(tab, cx)
                             .expect("every tab presents a view");
+                        let leaf = root.focused_leaf();
+                        let leaf_target = knot_protocol::ViewNodeTarget {
+                            window: target.clone(),
+                            view: leaf.id.as_u64().to_string(),
+                        };
+                        if focused == Some((pane.id(), tab.id())) {
+                            current_target = Some(view_target.clone());
+                            current_kind = Some(tab.surface_id());
+                            focused_view = Some(leaf_target.clone());
+                            focused_leaf_is_editor = leaf.editor.is_some();
+                        }
+                        if self.last_focused_editor_tab == Some(tab.id())
+                            && tab.id() == pane.active_tab_id()
+                            && leaf.editor.is_some()
+                        {
+                            last_editor_view = Some(leaf_target);
+                            if tab.document_id().is_some() {
+                                last_editor_target = Some(view_target.clone());
+                            }
+                        }
+                        let document = tab.document_id();
                         PresentationInfo {
                             root: Self::view_node_info(&root, &target, buffers, cx),
                             target: view_target,
@@ -1310,12 +1334,22 @@ impl KnotWindow {
             Some(TabSurfaceId::Terminal(_) | TabSurfaceId::Diff(_)) => None,
             _ => last_editor_target,
         };
+        // The same rule by view, which also covers editors inside a diff.
+        let status_view = match current_kind {
+            Some(TabSurfaceId::Terminal(_)) => None,
+            Some(TabSurfaceId::Document(_) | TabSurfaceId::Diff(_)) => {
+                focused_view.clone().filter(|_| focused_leaf_is_editor)
+            }
+            _ => last_editor_view,
+        };
         let workspace = self.workspace.snapshot();
         WindowInfo {
             target: target.clone(),
             panes,
             current_target,
             status_target,
+            focused_view,
+            status_view,
             last_focused_document: self
                 .last_focused_document
                 .and_then(|id| documents.get(id))
@@ -1607,6 +1641,14 @@ impl KnotWindow {
         });
     }
 
+    /// Whether the focused view inside `tab` is an editor.
+    fn leaf_is_editor(&self, tab: &super::workbench::WorkbenchTab, cx: &App) -> bool {
+        self.workbench
+            .read(cx)
+            .view_node(tab, cx)
+            .is_some_and(|root| root.focused_leaf().editor.is_some())
+    }
+
     /// Remember the focused editor tab, as a native window's focus event does.
     #[cfg(any(test, feature = "test-support"))]
     fn record_focused_tab(&mut self, cx: &App) {
@@ -1618,6 +1660,8 @@ impl KnotWindow {
         };
         if let Some(document) = pane.active_tab().document_id() {
             self.last_focused_document = Some(document);
+        }
+        if self.leaf_is_editor(pane.active_tab(), cx) {
             self.last_focused_editor_tab = Some(pane.active_tab_id());
         }
     }

@@ -17,6 +17,9 @@ use super::workbench::ExtensionView;
 /// Emitted by a view whose set of child views changed.
 pub(crate) struct ViewTreeChanged;
 
+/// Emitted by a view when focus moves between the views it contains.
+pub(crate) struct ViewFocusChanged;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ViewKind {
     Editor,
@@ -46,6 +49,8 @@ pub(crate) struct ViewNode {
     /// The editor, for an editor view.
     pub editor: Option<Entity<EditorView>>,
     pub children: Vec<ViewNode>,
+    /// The child that has focus, or had it last while focus is elsewhere.
+    pub focus: Option<usize>,
 }
 
 impl ViewNode {
@@ -55,6 +60,16 @@ impl ViewNode {
             kind,
             editor: None,
             children: Vec::new(),
+            focus: None,
+        }
+    }
+
+    /// The view that has focus within this one: the focused child's focused
+    /// leaf, or this view when it has none.
+    pub(crate) fn focused_leaf(&self) -> &ViewNode {
+        match self.focus.and_then(|index| self.children.get(index)) {
+            Some(child) => child.focused_leaf(),
+            None => self,
         }
     }
 
@@ -112,9 +127,16 @@ impl ViewTree for ExtensionView {
 impl ViewTree for Entity<DiffView> {
     fn view_node(&self, cx: &App) -> ViewNode {
         let diff = self.read(cx);
+        let editors = diff.visible_editors();
+        let focused = diff.command_editor();
         ViewNode {
-            children: diff
-                .visible_editors()
+            focus: Some(
+                editors
+                    .iter()
+                    .position(|editor| *editor == focused)
+                    .unwrap_or(0),
+            ),
+            children: editors
                 .into_iter()
                 .map(|editor| editor.view_node(cx))
                 .collect(),
