@@ -476,6 +476,16 @@ or incompatible databases. Public value, ordering, and error contracts live in
 [knot.d.ts](../../crates/knot-host/src/js/knot.d.ts); implementation and physical schema live in
 [extensions/storage.rs](../../src/app/extensions/storage.rs).
 
+### Extension buffers
+
+`buffers.create` makes a gpui `Buffer` outside document identity. The host
+keeps the strong reference in `extension_buffers` (`host/extension_buffers.rs`)
+beside the owning lifecycle, so teardown and disposal close it. A `persist` key
+stores the text as a record named `knot.buffer:<key>` in the package's database:
+a buffer's model observer schedules a debounced write, empty text deletes the
+record, and disposal, lifecycle teardown, and `quit_after_storage` write
+pending text before storage stops admitting work.
+
 Product and config-diagnostic quit stop storage admission synchronously, then
 await admitted work and connection release before gpui quit. Host release also
 detaches a drain. Task completion guards keep connections alive through admitted

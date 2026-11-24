@@ -115,6 +115,26 @@ does not wait for `launched`.
 The bundled [project registry](../../extensions/@knot/projects/src/) is a
 complete observer: it waits for `launched`, then tracks windows with `workbench.observe` and documents with `documents.track`.
 
+## Own a buffer
+
+`buffers.create({ text, language, readOnly, persist })` makes a buffer that
+belongs to the package rather than to a document: it is never dirty, has no
+closing prompt, and Save does not touch it. The usual `Buffer` operations work
+on it, and a read-only one rejects edits with `BufferReadOnly`. It ends when
+you dispose it (`await using` works) or when the package unloads.
+
+A `persist` key keeps the text in the package's storage under that key, so a
+buffer created with it after a restart starts from the stored text instead of
+`text`. Writes follow edits after a short delay and are forced at disposal,
+unload, and shutdown; disposal keeps the text and `clearPersisted()` removes
+it. An empty buffer stores nothing, and a key has one live buffer at a time.
+
+```js
+const draft = await buffers.create({ language: "markdown", persist: "commit-message" });
+// ... after the commit succeeds:
+await draft.clearPersisted();
+```
+
 ## Compare texts
 
 `diff(old, updated, options?)` returns the line hunks that turn one text into

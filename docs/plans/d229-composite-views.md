@@ -209,29 +209,15 @@ snapshot side.
 
 ### Phase C — Buffers
 
-#### 8. Extension buffers
+#### 8. Extension buffers ✅
 
-Deliverables: a package creates a buffer with text and a language, read-only
-or editable, outside document identity, released with its lifecycle or on
-disposal; the existing buffer API works on it. An extension buffer is never
-dirty: no closing prompt, no unsaved-changes marker, and Save does nothing.
-Creating one can take a `persist` key the package chooses (such as a commit
-message per repository): the text is kept in the package's durable storage,
-debounced and flushed at shutdown, and a buffer created with the same key
-starts from it; the package clears it through the buffer, and disposal keeps
-it. Phase C documentation.
-
-Validation: host tests for creation, edits and `BufferReadOnly`, language,
-disposal, teardown, Save, and persisted text across a restart, the shutdown
-flush, and clearing.
-
-Review gate: the API.
-
-Implementation context: snapshot buffers in `Side::snapshot`
-(`src/app/diff_view.rs`) and text frames' private buffers
-(`src/app/product/tests/text_frames.rs`); `BufferModel::from_read_only_text`
-in `crates/knot-model/src/buffer.rs`; buffer tracking in
-`src/app/extensions/buffers.rs`.
+`buffers.create` makes a lifecycle-owned buffer with text, a language, and a
+read-only flag, outside document identity; a `persist` key keeps its text in
+the package's storage, and `clearPersisted` removes it. Documented in the
+[extension guide](../extension-api/application.md#own-a-buffer) and the
+[extension host](../architecture/extension-host.md#extension-buffers)
+reference. Save needs no special case: no document owns the buffer. The test
+fake in `scripts/extensions/testing` implements it.
 
 ### Phase D — Composite views
 
