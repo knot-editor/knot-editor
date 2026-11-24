@@ -221,7 +221,17 @@ fake in `scripts/extensions/testing` implements it.
 
 ### Phase D — Composite views
 
-#### 9. Minimal composite
+#### 9. Minimal composite 🔍
+
+Implemented, awaiting the review gate. `workbench.registerComposite({ id })`
+reserves a kind, unique across packages, and its registration's `open` makes a
+center tab (`TabSurfaceId::Composite`) with one editor on a `buffers.create`
+buffer; the instance's `update` changes title, icon, and resource, and `close`
+or disposal closes the tab, as does disposing the registration or unloading.
+Scope decision: opening takes no `arguments`; they have no use before the
+toolbar's commands (14), which receive them. Vim attaches through `statusView`,
+which a product test checks; the Vim behavior in a composite remains to check
+by hand.
 
 Deliverables: a package registers a composite kind and opens instances as
 center tabs with arguments, each showing one editor on an extension buffer;
