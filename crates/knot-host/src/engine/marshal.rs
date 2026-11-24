@@ -1296,8 +1296,14 @@ pub(super) fn application_document_is_exact(info: &knot_protocol::DocumentInfo) 
 pub(super) fn application_window_is_exact(info: &knot_protocol::WindowInfo) -> bool {
     info.workspace.generation <= MAX_JS_INTEGER
         && info.panes.iter().flat_map(|pane| &pane.tabs).all(|tab| {
+            fn exact(node: &knot_protocol::ViewNodeInfo) -> bool {
+                node.buffer
+                    .is_none_or(|buffer| buffer.value() <= MAX_JS_INTEGER)
+                    && node.children.iter().all(exact)
+            }
             tab.buffer
                 .is_none_or(|buffer| buffer.value() <= MAX_JS_INTEGER)
+                && exact(&tab.root)
         })
 }
 pub(super) fn application_event_to_v8<'s>(

@@ -265,6 +265,18 @@ mod tests {
                 tabs: vec![PresentationInfo {
                     target: view.clone(),
                     kind: SurfaceKind::Document,
+                    root: knot_protocol::ViewNodeInfo {
+                        target: knot_protocol::ViewNodeTarget {
+                            window: target.clone(),
+                            view: "1".into(),
+                        },
+                        kind: "editor".into(),
+                        children: vec![],
+                        document: Some("document".into()),
+                        buffer: Some(BufferHandle::new(1)),
+                        language: Some("plaintext".into()),
+                        read_only: Some(false),
+                    },
                     document: Some("document".into()),
                     buffer: Some(BufferHandle::new(1)),
                     tool: None,

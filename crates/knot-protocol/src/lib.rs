@@ -769,6 +769,32 @@ pub struct PresentationTarget {
     pub presentation: String,
 }
 
+/// One view inside a tab: the tab's root view or any view nested in it.
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ViewNodeTarget {
+    pub window: WindowTarget,
+    pub view: String,
+}
+
+/// A view of a tab's view tree.
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ViewNodeInfo {
+    pub target: ViewNodeTarget,
+    /// `editor`, `terminal`, `diff`, or `tool`.
+    pub kind: String,
+    pub children: Vec<ViewNodeInfo>,
+    /// An editor's document, none for a buffer outside document identity.
+    pub document: Option<String>,
+    /// An editor's buffer.
+    pub buffer: Option<BufferHandle>,
+    /// An editor's language ID.
+    pub language: Option<String>,
+    /// Whether an editor refuses edits.
+    pub read_only: Option<bool>,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum DocumentKind {
@@ -845,6 +871,8 @@ pub enum SurfaceKind {
 pub struct PresentationInfo {
     pub target: PresentationTarget,
     pub kind: SurfaceKind,
+    /// The tab's root view and, beneath it, the views it contains.
+    pub root: ViewNodeInfo,
     pub document: Option<String>,
     pub buffer: Option<BufferHandle>,
     /// Stable contribution ID for a contributed tool surface.

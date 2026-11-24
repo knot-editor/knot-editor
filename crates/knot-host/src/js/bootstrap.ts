@@ -1,4 +1,4 @@
-import type { PaneTarget, ViewTarget, WindowTarget } from "knot";
+import type { PaneTarget, ViewNodeInfo, ViewNodeTarget, ViewTarget, WindowTarget } from "knot";
 import type * as DeclaredContract from "knot/contract";
 import { defineContract as defineSchemaContract, s } from "knot/contract";
 
@@ -1994,6 +1994,8 @@ const livePresentations = new WeakMap<object, Native>();
 const windowTargets = new Map<Native, WindowTarget>();
 const panesByKey = new Map<string, PaneTarget>();
 const presentationsByKey = new Map<string, ViewTarget>();
+const liveViewNodes = new WeakMap<object, Native>();
+const viewNodesByKey = new Map<string, ViewNodeTarget>();
 
 function windowTarget(value: Native): WindowTarget {
   let target = windowTargets.get(value.window);
@@ -2026,6 +2028,24 @@ function presentationTarget(value: Native): ViewTarget {
   }
   return target;
 }
+function viewNodeTarget(value: Native): ViewNodeTarget {
+  const key = `${value.window.window}/${value.view}`;
+  let target = viewNodesByKey.get(key);
+  if (!target) {
+    target = Object.freeze({ window: windowTarget(value.window) }) as ViewNodeTarget;
+    liveViewNodes.set(target, value);
+    viewNodesByKey.set(key, target);
+  }
+  return target;
+}
+function viewNodeFromNative(node: Native): ViewNodeInfo {
+  return Object.freeze({
+    target: viewNodeTarget(node.target), kind: node.kind,
+    children: Object.freeze(node.children.map(viewNodeFromNative)),
+    document: node.document, buffer: node.buffer === null ? null : bufferFor(node.buffer),
+    language: node.language, readOnly: node.readOnly,
+  });
+}
 function windowAuthority(target: unknown) {
   const value = isObject(target) ? liveWindows.get(target) : undefined;
   if (!value) hostError("InvalidTarget");
@@ -2054,7 +2074,8 @@ function windowFromNative(value: Native) {
 }
 function presentationFromNative(tab: Native) {
   return Object.freeze({
-    target: presentationTarget(tab.target), kind: tab.kind, document: tab.document,
+    target: presentationTarget(tab.target), kind: tab.kind, root: viewNodeFromNative(tab.root),
+    document: tab.document,
     buffer: tab.buffer === null ? null : bufferFor(tab.buffer), tool: tab.tool,
     directory: tab.directory,
   });
@@ -2077,6 +2098,7 @@ function documentPresentationFromNative(value: Native) {
   const presentation = value.presentation;
   return Object.freeze({ document: documentFromNative(value.document),
     presentation: Object.freeze({ target: presentationTarget(presentation.target), kind: presentation.kind, tool: null, directory: null,
+      root: viewNodeFromNative(presentation.root),
       document: presentation.document, buffer: bufferFor(presentation.buffer) }) });
 }
 export async function closePresentation(target: unknown, options?: Opts) {

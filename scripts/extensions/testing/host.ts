@@ -1019,12 +1019,28 @@ function workspaceInfo(window: FakeWindow): Knot.WorkspaceInfo {
   return { window: window.target, roots: [...window.roots], generation: window.generation };
 }
 
+const rootTargets = new WeakMap<FakeTab, Knot.ViewNodeTarget>();
+
 function windowInfo(window: FakeWindow): Knot.WindowInfo {
   const tabs = window.tabs.map((tab) => {
     const document = state.documents.get(tab.document);
+    let target = rootTargets.get(tab);
+    if (target === undefined) {
+      target = { window: window.target } as unknown as Knot.ViewNodeTarget;
+      rootTargets.set(tab, target);
+    }
     return {
       target: tab.target,
       kind: "document" as const,
+      root: {
+        target,
+        kind: "editor" as const,
+        children: [],
+        document: tab.document,
+        buffer: document === undefined ? null : buffer(document),
+        language: document?.language ?? "plaintext",
+        readOnly: false,
+      },
       document: tab.document,
       buffer: document === undefined ? null : buffer(document),
       tool: null,

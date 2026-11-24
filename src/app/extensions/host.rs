@@ -3134,6 +3134,56 @@ impl ProductExtensionHost {
         }
     }
 
+    /// Track the buffer of every document and of every editor a window shows,
+    /// including those outside document identity.
+    fn tracked_buffers(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> HashMap<gpui::EntityId, knot_protocol::BufferHandle> {
+        use crate::app::documents::ApplicationDocuments;
+        let mut models = cx
+            .try_global::<ApplicationDocuments>()
+            .map(|global| global.0.clone())
+            .map(|documents| {
+                documents
+                    .read(cx)
+                    .documents()
+                    .map(|document| document.model().clone())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        for window in crate::app::product::windows(cx) {
+            models.extend(window.read(cx).editor_models(cx));
+        }
+        let buffers = models
+            .iter()
+            .map(|model| (model.entity_id(), self.track_buffer(model, cx)))
+            .collect::<HashMap<_, _>>();
+        for model in &models {
+            self.route_model_changes(model, cx);
+        }
+        buffers
+    }
+
+    /// The presentation `target` names as the snapshot describes it.
+    pub(crate) fn presentation_info(
+        &mut self,
+        target: &knot_protocol::PresentationTarget,
+        cx: &mut Context<Self>,
+    ) -> Option<knot_protocol::PresentationInfo> {
+        let buffers = self.tracked_buffers(cx);
+        crate::app::product::windows(cx)
+            .into_iter()
+            .map(|window| {
+                window
+                    .read(cx)
+                    .application_window(window.entity_id(), &buffers, cx)
+            })
+            .flat_map(|window| window.panes)
+            .flat_map(|pane| pane.tabs)
+            .find(|tab| &tab.target == target)
+    }
+
     fn application_snapshot(
         &mut self,
         cx: &mut Context<Self>,
@@ -3146,22 +3196,13 @@ impl ProductExtensionHost {
         else {
             return ApplicationSnapshot::default();
         };
-        let models = documents
-            .read(cx)
-            .documents()
-            .map(|document| (document.id(), document.model().clone()))
-            .collect::<Vec<_>>();
-        let buffers = models
-            .iter()
-            .map(|(id, model)| (*id, self.track_buffer(model, cx)))
-            .collect::<HashMap<_, _>>();
-        for (_, model) in &models {
-            self.route_model_changes(model, cx);
-        }
+        let buffers = self.tracked_buffers(cx);
         let document_infos = documents
             .read(cx)
             .documents()
-            .map(|document| application_document_info(document, buffers[&document.id()], cx))
+            .map(|document| {
+                application_document_info(document, buffers[&document.model().entity_id()], cx)
+            })
             .collect();
         let active = crate::app::product::active_window(cx).map(|window| window.entity_id());
         let notifications = cx
@@ -3454,7 +3495,7 @@ impl ProductExtensionHost {
         cx: &mut Context<Self>,
     ) -> Result<knot_protocol::DocumentPresentation, handlers::OpenError> {
         use crate::app::documents::ApplicationDocuments;
-        use knot_protocol::{DocumentPresentation, PresentationInfo, SurfaceKind};
+        use knot_protocol::DocumentPresentation;
         let documents = cx.global::<ApplicationDocuments>().0.clone();
         let model = documents
             .read(cx)
@@ -3468,15 +3509,11 @@ impl ProductExtensionHost {
             .get(id)
             .ok_or(handlers::OpenError::BufferClosed)?;
         let info = application_document_info(document, buffer, cx);
+        let presentation = self
+            .presentation_info(&target, cx)
+            .ok_or(handlers::OpenError::BufferClosed)?;
         Ok(DocumentPresentation {
-            presentation: PresentationInfo {
-                target,
-                kind: SurfaceKind::Document,
-                document: Some(info.id.clone()),
-                buffer: Some(buffer),
-                tool: None,
-                directory: None,
-            },
+            presentation,
             document: info,
         })
     }

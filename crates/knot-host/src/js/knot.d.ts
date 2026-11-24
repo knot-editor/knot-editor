@@ -76,6 +76,7 @@ declare module "knot" {
   const liveWindowIdentity: unique symbol;
   const livePaneIdentity: unique symbol;
   const presentationIdentity: unique symbol;
+  const viewNodeIdentity: unique symbol;
   const rootIdentity: unique symbol;
   /** Application-allocated identity, preserved across Save As and presentations.
    * Reopening allocates a new identity. A document restored from automatic
@@ -98,6 +99,29 @@ declare module "knot" {
     readonly window: WindowTarget;
     readonly pane: PaneTarget;
   }
+  /** Exact view inside a tab: the tab's root view or any view nested in it.
+   * Closure of the view or its tab invalidates this target. */
+  export interface ViewNodeTarget {
+    readonly [viewNodeIdentity]: true;
+    readonly window: WindowTarget;
+  }
+  /** One view of a tab's view tree. */
+  export interface ViewNodeInfo {
+    readonly target: ViewNodeTarget;
+    /** `editor`, `terminal`, `tree`, `text`, or `diff`. */
+    readonly kind: "editor" | "terminal" | "tree" | "text" | "diff";
+    /** The views this one contains, in layout order; empty for a leaf. */
+    readonly children: readonly ViewNodeInfo[];
+    /** An editor's document; null for a buffer outside document identity and
+     * for other views. */
+    readonly document: DocumentId | null;
+    /** An editor's buffer, otherwise null. */
+    readonly buffer: Buffer | null;
+    /** An editor's language ID, otherwise null. */
+    readonly language: string | null;
+    /** Whether an editor refuses edits, otherwise null. */
+    readonly readOnly: boolean | null;
+  }
   export interface DocumentInfo {
     readonly id: DocumentId;
     readonly title: string;
@@ -118,6 +142,9 @@ declare module "knot" {
   export interface PresentationInfo {
     readonly target: ViewTarget;
     readonly kind: "document" | "terminal" | "diff" | "tool";
+    /** The tab's root view and, beneath it, the views it contains. A diff
+     * lists its visible editors: both sides, or only the modified one inline. */
+    readonly root: ViewNodeInfo;
     readonly document: DocumentId | null;
     readonly buffer: Buffer | null;
     /** Stable contribution ID for a tool presentation, otherwise null. */

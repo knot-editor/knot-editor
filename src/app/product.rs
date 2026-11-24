@@ -94,6 +94,7 @@ use super::{
         InputEvent, InputSpec, InputView, PromptText, TransientOutcome, TransientOwner,
         TransientSurface,
     },
+    view_tree::ViewNode,
     workbench::{
         Area, CloseRequestOutcome, DockLocation, DocumentCloseDisposition, PaneId, SplitDirection,
         SplitPlacement, TabId, TabSurfaceId, TerminalSessionId, ToolContent, ToolFrameId,
@@ -1198,7 +1199,7 @@ impl KnotWindow {
     pub(crate) fn application_window(
         &self,
         window: EntityId,
-        buffers: &std::collections::HashMap<DocumentId, knot_protocol::BufferHandle>,
+        buffers: &std::collections::HashMap<EntityId, knot_protocol::BufferHandle>,
         cx: &App,
     ) -> knot_protocol::WindowInfo {
         use knot_protocol::{
@@ -1247,7 +1248,11 @@ impl KnotWindow {
                             last_editor_target = Some(view_target.clone());
                         }
                         let document = tab.document_id();
+                        let root = workbench
+                            .view_node(tab, cx)
+                            .expect("every tab presents a view");
                         PresentationInfo {
+                            root: Self::view_node_info(&root, &target, buffers, cx),
                             target: view_target,
                             kind: match tab.surface_id() {
                                 TabSurfaceId::Document(_) => SurfaceKind::Document,
@@ -1258,7 +1263,10 @@ impl KnotWindow {
                             document: document
                                 .and_then(|id| documents.get(id))
                                 .map(|document| document.identity().to_string()),
-                            buffer: document.and_then(|id| buffers.get(&id).copied()),
+                            buffer: document
+                                .and_then(|id| documents.get(id))
+                                .and_then(|document| buffers.get(&document.model().entity_id()))
+                                .copied(),
                             tool: match tab.surface_id() {
                                 TabSurfaceId::Tool(id) => {
                                     workbench.tool(id).map(|tool| tool.stable_id.clone())
@@ -1313,6 +1321,67 @@ impl KnotWindow {
                 .and_then(|id| documents.get(id))
                 .map(|document| document.identity().to_string()),
             workspace: operations::workspace_info(target, &workspace),
+        }
+    }
+
+    /// The buffers of every editor the window shows, for the host to track.
+    pub(crate) fn editor_models(&self, cx: &App) -> Vec<Entity<Buffer>> {
+        let workbench = self.workbench.read(cx);
+        workbench
+            .panes()
+            .iter()
+            .flat_map(|pane| pane.tabs())
+            .filter_map(|tab| workbench.view_node(tab, cx))
+            .flat_map(|root| {
+                root.descendants()
+                    .into_iter()
+                    .filter_map(|node| node.editor.clone())
+                    .map(|editor| editor.read(cx).model().clone())
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    }
+
+    fn view_node_info(
+        node: &ViewNode,
+        window: &knot_protocol::WindowTarget,
+        buffers: &std::collections::HashMap<EntityId, knot_protocol::BufferHandle>,
+        cx: &App,
+    ) -> knot_protocol::ViewNodeInfo {
+        let editor = node.editor.as_ref().map(|editor| {
+            let editor = editor.read(cx);
+            (editor, editor.model().read(cx))
+        });
+        let documents = cx.global::<ApplicationDocuments>().0.read(cx);
+        knot_protocol::ViewNodeInfo {
+            target: knot_protocol::ViewNodeTarget {
+                window: window.clone(),
+                view: node.id.as_u64().to_string(),
+            },
+            kind: node.kind.name().to_owned(),
+            children: node
+                .children
+                .iter()
+                .map(|child| Self::view_node_info(child, window, buffers, cx))
+                .collect(),
+            document: node.editor.as_ref().and_then(|editor| {
+                let model = editor.read(cx).model();
+                documents
+                    .documents()
+                    .find(|document| document.model() == model)
+                    .map(|document| document.identity().to_string())
+            }),
+            buffer: node
+                .editor
+                .as_ref()
+                .and_then(|editor| buffers.get(&editor.read(cx).model().entity_id()))
+                .copied(),
+            language: editor
+                .as_ref()
+                .map(|(_, model)| super::languages::effective_language(model, cx)),
+            read_only: editor
+                .as_ref()
+                .map(|(view, model)| view.editor().read(cx).is_read_only() || !model.is_editable()),
         }
     }
 

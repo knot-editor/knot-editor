@@ -9,7 +9,7 @@
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 
-use gpui::{App, AppContext, Context, Entity, EntityId, FocusHandle, Focusable};
+use gpui::{App, AppContext, Context, Entity, EntityId, FocusHandle, Focusable, Subscription};
 use knot_model::workbench as layout;
 pub(crate) use knot_model::workbench::{
     Area, Arrangement, BottomDockLayout, CloseConfirmation, CloseRequestOutcome, DiffViewId,
@@ -26,6 +26,7 @@ use super::{
     terminal::view::TerminalView,
     text_view::TextView,
     tree_view::TreeView,
+    view_tree::{ViewNode, ViewTree, ViewTreeChanged},
 };
 
 /// Native content owned by one contributed view instance.
@@ -133,7 +134,12 @@ enum PresentationView {
     Editor(Entity<EditorView>),
     Terminal(Entity<TerminalView>),
     /// A diff view and the editor commands act on.
-    Diff(Entity<DiffView>, super::diff_view::DiffCommandTarget),
+    /// Its subscription reports layout changes to the application observer.
+    Diff(
+        Entity<DiffView>,
+        super::diff_view::DiffCommandTarget,
+        #[allow(dead_code)] Subscription,
+    ),
     Tool(ToolContent),
 }
 
@@ -249,6 +255,16 @@ impl Workbench {
         }
     }
 
+    /// The tree of views a tab presents.
+    pub(crate) fn view_node(&self, tab: &WorkbenchTab, cx: &App) -> Option<ViewNode> {
+        Some(match self.views.get(&tab.presentation())? {
+            PresentationView::Editor(editor) => editor.view_node(cx),
+            PresentationView::Terminal(view) => view.view_node(cx),
+            PresentationView::Diff(view, ..) => view.view_node(cx),
+            PresentationView::Tool(ToolContent::Extension(view)) => view.view_node(cx),
+        })
+    }
+
     /// The view attached to a terminal tab, if any.
     pub(crate) fn terminal_view(&self, tab: &WorkbenchTab) -> Option<&Entity<TerminalView>> {
         match self.views.get(&tab.presentation())? {
@@ -262,7 +278,7 @@ impl Workbench {
     /// The view a diff tab presents.
     pub(crate) fn diff_view(&self, tab: &WorkbenchTab) -> Option<&Entity<DiffView>> {
         match self.views.get(&tab.presentation())? {
-            PresentationView::Diff(view, _) => Some(view),
+            PresentationView::Diff(view, ..) => Some(view),
             PresentationView::Editor(_)
             | PresentationView::Terminal(_)
             | PresentationView::Tool(_) => None,
@@ -297,7 +313,7 @@ impl Workbench {
         Some(match self.views.get(&tab.presentation())? {
             PresentationView::Editor(editor) => CommandView::Editor(editor.clone()),
             PresentationView::Terminal(view) => CommandView::Terminal(view.clone()),
-            PresentationView::Diff(_, target) => CommandView::Editor(target.editor().clone()),
+            PresentationView::Diff(_, target, _) => CommandView::Editor(target.editor().clone()),
             PresentationView::Tool(content) => content.command_view(),
         })
     }
@@ -499,14 +515,19 @@ impl Workbench {
         diff: DiffViewId,
         presentation: PresentationId,
         view: Entity<DiffView>,
-        cx: &App,
+        cx: &mut Context<Self>,
     ) {
         let target = view.read(cx).command_target();
+        let subscription = cx.subscribe(&view, |_, _, _: &ViewTreeChanged, cx| {
+            super::extensions::host::application_changed(cx);
+        });
         if let Some(document) = view.read(cx).document() {
             self.layout.set_diff_document(diff, document);
         }
-        self.views
-            .insert(presentation, PresentationView::Diff(view, target));
+        self.views.insert(
+            presentation,
+            PresentationView::Diff(view, target, subscription),
+        );
     }
 
     /// Open a diff in the center and return its tab.

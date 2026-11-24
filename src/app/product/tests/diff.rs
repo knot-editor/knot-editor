@@ -453,7 +453,7 @@ async fn closing_the_final_dirty_view_of_a_document_through_its_diff_prompts(
 }
 
 const API_SOURCE: &str = r#"
-import { commands, documents, workbench } from "knot";
+import { commands, documents, windows, workbench } from "knot";
 const check = (condition, message) => { if (!condition) throw new Error(message); };
 const expectCode = async (operation, code) => {
   try { await operation(); } catch (error) { if (error.code === code) return; throw error; }
@@ -470,6 +470,13 @@ await commands.register("diff.open", async () => {
     modified: { label: "Working copy", text: "a\nc\n" },
   });
   check(handle.target !== undefined, "handle target");
+  const tab = (await windows.list()).flatMap((window) => window.panes.flatMap((pane) => pane.tabs))
+    .find((tab) => tab.kind === "diff");
+  check(tab.root.kind === "diff" && tab.root.children.length === 2, "diff tree");
+  const [original, modified] = tab.root.children;
+  check(original.kind === "editor" && original.document === null && original.readOnly === true, "original side");
+  check(original.language === "plaintext" && modified.target !== original.target, "sides are distinct");
+  check(original.target === tab.root.children[0].target && original.buffer !== null, "stable identity");
 });
 await commands.register("diff.openAtLine", async () => {
   handle = await workbench.openDiff({
@@ -1110,4 +1117,127 @@ fn the_layout_glyphs_exist() {
     for glyph in ["rows-2", "columns-2"] {
         assert!(crate::app::icons::glyph_exists(glyph), "{glyph}");
     }
+}
+
+fn tab_roots(
+    window: &Entity<KnotWindow>,
+    cx: &TestAppContext,
+) -> Vec<(knot_protocol::SurfaceKind, knot_protocol::ViewNodeInfo)> {
+    cx.read(|cx| {
+        window
+            .read(cx)
+            .application_window(window.entity_id(), &std::collections::HashMap::new(), cx)
+            .panes
+            .into_iter()
+            .flat_map(|pane| pane.tabs)
+            .map(|tab| (tab.kind, tab.root))
+            .collect()
+    })
+}
+
+#[gpui::test]
+fn a_tab_reports_its_view_tree_and_a_diff_lists_its_visible_editors(cx: &mut TestAppContext) {
+    use knot_protocol::SurfaceKind;
+    let (window, _, _) = diff_window(cx);
+    let roots = tab_roots(&window, cx);
+    let (_, document) = roots
+        .iter()
+        .find(|(kind, _)| *kind == SurfaceKind::Document)
+        .unwrap();
+    assert_eq!(document.kind, "editor");
+    assert!(document.children.is_empty());
+    assert!(document.document.is_some());
+    assert_eq!(document.read_only, Some(false));
+    let (_, diff) = roots
+        .iter()
+        .find(|(kind, _)| *kind == SurfaceKind::Diff)
+        .unwrap();
+    assert_eq!(diff.kind, "diff");
+    assert!(diff.document.is_none() && diff.read_only.is_none());
+    let sides = diff
+        .children
+        .iter()
+        .map(|side| {
+            (
+                side.kind.as_str(),
+                side.document.clone(),
+                side.language.clone(),
+                side.read_only,
+            )
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        sides,
+        vec![
+            ("editor", None, Some("plaintext".to_owned()), Some(true)),
+            ("editor", None, Some("plaintext".to_owned()), Some(true)),
+        ]
+    );
+    assert_ne!(diff.children[0].target, diff.children[1].target);
+    assert_ne!(diff.children[0].target, document.target);
+}
+
+#[gpui::test]
+fn a_document_side_of_a_diff_carries_its_document(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (window, _) = product_window(document, model.clone(), cx);
+    window.update(cx, |window, cx| {
+        window.workbench.update(cx, |workbench, cx| {
+            workbench.open_diff_in_center(
+                spec("HEAD", None, ""),
+                crate::app::diff_view::ModifiedSource::Document {
+                    id: document,
+                    label: "Working copy".to_owned(),
+                    model,
+                },
+                cx,
+            );
+        });
+    });
+    let roots = tab_roots(&window, cx);
+    let diff = roots
+        .iter()
+        .find(|(kind, _)| *kind == knot_protocol::SurfaceKind::Diff)
+        .map(|(_, root)| root)
+        .unwrap();
+    assert_eq!(diff.children[0].document, None);
+    assert!(diff.children[1].document.is_some());
+    assert_eq!(diff.children[1].read_only, Some(false));
+    assert_eq!(roots[0].1.document, diff.children[1].document);
+}
+
+#[gpui::test]
+fn switching_the_layout_reports_the_changed_view_tree(cx: &mut TestAppContext) {
+    use knot_protocol::{ApplicationChange, SurfaceKind};
+    let (window, _, _) = diff_window(cx);
+    let host = cx.update(crate::app::extensions::host::install);
+    cx.run_until_parked();
+    host.update(cx, |host, _| host.take_test_application_events());
+    let view = cx.read(|cx| {
+        let workbench = window.read(cx).workbench.read(cx);
+        workbench
+            .diff_view(workbench.focused_pane().unwrap().active_tab())
+            .unwrap()
+            .clone()
+    });
+    view.update(cx, |view, cx| {
+        view.set_layout(crate::app::settings::DiffLayout::Inline, cx)
+    });
+    cx.run_until_parked();
+    let events = host.update(cx, |host, _| host.take_test_application_events());
+    let tree = events
+        .iter()
+        .find_map(|event| match &event.change {
+            ApplicationChange::PresentationsChanged { window } => window
+                .panes
+                .iter()
+                .flat_map(|pane| &pane.tabs)
+                .find(|tab| tab.kind == SurfaceKind::Diff)
+                .map(|tab| tab.root.children.len()),
+            _ => None,
+        })
+        .expect("the layout change is reported");
+    assert_eq!(tree, 1);
 }

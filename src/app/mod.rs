@@ -54,6 +54,7 @@ pub(crate) mod tool_layout;
 mod transient;
 mod tree_view;
 mod typography;
+mod view_tree;
 mod window_layout;
 mod window_record;
 #[cfg(any(test, feature = "test-support"))]

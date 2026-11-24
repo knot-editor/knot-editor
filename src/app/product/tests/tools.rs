@@ -58,6 +58,8 @@ fn a_docked_tool_opens_resources_beside_it_and_has_a_nontext_snapshot(cx: &mut T
             .unwrap();
         assert!(tool.buffer.is_none());
         assert!(tool.document.is_none());
+        assert_eq!(tool.root.kind, "tree");
+        assert!(tool.root.children.is_empty());
         assert_eq!(state.current_target, Some(tool.target.clone()));
     })
     .unwrap();

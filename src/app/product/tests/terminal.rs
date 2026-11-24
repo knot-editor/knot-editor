@@ -2091,3 +2091,32 @@ fn a_terminal_notification_becomes_a_notice_that_shows_the_terminal(cx: &mut Tes
     assert_eq!(wait_for_command(show, cx), CommandOutcome::Completed);
     assert_eq!(active(cx), first_tab);
 }
+
+#[gpui::test]
+async fn a_terminal_tab_presents_one_terminal_view(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (window, native_window) = product_window(document, model, cx);
+    assert_eq!(
+        dispatch_product_command(&window, native_window, NEW_TERMINAL_COMMAND, cx)
+            .completion
+            .await
+            .unwrap(),
+        CommandOutcome::Completed
+    );
+    let root = cx.read(|cx| {
+        window
+            .read(cx)
+            .application_window(window.entity_id(), &std::collections::HashMap::new(), cx)
+            .panes
+            .into_iter()
+            .flat_map(|pane| pane.tabs)
+            .find(|tab| tab.kind == knot_protocol::SurfaceKind::Terminal)
+            .unwrap()
+            .root
+    });
+    assert_eq!(root.kind, "terminal");
+    assert!(root.children.is_empty());
+    assert!(root.document.is_none() && root.buffer.is_none());
+}

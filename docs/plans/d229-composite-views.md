@@ -136,7 +136,15 @@ guide, and decisions for that phase, so documentation never lags a phase.
 
 ### Phase A — The view tree
 
-#### 1. View identity
+#### 1. View identity 🔍 implemented, awaiting the review gate
+
+Built: `view_tree.rs` (`ViewTree` interface, `ViewTreeChanged` event); each
+tab's `PresentationInfo.root` is a `ViewNodeInfo` (`ViewNodeTarget` identity =
+the view's entity, `kind`, `children`, and for editors `document`, `buffer`,
+`language`, `readOnly`); the diff reports layout changes through its
+subscription. Names proposed for the gate: `ViewNodeTarget`, `ViewNodeInfo`,
+`PresentationInfo.root`; `ViewTarget` stays the tab's target and `ViewId` the
+contributed view instance.
 
 Deliverables: a native interface through which any view lists its child
 views, reports its focused child, and signals changes to its children; the

@@ -26,6 +26,7 @@ use super::icons::AppIcon;
 use super::model::{Buffer, BufferModel};
 use super::settings::{self, DiffLayout};
 use super::theme::{color, theme};
+use super::view_tree::ViewTreeChanged;
 use super::zoom;
 use knot_model::icons::IconDefinition;
 use knot_model::theme::color as key;
@@ -359,6 +360,7 @@ impl DiffView {
                 self.sync_scroll(cx);
             }
         }
+        cx.emit(ViewTreeChanged);
         cx.notify();
     }
 
@@ -581,11 +583,21 @@ impl DiffView {
         self.focused.set(side);
     }
 
+    /// The editors on screen: both sides, or only the modified one inline.
+    pub(crate) fn visible_editors(&self) -> Vec<&Entity<EditorView>> {
+        match self.layout {
+            DiffLayout::SideBySide => vec![&self.original.editor, &self.modified.editor],
+            DiffLayout::Inline => vec![&self.modified.editor],
+        }
+    }
+
     #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn editors(&self) -> [&Entity<EditorView>; 2] {
         [&self.original.editor, &self.modified.editor]
     }
 }
+
+impl EventEmitter<ViewTreeChanged> for DiffView {}
 
 impl Focusable for DiffView {
     fn focus_handle(&self, cx: &App) -> FocusHandle {

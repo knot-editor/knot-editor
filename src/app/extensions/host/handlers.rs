@@ -298,17 +298,11 @@ async fn open_terminal(
         None => None,
     };
     let location = arguments.location;
-    let target = context.foreground(move |_, cx| {
-        product::operations::open_terminal(destination, directory, &location, cx)
-    })??;
-    Ok(knot_protocol::PresentationInfo {
-        target,
-        kind: knot_protocol::SurfaceKind::Terminal,
-        document: None,
-        buffer: None,
-        tool: None,
-        directory: None,
-    })
+    context.foreground(move |host, cx| {
+        let target = product::operations::open_terminal(destination, directory, &location, cx)?;
+        host.presentation_info(&target, cx)
+            .ok_or(OpenError::from(AccessError::InvalidTarget))
+    })?
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -751,14 +745,8 @@ pub(crate) async fn open_diff(
             .entry(ExtensionKey::new(request.extension, request.lifecycle))
             .or_default()
             .push(target.clone());
-        Ok(knot_protocol::PresentationInfo {
-            target,
-            kind: knot_protocol::SurfaceKind::Diff,
-            document: None,
-            buffer: None,
-            tool: None,
-            directory: None,
-        })
+        host.presentation_info(&target, cx)
+            .ok_or(OpenError::from(AccessError::InvalidTarget))
     })?
 }
 
