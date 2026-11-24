@@ -198,19 +198,14 @@ that need a file (`:w`, `:sav`, `:e`, `:set`, `:wq`) do nothing or answer
 `E32` there. Covered by Rust tests on a real diff in both layouts; the pinned
 request-count test is unchanged. Checked by hand in a diff.
 
-#### 7. Read-only editors
+#### 7. Read-only editors ✅
 
-Deliverables: Vim refuses edits and insert mode on a read-only editor with the
-`'modifiable'` error, also on a `BufferReadOnly` rejection. Phase B
-documentation. Entering insert mode asks the host whether the editor is
-read-only, one more request pinned in the request-count test.
-
-Validation: Vim cases on a snapshot side.
-
-Review gate: behavior by hand; phase B docs.
-
-Implementation context: edit and insert-entry points in
-`extensions/@knot/vim/src/normal.ts`.
+Vim refuses edits and insert mode on a read-only editor, and on any
+`BufferReadOnly` rejection, with `E21` as for `'modifiable'`. Entering insert
+mode asks the host whether the editor is read-only, one more request than
+before in the pinned request-count test. Documented in the
+[extension guide](../extension-api/commands-and-keys.md). Checked by hand on a
+snapshot side.
 
 ### Phase C — Buffers
 
