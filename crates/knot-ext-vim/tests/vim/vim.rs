@@ -871,7 +871,6 @@ fn show_diff(
     packages.extend(knot_ext_vcs::PACKAGES);
     let packages: &'static [knot_bundled::BundledSource] = Box::leak(packages.into_boxed_slice());
     let product = TestProduct::launch_with_post_init(packages, post_init, cx);
-    product.watch_files(cx);
     let window = product.active_window(cx);
     window.set_roots(&[url::Url::from_file_path(root).unwrap().as_str()], cx);
     window.open_path(&root.join("a.txt"), cx);

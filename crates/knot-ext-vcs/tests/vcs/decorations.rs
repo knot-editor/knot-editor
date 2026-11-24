@@ -61,6 +61,21 @@ fn row(tree: &TestTree, label: &str, cx: &mut TestAppContext) -> Decoration {
 /// A repository with `a.txt` and `src/lib.txt`, where `a.txt` is edited and
 /// `src/new.txt` is untracked, shown in the explorer.
 fn show(cx: &mut TestAppContext) -> (TestProduct, TestWindow, TestTree, tempfile::TempDir) {
+    show_with(false, cx)
+}
+
+/// Like [`show`], for a test that changes the repository afterwards and needs
+/// the operating system's file events.
+fn show_watching(
+    cx: &mut TestAppContext,
+) -> (TestProduct, TestWindow, TestTree, tempfile::TempDir) {
+    show_with(true, cx)
+}
+
+fn show_with(
+    watch: bool,
+    cx: &mut TestAppContext,
+) -> (TestProduct, TestWindow, TestTree, tempfile::TempDir) {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
     std::fs::create_dir_all(root).unwrap();
@@ -74,8 +89,9 @@ fn show(cx: &mut TestAppContext) -> (TestProduct, TestWindow, TestTree, tempfile
     write(root, "src/new.txt", "new\n");
 
     let product = TestProduct::launch(packages(), cx);
-    // The commit test needs the operating system's file events.
-    product.watch_files(cx);
+    if watch {
+        product.watch_files(cx);
+    }
     let window = product.active_window(cx);
     window.set_roots(&[&uri(root)], cx);
     let tree = window.tree("builtin.explorer", cx);
@@ -118,7 +134,7 @@ fn a_document_tab_takes_the_color_of_its_file(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn a_commit_made_with_git_clears_the_decorations(cx: &mut TestAppContext) {
-    let (_product, window, tree, directory) = show(cx);
+    let (_product, window, tree, directory) = show_watching(cx);
     let root = directory.path();
     let file = root.join("a.txt");
     window.open_path(&file, cx);
@@ -136,7 +152,7 @@ fn a_commit_made_with_git_clears_the_decorations(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn an_edit_and_a_new_file_on_disk_update_the_explorer(cx: &mut TestAppContext) {
-    let (_product, _window, tree, directory) = show(cx);
+    let (_product, _window, tree, directory) = show_watching(cx);
     let root = directory.path();
     wait_until(cx, |cx| row(&tree, "new.txt", cx).is_some());
 
@@ -157,7 +173,7 @@ fn an_edit_and_a_new_file_on_disk_update_the_explorer(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn output_in_an_ignored_folder_shows_nothing(cx: &mut TestAppContext) {
-    let (_product, _window, tree, directory) = show(cx);
+    let (_product, _window, tree, directory) = show_watching(cx);
     let root = directory.path();
     write(root, "build/out.txt", "out\n");
     // A later change is seen, which means the ignored one was settled before it.

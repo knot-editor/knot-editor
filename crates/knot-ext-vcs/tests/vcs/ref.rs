@@ -55,8 +55,6 @@ fn launch(cx: &mut TestAppContext) -> (TestProduct, TestWindow) {
         sources: &[("dist/main.js", PROBE)],
     });
     let product = TestProduct::launch(Box::leak(packages.into_boxed_slice()), cx);
-    // The checkout test needs the operating system's file events.
-    product.watch_files(cx);
     let window = product.active_window(cx);
     (product, window)
 }
@@ -108,7 +106,9 @@ fn the_status_bar_follows_a_checkout_made_with_git(cx: &mut TestAppContext) {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
     repository(root);
-    let (_product, window) = launch(cx);
+    let (product, window) = launch(cx);
+    // The checkout needs the operating system's file events.
+    product.watch_files(cx);
     window.set_roots(&[&uri(root)], cx);
     let shows = |text: &str, cx: &mut TestAppContext| {
         let (left, right) = window.status_bar(cx);
