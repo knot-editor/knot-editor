@@ -134,37 +134,12 @@ focus ([workbench and lifecycle](../architecture/workbench-and-lifecycle.md)).
 
 ### 7. Version control entry points ✅
 
-Implemented; see [version control](../architecture/version-control.md#showing-changes).
-Diff tabs from these entry points are regular tabs, not previews, since they are
-opened on purpose. A second request closes the open tab and opens a new one,
-because the API cannot focus an open diff. Awaiting the review gate below.
-
-Deliverables:
-
-- A `vcs.showChanges` command that opens the focused file's diff, the
-  baseline as a snapshot labeled with the backend's ref against the document.
-  A file without a baseline shows nothing.
-- Change-gutter marks carry a command that opens the file's diff at that
-  hunk. D221 replaces this click with its popup.
-- Open diffs follow baseline refreshes through `setText`, and close when the
-  document closes or the baseline is gone.
-- The preview-tab decision.
-
-Validation: `extensions/@knot/vcs/test` cases for the command, the gutter
-command, and refresh; a `crates/knot-ext-vcs/tests` case over a temporary
-repository that opens a diff and commits.
-
-Review gate: the entry points in daily use, and whether a second request
-reuses the open diff tab for the same file.
-
-**Implementation context**
-
-- `extensions/@knot/vcs/src/hunks.ts` builds the gutter contributions; add the
-  contribution `command` there. `main.ts` and `navigation.ts` show how
-  commands find the focused editor's cached baseline, and `ref.ts` has the ref
-  label.
-- Document [version control](../architecture/version-control.md#gutter) and
-  [packages](../extension-api/packages.md) as the behavior lands.
+Done and approved. Compare with Last Commit (`vcs.showChanges`, Cmd+D) and the
+change gutter's marks open a file's diff, which follows baseline refreshes; see
+[version control](../architecture/version-control.md#showing-changes). The
+diff is a regular tab, not a preview, and a second request closes the open tab
+and opens a new one, since the API cannot focus an open diff. Ctrl+D on
+Windows and Linux was not tried on those platforms.
 
 ### 8. Diff toolbar
 
