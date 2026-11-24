@@ -166,7 +166,29 @@ reuses the open diff tab for the same file.
 - Document [version control](../architecture/version-control.md#gutter) and
   [packages](../extension-api/packages.md) as the behavior lands.
 
-### 8. Virtual block rows
+### 8. Diff toolbar
+
+Deliverables:
+
+- A minimal bar at the top of a diff tab with previous hunk, next hunk, and a
+  read-only toggle for the modified side, which is editable by default.
+- A per-editor read-only flag in `knot-model`'s `Editor`, checked beside
+  `BufferModel::is_editable` at each edit site, so locking the diff's side
+  leaves the document's other views editable. The toggle is also a command.
+
+Validation: model tests that a read-only editor refuses edits its buffer would
+accept; product tests that the buttons move between hunks and the toggle blocks
+and restores typing.
+
+Review gate: the toolbar's look and placement in the real app.
+
+**Implementation context**
+
+- `DiffView::render` in `src/app/diff_view.rs`; `go_to_hunk` already serves the
+  hunk buttons. Edit sites are the `is_editable` checks in
+  `crates/knot-model/src/editor.rs` and `editor/`.
+
+### 9. Virtual block rows
 
 Deliverables:
 
@@ -188,7 +210,7 @@ Review gate: whether block rows are general enough for later consumers.
   to mirror. Painting and hit-testing are in `src/app/editor/paint.rs` and
   `src/app/editor/layout.rs`.
 
-### 9. Inline layout
+### 10. Inline layout
 
 Deliverables:
 
@@ -204,12 +226,12 @@ Review gate: the inline view's look.
 
 **Implementation context**
 
-- The diff view from checkpoints 1–6 and the block rows of checkpoint 8. Add
+- The diff view from checkpoints 1–6 and the block rows of checkpoint 9. Add
   the setting to [settings](../settings.md).
 
 ### Completion
 
-When checkpoint 9 passes review: describe the diff view in a subsystem
+When checkpoint 10 passes review: describe the diff view in a subsystem
 reference (likely [editor and languages](../architecture/editor-and-languages.md)
 or a new one), record the native-tab, native-rediff, alignment, and block-row
 decisions in `docs/decisions/` with index lines, mark D197 ✅ in

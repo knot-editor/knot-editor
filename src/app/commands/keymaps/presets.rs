@@ -19,6 +19,7 @@ use knot_protocol::{ExtensionId, ExtensionLifecycleId};
 /// reports it unavailable while its package is not running.
 pub(crate) const GO_TO_LINE_COMMAND: &str = "editor.go-to-line";
 pub(crate) const GO_TO_FILE_COMMAND: &str = "workspace.go-to-file";
+pub(crate) const COMPARE_WITH_LAST_COMMIT_COMMAND: &str = "vcs.showChanges";
 pub(crate) const GO_TO_BUFFER_COMMAND: &str = "workspace.go-to-buffer";
 pub(crate) const OPEN_RECENT_COMMAND: &str = "workspace.open-recent";
 /// The generated Toggle <Tool> commands the Knot preset binds.
@@ -34,6 +35,7 @@ pub(crate) const BUNDLED_PACKAGE_COMMANDS: &[&str] = &[
     TOGGLE_NOTIFICATIONS_COMMAND,
     GO_TO_LINE_COMMAND,
     GO_TO_FILE_COMMAND,
+    COMPARE_WITH_LAST_COMMIT_COMMAND,
     GO_TO_BUFFER_COMMAND,
     OPEN_RECENT_COMMAND,
     FIND_COMMAND,
@@ -241,6 +243,7 @@ const SHARED_BINDINGS: &[PresetEntry] = &[
     ("secondary-o", OPEN_COMMAND, None),
     ("secondary-p", GO_TO_FILE_COMMAND, None),
     ("secondary-alt-p", GO_TO_BUFFER_COMMAND, None),
+    ("secondary-shift-d", COMPARE_WITH_LAST_COMMIT_COMMAND, Some("editor")),
     ("secondary-e", OPEN_RECENT_COMMAND, None),
     ("secondary-s", SAVE_COMMAND, None),
     ("secondary-shift-s", SAVE_AS_COMMAND, None),

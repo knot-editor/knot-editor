@@ -339,6 +339,15 @@ test("Show Changes opens the baseline against the document at the caret line", a
   assert.equal(diff!.options.line, 1);
 });
 
+test("Compare with Last Commit says so when nothing changed", async () => {
+  open("a\nb\n");
+  await backend("one", { repositories: () => [ROOT], baseline: () => "a\nb\n" });
+  await rest();
+  assert.equal(await host.run("vcs.showChanges"), "completed");
+  assert.equal(host.diffs().length, 0);
+  assert.equal(host.notices().length, 1);
+});
+
 test("Show Changes is unavailable for a file without a baseline", async () => {
   open("a\n");
   await backend("one", { repositories: () => [ROOT], baseline: () => null });

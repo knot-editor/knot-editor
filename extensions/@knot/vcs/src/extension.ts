@@ -340,6 +340,11 @@ export async function start(): Promise<Disposable> {
     const range = (given as { range?: { startByteOffset?: number } } | null)?.range;
     const offset = typeof range?.startByteOffset === "number" ? range.startByteOffset : (await editor.selection()).caret;
     const line = await buffer.lineAt(offset);
+    const { hunks } = await diff(follow.baseline, buffer);
+    if (hunks.length === 0) {
+      await workbench.showNotice({ title: "Version Control", message: "No changes from the last commit." });
+      return;
+    }
     await closeDiff(follow);
     const label = await refLabel(follow);
     follow.diff = await workbench.openDiff({
@@ -363,8 +368,8 @@ export async function start(): Promise<Disposable> {
 
   const navigation = [
     await commands.register(SHOW_CHANGES, showChanges, {
-      title: "Show Changes",
-      description: "Open the file's differences from the version control baseline.",
+      title: "Compare with Last Commit",
+      description: "Open the file's differences from its version control baseline.",
     }),
     await commands.register(NEXT_CHANGE, go("next"), {
       title: "Go to Next Change",
