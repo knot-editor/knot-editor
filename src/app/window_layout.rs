@@ -332,7 +332,9 @@ impl WindowLayout {
                     pinned: tab.is_pinned(),
                 }
             }
-            TabSurfaceId::Tool(_) | TabSurfaceId::Diff(_) => return None,
+            TabSurfaceId::Tool(_) | TabSurfaceId::Diff(_) | TabSurfaceId::Composite(_) => {
+                return None;
+            }
             TabSurfaceId::Terminal(id) => {
                 let facts = terminal_directory(id);
                 LayoutTab::Terminal {

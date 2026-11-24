@@ -2185,6 +2185,68 @@ export async function openDiff(options: unknown) {
     [Symbol.asyncDispose]: () => owned.dispose(),
   });
 }
+function compositeTab(given: Rec, titleRequired: boolean) {
+  const { title, icon, resource } = given;
+  if (title === undefined ? titleRequired : typeof title !== "string") {
+    throw new TypeError("composite title must be a string");
+  }
+  if (icon != null && typeof icon !== "string" && !isObject(icon)) {
+    throw new TypeError("composite icon must be an icon reference");
+  }
+  if (resource != null && typeof resource !== "string") throw new TypeError("composite resource must be a string");
+  return { title: title as string | undefined, icon: icon ?? null, resource: (resource ?? null) as string | null };
+}
+/** Register a composite view kind and return the registration that opens instances of it. */
+export async function registerComposite(contribution: unknown) {
+  const given = record(contribution, "composite contribution must be an object");
+  const id = string(given.id, "composite id must be a string");
+  await request("registerComposite", id);
+  const registration = ownership(() => {}, () => request("unregisterComposite", id));
+  return Object.freeze({
+    id,
+    async open(options: unknown) {
+      registration.assertActive();
+      const given = record(options, "composite options must be an object");
+      const tab = compositeTab(given, true);
+      const buffer = isObject(given.buffer) ? bufferHandles.get(given.buffer) : undefined;
+      if (buffer === undefined) throw new TypeError("composite buffer must be a buffer of buffers.create");
+      const value = await registration.track(request("openComposite", destinationAuthority(given), id,
+        tab.title, tab.icon === null ? null : JSON.stringify(tab.icon), tab.resource, buffer));
+      const target = presentationTarget(value.target);
+      let current = { title: tab.title as string, icon: tab.icon, resource: tab.resource };
+      const owned = ownership(() => {}, async () => {
+        try { await closePresentation(target); } catch (error) {
+          if ((error as { code?: unknown }).code !== "InvalidTarget") throw error;
+        }
+      });
+      return Object.freeze({
+        target,
+        async update(changes: unknown) {
+          const given = record(changes, "composite update must be an object");
+          const next = compositeTab(given, false);
+          owned.assertActive();
+          current = {
+            title: next.title ?? current.title,
+            icon: given.icon === undefined ? current.icon : next.icon,
+            resource: given.resource === undefined ? current.resource : next.resource,
+          };
+          await owned.track(request("updateComposite", destinationAuthority({ target }),
+            current.title, current.icon === null ? null : JSON.stringify(current.icon), current.resource));
+        },
+        async close(closeOptions?: Opts) {
+          try {
+            return await closePresentation(target, closeOptions);
+          } catch (error) {
+            if ((error as { code?: unknown }).code !== "InvalidTarget") throw error;
+            return Object.freeze({ kind: "closed" });
+          }
+        },
+        [Symbol.asyncDispose]: () => owned.dispose(),
+      });
+    },
+    [Symbol.asyncDispose]: () => registration.dispose(),
+  });
+}
 export async function createUntitled(options?: Opts) {
   return documentPresentationFromNative(await request("createUntitled", destinationAuthority(options)));
 }

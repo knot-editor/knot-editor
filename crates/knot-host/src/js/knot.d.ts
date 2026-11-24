@@ -108,8 +108,8 @@ declare module "knot" {
   /** One view of a tab's view tree. */
   export interface ViewNodeInfo {
     readonly target: ViewNodeTarget;
-    /** `editor`, `terminal`, `tree`, `text`, or `diff`. */
-    readonly kind: "editor" | "terminal" | "tree" | "text" | "diff";
+    /** `editor`, `terminal`, `tree`, `text`, `diff`, or `composite`. */
+    readonly kind: "editor" | "terminal" | "tree" | "text" | "diff" | "composite";
     /** The views this one contains, in layout order; empty for a leaf. */
     readonly children: readonly ViewNodeInfo[];
     /** An editor's document; null for a buffer outside document identity and
@@ -141,7 +141,7 @@ declare module "knot" {
   }
   export interface PresentationInfo {
     readonly target: ViewTarget;
-    readonly kind: "document" | "terminal" | "diff" | "tool";
+    readonly kind: "document" | "terminal" | "diff" | "composite" | "tool";
     /** The tab's root view and, beneath it, the views it contains. A diff
      * lists its visible editors: both sides, or only the modified one inline. */
     readonly root: ViewNodeInfo;
@@ -2977,6 +2977,55 @@ declare module "knot" {
      * as closed. */
     close(options?: CloseOptions): Promise<PresentationCloseOutcome>;
   }
+  /** A composite view kind, registered with `workbench.registerComposite`. */
+  export interface CompositeContribution {
+    /** Stable, unique, namespaced identity; `knot.` is reserved. */
+    readonly id: string;
+  }
+  /** What a composite view's tab shows. */
+  export interface CompositeTab {
+    /** The tab title; long titles truncate, with the full title in a tooltip. */
+    readonly title: string;
+    readonly icon?: IconRef;
+    /** A resource URI whose decorations, such as a Git status color, the tab
+     * shows as a document tab does. */
+    readonly resource?: string;
+  }
+  export interface OpenCompositeOptions extends DocumentDestinationOptions, CompositeTab {
+    /** The buffer the instance's one editor shows, from `buffers.create`. */
+    readonly buffer: ExtensionBuffer;
+  }
+  /** An open composite view. Disposing it closes the tab, as `close` does. */
+  export interface CompositeInstance extends AsyncDisposable {
+    readonly target: ViewTarget;
+    /**
+     * Change what the tab shows; a field left out keeps its value and a
+     * `null` icon or resource clears it.
+     * @throws HostError with InvalidTarget for a tab that was closed, InvalidUri,
+     * OwnershipDisposed after disposal, or Cancelled; TypeError for invalid fields.
+     */
+    update(changes: Partial<Omit<CompositeTab, "icon" | "resource">> & {
+      readonly icon?: IconRef | null;
+      readonly resource?: string | null;
+    }): Promise<void>;
+    /** Close the tab as `workbench.close` does; a tab already closed resolves
+     * as closed. */
+    close(options?: CloseOptions): Promise<PresentationCloseOutcome>;
+  }
+  /** Owns a composite view kind. Disposing it closes its instances. */
+  export interface CompositeRegistration extends AsyncDisposable {
+    readonly id: string;
+    /**
+     * Open an instance as a center tab of the destination's window and focus
+     * it. Instances are not restored with their window. The caller's
+     * lifecycle owns the tab: it closes when the extension unloads, the
+     * instance or this registration is disposed.
+     * @throws TypeError for invalid options or a buffer that is not this
+     * package's; HostError with BufferClosed, InvalidUri, InvalidTarget for a
+     * stale destination, OwnershipDisposed after disposal, or Cancelled.
+     */
+    open(options: OpenCompositeOptions): Promise<CompositeInstance>;
+  }
   export interface CloseOptions {
     /** Close a dirty final view without the Save prompt, discarding its
      * changes. Defaults to false. */
@@ -3189,6 +3238,14 @@ declare module "knot" {
      * Cancelled on teardown.
      */
     openDiff(options: OpenDiffOptions): Promise<DiffHandle>;
+    /**
+     * Register a composite view kind: a center tab whose views the package
+     * lays out and the user cannot rearrange. The ID is unique across
+     * packages.
+     * @throws HostError with ViewIdInUse, InvalidViewId or Cancelled; TypeError
+     * for an invalid contribution.
+     */
+    registerComposite(contribution: CompositeContribution): Promise<CompositeRegistration>;
     /** A long-lived editor for the editor view `target` names, at any depth of
      * a tab's view tree; targets come from observation. @throws HostError with
      * InvalidTarget for a target that is not a live editor view, a tab target

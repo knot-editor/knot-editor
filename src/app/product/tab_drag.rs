@@ -51,10 +51,15 @@ impl TabDragState {
             position,
             matches!(
                 surface,
-                TabSurfaceId::Document(_) | TabSurfaceId::Terminal(_) | TabSurfaceId::Diff(_)
+                TabSurfaceId::Document(_)
+                    | TabSurfaceId::Terminal(_)
+                    | TabSurfaceId::Diff(_)
+                    | TabSurfaceId::Composite(_)
             ),
             |pane| match surface {
-                TabSurfaceId::Document(_) | TabSurfaceId::Diff(_) => pane.area == Area::Center,
+                TabSurfaceId::Document(_) | TabSurfaceId::Diff(_) | TabSurfaceId::Composite(_) => {
+                    pane.area == Area::Center
+                }
                 TabSurfaceId::Terminal(_) => pane.terminals,
                 TabSurfaceId::Tool(tool) => pane.area == Area::Tool(tool),
             },

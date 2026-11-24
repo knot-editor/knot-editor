@@ -71,7 +71,9 @@ impl KnotWindow {
                         .tab(snapshot.pane_id, snapshot.tab_id)
                         .expect("snapshots name live tabs");
                     (
-                        workbench.editor(tab).is_some() || workbench.diff_view(tab).is_some(),
+                        workbench.editor(tab).is_some()
+                            || workbench.diff_view(tab).is_some()
+                            || workbench.composite_view(tab).is_some(),
                         tab.is_pinned(),
                         tab.presentation(),
                         workbench.shown_document(tab),
@@ -585,6 +587,7 @@ impl KnotWindow {
                             TabSurfaceId::Terminal(id) => Some(id),
                             TabSurfaceId::Document(_)
                             | TabSurfaceId::Diff(_)
+                            | TabSurfaceId::Composite(_)
                             | TabSurfaceId::Tool(_) => None,
                         }),
                         cx,
@@ -599,6 +602,7 @@ impl KnotWindow {
                         TabSurfaceId::Terminal(id) => Some(id),
                         TabSurfaceId::Document(_)
                         | TabSurfaceId::Diff(_)
+                        | TabSurfaceId::Composite(_)
                         | TabSurfaceId::Tool(_) => None,
                     }),
                     cx,
@@ -690,6 +694,17 @@ impl KnotWindow {
                 Self::documents(cx).update(cx, |documents, cx| {
                     documents.remove(document, cx);
                 });
+            }
+            self.focus_active_surface(cx);
+            cx.notify();
+            return Ok(());
+        }
+        if let TabSurfaceId::Composite(composite) = surface {
+            let outcome = self.workbench.update(cx, |workbench, _| {
+                workbench.request_close_composite_tab(pane, tab, composite)
+            });
+            if outcome.is_none() {
+                return Err(ProtectedCloseFailure::InvalidTarget);
             }
             self.focus_active_surface(cx);
             cx.notify();

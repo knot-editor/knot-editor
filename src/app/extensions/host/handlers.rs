@@ -751,6 +751,129 @@ pub(crate) async fn open_diff(
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub(crate) struct CompositeKindArguments {
+    kind: String,
+}
+
+impl HostArguments for CompositeKindArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self {
+            kind: reader.text(2, "composite kind must be text")?,
+        })
+    }
+}
+
+/// Reserve a composite view kind for the calling lifecycle.
+#[host_operation("registerComposite")]
+pub(crate) async fn register_composite(
+    context: HostContext,
+    arguments: CompositeKindArguments,
+) -> Result<(), SemanticError> {
+    let owner = ExtensionKey::new(context.request.extension, context.request.lifecycle);
+    context.foreground(|host, _| host.register_composite_kind(owner, arguments.kind))?
+}
+
+/// Release a kind and close the instances of it that are open.
+#[host_operation("unregisterComposite")]
+pub(crate) async fn unregister_composite(
+    context: HostContext,
+    arguments: CompositeKindArguments,
+) -> Result<(), AccessError> {
+    let owner = ExtensionKey::new(context.request.extension, context.request.lifecycle);
+    context.foreground(|host, cx| host.unregister_composite_kind(owner, &arguments.kind, cx))?;
+    Ok(())
+}
+
+/// The tab of a composite view: title, icon as JSON, and resource URI.
+fn decode_composite_tab(
+    reader: &mut dyn ArgumentReader,
+    first: usize,
+) -> Result<composites::CompositeTabSpec, DecodeError> {
+    let icon = reader
+        .optional_text(first + 1, "composite icon must be text or null")?
+        .map(|icon| {
+            serde_json::from_str(&icon).map_err(|_| DecodeError::Type("composite icon is invalid"))
+        })
+        .transpose()?;
+    Ok(super::composites::CompositeTabSpec {
+        title: reader.text(first, "composite title must be text")?,
+        icon,
+        resource: reader.optional_text(first + 2, "composite resource must be text or null")?,
+    })
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct OpenCompositeArguments {
+    target: Option<knot_protocol::DocumentDestination>,
+    kind: String,
+    tab: super::composites::CompositeTabSpec,
+    buffer: knot_protocol::BufferHandle,
+}
+
+impl HostArguments for OpenCompositeArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self {
+            target: reader.destination(2)?,
+            kind: reader.text(3, "composite kind must be text")?,
+            tab: decode_composite_tab(reader, 4)?,
+            buffer: knot_protocol::BufferHandle::new(reader.integer(7)?),
+        })
+    }
+}
+
+/// Open a composite view of a kind the caller registered in the center of the
+/// destination's window. The caller's lifecycle owns the tab.
+#[host_operation("openComposite")]
+pub(crate) async fn open_composite(
+    context: HostContext,
+    arguments: OpenCompositeArguments,
+) -> Result<knot_protocol::PresentationInfo, OpenError> {
+    let request = context.request;
+    context.foreground(|host, cx| {
+        let destination = host.document_destination(&request, arguments.target, cx)?;
+        let owner = ExtensionKey::new(request.extension, request.lifecycle);
+        let target = host.open_composite(
+            owner,
+            destination,
+            arguments.kind,
+            arguments.tab,
+            arguments.buffer,
+            cx,
+        )?;
+        host.presentation_info(&target, cx)
+            .ok_or(OpenError::from(AccessError::InvalidTarget))
+    })?
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct UpdateCompositeArguments {
+    target: knot_protocol::PresentationTarget,
+    tab: super::composites::CompositeTabSpec,
+}
+
+impl HostArguments for UpdateCompositeArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        let ViewTargetArguments { target } = ViewTargetArguments::decode(reader)?;
+        Ok(Self {
+            target,
+            tab: decode_composite_tab(reader, 3)?,
+        })
+    }
+}
+
+/// Replace the title, icon, and resource of a composite view the caller
+/// opened.
+#[host_operation("updateComposite")]
+pub(crate) async fn update_composite(
+    context: HostContext,
+    arguments: UpdateCompositeArguments,
+) -> Result<(), OpenError> {
+    let owner = ExtensionKey::new(context.request.extension, context.request.lifecycle);
+    context
+        .foreground(|host, cx| host.update_composite(owner, &arguments.target, arguments.tab, cx))?
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) struct SetDiffTextArguments {
     target: knot_protocol::PresentationTarget,
     side: knot_model::diff::DiffSide,

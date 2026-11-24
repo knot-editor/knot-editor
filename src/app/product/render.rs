@@ -340,6 +340,12 @@ impl KnotWindow {
                     .diff_view(pane.active_tab())
                     .cloned()
                     .map(|view| view.into_any_element())
+            })
+            .or_else(|| {
+                workbench
+                    .composite_view(pane.active_tab())
+                    .cloned()
+                    .map(|view| view.into_any_element())
             });
         let active_view = active_view.or_else(|| {
             let TabSurfaceId::Tool(tool) = pane.active_tab().surface_id() else {
@@ -417,6 +423,10 @@ impl KnotWindow {
                         .diff_view(tab)
                         .map(|view| view.read(cx).title())
                         .unwrap_or_else(|| "Diff".to_owned()),
+                    TabSurfaceId::Composite(_) => workbench
+                        .composite_view(tab)
+                        .map(|view| view.read(cx).tab().title.clone())
+                        .unwrap_or_default(),
                     TabSurfaceId::Tool(id) => workbench.tool(id).unwrap().title.to_owned(),
                 };
                 let decoration = match tab.surface_id() {
@@ -424,6 +434,10 @@ impl KnotWindow {
                         .get(document_id)
                         .unwrap()
                         .resource_uri()
+                        .and_then(|uri| crate::app::resource_decorations::decoration_of(uri, cx)),
+                    TabSurfaceId::Composite(_) => workbench
+                        .composite_view(tab)
+                        .and_then(|view| view.read(cx).tab().resource.as_ref())
                         .and_then(|uri| crate::app::resource_decorations::decoration_of(uri, cx)),
                     _ => None,
                 };
@@ -453,6 +467,10 @@ impl KnotWindow {
                             cx,
                         ))
                     }
+                    TabSurfaceId::Composite(_) => workbench
+                        .composite_view(tab)
+                        .and_then(|view| view.read(cx).tab().icon.as_ref())
+                        .map(|icon| crate::app::icons::ref_definition(icon, false, cx)),
                     _ => None,
                 };
                 let drag_label = self.tab_drag_label(title.clone().into(), icon.clone(), cx);
@@ -521,7 +539,9 @@ impl KnotWindow {
                     .map(|element| {
                         if matches!(
                             tab.surface_id(),
-                            TabSurfaceId::Terminal(_) | TabSurfaceId::Diff(_)
+                            TabSurfaceId::Terminal(_)
+                                | TabSurfaceId::Diff(_)
+                                | TabSurfaceId::Composite(_)
                         ) {
                             // A program's title can be arbitrarily long.
                             let full = SharedString::from(title.clone());

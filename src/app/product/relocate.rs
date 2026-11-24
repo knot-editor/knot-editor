@@ -44,6 +44,12 @@ impl KnotWindow {
                     .tab(source.tab.tab.pane_id, source.tab.tab.tab_id)
                     .is_some_and(|tab| workbench.diff_view(tab).is_some())
             }
+            TabSurfaceId::Composite(_) => {
+                let workbench = self.workbench.read(cx);
+                workbench
+                    .tab(source.tab.tab.pane_id, source.tab.tab.tab_id)
+                    .is_some_and(|tab| workbench.composite_view(tab).is_some())
+            }
             TabSurfaceId::Document(document) => {
                 Self::documents(cx).read(cx).get(document).is_some()
             }
@@ -136,9 +142,10 @@ impl KnotWindow {
                         .sessions
                         .get(&id)
                         .cloned(),
-                    TabSurfaceId::Document(_) | TabSurfaceId::Diff(_) | TabSurfaceId::Tool(_) => {
-                        None
-                    }
+                    TabSurfaceId::Document(_)
+                    | TabSurfaceId::Diff(_)
+                    | TabSurfaceId::Composite(_)
+                    | TabSurfaceId::Tool(_) => None,
                 };
                 let moved = source_workbench.update(cx, |workbench, cx| {
                     let moved = destination_workbench.update(cx, |destination, cx| {

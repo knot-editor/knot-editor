@@ -3,6 +3,7 @@
 mod chrome;
 mod closure;
 mod commands;
+mod composite;
 mod context_menus;
 mod contracts;
 mod contribution_clicks;

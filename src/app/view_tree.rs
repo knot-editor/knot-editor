@@ -7,6 +7,7 @@
 
 use gpui::{App, Entity, EntityId};
 
+use super::composite_view::CompositeView;
 use super::diff_view::DiffView;
 use super::editor::EditorView;
 use super::terminal::view::TerminalView;
@@ -27,6 +28,7 @@ pub(crate) enum ViewKind {
     Tree,
     Text,
     Diff,
+    Composite,
 }
 
 impl ViewKind {
@@ -37,6 +39,7 @@ impl ViewKind {
             Self::Tree => "tree",
             Self::Text => "text",
             Self::Diff => "diff",
+            Self::Composite => "composite",
         }
     }
 }
@@ -131,6 +134,16 @@ impl ViewTree for ExtensionView {
         match self {
             Self::Tree(view) => view.view_node(cx),
             Self::Text(view) => view.view_node(cx),
+        }
+    }
+}
+
+impl ViewTree for Entity<CompositeView> {
+    fn view_node(&self, cx: &App) -> ViewNode {
+        ViewNode {
+            focus: Some(0),
+            children: vec![self.read(cx).editor().view_node(cx)],
+            ..ViewNode::leaf(self.entity_id(), ViewKind::Composite)
         }
     }
 }

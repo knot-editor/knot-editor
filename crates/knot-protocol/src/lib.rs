@@ -863,6 +863,7 @@ pub enum SurfaceKind {
     Document,
     Terminal,
     Diff,
+    Composite,
     Tool,
 }
 

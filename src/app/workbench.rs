@@ -12,14 +12,15 @@ use std::ops::{Deref, DerefMut};
 use gpui::{App, AppContext, Context, Entity, EntityId, FocusHandle, Focusable, Subscription};
 use knot_model::workbench as layout;
 pub(crate) use knot_model::workbench::{
-    Area, Arrangement, BottomDockLayout, CloseConfirmation, CloseRequestOutcome, DiffViewId,
-    DockLocation, DocumentCloseDisposition, DocumentId, PaneId, PresentationId, Slot,
+    Area, Arrangement, BottomDockLayout, CloseConfirmation, CloseRequestOutcome, CompositeViewId,
+    DiffViewId, DockLocation, DocumentCloseDisposition, DocumentId, PaneId, PresentationId, Slot,
     SplitDirection, SplitEdge, SplitPlacement, StripeClick, Stripes, TabId, TabMoveCapture,
     TabMoveDestination, TabMovePlacement, TabSurfaceId, TerminalSessionId, ToolBadge, ToolFrameId,
     ToolKind, WorkbenchLayout, WorkbenchTab, neighbor,
 };
 
 use super::{
+    composite_view::{CompositeTab, CompositeView},
     diff_view::DiffView,
     editor::{EditorView, EditorViewState},
     model::Buffer,
@@ -141,6 +142,13 @@ enum PresentationView {
         super::diff_view::DiffCommandTarget,
         #[allow(dead_code)] (Subscription, Subscription),
     ),
+    /// A composite view; its subscription reports tree changes to the
+    /// application observer.
+    Composite(
+        Entity<CompositeView>,
+        Entity<EditorView>,
+        #[allow(dead_code)] Subscription,
+    ),
     Tool(ToolContent),
 }
 
@@ -252,6 +260,7 @@ impl Workbench {
             PresentationView::Editor(editor) => Some(editor),
             PresentationView::Terminal(_)
             | PresentationView::Diff(..)
+            | PresentationView::Composite(..)
             | PresentationView::Tool(_) => None,
         }
     }
@@ -267,6 +276,7 @@ impl Workbench {
             PresentationView::Editor(editor) => editor.view_node(cx),
             PresentationView::Terminal(view) => view.view_node(cx),
             PresentationView::Diff(view, ..) => view.view_node(cx),
+            PresentationView::Composite(view, ..) => view.view_node(cx),
             PresentationView::Tool(ToolContent::Extension(view)) => view.view_node(cx),
         })
     }
@@ -277,6 +287,7 @@ impl Workbench {
             PresentationView::Terminal(view) => Some(view),
             PresentationView::Editor(_)
             | PresentationView::Diff(..)
+            | PresentationView::Composite(..)
             | PresentationView::Tool(_) => None,
         }
     }
@@ -287,7 +298,16 @@ impl Workbench {
             PresentationView::Diff(view, ..) => Some(view),
             PresentationView::Editor(_)
             | PresentationView::Terminal(_)
+            | PresentationView::Composite(..)
             | PresentationView::Tool(_) => None,
+        }
+    }
+
+    /// The view a composite tab presents.
+    pub(crate) fn composite_view(&self, tab: &WorkbenchTab) -> Option<&Entity<CompositeView>> {
+        match self.views.get(&tab.presentation())? {
+            PresentationView::Composite(view, ..) => Some(view),
+            _ => None,
         }
     }
 
@@ -311,6 +331,7 @@ impl Workbench {
             PresentationView::Tool(content) => Some(content),
             PresentationView::Editor(_)
             | PresentationView::Terminal(_)
+            | PresentationView::Composite(..)
             | PresentationView::Diff(..) => None,
         }
     }
@@ -320,6 +341,7 @@ impl Workbench {
             PresentationView::Editor(editor) => CommandView::Editor(editor.clone()),
             PresentationView::Terminal(view) => CommandView::Terminal(view.clone()),
             PresentationView::Diff(_, target, _) => CommandView::Editor(target.editor().clone()),
+            PresentationView::Composite(_, editor, _) => CommandView::Editor(editor.clone()),
             PresentationView::Tool(content) => content.command_view(),
         })
     }
@@ -588,6 +610,43 @@ impl Workbench {
         diff: DiffViewId,
     ) -> Option<layout::CloseTransition> {
         let transition = self.layout.request_close_diff_tab(pane_id, tab_id, diff);
+        self.drop_ended_views();
+        transition
+    }
+
+    /// Open a composite view in the center and return its tab.
+    pub(crate) fn open_composite_in_center(
+        &mut self,
+        tab: CompositeTab,
+        buffer: Entity<Buffer>,
+        cx: &mut Context<Self>,
+    ) -> (PaneId, TabId) {
+        let id = super::composite_view::allocate_composite_id();
+        let (pane, tab_id) = self
+            .layout
+            .open_composite_in_center(id)
+            .expect("a new composite view has a fresh identity");
+        let view = cx.new(|cx| CompositeView::new(tab, buffer, cx));
+        let editor = view.read(cx).editor().clone();
+        let subscription = cx.subscribe(&view, |_, _, _: &ViewTreeChanged, cx| {
+            super::extensions::host::application_changed(cx);
+        });
+        self.views.insert(
+            self.presentation_of(pane, tab_id),
+            PresentationView::Composite(view, editor, subscription),
+        );
+        (pane, tab_id)
+    }
+
+    pub(crate) fn request_close_composite_tab(
+        &mut self,
+        pane_id: PaneId,
+        tab_id: TabId,
+        composite: CompositeViewId,
+    ) -> Option<layout::CloseTransition> {
+        let transition = self
+            .layout
+            .request_close_composite_tab(pane_id, tab_id, composite);
         self.drop_ended_views();
         transition
     }

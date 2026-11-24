@@ -54,6 +54,12 @@ pub(crate) enum CreateError {
     KeyInUse,
 }
 
+impl ExtensionBufferState {
+    pub(super) fn owner(&self) -> ExtensionKey {
+        self.owner
+    }
+}
+
 impl ProductExtensionHost {
     pub(crate) fn create_extension_buffer(
         &mut self,

@@ -182,7 +182,8 @@ impl ProductCommandTarget {
             }
             crate::app::workbench::TabSurfaceId::Document(_)
             | crate::app::workbench::TabSurfaceId::Terminal(_)
-            | crate::app::workbench::TabSurfaceId::Diff(_) => None,
+            | crate::app::workbench::TabSurfaceId::Diff(_)
+            | crate::app::workbench::TabSurfaceId::Composite(_) => None,
         }
     }
 
@@ -194,6 +195,7 @@ impl ProductCommandTarget {
             crate::app::workbench::TabSurfaceId::Document(document) => Ok(document),
             crate::app::workbench::TabSurfaceId::Terminal(_)
             | crate::app::workbench::TabSurfaceId::Diff(_)
+            | crate::app::workbench::TabSurfaceId::Composite(_)
             | crate::app::workbench::TabSurfaceId::Tool(_) => Err(CommandOutcome::Unavailable),
         }
     }

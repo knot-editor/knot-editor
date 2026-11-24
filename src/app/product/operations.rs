@@ -358,6 +358,42 @@ pub(crate) fn set_diff_text(
     }
 }
 
+/// Open a composite view in the center of the destination's window, showing one editor on `buffer`.
+pub(crate) fn open_composite(
+    destination: DocumentDestination,
+    tab: crate::app::composite_view::CompositeTab,
+    buffer: Entity<crate::app::model::Buffer>,
+    cx: &mut App,
+) -> Result<PresentationTarget, OpenError> {
+    let (window, _) = capture_destination(&destination, cx)?;
+    Ok(window
+        .update(cx, |window, cx| window.open_composite(tab, buffer, cx))
+        .public_target())
+}
+
+/// Replace what the tab of the composite view `target` names shows.
+pub(crate) fn update_composite(
+    target: &PresentationTarget,
+    tab: crate::app::composite_view::CompositeTab,
+    cx: &mut App,
+) -> Result<(), AccessError> {
+    let (window, open) = capture_destination(&DocumentDestination::View(target.clone()), cx)?;
+    let workbench = open.workbench.upgrade().ok_or(AccessError::InvalidTarget)?;
+    let location = open.tab.ok_or(AccessError::InvalidTarget)?;
+    let view = {
+        let workbench = workbench.read(cx);
+        workbench
+            .tab(location.pane, location.tab)
+            .and_then(|tab| workbench.composite_view(tab))
+            .cloned()
+            .ok_or(AccessError::InvalidTarget)?
+    };
+    view.update(cx, |view, cx| view.set_tab(tab, cx));
+    window.update(cx, |_, cx| cx.notify());
+    crate::app::extensions::host::application_changed(cx);
+    Ok(())
+}
+
 /// Close the tab `presentation` names with the usual prompts, for an owner
 /// that is gone.
 pub(crate) fn close_presentation_unattended(presentation: PresentationTarget, cx: &mut App) {

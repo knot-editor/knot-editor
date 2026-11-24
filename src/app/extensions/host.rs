@@ -1,5 +1,6 @@
 //! Product ownership and foreground routing for the pooled extension host.
 
+pub(crate) mod composites;
 #[cfg(test)]
 mod declaration_tests;
 #[cfg(test)]
@@ -794,6 +795,9 @@ pub(crate) struct ProductExtensionHost {
     /// The buffers packages created, by handle.
     extension_buffers:
         HashMap<knot_protocol::BufferHandle, extension_buffers::ExtensionBufferState>,
+    /// The composite view kinds in use, with the lifecycle that registered each.
+    composite_kinds: HashMap<String, ExtensionKey>,
+    owned_composites: HashMap<ExtensionKey, Vec<composites::OwnedComposite>>,
     commands: ExtensionCommandBridge,
     completion_editors: Vec<gpui::WeakEntity<crate::app::editor::Editor>>,
     command_targets: HashMap<CommandInvocationId, ProductCommandTarget>,
@@ -888,6 +892,8 @@ impl ProductExtensionHost {
             }),
             buffer_observers: HashMap::new(),
             extension_buffers: HashMap::new(),
+            composite_kinds: HashMap::new(),
+            owned_composites: HashMap::new(),
             commands,
             completion_editors: Vec::new(),
             command_targets: HashMap::new(),
@@ -3841,6 +3847,7 @@ impl ProductExtensionHost {
             }
         }
         self.editor_handles.retain(|_, handle| handle.owner != key);
+        self.release_composites_of(key, cx);
         for diff in self.owned_diffs.remove(&key).unwrap_or_default() {
             crate::app::product::operations::close_presentation_unattended(diff, cx);
         }

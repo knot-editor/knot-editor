@@ -145,6 +145,9 @@ function emptyState() {
     opens: [] as { uri: string; options: Knot.OpenDocumentOptions }[],
     /** The `workbench.openDiff` calls, oldest first. */
     diffs: [] as FakeDiff[],
+    /** The composite kinds registered, and the instances opened of them, oldest first. */
+    compositeKinds: new Set<string>(),
+    composites: [] as FakeComposite[],
     selectedText: null as string | null,
     selectedTreeItem: null as string | null,
     failures: new Map<string, HostErrorCode[]>(),
@@ -271,6 +274,15 @@ export type FakeDiff = {
   original: string;
   /** The text of the modified side now when it is a snapshot, else null. */
   modified: string | null;
+  closed: boolean;
+};
+
+/** A composite view opened through a `workbench.registerComposite` registration; the fake keeps it outside the window's tabs. */
+export type FakeComposite = {
+  kind: string;
+  options: Knot.OpenCompositeOptions;
+  /** What the tab shows now, after any `update`. */
+  tab: { title: string; icon: Knot.IconRef | null; resource: string | null };
   closed: boolean;
 };
 
@@ -1441,6 +1453,16 @@ export function clipboard() {
 /** The diffs opened through `workbench.openDiff`, oldest first, closed ones included. */
 export function diffs(): readonly FakeDiff[] {
   return state.diffs;
+}
+
+/** The composite views opened, oldest first, closed ones included. */
+export function composites(): readonly FakeComposite[] {
+  return state.composites;
+}
+
+/** Closes a composite view's tab as the user would; its handle then rejects `update`. */
+export function closeComposite(composite: FakeComposite) {
+  composite.closed = true;
 }
 
 /** Closes a diff tab as the user would; its handle then rejects `setText`. */
@@ -2940,6 +2962,52 @@ export const api: KnotApi = {
         },
         close,
         [Symbol.asyncDispose]: async () => void (await close()),
+      };
+    },
+    registerComposite: async (contribution) => {
+      const id = contribution.id;
+      if (id.length === 0 || id.startsWith("knot.") || /\s/.test(id)) throw hostError("InvalidViewId");
+      if (state.compositeKinds.has(id)) throw hostError("ViewIdInUse");
+      state.compositeKinds.add(id);
+      let disposed = false;
+      const instances: FakeComposite[] = [];
+      return {
+        id,
+        open: async (options) => {
+          if (disposed) throw hostError("OwnershipDisposed");
+          const window = destinationWindow(options.target);
+          const composite: FakeComposite = {
+            kind: id,
+            options,
+            tab: { title: options.title, icon: options.icon ?? null, resource: options.resource ?? null },
+            closed: false,
+          };
+          state.composites.push(composite);
+          instances.push(composite);
+          const target = { window: window.target, pane: window.pane } as unknown as Knot.ViewTarget;
+          const close = async () => {
+            composite.closed = true;
+            return { kind: "closed" } as const;
+          };
+          return {
+            target,
+            update: async (changes) => {
+              if (composite.closed) throw hostError("InvalidTarget");
+              composite.tab = {
+                title: changes.title ?? composite.tab.title,
+                icon: changes.icon === undefined ? composite.tab.icon : changes.icon,
+                resource: changes.resource === undefined ? composite.tab.resource : changes.resource,
+              };
+            },
+            close,
+            [Symbol.asyncDispose]: async () => void (await close()),
+          };
+        },
+        [Symbol.asyncDispose]: async () => {
+          disposed = true;
+          state.compositeKinds.delete(id);
+          for (const instance of instances) instance.closed = true;
+        },
       };
     },
     editor: async (target) => editorHandle(target),
