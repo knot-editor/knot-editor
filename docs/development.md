@@ -152,7 +152,7 @@ commands; `indents.jsonc`, `brackets.jsonc`, and `folds.jsonc` list
 indentation, bracket, and fold cases, which `indents.rs`,
 `brackets.rs`, and `folds.rs` beside it run through an
 editor without a window. `@knot/vim` keeps one file per topic, each its own
-parallel test in `crates/knot-ext-vim/tests/vim.rs`. Instead of the language
+parallel test in `crates/knot-ext-vim/tests/vim/vim.rs`. Instead of the language
 packages, the topics whose cases are syntax-aware register a minimal Rust
 fixture language (indent, fold, highlight, and bracket configuration) from
 `post-init.js`; the others start with no languages.

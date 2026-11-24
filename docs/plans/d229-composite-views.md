@@ -419,7 +419,7 @@ Validation: vcs diff tests through the package.
 Review gate: vcs diffs by hand against the native one.
 
 Implementation context: `openDiff` use in `extensions/@knot/vcs/src/extension.ts`;
-tests in `crates/knot-ext-vcs/tests/diff.rs`.
+tests in `crates/knot-ext-vcs/tests/vcs/diff.rs`.
 
 #### 21. Remove the native diff
 
