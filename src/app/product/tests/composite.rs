@@ -20,7 +20,70 @@ await commands.register("composite.open", async () => {
     await expectCode(() => workbench.registerComposite({ id: "knot.view" }), "InvalidViewId");
   }
   const buffer = await buffers.create({ text: "one\ntwo\n", language: "plaintext" });
-  instance = await registration.open({ title: "Example", icon: "file", buffer });
+  instance = await registration.open({
+    title: "Example",
+    icon: "file",
+    layout: { type: "row", children: [{ type: "editor", buffer }] },
+  });
+});
+// A column of an editor and a row whose editors have fixed and weighted sizes;
+// the layout names the last editor as focused.
+await commands.register("composite.open-nested", async () => {
+  const kind = registration ?? (registration = await workbench.registerComposite({ id: "example.view" }));
+  const [a, b, c] = await Promise.all(["a\n", "b\n", "c\n"].map((text) => buffers.create({ text })));
+  instance = await kind.open({
+    title: "Nested",
+    layout: {
+      type: "column",
+      children: [
+        { type: "editor", buffer: a, size: { weight: 2 } },
+        {
+          type: "row",
+          size: { pixels: 120 },
+          children: [
+            { type: "editor", buffer: b },
+            { type: "editor", buffer: c, size: { pixels: 200 }, focused: true },
+          ],
+        },
+      ],
+    },
+  });
+});
+// The same shape without a `focused` member.
+await commands.register("composite.open-default", async () => {
+  const kind = registration ?? (registration = await workbench.registerComposite({ id: "example.view" }));
+  const [a, b, c] = await Promise.all(["a\n", "b\n", "c\n"].map((text) => buffers.create({ text })));
+  instance = await kind.open({
+    title: "Default",
+    layout: {
+      type: "column",
+      children: [
+        { type: "row", children: [{ type: "editor", buffer: a }, { type: "editor", buffer: b }] },
+        { type: "editor", buffer: c },
+      ],
+    },
+  });
+});
+await commands.register("composite.invalid-layouts", async () => {
+  const kind = registration ?? (registration = await workbench.registerComposite({ id: "example.view" }));
+  const buffer = await buffers.create();
+  const editor = { type: "editor", buffer };
+  const rejected = async (layout, message) => {
+    try { await kind.open({ title: "x", layout }); } catch (error) {
+      check(error instanceof TypeError, message);
+      return;
+    }
+    throw new Error(message);
+  };
+  await rejected(undefined, "missing layout");
+  await rejected(editor, "root editor");
+  await rejected({ type: "row", children: [] }, "no editor");
+  await rejected({ type: "row", children: [{ type: "column", children: [] }] }, "no editor deep");
+  await rejected({ type: "row", children: [{ ...editor, focused: true }, { ...editor, focused: true }] }, "two focused");
+  await rejected({ type: "row", children: [{ ...editor, size: { weight: 0 } }] }, "zero weight");
+  await rejected({ type: "row", children: [{ ...editor, size: { weight: 1, pixels: 1 } }] }, "two size kinds");
+  await rejected({ type: "tabs", children: [editor] }, "unknown type");
+  await rejected({ type: "row", children: [{ type: "editor", buffer: {} }] }, "foreign buffer");
 });
 await commands.register("composite.update", async () => {
   await instance.update({ title: "Renamed", resource: "file:///a.txt" });
@@ -37,14 +100,6 @@ await commands.register("composite.close", async () => {
 await commands.register("composite.dispose-registration", async () => {
   await registration[Symbol.asyncDispose]();
   registration = undefined;
-});
-await commands.register("composite.foreign-buffer", async () => {
-  other = await workbench.registerComposite({ id: "example.other" });
-  try { await other.open({ title: "x", buffer: {} }); } catch (error) {
-    check(error instanceof TypeError, "buffer type");
-    return;
-  }
-  throw new Error("expected TypeError");
 });
 "#;
 
@@ -68,7 +123,7 @@ fn load(
             .read(cx)
             .catalog()
             .borrow()
-            .resolve("composite.foreign-buffer")
+            .resolve("composite.invalid-layouts")
             .is_ok()
     });
     (host, key)
@@ -183,7 +238,11 @@ fn an_extension_opens_a_composite_with_an_editor_in_its_view_tree(cx: &mut TestA
         let workbench = window.read(cx).workbench.read(cx);
         let tab = workbench.focused_pane().unwrap().active_tab();
         let composite = workbench.composite_view(tab).unwrap();
-        composite.read(cx).editor().read(cx).model().read(cx).text()
+        composite.read(cx).editors()[0]
+            .read(cx)
+            .model()
+            .read(cx)
+            .text()
     });
     assert_eq!(text, "one\ntwo\n");
 }
@@ -241,8 +300,142 @@ fn closing_disposing_and_unloading_end_the_tab(cx: &mut TestAppContext) {
     assert_eq!(composite_tabs(&window, cx), 0);
 }
 
+fn composite_root(info: &knot_protocol::WindowInfo) -> &knot_protocol::ViewNodeInfo {
+    &info
+        .panes
+        .iter()
+        .flat_map(|pane| &pane.tabs)
+        .find(|tab| tab.kind == SurfaceKind::Composite)
+        .unwrap()
+        .root
+}
+
+/// Move focus into the `index`th editor of the focused composite, as a click
+/// in it would: the test window has no platform to report focus.
+fn focus_editor(
+    window: &Entity<KnotWindow>,
+    native_window: gpui::AnyWindowHandle,
+    index: usize,
+    cx: &mut TestAppContext,
+) {
+    let view = cx.read(|cx| {
+        let workbench = window.read(cx).workbench.read(cx);
+        let tab = workbench.focused_pane().unwrap().active_tab();
+        workbench.composite_view(tab).unwrap().clone()
+    });
+    let handle = cx.read(|cx| view.read(cx).editors()[index].read(cx).focus_handle(cx));
+    view.update(cx, |view, cx| view.set_focused_editor(index, cx));
+    cx.update_window(native_window, |_, native_window, cx| {
+        handle.focus(native_window, cx);
+        focus_view(&handle, native_window, cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+}
+
+/// The text of the editor that commands act on in the focused tab.
+fn command_text(window: &Entity<KnotWindow>, cx: &TestAppContext) -> String {
+    cx.read(|cx| {
+        let workbench = window.read(cx).workbench.read(cx);
+        match workbench.focused_command_view().unwrap() {
+            crate::app::workbench::CommandView::Editor(editor) => {
+                editor.read(cx).model().read(cx).text()
+            }
+            _ => panic!("a composite's command view is an editor"),
+        }
+    })
+}
+
 #[gpui::test]
-fn a_buffer_that_is_not_the_packages_is_a_type_error(cx: &mut TestAppContext) {
+fn rows_and_columns_nest_as_composite_views_and_the_layout_names_the_focus(
+    cx: &mut TestAppContext,
+) {
     let (window, native_window, _, _) = window_with_extension(cx);
-    run(&window, native_window, "composite.foreign-buffer", cx);
+    run(&window, native_window, "composite.open-nested", cx);
+    let info = info(&window, cx);
+    let root = composite_root(&info);
+    assert_eq!(root.kind, "composite");
+    assert_eq!(root.children.len(), 2);
+    assert_eq!(root.children[0].kind, "editor");
+    let nested = &root.children[1];
+    assert_eq!(nested.kind, "composite");
+    assert_eq!(
+        nested
+            .children
+            .iter()
+            .map(|c| c.kind.as_str())
+            .collect::<Vec<_>>(),
+        ["editor", "editor"]
+    );
+    // Every view has its own identity.
+    let mut identities = vec![&root.target, &root.children[0].target, &nested.target];
+    identities.extend(nested.children.iter().map(|c| &c.target));
+    for (index, identity) in identities.iter().enumerate() {
+        assert!(!identities[..index].contains(identity));
+    }
+    // The layout names the last editor, which is where the caret is.
+    assert_eq!(info.focused_view.as_ref(), Some(&nested.children[1].target));
+    assert_eq!(command_text(&window, cx), "c\n");
+}
+
+#[gpui::test]
+fn the_first_editor_has_focus_when_the_layout_names_none(cx: &mut TestAppContext) {
+    let (window, native_window, _, _) = window_with_extension(cx);
+    run(&window, native_window, "composite.open-default", cx);
+    let info = info(&window, cx);
+    let first = &composite_root(&info).children[0].children[0];
+    assert_eq!(first.kind, "editor");
+    assert_eq!(info.focused_view.as_ref(), Some(&first.target));
+    assert_eq!(command_text(&window, cx), "a\n");
+}
+
+#[gpui::test]
+fn focus_moves_between_editors_and_reselecting_the_tab_restores_the_last(cx: &mut TestAppContext) {
+    let (window, native_window, _, _) = window_with_extension(cx);
+    run(&window, native_window, "composite.open-nested", cx);
+    focus_editor(&window, native_window, 1, cx);
+    let info_now = info(&window, cx);
+    let root = composite_root(&info_now);
+    assert_eq!(
+        info_now.focused_view.as_ref(),
+        Some(&root.children[1].children[0].target)
+    );
+    assert_eq!(command_text(&window, cx), "b\n");
+
+    focus_editor(&window, native_window, 0, cx);
+    let info_now = info(&window, cx);
+    assert_eq!(
+        info_now.focused_view.as_ref(),
+        Some(&composite_root(&info_now).children[0].target)
+    );
+
+    // Leave the tab and select it again.
+    focus_document_tab(&window, cx);
+    assert_ne!(command_text(&window, cx), "a\n");
+    window.update(cx, |window, cx| {
+        window.workbench.update(cx, |workbench, _| {
+            let pane = workbench.focused_pane_id().unwrap();
+            let composite = workbench
+                .tabs()
+                .find(|tab| matches!(tab.surface_id(), TabSurfaceId::Composite(_)))
+                .unwrap()
+                .id();
+            workbench.activate_tab(pane, composite);
+        });
+        window.focus_active_surface(cx);
+    });
+    cx.run_until_parked();
+    let info_now = info(&window, cx);
+    assert_eq!(
+        info_now.focused_view.as_ref(),
+        Some(&composite_root(&info_now).children[0].target)
+    );
+    assert_eq!(command_text(&window, cx), "a\n");
+}
+
+#[gpui::test]
+fn a_layout_that_is_not_valid_is_a_type_error(cx: &mut TestAppContext) {
+    let (window, native_window, _, _) = window_with_extension(cx);
+    run(&window, native_window, "composite.invalid-layouts", cx);
+    assert_eq!(composite_tabs(&window, cx), 0);
 }

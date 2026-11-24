@@ -242,6 +242,14 @@ on reselection.
 
 Review gate: the layout data's shape.
 
+Implemented, awaiting review: `open({ title, layout })` takes a `row` or
+`column` whose `children` are `editor` members (on a `buffers.create` buffer)
+or nested rows and columns, each nested group a `composite` view in the tree.
+A member's `size` is `{ weight }` (default 1) or `{ pixels }`, and `focused`
+names the member focused on open. The layout needs an editor and cannot be
+replaced yet; children have no key until layout updates (13) need one. Text and
+tree children join in 11.
+
 Implementation context: the composite's native view beside `DiffView`'s
 side-by-side layout in `src/app/diff_view.rs`.
 

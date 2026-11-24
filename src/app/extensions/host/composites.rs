@@ -7,10 +7,13 @@
 
 use gpui::{App, Context};
 use knot_protocol::{BufferHandle, DocumentDestination, ExtensionKey, PresentationTarget};
+use serde::Deserialize;
 
 use super::ProductExtensionHost;
 use super::handlers::{AccessError, OpenError};
-use crate::app::composite_view::CompositeTab;
+use crate::app::composite_view::{
+    CompositeTab, ContentSpec, GroupSpec, LayoutAxis, LayoutSize, MemberSpec,
+};
 use crate::app::extensions::semantics::SemanticError;
 use crate::app::product;
 
@@ -34,6 +37,156 @@ impl CompositeTabSpec {
                         .map_err(|_| OpenError::InvalidUri)
                 })
                 .transpose()?,
+        })
+    }
+}
+
+/// A layout as the package sends it: a row or column of editors on buffers
+/// and nested rows and columns.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(tag = "type", rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) enum LayoutWire {
+    Editor {
+        buffer: u64,
+        #[serde(default)]
+        size: SizeWire,
+        #[serde(default)]
+        focused: bool,
+    },
+    Row {
+        children: Vec<LayoutWire>,
+        #[serde(default)]
+        size: SizeWire,
+        #[serde(default)]
+        focused: bool,
+    },
+    Column {
+        children: Vec<LayoutWire>,
+        #[serde(default)]
+        size: SizeWire,
+        #[serde(default)]
+        focused: bool,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) enum SizeWire {
+    Weight(f32),
+    Pixels(f32),
+}
+
+impl Default for SizeWire {
+    fn default() -> Self {
+        Self::Weight(1.)
+    }
+}
+
+impl LayoutWire {
+    /// The root of a layout is a row or a column with at least one editor
+    /// beneath it, at most one member asking for focus per group, and sizes
+    /// that are positive and finite.
+    pub(crate) fn check(&self) -> Result<(), &'static str> {
+        fn check(node: &LayoutWire, root: bool) -> Result<usize, &'static str> {
+            let (size, focused, children) = match node {
+                LayoutWire::Editor { size, focused, .. } => (size, focused, None),
+                LayoutWire::Row {
+                    children,
+                    size,
+                    focused,
+                }
+                | LayoutWire::Column {
+                    children,
+                    size,
+                    focused,
+                } => (size, focused, Some(children)),
+            };
+            let (SizeWire::Weight(value) | SizeWire::Pixels(value)) = size;
+            if !value.is_finite() || *value <= 0. {
+                return Err("composite size must be a positive number");
+            }
+            if root && (children.is_none() || *focused) {
+                return Err("composite layout must be a row or column");
+            }
+            let Some(children) = children else {
+                return Ok(1);
+            };
+            let asking = children
+                .iter()
+                .filter(|child| match child {
+                    LayoutWire::Editor { focused, .. }
+                    | LayoutWire::Row { focused, .. }
+                    | LayoutWire::Column { focused, .. } => *focused,
+                })
+                .count();
+            if asking > 1 {
+                return Err("a composite group has one focused member");
+            }
+            children
+                .iter()
+                .try_fold(0, |editors, child| Ok(editors + check(child, false)?))
+        }
+        match check(self, true)? {
+            0 => Err("composite layout needs an editor"),
+            _ => Ok(()),
+        }
+    }
+
+    /// The spec of a checked root, with each editor's buffer from `model`.
+    fn spec<E>(
+        &self,
+        model: &mut impl FnMut(BufferHandle) -> Result<gpui::Entity<crate::app::model::Buffer>, E>,
+    ) -> Result<MemberSpec, E> {
+        let (size, focused, content) = match self {
+            Self::Editor {
+                buffer,
+                size,
+                focused,
+            } => (
+                size,
+                focused,
+                ContentSpec::Editor(model(BufferHandle::new(*buffer))?),
+            ),
+            Self::Row {
+                children,
+                size,
+                focused,
+            } => (
+                size,
+                focused,
+                ContentSpec::Group(Self::group(LayoutAxis::Row, children, model)?),
+            ),
+            Self::Column {
+                children,
+                size,
+                focused,
+            } => (
+                size,
+                focused,
+                ContentSpec::Group(Self::group(LayoutAxis::Column, children, model)?),
+            ),
+        };
+        Ok(MemberSpec {
+            size: match size {
+                SizeWire::Weight(weight) => LayoutSize::Weight(*weight),
+                SizeWire::Pixels(pixels) => LayoutSize::Pixels(*pixels),
+            },
+            focused: *focused,
+            content,
+        })
+    }
+
+    fn group<E>(
+        axis: LayoutAxis,
+        children: &[LayoutWire],
+        model: &mut impl FnMut(BufferHandle) -> Result<gpui::Entity<crate::app::model::Buffer>, E>,
+    ) -> Result<GroupSpec, E> {
+        Ok(GroupSpec {
+            axis,
+            members: children
+                .iter()
+                .map(|child| child.spec(model))
+                .collect::<Result<_, _>>()?,
         })
     }
 }
@@ -86,21 +239,25 @@ impl ProductExtensionHost {
         destination: DocumentDestination,
         kind: String,
         tab: CompositeTabSpec,
-        buffer: BufferHandle,
+        layout: LayoutWire,
         cx: &mut Context<Self>,
     ) -> Result<PresentationTarget, OpenError> {
         if self.composite_kinds.get(&kind) != Some(&owner) {
             return Err(AccessError::InvalidTarget.into());
         }
-        let model = self
-            .extension_buffers
-            .get(&buffer)
-            .filter(|state| state.owner() == owner)
-            .ok_or(OpenError::BufferClosed)?
-            .model
-            .clone();
+        let mut model = |buffer| {
+            self.extension_buffers
+                .get(&buffer)
+                .filter(|state| state.owner() == owner)
+                .map(|state| state.model.clone())
+                .ok_or(OpenError::BufferClosed)
+        };
+        // The root is a row or column, so its spec is a group.
+        let ContentSpec::Group(layout) = layout.spec(&mut model)?.content else {
+            return Err(AccessError::InvalidTarget.into());
+        };
         let tab = tab.tab()?;
-        let target = product::operations::open_composite(destination, tab, model, cx)?;
+        let target = product::operations::open_composite(destination, tab, layout, cx)?;
         self.owned_composites
             .entry(owner)
             .or_default()

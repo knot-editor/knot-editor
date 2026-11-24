@@ -802,12 +802,20 @@ fn decode_composite_tab(
     })
 }
 
+/// A composite layout, sent as JSON.
+fn decode_composite_layout(json: &str) -> Result<super::composites::LayoutWire, DecodeError> {
+    let layout: super::composites::LayoutWire =
+        serde_json::from_str(json).map_err(|_| DecodeError::Type("composite layout is invalid"))?;
+    layout.check().map_err(DecodeError::Range)?;
+    Ok(layout)
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct OpenCompositeArguments {
     target: Option<knot_protocol::DocumentDestination>,
     kind: String,
     tab: super::composites::CompositeTabSpec,
-    buffer: knot_protocol::BufferHandle,
+    layout: super::composites::LayoutWire,
 }
 
 impl HostArguments for OpenCompositeArguments {
@@ -816,7 +824,7 @@ impl HostArguments for OpenCompositeArguments {
             target: reader.destination(2)?,
             kind: reader.text(3, "composite kind must be text")?,
             tab: decode_composite_tab(reader, 4)?,
-            buffer: knot_protocol::BufferHandle::new(reader.integer(7)?),
+            layout: decode_composite_layout(&reader.text(7, "composite layout must be text")?)?,
         })
     }
 }
@@ -837,7 +845,7 @@ pub(crate) async fn open_composite(
             destination,
             arguments.kind,
             arguments.tab,
-            arguments.buffer,
+            arguments.layout,
             cx,
         )?;
         host.presentation_info(&target, cx)

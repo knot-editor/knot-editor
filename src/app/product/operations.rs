@@ -358,16 +358,16 @@ pub(crate) fn set_diff_text(
     }
 }
 
-/// Open a composite view in the center of the destination's window, showing one editor on `buffer`.
+/// Open a composite view of `layout` in the center of the destination's window.
 pub(crate) fn open_composite(
     destination: DocumentDestination,
     tab: crate::app::composite_view::CompositeTab,
-    buffer: Entity<crate::app::model::Buffer>,
+    layout: crate::app::composite_view::GroupSpec,
     cx: &mut App,
 ) -> Result<PresentationTarget, OpenError> {
     let (window, _) = capture_destination(&destination, cx)?;
     Ok(window
-        .update(cx, |window, cx| window.open_composite(tab, buffer, cx))
+        .update(cx, |window, cx| window.open_composite(tab, layout, cx))
         .public_target())
 }
 

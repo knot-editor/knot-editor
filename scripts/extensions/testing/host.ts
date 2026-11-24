@@ -277,6 +277,10 @@ export type FakeDiff = {
   closed: boolean;
 };
 
+function hasEditor(layout: Knot.CompositeLayout): boolean {
+  return layout.type === "editor" || layout.children.some(hasEditor);
+}
+
 /** A composite view opened through a `workbench.registerComposite` registration; the fake keeps it outside the window's tabs. */
 export type FakeComposite = {
   kind: string;
@@ -2975,6 +2979,7 @@ export const api: KnotApi = {
         id,
         open: async (options) => {
           if (disposed) throw hostError("OwnershipDisposed");
+          if (!hasEditor(options.layout)) throw new TypeError("composite layout needs an editor");
           const window = destinationWindow(options.target);
           const composite: FakeComposite = {
             kind: id,

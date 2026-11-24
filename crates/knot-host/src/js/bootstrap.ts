@@ -2196,6 +2196,39 @@ function compositeTab(given: Rec, titleRequired: boolean) {
   if (resource != null && typeof resource !== "string") throw new TypeError("composite resource must be a string");
   return { title: title as string | undefined, icon: icon ?? null, resource: (resource ?? null) as string | null };
 }
+/** The layout JSON of a composite's row or column, or of one member of it. */
+function compositeLayout(node: unknown, root: boolean): Rec {
+  const given = record(node, "composite layout must be an object");
+  const { type, size, focused } = given;
+  if (type !== "row" && type !== "column" && type !== "editor") {
+    throw new TypeError("composite layout type must be row, column, or editor");
+  }
+  if (root && type === "editor") throw new TypeError("composite layout must be a row or column");
+  if (focused !== undefined && typeof focused !== "boolean") throw new TypeError("composite focused must be a boolean");
+  if (size !== undefined) {
+    const given = record(size, "composite size must be an object");
+    const keys = Object.keys(given);
+    const value = given[keys[0] ?? ""];
+    if (keys.length !== 1 || (keys[0] !== "weight" && keys[0] !== "pixels")
+      || typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+      throw new TypeError("composite size must be a positive weight or pixels");
+    }
+  }
+  const wire: Rec = { type, ...(size === undefined ? {} : { size }), ...(focused === undefined ? {} : { focused }) };
+  if (type === "editor") {
+    const buffer = isObject(given.buffer) ? bufferHandles.get(given.buffer) : undefined;
+    if (buffer === undefined) throw new TypeError("composite buffer must be a buffer of buffers.create");
+    wire.buffer = buffer;
+  } else {
+    if (!Array.isArray(given.children)) throw new TypeError("composite children must be an array");
+    const children = given.children.map((child) => compositeLayout(child, false));
+    if (children.filter((child) => child.focused === true).length > 1) {
+      throw new TypeError("a composite group has one focused member");
+    }
+    wire.children = children;
+  }
+  return wire;
+}
 /** Register a composite view kind and return the registration that opens instances of it. */
 export async function registerComposite(contribution: unknown) {
   const given = record(contribution, "composite contribution must be an object");
@@ -2208,10 +2241,11 @@ export async function registerComposite(contribution: unknown) {
       registration.assertActive();
       const given = record(options, "composite options must be an object");
       const tab = compositeTab(given, true);
-      const buffer = isObject(given.buffer) ? bufferHandles.get(given.buffer) : undefined;
-      if (buffer === undefined) throw new TypeError("composite buffer must be a buffer of buffers.create");
+      const wire = compositeLayout(given.layout, true);
+      if (!JSON.stringify(wire).includes('"type":"editor"')) throw new TypeError("composite layout needs an editor");
+      const layout = JSON.stringify(wire);
       const value = await registration.track(request("openComposite", destinationAuthority(given), id,
-        tab.title, tab.icon === null ? null : JSON.stringify(tab.icon), tab.resource, buffer));
+        tab.title, tab.icon === null ? null : JSON.stringify(tab.icon), tab.resource, layout));
       const target = presentationTarget(value.target);
       let current = { title: tab.title as string, icon: tab.icon, resource: tab.resource };
       const owned = ownership(() => {}, async () => {

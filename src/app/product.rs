@@ -2508,11 +2508,11 @@ impl KnotWindow {
     fn open_composite(
         &mut self,
         tab: crate::app::composite_view::CompositeTab,
-        buffer: Entity<crate::app::model::Buffer>,
+        layout: crate::app::composite_view::GroupSpec,
         cx: &mut Context<Self>,
     ) -> OpenTarget {
         let (pane, tab) = self.workbench.update(cx, |workbench, cx| {
-            workbench.open_composite_in_center(tab, buffer, cx)
+            workbench.open_composite_in_center(tab, layout, cx)
         });
         self.focus_active_surface(cx);
         cx.notify();

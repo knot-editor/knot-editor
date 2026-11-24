@@ -20,7 +20,7 @@ pub(crate) use knot_model::workbench::{
 };
 
 use super::{
-    composite_view::{CompositeTab, CompositeView},
+    composite_view::{CompositeCommandTarget, CompositeTab, CompositeView, GroupSpec},
     diff_view::DiffView,
     editor::{EditorView, EditorViewState},
     model::Buffer,
@@ -142,12 +142,13 @@ enum PresentationView {
         super::diff_view::DiffCommandTarget,
         #[allow(dead_code)] (Subscription, Subscription),
     ),
-    /// A composite view; its subscription reports tree changes to the
-    /// application observer.
+    /// A composite view and the editor commands act on.
+    /// Its subscriptions report tree and focus changes to the application
+    /// observer.
     Composite(
         Entity<CompositeView>,
-        Entity<EditorView>,
-        #[allow(dead_code)] Subscription,
+        CompositeCommandTarget,
+        #[allow(dead_code)] (Subscription, Subscription),
     ),
     Tool(ToolContent),
 }
@@ -341,7 +342,9 @@ impl Workbench {
             PresentationView::Editor(editor) => CommandView::Editor(editor.clone()),
             PresentationView::Terminal(view) => CommandView::Terminal(view.clone()),
             PresentationView::Diff(_, target, _) => CommandView::Editor(target.editor().clone()),
-            PresentationView::Composite(_, editor, _) => CommandView::Editor(editor.clone()),
+            PresentationView::Composite(_, target, _) => {
+                CommandView::Editor(target.editor().clone())
+            }
             PresentationView::Tool(content) => content.command_view(),
         })
     }
@@ -618,7 +621,7 @@ impl Workbench {
     pub(crate) fn open_composite_in_center(
         &mut self,
         tab: CompositeTab,
-        buffer: Entity<Buffer>,
+        layout: GroupSpec,
         cx: &mut Context<Self>,
     ) -> (PaneId, TabId) {
         let id = super::composite_view::allocate_composite_id();
@@ -626,14 +629,19 @@ impl Workbench {
             .layout
             .open_composite_in_center(id)
             .expect("a new composite view has a fresh identity");
-        let view = cx.new(|cx| CompositeView::new(tab, buffer, cx));
-        let editor = view.read(cx).editor().clone();
-        let subscription = cx.subscribe(&view, |_, _, _: &ViewTreeChanged, cx| {
-            super::extensions::host::application_changed(cx);
-        });
+        let view = cx.new(|cx| CompositeView::new(tab, layout, cx));
+        let target = view.read(cx).command_target();
+        let subscriptions = (
+            cx.subscribe(&view, |_, _, _: &ViewTreeChanged, cx| {
+                super::extensions::host::application_changed(cx);
+            }),
+            cx.subscribe(&view, |_, _, _: &ViewFocusChanged, cx| {
+                super::extensions::host::application_changed(cx);
+            }),
+        );
         self.views.insert(
             self.presentation_of(pane, tab_id),
-            PresentationView::Composite(view, editor, subscription),
+            PresentationView::Composite(view, target, subscriptions),
         );
         (pane, tab_id)
     }

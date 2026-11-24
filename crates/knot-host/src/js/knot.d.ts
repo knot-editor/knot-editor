@@ -2991,9 +2991,36 @@ declare module "knot" {
      * shows as a document tab does. */
     readonly resource?: string;
   }
-  export interface OpenCompositeOptions extends DocumentDestinationOptions, CompositeTab {
-    /** The buffer the instance's one editor shows, from `buffers.create`. */
+  /** How much of its group's main axis a layout member takes. */
+  export type CompositeSize =
+    /** A share of the space the `pixels` members leave, in proportion to the
+     * other weights. Defaults to `{ weight: 1 }`. */
+    | { readonly weight: number }
+    | { readonly pixels: number };
+  interface CompositeLayoutMember {
+    readonly size?: CompositeSize;
+    /** The member that has focus when the tab opens; a row or column gives it
+     * to its first editor. At most one member of a group sets it. When none
+     * does, the first editor in layout order has focus. Later, the editor
+     * focused last has it when the tab is selected again. */
+    readonly focused?: boolean;
+  }
+  /** An editor on a buffer of `buffers.create`. */
+  export interface CompositeEditor extends CompositeLayoutMember {
+    readonly type: "editor";
     readonly buffer: ExtensionBuffer;
+  }
+  /** A group of members side by side (`row`) or stacked (`column`). A group
+   * inside another is a composite view of its own in the view tree. */
+  export interface CompositeGroup extends CompositeLayoutMember {
+    readonly type: "row" | "column";
+    readonly children: readonly CompositeLayout[];
+  }
+  export type CompositeLayout = CompositeEditor | CompositeGroup;
+  export interface OpenCompositeOptions extends DocumentDestinationOptions, CompositeTab {
+    /** The layout, which the user cannot rearrange: a row or column holding at
+     * least one editor at any depth. */
+    readonly layout: CompositeGroup;
   }
   /** An open composite view. Disposing it closes the tab, as `close` does. */
   export interface CompositeInstance extends AsyncDisposable {
@@ -3020,8 +3047,8 @@ declare module "knot" {
      * it. Instances are not restored with their window. The caller's
      * lifecycle owns the tab: it closes when the extension unloads, the
      * instance or this registration is disposed.
-     * @throws TypeError for invalid options or a buffer that is not this
-     * package's; HostError with BufferClosed, InvalidUri, InvalidTarget for a
+     * @throws TypeError for invalid options, a layout without an editor, or a
+     * buffer that is not this package's; HostError with BufferClosed, InvalidUri, InvalidTarget for a
      * stale destination, OwnershipDisposed after disposal, or Cancelled.
      */
     open(options: OpenCompositeOptions): Promise<CompositeInstance>;
