@@ -221,36 +221,14 @@ fake in `scripts/extensions/testing` implements it.
 
 ### Phase D — Composite views
 
-#### 9. Minimal composite 🔍
+#### 9. Minimal composite ✅
 
-Implemented, awaiting the review gate. `workbench.registerComposite({ id })`
-reserves a kind, unique across packages, and its registration's `open` makes a
-center tab (`TabSurfaceId::Composite`) with one editor on a `buffers.create`
-buffer; the instance's `update` changes title, icon, and resource, and `close`
-or disposal closes the tab, as does disposing the registration or unloading.
-Scope decision: opening takes no `arguments`; they have no use before the
-toolbar's commands (14), which receive them. Vim attaches through `statusView`,
-which a product test checks; the Vim behavior in a composite remains to check
-by hand.
-
-Deliverables: a package registers a composite kind and opens instances as
-center tabs with arguments, each showing one editor on an extension buffer;
-instances close with the lifecycle or on disposal; they appear in the view
-tree, and Vim attaches to their editor. The package sets an instance's title,
-icon, and optional resource URI, and changes them while it is open; with a URI
-the tab shows that resource's decorations as a document tab does. As diff tabs
-today, the title truncates with the full title in a tooltip.
-
-Validation: product tests for open, focus, close, teardown, the view tree, and
-tab title, icon, and decoration updates.
-
-Review gate: registration and instance API.
-
-Implementation context: `registerView`/`ViewContribution` in `knot.d.ts`;
-`ExtensionView` and `PresentationView` in `src/app/workbench.rs`; tab surface
-kinds (`TabSurfaceId`) in `crates/knot-model/src/workbench.rs`; contributed
-views in `src/app/extensions/semantics.rs`. The composite implements the
-child-view interface from checkpoint 1.
+`workbench.registerComposite({ id })` reserves a kind, and its registration's
+`open` makes a center tab (`TabSurfaceId::Composite`) with one editor on a
+`buffers.create` buffer; `update` changes the tab's title, icon, and resource.
+The tab closes with the instance, the registration, or the lifecycle. Opening
+takes no `arguments` until the toolbar's commands (14) need them. Reference
+docs follow in checkpoint 14.
 
 #### 10. Layout tree
 
