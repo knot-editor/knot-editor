@@ -797,7 +797,8 @@ fn a_read_only_view_refuses_edits_its_buffer_would_accept() {
     f.editor.paste(Some("z"), &mut f.buffer);
     assert_eq!(f.text(), "cab");
 
+    // The selection the refused cut left is still there to be replaced.
     f.editor.set_read_only(false);
     f.type_text("d");
-    assert_eq!(f.text(), "cdab");
+    assert_eq!(f.text(), "d");
 }
