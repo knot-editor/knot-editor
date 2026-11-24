@@ -25,7 +25,7 @@ impl EditorState {
     /// it. A line holding only whitespace keeps none of it.
     pub(crate) fn insert_newline(&mut self, buffer: &mut BufferModel) {
         let model = &*buffer;
-        if !model.is_editable() {
+        if !self.can_edit(model) {
             return;
         }
         let range = self.implicit_replacement_range(model);
@@ -255,7 +255,7 @@ impl EditorState {
     /// indentation style.
     pub(crate) fn convert_indentation(&mut self, tabs: bool, buffer: &mut BufferModel) {
         let model = &*buffer;
-        if !model.is_editable() {
+        if !self.can_edit(model) {
             return;
         }
         let unit = IndentUnit {

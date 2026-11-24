@@ -11,7 +11,7 @@ impl EditorState {
         model: &BufferModel,
     ) -> Vec<(CompletionProviderRegistration, CompletionRequest)> {
         self.dismiss_completion();
-        if !model.is_editable() {
+        if !self.can_edit(model) {
             return Vec::new();
         }
         let revision = model.revision();

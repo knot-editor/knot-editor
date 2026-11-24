@@ -98,7 +98,7 @@ impl EditorState {
         buffer: &mut BufferModel,
     ) -> bool {
         let model = &*buffer;
-        if !model.is_editable() || text.is_empty() || text.contains(['\n', '\r']) {
+        if !self.can_edit(model) || text.is_empty() || text.contains(['\n', '\r']) {
             return false;
         }
         let implicit = self.implicit_replacement_range(model);

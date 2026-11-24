@@ -76,7 +76,7 @@ impl EditorState {
         new_selected_range: Option<Range<usize>>,
         buffer: &mut BufferModel,
     ) {
-        if !buffer.is_editable() {
+        if !self.can_edit(buffer) {
             return;
         }
         self.preferred_column = None;

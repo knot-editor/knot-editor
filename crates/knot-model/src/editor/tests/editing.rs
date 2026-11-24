@@ -781,3 +781,23 @@ fn a_context_menu_click_keeps_a_selection_it_lands_in_and_replaces_one_it_misses
     assert_eq!(f.selection(), ((1, 2), (1, 2)));
     assert!(!f.editor.has_selection());
 }
+
+#[test]
+fn a_read_only_view_refuses_edits_its_buffer_would_accept() {
+    let mut f = Fixture::new("ab");
+    f.type_text("c");
+    assert_eq!(f.text(), "cab");
+
+    f.editor.set_read_only(true);
+    f.type_text("d");
+    f.run("editor.delete-backward");
+    f.run("editor.select-all");
+    f.run("editor.cut");
+    f.run("editor.undo");
+    f.editor.paste(Some("z"), &mut f.buffer);
+    assert_eq!(f.text(), "cab");
+
+    f.editor.set_read_only(false);
+    f.type_text("d");
+    assert_eq!(f.text(), "cdab");
+}

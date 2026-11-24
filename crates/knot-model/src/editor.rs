@@ -298,6 +298,9 @@ pub struct EditorState {
     /// Named key contexts keybindings can require, each owned by the
     /// extension lifecycle that set it. Presentation state, never recorded.
     key_contexts: Vec<(knot_protocol::ExtensionKey, Arc<str>)>,
+    /// This view refuses edits its buffer would accept. Presentation state,
+    /// never recorded.
+    read_only: bool,
     /// Caret shapes lifecycles have set; the latest one wins and each belongs
     /// to its lifecycle. Presentation state, never recorded.
     caret_shapes: Vec<(knot_protocol::ExtensionKey, CaretShape)>,
@@ -358,6 +361,7 @@ impl EditorState {
             pending_indent: None,
             auto_closed: Vec::new(),
             key_contexts: Vec::new(),
+            read_only: false,
             caret_shapes: Vec::new(),
             bars: bars::EditorBars::default(),
             recordings: recording::Recordings::default(),
@@ -637,6 +641,22 @@ impl EditorState {
         contexts
     }
 
+    /// Make this view refuse edits, or accept them again where its buffer
+    /// does. Other views of the buffer are unaffected.
+    pub fn set_read_only(&mut self, read_only: bool) {
+        self.read_only = read_only;
+    }
+
+    /// Whether this view refuses edits regardless of its buffer.
+    pub fn is_read_only(&self) -> bool {
+        self.read_only
+    }
+
+    /// Whether an edit made through this view can change `buffer`.
+    pub(crate) fn can_edit(&self, buffer: &BufferModel) -> bool {
+        !self.read_only && buffer.is_editable()
+    }
+
     /// Set or clear `owner`'s key context `name`. Lifecycles own their
     /// contexts independently, so one clearing a name leaves another's.
     pub fn set_key_context(
@@ -683,6 +703,7 @@ impl EditorState {
     #[cfg(any(test, feature = "test-support"))]
     pub fn keep_presentation_from(&mut self, previous: &mut EditorState) {
         self.key_contexts = std::mem::take(&mut previous.key_contexts);
+        self.read_only = previous.read_only;
         self.caret_shapes = std::mem::take(&mut previous.caret_shapes);
     }
 
@@ -1112,7 +1133,7 @@ impl EditorState {
         caret: usize,
         buffer: &mut BufferModel,
     ) {
-        if edits.is_empty() || !buffer.is_editable() {
+        if edits.is_empty() || !self.can_edit(buffer) {
             return;
         }
         self.break_history_group(buffer);
@@ -1158,7 +1179,7 @@ impl EditorState {
         grouping: Option<EditGroupKind>,
         buffer: &mut BufferModel,
     ) {
-        if !buffer.is_editable() {
+        if !self.can_edit(buffer) {
             return;
         }
         self.preferred_column = None;
