@@ -371,6 +371,7 @@ pub(crate) fn close_presentation_unattended(presentation: PresentationTarget, cx
         tab: target.tab,
         focused: true,
         view: None,
+        leaf: None,
     };
     KnotWindow::begin_protected_operation(
         ProtectedCloseRequest {
@@ -642,6 +643,7 @@ pub(crate) fn close_presentation(
         tab: target.tab,
         focused: true,
         view: None,
+        leaf: None,
     };
     super::super::commands::dispatch::break_captured_history_group(&origin, cx);
     KnotWindow::begin_protected_operation(

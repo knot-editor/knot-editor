@@ -1609,6 +1609,8 @@ async function invokeRegisteredCommand(
     window: capture.window,
     windowTarget: windowTarget({ window: capture.window }),
     viewTarget: capture.viewTarget === null ? null : presentationTarget(capture.viewTarget),
+    focusedView: capture.focusedView === null ? null : viewNodeTarget(capture.focusedView),
+    viewChain: Object.freeze(capture.viewChain.map(viewNodeTarget)),
     view: capture.view,
     tool: capture.tool,
   });

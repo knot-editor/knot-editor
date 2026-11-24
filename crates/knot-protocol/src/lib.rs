@@ -1172,6 +1172,12 @@ pub struct CommandCapture {
     pub tool: Option<String>,
     /// Whether the captured presentation is a document editor.
     pub editor: bool,
+    /// The leaf view that had focus in the tab, whose editor the command acts
+    /// on.
+    pub focused_view: Option<Box<ViewNodeTarget>>,
+    /// The views above the focused leaf, its parent first and the tab's root
+    /// view last.
+    pub view_chain: Vec<ViewNodeTarget>,
 }
 
 /// A foreground-authorized command invocation routed to its extension owner.

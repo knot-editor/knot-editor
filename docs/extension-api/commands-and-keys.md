@@ -50,6 +50,13 @@ await commands.register("example.go-to-start", async ({ editor, buffer }) => {
 });
 ```
 
+The command's target names the views it ran in: `target.focusedView` is the
+view that had focus in the tab, and `target.viewChain` lists the views above
+it, its parent first and the tab's root view last, so a package finds its
+composite view there. In a view with several editors, `context.editor` is the
+editor that had focus at admission, and it stays that editor if focus moves
+while the command runs.
+
 A click on an editor contribution's gutter mark or text runs the
 contribution's `command` in the clicked editor, so `context.editor` and
 `context.buffer` are that editor and its buffer. Its `arguments`, an object,

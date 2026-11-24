@@ -541,6 +541,8 @@ fn execute_captured_fixture(
                 view_target: None,
                 tool: None,
                 editor: false,
+                focused_view: None,
+                view_chain: Vec::new(),
             }),
         },
         Some(BufferHandle::new(3)),

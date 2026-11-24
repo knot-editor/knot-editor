@@ -123,6 +123,10 @@ pub(crate) struct ProductCommandTarget {
     /// focused view takes its own commands.
     pub(crate) focused: bool,
     pub(crate) view: Option<ViewId>,
+    /// The leaf view that had focus in the tab when captured. The command's
+    /// editor is that exact view, whatever has focus later; a leaf that has
+    /// left the tab's views makes the target invalid.
+    pub(crate) leaf: Option<gpui::EntityId>,
 }
 
 impl ProductCommandTarget {
@@ -198,7 +202,42 @@ impl ProductCommandTarget {
         let tab = self.validate_tab(cx).ok()?;
         let workbench = self.workbench.upgrade()?;
         let workbench = workbench.read(cx);
-        workbench.command_view(workbench.tab(tab.pane, tab.tab)?)
+        let tab = workbench.tab(tab.pane, tab.tab)?;
+        let view = workbench.command_view(tab)?;
+        match (self.leaf, view) {
+            (Some(leaf), crate::app::workbench::CommandView::Editor(_)) => workbench
+                .view_node(tab, cx)?
+                .path_to(leaf)?
+                .last()?
+                .editor
+                .clone()
+                .map(crate::app::workbench::CommandView::Editor),
+            (_, view) => Some(view),
+        }
+    }
+
+    /// The views from the captured leaf up to the tab's root view, the leaf
+    /// first.
+    pub(crate) fn view_chain(&self, cx: &App) -> Vec<gpui::EntityId> {
+        let Some(leaf) = self.leaf else {
+            return Vec::new();
+        };
+        let Ok(tab) = self.validate_tab(cx) else {
+            return Vec::new();
+        };
+        let Some(workbench) = self.workbench.upgrade() else {
+            return Vec::new();
+        };
+        let workbench = workbench.read(cx);
+        let Some(root) = workbench
+            .tab(tab.pane, tab.tab)
+            .and_then(|tab| workbench.view_node(tab, cx))
+        else {
+            return Vec::new();
+        };
+        root.path_to(leaf)
+            .map(|path| path.into_iter().rev().map(|node| node.id).collect())
+            .unwrap_or_default()
     }
 
     /// The diff view the captured tab presents, if it is a diff tab.

@@ -169,6 +169,16 @@ pub(crate) struct StartupReportSnapshot {
     pub(crate) report: LoadReport,
 }
 
+/// The wire name of the view `view` in the window `window`.
+fn node_target(window: gpui::EntityId, view: gpui::EntityId) -> knot_protocol::ViewNodeTarget {
+    knot_protocol::ViewNodeTarget {
+        window: knot_protocol::WindowTarget {
+            window: crate::app::product::window_id(window),
+        },
+        view: view.as_u64().to_string(),
+    }
+}
+
 pub(crate) fn entity(cx: &App) -> Option<Entity<ProductExtensionHost>> {
     cx.try_global::<ApplicationExtensionHost>()
         .map(|global| global._host.clone())
@@ -2664,6 +2674,15 @@ impl ProductExtensionHost {
                                     target.command_view(cx),
                                     Some(crate::app::workbench::CommandView::Editor(_))
                                 ),
+                                focused_view: target.leaf.map(|leaf| {
+                                    Box::new(node_target(target.window.entity_id(), leaf))
+                                }),
+                                view_chain: target
+                                    .view_chain(cx)
+                                    .into_iter()
+                                    .skip(1)
+                                    .map(|view| node_target(target.window.entity_id(), view))
+                                    .collect(),
                             }
                         });
                         let id = invocation.id;

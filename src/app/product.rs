@@ -1696,6 +1696,7 @@ impl KnotWindow {
             }),
             focused,
             view,
+            leaf: pane.and_then(|pane| workbench.focused_leaf(pane.active_tab(), cx)),
         }
     }
 
@@ -1736,6 +1737,7 @@ impl KnotWindow {
                 }
                 _ => None,
             },
+            leaf: workbench.focused_leaf(tab, cx),
         };
         let mut arguments = action.command.arguments.clone();
         arguments.insert(

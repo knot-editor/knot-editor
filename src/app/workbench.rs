@@ -256,6 +256,11 @@ impl Workbench {
         }
     }
 
+    /// The view that has focus within a tab's views.
+    pub(crate) fn focused_leaf(&self, tab: &WorkbenchTab, cx: &App) -> Option<EntityId> {
+        Some(self.view_node(tab, cx)?.focused_leaf().id)
+    }
+
     /// The tree of views a tab presents.
     pub(crate) fn view_node(&self, tab: &WorkbenchTab, cx: &App) -> Option<ViewNode> {
         Some(match self.views.get(&tab.presentation())? {

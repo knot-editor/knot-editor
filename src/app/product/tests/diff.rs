@@ -1306,6 +1306,20 @@ fn switching_diff_sides_moves_the_focused_view_and_reports_it(cx: &mut TestAppCo
     );
 }
 
+const CAPTURE_SOURCE: &str = r#"
+import { commands, workbench } from "knot";
+await commands.register("capture.report", async (context) => {
+  const { snapshot } = await workbench.observe(() => {});
+  const diff = snapshot.windows[0].panes.flatMap((pane) => pane.tabs).find((tab) => tab.kind === "diff");
+  const leaf = context.target.focusedView;
+  const side = diff.root.children.findIndex((child) => child.target === leaf);
+  const chain = context.target.viewChain;
+  // The command's editor is the captured leaf.
+  await context.editor.setSelection({ anchor: side + 1, caret: side + 1 });
+  await workbench.writeClipboardText([side, chain.length, chain[0] === diff.root.target].join(","));
+});
+"#;
+
 const BINDING_SOURCE: &str = r#"
 import { commands, workbench } from "knot";
 const handles = [];
@@ -1404,4 +1418,47 @@ fn editor_handles_bind_each_diff_side_exactly_and_go_stale_with_their_view(
     assert_eq!(diff_tabs(&window, cx), 0);
     run("binding.report", cx);
     assert_eq!(clipboard_text(cx), "InvalidTarget,InvalidTarget");
+}
+
+#[gpui::test]
+fn commands_capture_the_focused_diff_side_and_the_views_above_it(cx: &mut TestAppContext) {
+    use knot_model::diff::DiffSide;
+    use knot_protocol::{ExtensionId, ExtensionKey, ExtensionLifecycleId};
+    let (window, native_window, _) = diff_window(cx);
+    let host = cx.update(crate::app::extensions::host::install);
+    let key = ExtensionKey::new(ExtensionId::new(732), ExtensionLifecycleId::new(1));
+    host.update(cx, |host, cx| {
+        let execution = host.load_test_source(key, CAPTURE_SOURCE).unwrap();
+        cx.spawn(async move |_, _| execution.await.unwrap())
+            .detach();
+    });
+    wait_for_api_condition(cx, |cx| {
+        cx.global::<ApplicationProductCommands>()
+            .0
+            .read(cx)
+            .catalog()
+            .borrow()
+            .resolve("capture.report")
+            .is_ok()
+    });
+    let view = active_diff(&window, cx);
+    let [original, modified] = cx.read(|cx| view.read(cx).editors().map(Clone::clone));
+    for (side, expected, editor) in [
+        (DiffSide::Original, "0,1,true", &original),
+        (DiffSide::Modified, "1,1,true", &modified),
+    ] {
+        view.update(cx, |view, cx| view.set_focused_side(side, cx));
+        assert_eq!(
+            run_command(&window, native_window, "capture.report", cx),
+            CommandOutcome::Completed
+        );
+        assert_eq!(clipboard_text(cx), expected);
+        let caret = usize::from(side == DiffSide::Modified) + 1;
+        cx.read(|cx| {
+            assert_eq!(
+                editor.read(cx).editor().read(cx).selection(cx),
+                (caret, caret)
+            );
+        });
+    }
 }

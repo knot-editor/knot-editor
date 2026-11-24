@@ -1918,8 +1918,15 @@ function context(window: Knot.WindowTarget, args: Knot.JsonValue, tool: string |
     removeEventListener() {},
     throwIfAborted() {},
   };
-  const target = { window: "window", windowTarget: window, view: null, tool } as unknown as Knot.CommandTarget;
   const tab = tool === null ? fakeWindow(window).tabs[fakeWindow(window).selected] : undefined;
+  const target = {
+    window: "window",
+    windowTarget: window,
+    focusedView: tab === undefined ? null : rootTarget(fakeWindow(window), tab),
+    viewChain: [],
+    view: null,
+    tool,
+  } as unknown as Knot.CommandTarget;
   const presented = tab === undefined ? undefined : state.documents.get(tab.document);
   return {
     target,

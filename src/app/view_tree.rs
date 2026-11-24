@@ -73,6 +73,17 @@ impl ViewNode {
         }
     }
 
+    /// The views from this one down to the view `id`, this one first, or
+    /// none when `id` is not beneath it.
+    pub(crate) fn path_to(&self, id: EntityId) -> Option<Vec<&ViewNode>> {
+        if self.id == id {
+            return Some(vec![self]);
+        }
+        let mut path = self.children.iter().find_map(|child| child.path_to(id))?;
+        path.insert(0, self);
+        Some(path)
+    }
+
     /// This view and every view beneath it, parents first.
     pub(crate) fn descendants(&self) -> Vec<&ViewNode> {
         let mut nodes = vec![self];

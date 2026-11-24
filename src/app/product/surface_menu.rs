@@ -44,6 +44,9 @@ impl KnotWindow {
             tab: Some(target),
             focused: true,
             view,
+            leaf: is_active_focus
+                .then(|| workbench.focused_leaf(clicked, cx))
+                .flatten(),
         })
     }
 

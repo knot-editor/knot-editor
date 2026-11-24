@@ -103,6 +103,7 @@ impl KnotWindow {
                         }),
                         focused: true,
                         view: None,
+                        leaf: None,
                     }),
                 }
             }));
@@ -226,6 +227,7 @@ impl KnotWindow {
             }),
             focused: true,
             view: None,
+            leaf: None,
         };
         // Protected closure updates this window, so it starts outside the
         // current update.

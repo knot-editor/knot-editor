@@ -502,6 +502,13 @@ await commands.register("handle.measure", async () => {
   ];
   await workbench.writeClipboardText(report.join(","));
 });
+await commands.register("handle.captured", async (context) => {
+  const { snapshot } = await workbench.observe(() => {});
+  const tab = snapshot.windows[0].panes.flatMap((pane) => pane.tabs).find((tab) => tab.kind === "document");
+  await workbench.writeClipboardText(
+    [context.target.focusedView === tab.root.target, context.target.viewChain.length, context.editor !== null].join(","),
+  );
+});
 await commands.register("handle.move", async () => {
   await handle.setSelection({ anchor: 1, caret: 1 });
 });
@@ -1480,4 +1487,19 @@ fn window_level_key_commands_are_not_recorded(cx: &mut TestAppContext) {
     press_keys(&window, "secondary-shift-p escape", cx);
     run_recording_command(&window, "rec.stop", Some("a"), cx);
     assert_eq!(recorded(cx), serde_json::json!([]));
+}
+
+#[gpui::test]
+fn a_command_on_a_document_tab_captures_its_root_editor_view(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    let (_host, _) = load_handle_extension(cx);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let window = headless_window(document, model, cx);
+    let execution = dispatch_product_command(&window, Headless, "handle.captured", cx);
+    assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
+    assert_eq!(
+        cx.read(|cx| cx.read_from_clipboard().unwrap().text().unwrap()),
+        "true,0,true"
+    );
 }

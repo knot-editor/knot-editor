@@ -1323,6 +1323,15 @@ declare module "knot" {
      * was focused. It identifies that exact tab; it never follows a later
      * focus change. */
     readonly viewTarget: ViewTarget | null;
+    /** The view with focus inside that tab when the command was captured: an
+     * editor when `CommandContext.editor` is set, so the command acts on that
+     * exact editor and never on the side that gains focus later. Null when no
+     * tab was focused. */
+    readonly focusedView: ViewNodeTarget | null;
+    /** The views above `focusedView`, its parent first and the tab's root view
+     * last; empty when the focused view is the root. A composite view's
+     * package finds its instance here. */
+    readonly viewChain: readonly ViewNodeTarget[];
     /** Captured extension-addressable view, or null when none is available. */
     readonly view: ViewId | null;
     /** Stable contributed view ID, or null for non-contributed surfaces. */
