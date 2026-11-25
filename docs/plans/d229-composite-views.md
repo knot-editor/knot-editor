@@ -273,7 +273,7 @@ new views. The focused view keeps focus, or the layout's initial focus takes
 over when it is removed. An update that would drop the final view of a
 document with unsaved changes fails with `DocumentUnsaved`.
 
-#### 14. Toolbar 🔎
+#### 14. Toolbar ✅
 
 `open` and `update` take a `toolbar` of icon buttons (`label` tooltip, `icon`,
 `command`, `arguments`, `toggled`, `disabled`); an update replaces the whole
@@ -282,8 +282,7 @@ view focused there as its focus, wherever focus is. Documented in the
 [extension guide](../extension-api/ui.md#open-a-composite-view) and the
 [composite views](../architecture/workbench-and-lifecycle.md#composite-views)
 reference, which also cover the layout, embedded views, document editors, and
-keys of checkpoints 9 to 13. Review gate: the toolbar by hand with the
-playground's `Playground: Open Composite with Toolbar`, and the phase D docs.
+keys of checkpoints 9 to 13.
 
 ### Phase E — Editor primitives
 
