@@ -22,7 +22,6 @@ use super::theme::{color, theme};
 use super::tree_view::TreeView;
 use super::view_tree::{ViewFocusChanged, ViewKind, ViewNode, ViewTree, ViewTreeChanged};
 use super::workbench::{CommandView, ExtensionView};
-use super::{tokens, zoom};
 
 static NEXT_COMPOSITE_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -405,9 +404,8 @@ impl GroupView {
             .flex()
             .flex_row()
             .flex_none()
-            .gap_1()
-            .px_1()
-            .py_1()
+            .items_end()
+            .bg(theme.paint_color(color::TAB_BAR_BACKGROUND))
             .border_b_1()
             .border_color(theme.paint_color(color::BORDER))
             .children(self.0.members.iter().enumerate().map(|(index, member)| {
@@ -416,15 +414,19 @@ impl GroupView {
                 div()
                     .id(("composite-tab", index))
                     .debug_selector(move || format!("composite-tab-{index}"))
-                    .px_2()
-                    .rounded(zoom::rems(tokens::radius::MD))
-                    .text_xs()
-                    .when(active, |chip| {
-                        chip.bg(theme.paint_color(color::LIST_SELECTED_BACKGROUND))
-                            .text_color(theme.paint_color(color::LIST_SELECTED_FOREGROUND))
+                    .px_3()
+                    .py_1p5()
+                    .text_sm()
+                    .cursor_pointer()
+                    .border_b_2()
+                    .when(active, |tab| {
+                        tab.bg(theme.paint_color(color::TAB_ACTIVE_BACKGROUND))
+                            .text_color(theme.paint_color(color::TAB_ACTIVE_FOREGROUND))
+                            .border_color(theme.paint_color(color::TAB_ACCENT))
                     })
-                    .when(!active, |chip| {
-                        chip.text_color(theme.paint_color(color::TEXT_MUTED))
+                    .when(!active, |tab| {
+                        tab.border_color(gpui::transparent_black())
+                            .text_color(theme.paint_color(color::TAB_INACTIVE_FOREGROUND))
                             .hover(|style| {
                                 style.bg(theme.paint_color(color::LIST_HOVER_BACKGROUND))
                             })
