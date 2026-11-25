@@ -270,25 +270,12 @@ included. Reference docs follow in checkpoint 14.
 #### 13. Layout updates ✅
 
 `instance.update({ layout })` replaces the layout. A member names itself with
-an optional `key`, unique in the layout; a keyed member keeps its view when
-the new layout has the key and the same content (the same buffer or document
-for an editor, the same embedded view for a text frame or tree, any group), so
-it keeps its handle, state, and focus wherever it moves. A group keeps its
-identity and takes the new arrangement and members. A member without a key,
-or whose key shows something else, is a new view; views left out close.
-
-The focused view keeps focus. When it is removed, the layout's initial focus
-takes over as on open; a `focused` member of an update does not move focus
-otherwise. A tabs group keeps the member it showed when that member is kept.
-A command that removes the view it ran in ends `InvalidTarget`, as one that
-closes its own tab does.
-
-A dropped document that was the final view of its document is closed, and an
-update that would drop the final view of one with unsaved changes fails with
-`DocumentUnsaved` and changes nothing.
-
-Review gate: child naming. Try it with the playground's "Open Keyed Composite"
-and "Next Layout". Reference docs follow in checkpoint 14.
+an optional `key`; a keyed member keeps its view, handle, and focus when the
+new layout has the key and the same content, and members without a key are
+new views. The focused view keeps focus, or the layout's initial focus takes
+over when it is removed. An update that would drop the final view of a
+document with unsaved changes fails with `DocumentUnsaved`. Reference docs
+follow in checkpoint 14.
 
 #### 14. Toolbar
 
