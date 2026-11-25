@@ -494,9 +494,14 @@ impl ProductExtensionHost {
     }
 }
 
+/// The definitions that get a tool window, which excludes embedded views.
 pub(crate) fn view_definitions(cx: &App) -> Vec<crate::app::extensions::semantics::ViewDefinition> {
     entity(cx)
-        .map(|host| host.read(cx).semantics.definitions())
+        .map(|host| {
+            let mut definitions = host.read(cx).semantics.definitions();
+            definitions.retain(|definition| !definition.embedded);
+            definitions
+        })
         .unwrap_or_default()
 }
 
@@ -510,11 +515,24 @@ pub(crate) fn attach_view_instance(
 ) -> bool {
     let Some(host) = entity(cx) else { return false };
     host.update(cx, |host, cx| {
-        if !host.semantics.has_definition(&stable_id) {
+        host.attach_view(stable_id, window_id, view, cx)
+    })
+}
+
+impl ProductExtensionHost {
+    /// Attach a native view instance to the definition `stable_id` names.
+    pub(crate) fn attach_view(
+        &mut self,
+        stable_id: String,
+        window_id: String,
+        view: ExtensionView,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if !self.semantics.has_definition(&stable_id) {
             return false;
         }
         let view_id = view.instance_id(cx);
-        if host
+        if self
             .commands
             .catalog()
             .borrow_mut()
@@ -524,22 +542,22 @@ pub(crate) fn attach_view_instance(
             return false;
         }
         let attached = match &view {
-            ExtensionView::Tree(tree) => host
+            ExtensionView::Tree(tree) => self
                 .semantics
                 .add_tree_view(stable_id, window_id, tree.clone(), cx)
                 .is_ok(),
             ExtensionView::Text(text) => {
-                host.semantics
+                self.semantics
                     .add_text_view(stable_id, window_id, text.clone(), cx);
                 true
             }
         };
         if !attached {
-            host.commands.catalog().borrow_mut().remove_view(view_id);
+            self.commands.catalog().borrow_mut().remove_view(view_id);
             return false;
         }
         true
-    })
+    }
 }
 
 pub(crate) fn detach_view_instance(view: ViewId, cx: &mut App) {

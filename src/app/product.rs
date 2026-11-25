@@ -2510,13 +2510,28 @@ impl KnotWindow {
         tab: crate::app::composite_view::CompositeTab,
         layout: crate::app::composite_view::GroupSpec,
         cx: &mut Context<Self>,
-    ) -> OpenTarget {
+    ) -> (OpenTarget, Vec<super::workbench::ExtensionView>) {
+        let window = window_id(cx.entity_id());
         let (pane, tab) = self.workbench.update(cx, |workbench, cx| {
-            workbench.open_composite_in_center(tab, layout, cx)
+            workbench.open_composite_in_center(tab, layout, &window, cx)
         });
+        let hosted = {
+            let workbench = self.workbench.read(cx);
+            workbench
+                .tab(pane, tab)
+                .and_then(|tab| workbench.composite_view(tab))
+                .map(|view| view.read(cx).hosted_views())
+                .unwrap_or_default()
+        };
+        for view in &hosted {
+            self.observe_hosted_view(view, cx);
+        }
         self.focus_active_surface(cx);
         cx.notify();
-        OpenTarget::at(cx.weak_entity(), &self.workbench, pane, tab, cx)
+        (
+            OpenTarget::at(cx.weak_entity(), &self.workbench, pane, tab, cx),
+            hosted,
+        )
     }
 
     #[cfg(test)]

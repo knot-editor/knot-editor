@@ -2396,6 +2396,12 @@ declare module "knot" {
      * numbers, which then follow `editor.lineNumbers` under the view's ID.
      * Text frames only; defaults to false. */
     readonly gutter?: boolean;
+    /** Whether composite views host this view instead of a tool window:
+     * `show`, `hide`, `focus`, and `toggle` do nothing. A composite's `tree`
+     * or `text` member takes the registration, and each composite holding it
+     * shows one instance, so they share its content. Tree and text frames
+     * only; defaults to false. */
+    readonly embedded?: boolean;
   }
   export interface TreeEditOptions {
     /** The initial text; defaults to empty. */
@@ -2999,16 +3005,29 @@ declare module "knot" {
     | { readonly pixels: number };
   interface CompositeLayoutMember {
     readonly size?: CompositeSize;
-    /** The member that has focus when the tab opens; a row or column gives it
-     * to its first editor. At most one member of a group sets it. When none
-     * does, the first editor in layout order has focus. Later, the editor
-     * focused last has it when the tab is selected again. */
+    /** The member that has focus when the tab opens; a group gives it to its
+     * first view, and tabs show the member. At most one member of a group
+     * sets it. When none does, the first view in layout order has focus.
+     * Later, the view focused last has it when the tab is selected again. */
     readonly focused?: boolean;
+    /** The label of the member's tab. Required for a member of `tabs`, and
+     * for no other member. */
+    readonly title?: string;
   }
   /** An editor on a buffer of `buffers.create`. */
   export interface CompositeEditor extends CompositeLayoutMember {
     readonly type: "editor";
     readonly buffer: ExtensionBuffer;
+  }
+  /** A text frame of a view registered with `embedded`. */
+  export interface CompositeText extends CompositeLayoutMember {
+    readonly type: "text";
+    readonly view: ViewRegistration;
+  }
+  /** A tree of a view registered with `embedded`. */
+  export interface CompositeTree extends CompositeLayoutMember {
+    readonly type: "tree";
+    readonly view: ViewRegistration;
   }
   /** A group of members side by side (`row`) or stacked (`column`). A group
    * inside another is a composite view of its own in the view tree. */
@@ -3016,10 +3035,17 @@ declare module "knot" {
     readonly type: "row" | "column";
     readonly children: readonly CompositeLayout[];
   }
-  export type CompositeLayout = CompositeEditor | CompositeGroup;
+  /** Members of which one shows at a time, chosen from a strip of their
+   * titles. A composite view of its own in the view tree, whose children are
+   * all the members; the shown one holds focus. */
+  export interface CompositeTabs extends CompositeLayoutMember {
+    readonly type: "tabs";
+    readonly children: readonly CompositeLayout[];
+  }
+  export type CompositeLayout = CompositeEditor | CompositeText | CompositeTree | CompositeGroup | CompositeTabs;
   export interface OpenCompositeOptions extends DocumentDestinationOptions, CompositeTab {
     /** The layout, which the user cannot rearrange: a row or column holding at
-     * least one editor at any depth. */
+     * least one editor, text frame, or tree at any depth. */
     readonly layout: CompositeGroup;
   }
   /** An open composite view. Disposing it closes the tab, as `close` does. */
@@ -3047,9 +3073,11 @@ declare module "knot" {
      * it. Instances are not restored with their window. The caller's
      * lifecycle owns the tab: it closes when the extension unloads, the
      * instance or this registration is disposed.
-     * @throws TypeError for invalid options, a layout without an editor, or a
-     * buffer that is not this package's; HostError with BufferClosed, InvalidUri, InvalidTarget for a
-     * stale destination, OwnershipDisposed after disposal, or Cancelled.
+     * @throws TypeError for invalid options, a layout without a view, a buffer
+     * that is not this package's, or a view that is not embedded; HostError with
+     * BufferClosed, InvalidUri, InvalidTarget for a stale destination or a
+     * view whose registration ended, OwnershipDisposed after disposal, or
+     * Cancelled.
      */
     open(options: OpenCompositeOptions): Promise<CompositeInstance>;
   }

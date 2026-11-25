@@ -358,17 +358,26 @@ pub(crate) fn set_diff_text(
     }
 }
 
-/// Open a composite view of `layout` in the center of the destination's window.
+/// Open a composite view of `layout` in the center of the destination's
+/// window, returning its target, the window's ID, and the contributed views
+/// it holds.
 pub(crate) fn open_composite(
     destination: DocumentDestination,
     tab: crate::app::composite_view::CompositeTab,
     layout: crate::app::composite_view::GroupSpec,
     cx: &mut App,
-) -> Result<PresentationTarget, OpenError> {
+) -> Result<
+    (
+        PresentationTarget,
+        String,
+        Vec<crate::app::workbench::ExtensionView>,
+    ),
+    OpenError,
+> {
     let (window, _) = capture_destination(&destination, cx)?;
-    Ok(window
-        .update(cx, |window, cx| window.open_composite(tab, layout, cx))
-        .public_target())
+    let id = super::window_id(window.entity_id());
+    let (target, hosted) = window.update(cx, |window, cx| window.open_composite(tab, layout, cx));
+    Ok((target.public_target(), id, hosted))
 }
 
 /// Replace what the tab of the composite view `target` names shows.

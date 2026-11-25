@@ -11,7 +11,7 @@ use gpui::{App, Entity, WeakEntity};
 
 use knot_model::contracts::ContractSchema;
 use knot_model::providers::{ProviderRegistry, ServedContract};
-use knot_protocol::{ContractClientId, ProviderRegistrationId};
+use knot_protocol::{ContractClientId, ExtensionKey, ProviderRegistrationId};
 use knot_protocol::{
     ExtensionId, ExtensionLifecycleId, RequestContext, TreeAction, TreeChildrenResponse,
     TreeProviderRegistrationId, ViewContentKind, ViewId,
@@ -83,6 +83,8 @@ pub(crate) struct ViewDefinition {
     pub(crate) new_tab: Option<String>,
     /// The dot on its stripe button.
     pub(crate) badge: Option<crate::app::workbench::ToolBadge>,
+    /// Composites host the view; it has no tool window.
+    pub(crate) embedded: bool,
 }
 
 struct TreeRegistration {
@@ -239,6 +241,7 @@ impl ExtensionSemanticBridge {
             gutter,
             new_tab,
             drop,
+            embedded,
         } = arguments;
 
         if id.is_empty() || id.starts_with("knot.") {
@@ -275,6 +278,7 @@ impl ExtensionSemanticBridge {
             visible,
             new_tab,
             badge: None,
+            embedded,
         };
         if content == ViewContentKind::Tree {
             for view in self.live_tree_views(&id, None) {
@@ -443,6 +447,23 @@ impl ExtensionSemanticBridge {
             .collect::<Vec<_>>();
         definitions.sort_by(|left, right| (left.order, &left.id).cmp(&(right.order, &right.id)));
         definitions
+    }
+
+    /// The content of the embedded view `id` that `owner` registered.
+    pub(crate) fn embedded_content(
+        &self,
+        id: &str,
+        owner: ExtensionKey,
+    ) -> Option<ViewContentKind> {
+        self.tree_registrations
+            .values()
+            .find(|entry| entry.definition.id == id)
+            .filter(|entry| {
+                entry.definition.embedded
+                    && (entry.identity.extension, entry.identity.lifecycle)
+                        == (owner.extension, owner.lifecycle)
+            })
+            .map(|entry| entry.definition.content)
     }
 
     pub(crate) fn has_definition(&self, id: &str) -> bool {
@@ -635,6 +656,7 @@ mod tests {
             gutter: false,
             new_tab: None,
             drop: None,
+            embedded: false,
         }
     }
 
@@ -651,6 +673,7 @@ mod tests {
             gutter: false,
             new_tab: None,
             drop: None,
+            embedded: false,
         }
     }
 

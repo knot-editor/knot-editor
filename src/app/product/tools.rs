@@ -36,6 +36,47 @@ impl KnotWindow {
         }
     }
 
+    /// Route what a tree reports: popup focus stays with the window, the rest
+    /// goes to the extension host.
+    fn handle_tree_event(
+        &mut self,
+        event: &crate::app::tree_view::TreeViewEvent,
+        cx: &mut Context<Self>,
+    ) {
+        match event {
+            crate::app::tree_view::TreeViewEvent::ContextMenuOpened => {
+                self.set_focus(Focus::Popup, cx);
+                return;
+            }
+            crate::app::tree_view::TreeViewEvent::ContextMenuClosed => {
+                self.close_popup_focus(cx);
+                return;
+            }
+            _ => {}
+        }
+        let event = event.clone();
+        cx.defer(move |cx| crate::app::extensions::host::route_tree_event(&event, cx));
+        cx.notify();
+    }
+
+    /// Route the events of a contributed view a composite holds, for as long
+    /// as the view lives.
+    pub(super) fn observe_hosted_view(
+        &mut self,
+        view: &crate::app::workbench::ExtensionView,
+        cx: &mut Context<Self>,
+    ) {
+        use crate::app::workbench::ExtensionView;
+        match view {
+            ExtensionView::Tree(tree) => {
+                cx.subscribe(tree, |this, _, event, cx| this.handle_tree_event(event, cx))
+                    .detach();
+                cx.observe(tree, |_, _, cx| cx.notify()).detach();
+            }
+            ExtensionView::Text(text) => cx.observe(text, |_, _, cx| cx.notify()).detach(),
+        }
+    }
+
     pub(super) fn attach_contributed_view(
         &mut self,
         definition: crate::app::extensions::semantics::ViewDefinition,
@@ -68,20 +109,7 @@ impl KnotWindow {
                     crate::app::tree_view::TreeView::new(definition.id.clone(), window.clone(), cx)
                 });
                 let event = cx.subscribe(&view, |this, _, event, cx| {
-                    match event {
-                        crate::app::tree_view::TreeViewEvent::ContextMenuOpened => {
-                            this.set_focus(Focus::Popup, cx);
-                            return;
-                        }
-                        crate::app::tree_view::TreeViewEvent::ContextMenuClosed => {
-                            this.close_popup_focus(cx);
-                            return;
-                        }
-                        _ => {}
-                    }
-                    let event = event.clone();
-                    cx.defer(move |cx| crate::app::extensions::host::route_tree_event(&event, cx));
-                    cx.notify();
+                    this.handle_tree_event(event, cx)
                 });
                 let observer = cx.observe(&view, |_, _, cx| cx.notify());
                 (

@@ -277,8 +277,17 @@ export type FakeDiff = {
   closed: boolean;
 };
 
-function hasEditor(layout: Knot.CompositeLayout): boolean {
-  return layout.type === "editor" || layout.children.some(hasEditor);
+function hasView(layout: Knot.CompositeLayout): boolean {
+  return "children" in layout ? layout.children.some(hasView) : true;
+}
+
+/** Throws a TypeError for a text or tree member whose view was not registered with `embedded`. */
+function checkEmbedded(layout: Knot.CompositeLayout, views: Map<string, FakeView>) {
+  if ("children" in layout) {
+    for (const child of layout.children) checkEmbedded(child, views);
+  } else if (layout.type !== "editor" && views.get(layout.view.id)?.contribution.embedded !== true) {
+    throw new TypeError(`composite ${layout.type} must be a ${layout.type} view registered with embedded`);
+  }
 }
 
 /** A composite view opened through a `workbench.registerComposite` registration; the fake keeps it outside the window's tabs. */
@@ -2979,7 +2988,8 @@ export const api: KnotApi = {
         id,
         open: async (options) => {
           if (disposed) throw hostError("OwnershipDisposed");
-          if (!hasEditor(options.layout)) throw new TypeError("composite layout needs an editor");
+          if (!hasView(options.layout)) throw new TypeError("composite layout needs a view");
+          checkEmbedded(options.layout, state.views);
           const window = destinationWindow(options.target);
           const composite: FakeComposite = {
             kind: id,

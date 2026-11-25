@@ -1592,6 +1592,8 @@ pub(crate) struct TreeArguments {
     pub new_tab: Option<String>,
     /// A tree's command that runs when a row is dropped onto another.
     pub drop: Option<String>,
+    /// Whether composites host the view instead of a tool window.
+    pub embedded: bool,
 }
 impl HostArguments for TreeArguments {
     fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
@@ -1626,6 +1628,7 @@ impl HostArguments for TreeArguments {
             gutter: reader.integer(10)? != 0,
             new_tab: reader.optional_text(11, "view new tab command must be text or null")?,
             drop: reader.optional_text(12, "view drop command must be text or null")?,
+            embedded: reader.integer(13)? != 0,
         })
     }
 }

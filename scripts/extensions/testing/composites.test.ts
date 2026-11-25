@@ -50,3 +50,36 @@ test("a layout nests rows and columns around editors and needs one editor", asyn
     TypeError,
   );
 });
+
+test("a layout holds embedded trees and text frames, and tabs of members", async () => {
+  const registration = await workbench.registerComposite({ id: "example.view" });
+  host.openWindow();
+  const buffer = await buffers.create();
+  const tree = await workbench.registerView({
+    id: "example.files",
+    title: "Files",
+    embedded: true,
+    content: { kind: "tree", provider: { getChildren: () => [] } },
+  });
+  const log = await workbench.registerView({ id: "example.log", title: "Log", embedded: true, content: { kind: "text" } });
+  const layout = {
+    type: "row",
+    children: [
+      { type: "tree", view: tree },
+      {
+        type: "tabs",
+        children: [
+          { type: "editor", title: "Code", buffer },
+          { type: "text", title: "Log", view: log, focused: true },
+        ],
+      },
+    ],
+  } as const;
+  await registration.open({ title: "Views", layout });
+  assert.deepEqual(host.composites()[0]!.options.layout, layout);
+  const tool = await workbench.registerView({ id: "example.tool", title: "Tool", content: { kind: "text" } });
+  await assert.rejects(
+    () => registration.open({ title: "Tool", layout: { type: "row", children: [{ type: "text", view: tool }] } }),
+    TypeError,
+  );
+});

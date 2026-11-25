@@ -64,6 +64,48 @@ await commands.register("composite.open-default", async () => {
     },
   });
 });
+// A tree and a text frame beside tabs of an editor and another text frame;
+// the layout names the log tab as focused when `which` says so.
+let embedded;
+const openViews = async (focusLog) => {
+  const kind = registration ?? (registration = await workbench.registerComposite({ id: "example.view" }));
+  if (embedded === undefined) {
+    const tree = await workbench.registerView({
+      id: "example.files",
+      title: "Files",
+      embedded: true,
+      content: {
+        kind: "tree",
+        provider: { getChildren: () => [
+          { id: "a", label: "Alpha", collapsibleState: "none" },
+          { id: "b", label: "Beta", collapsibleState: "none" },
+        ] },
+      },
+    });
+    const log = await workbench.registerView({ id: "example.log", title: "Log", embedded: true, content: { kind: "text" } });
+    await log.setText("log text\n");
+    embedded = { tree, log };
+  }
+  const buffer = await buffers.create({ text: "code\n" });
+  instance = await kind.open({
+    title: "Views",
+    layout: {
+      type: "row",
+      children: [
+        { type: "tree", view: embedded.tree, size: { pixels: 160 } },
+        {
+          type: "tabs",
+          children: [
+            { type: "editor", title: "Code", buffer },
+            { type: "text", title: "Log", view: embedded.log, focused: focusLog },
+          ],
+        },
+      ],
+    },
+  });
+};
+await commands.register("composite.open-views", () => openViews(false));
+await commands.register("composite.open-views-log", () => openViews(true));
 await commands.register("composite.capture", async (context) => {
   check(context.editor !== null && context.buffer !== null, "editor and buffer captured");
   check(context.target.focusedView !== null, "focused view");
@@ -86,7 +128,17 @@ await commands.register("composite.invalid-layouts", async () => {
   await rejected({ type: "row", children: [{ ...editor, focused: true }, { ...editor, focused: true }] }, "two focused");
   await rejected({ type: "row", children: [{ ...editor, size: { weight: 0 } }] }, "zero weight");
   await rejected({ type: "row", children: [{ ...editor, size: { weight: 1, pixels: 1 } }] }, "two size kinds");
-  await rejected({ type: "tabs", children: [editor] }, "unknown type");
+  await rejected({ type: "grid", children: [editor] }, "unknown type");
+  await rejected({ type: "tabs", children: [{ ...editor, title: "A" }] }, "root tabs");
+  await rejected({ type: "row", children: [{ type: "tabs", children: [editor] }] }, "tab without title");
+  await rejected({ type: "row", children: [{ ...editor, title: "A" }] }, "title outside tabs");
+  const plain = await workbench.registerView({ id: "example.plain", title: "Plain", content: { kind: "text" } });
+  await rejected({ type: "row", children: [{ type: "text", view: plain }] }, "view not embedded");
+  const tree = await workbench.registerView({
+    id: "example.other-tree", title: "T", embedded: true,
+    content: { kind: "tree", provider: { getChildren: () => [] } },
+  });
+  await rejected({ type: "row", children: [{ type: "text", view: tree }] }, "wrong content kind");
   await rejected({ type: "row", children: [{ type: "editor", buffer: {} }] }, "foreign buffer");
 });
 await commands.register("composite.update", async () => {
@@ -242,7 +294,9 @@ fn an_extension_opens_a_composite_with_an_editor_in_its_view_tree(cx: &mut TestA
         let workbench = window.read(cx).workbench.read(cx);
         let tab = workbench.focused_pane().unwrap().active_tab();
         let composite = workbench.composite_view(tab).unwrap();
-        composite.read(cx).editors()[0]
+        composite.read(cx).leaves()[0]
+            .editor()
+            .unwrap()
             .read(cx)
             .model()
             .read(cx)
@@ -316,7 +370,7 @@ fn composite_root(info: &knot_protocol::WindowInfo) -> &knot_protocol::ViewNodeI
 
 /// Move focus into the `index`th editor of the focused composite, as a click
 /// in it would: the test window has no platform to report focus.
-fn focus_editor(
+fn focus_leaf(
     window: &Entity<KnotWindow>,
     native_window: gpui::AnyWindowHandle,
     index: usize,
@@ -327,8 +381,8 @@ fn focus_editor(
         let tab = workbench.focused_pane().unwrap().active_tab();
         workbench.composite_view(tab).unwrap().clone()
     });
-    let handle = cx.read(|cx| view.read(cx).editors()[index].read(cx).focus_handle(cx));
-    view.update(cx, |view, cx| view.set_focused_editor(index, cx));
+    let handle = cx.read(|cx| view.read(cx).leaves()[index].focus_handle(cx));
+    view.update(cx, |view, cx| view.set_focused_leaf(index, cx));
     cx.update_window(native_window, |_, native_window, cx| {
         handle.focus(native_window, cx);
         focus_view(&handle, native_window, cx);
@@ -397,7 +451,7 @@ fn the_first_editor_has_focus_when_the_layout_names_none(cx: &mut TestAppContext
 fn focus_moves_between_editors_and_reselecting_the_tab_restores_the_last(cx: &mut TestAppContext) {
     let (window, native_window, _, _) = window_with_extension(cx);
     run(&window, native_window, "composite.open-nested", cx);
-    focus_editor(&window, native_window, 1, cx);
+    focus_leaf(&window, native_window, 1, cx);
     let info_now = info(&window, cx);
     let root = composite_root(&info_now);
     assert_eq!(
@@ -408,7 +462,7 @@ fn focus_moves_between_editors_and_reselecting_the_tab_restores_the_last(cx: &mu
     // A command captures the focused editor, as find needs.
     run(&window, native_window, "composite.capture", cx);
 
-    focus_editor(&window, native_window, 0, cx);
+    focus_leaf(&window, native_window, 0, cx);
     let info_now = info(&window, cx);
     assert_eq!(
         info_now.focused_view.as_ref(),
@@ -444,4 +498,155 @@ fn a_layout_that_is_not_valid_is_a_type_error(cx: &mut TestAppContext) {
     let (window, native_window, _, _) = window_with_extension(cx);
     run(&window, native_window, "composite.invalid-layouts", cx);
     assert_eq!(composite_tabs(&window, cx), 0);
+}
+
+/// The focused composite's view of the `index`th leaf in layout order.
+fn leaf_of(
+    window: &Entity<KnotWindow>,
+    index: usize,
+    cx: &TestAppContext,
+) -> crate::app::composite_view::Leaf {
+    cx.read(|cx| {
+        let workbench = window.read(cx).workbench.read(cx);
+        let tab = workbench.focused_pane().unwrap().active_tab();
+        workbench.composite_view(tab).unwrap().read(cx).leaves()[index].clone()
+    })
+}
+
+/// Show the `index`th member of the composite's only tabs group and move
+/// focus into it, as clicking its title would.
+fn select_tab(
+    window: &Entity<KnotWindow>,
+    native_window: gpui::AnyWindowHandle,
+    index: usize,
+    cx: &mut TestAppContext,
+) {
+    let view = cx.read(|cx| {
+        let workbench = window.read(cx).workbench.read(cx);
+        let tab = workbench.focused_pane().unwrap().active_tab();
+        workbench.composite_view(tab).unwrap().clone()
+    });
+    view.update(cx, |view, cx| view.select_tab(0, index, cx))
+        .unwrap();
+    // The tabs follow the tree and the editor in layout order.
+    focus_leaf(window, native_window, 1 + index, cx);
+}
+
+fn command_view_kind(window: &Entity<KnotWindow>, cx: &TestAppContext) -> &'static str {
+    use crate::app::workbench::{CommandView, ExtensionView};
+    cx.read(|cx| {
+        match window
+            .read(cx)
+            .workbench
+            .read(cx)
+            .focused_command_view()
+            .unwrap()
+        {
+            CommandView::Editor(_) => "editor",
+            CommandView::Extension(ExtensionView::Tree(_)) => "tree",
+            CommandView::Extension(ExtensionView::Text(_)) => "text",
+            CommandView::Terminal(_) => "terminal",
+        }
+    })
+}
+
+#[gpui::test]
+fn trees_and_text_frames_are_views_beside_tabs_of_views(cx: &mut TestAppContext) {
+    let (window, native_window, _, _) = window_with_extension(cx);
+    run(&window, native_window, "composite.open-views", cx);
+    // An embedded view has no tool window.
+    assert!(
+        cx.read(crate::app::extensions::host::view_definitions)
+            .is_empty()
+    );
+
+    let info = info(&window, cx);
+    let root = composite_root(&info);
+    assert_eq!(root.children[0].kind, "tree");
+    let tabs = &root.children[1];
+    assert_eq!(tabs.kind, "composite");
+    assert_eq!(
+        tabs.children
+            .iter()
+            .map(|c| c.kind.as_str())
+            .collect::<Vec<_>>(),
+        ["editor", "text"]
+    );
+    // The first view has focus, and it is not an editor.
+    assert_eq!(info.focused_view.as_ref(), Some(&root.children[0].target));
+    assert_eq!(info.status_view, None);
+    assert_eq!(command_view_kind(&window, cx), "tree");
+
+    // The provider filled the tree, and the text frame has its text.
+    let crate::app::composite_view::Leaf::Tree(tree) = leaf_of(&window, 0, cx) else {
+        panic!("the first view is a tree");
+    };
+    assert_eq!(
+        cx.read(|cx| tree.read(cx).visible_labels()),
+        ["Alpha", "Beta"]
+    );
+    let crate::app::composite_view::Leaf::Text(text) = leaf_of(&window, 2, cx) else {
+        panic!("the third view is a text frame");
+    };
+    assert_eq!(cx.read(|cx| text.read(cx).text(cx)), "log text\n");
+}
+
+#[gpui::test]
+fn selecting_a_tab_shows_its_member_and_moves_focus_into_it(cx: &mut TestAppContext) {
+    let (window, native_window, _, _) = window_with_extension(cx);
+    run(&window, native_window, "composite.open-views", cx);
+
+    select_tab(&window, native_window, 1, cx);
+    let info_now = info(&window, cx);
+    let tabs = &composite_root(&info_now).children[1];
+    assert_eq!(
+        info_now.focused_view.as_ref(),
+        Some(&tabs.children[1].target)
+    );
+    assert_eq!(command_view_kind(&window, cx), "text");
+
+    select_tab(&window, native_window, 0, cx);
+    let info_now = info(&window, cx);
+    let tabs = &composite_root(&info_now).children[1];
+    assert_eq!(
+        info_now.focused_view.as_ref(),
+        Some(&tabs.children[0].target)
+    );
+    assert_eq!(info_now.status_view, info_now.focused_view);
+    assert_eq!(command_view_kind(&window, cx), "editor");
+    assert_eq!(command_text(&window, cx), "code\n");
+
+    // A command captures the editor it ran in.
+    run(&window, native_window, "composite.capture", cx);
+}
+
+#[gpui::test]
+fn a_focused_member_of_tabs_is_shown_and_has_focus_on_open(cx: &mut TestAppContext) {
+    let (window, native_window, _, _) = window_with_extension(cx);
+    run(&window, native_window, "composite.open-views-log", cx);
+    let info = info(&window, cx);
+    let tabs = &composite_root(&info).children[1];
+    assert_eq!(info.focused_view.as_ref(), Some(&tabs.children[1].target));
+    assert_eq!(command_view_kind(&window, cx), "text");
+}
+
+#[gpui::test]
+fn clicking_a_tab_title_shows_its_member_and_focuses_it(cx: &mut TestAppContext) {
+    let (window, native_window, _, _) = window_with_extension(cx);
+    run(&window, native_window, "composite.open-views", cx);
+    cx.refresh().unwrap();
+    let mut visual = gpui::VisualTestContext::from_window(native_window, cx);
+    let title = visual.debug_bounds("composite-tab-1").unwrap().center();
+    visual.simulate_mouse_down(title, gpui::MouseButton::Left, gpui::Modifiers::default());
+    visual.simulate_mouse_up(title, gpui::MouseButton::Left, gpui::Modifiers::default());
+    cx.run_until_parked();
+    cx.refresh().unwrap();
+    // The log tab shows its text, and its focus handle has focus.
+    let text = leaf_of(&window, 2, cx);
+    let focused = cx
+        .update_window(native_window, |_, native_window, cx| {
+            text.focus_handle(cx).is_focused(native_window)
+        })
+        .unwrap();
+    assert!(focused);
 }

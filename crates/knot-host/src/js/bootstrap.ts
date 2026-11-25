@@ -531,6 +531,8 @@ const bufferHandles = new WeakMap<object, Native>();
 const commandHandlers = new Map<number, Fn>();
 const bufferChangeListeners = new Map<number, { handle: Native; listener: Fn; turn?: Promise<unknown> }>();
 const treeProviders = new Map<number, { getChildren: Fn }>();
+/** The views of `registerView` with `embedded`, by registration object. */
+const embeddedViews = new WeakMap<object, { id: string; content: string; owned: { assertActive(): void } }>();
 const providerImplementations = new Map<number, Record<string, unknown>>();
 // The frame of the invocation a continuation belongs to travels with the
 // continuation itself (V8's continuation-preserved embedder data), so it
@@ -1742,6 +1744,12 @@ export async function registerView(contribution: unknown) {
     }
     gutter = value.gutter;
   }
+  let embedded = false;
+  if (value.embedded !== undefined) {
+    if (typeof value.embedded !== "boolean") throw new TypeError("view embedded must be a boolean");
+    if (content.kind === "container") throw new TypeError("view embedded applies only to tree or text content");
+    embedded = value.embedded;
+  }
   let location = "leftTop";
   let order = null;
   let visible = true;
@@ -1782,10 +1790,11 @@ export async function registerView(contribution: unknown) {
     gutter ? 1 : 0,
     newTab,
     drop,
+    embedded ? 1 : 0,
   ));
   const owned = ownership(() => treeProviders.delete(registration),
     () => request("unregisterView", registration));
-  return Object.freeze({
+  const view = Object.freeze({
     id,
     async show(window: unknown) {
       owned.assertActive();
@@ -1844,6 +1853,8 @@ export async function registerView(contribution: unknown) {
     },
     [Symbol.asyncDispose]: () => owned.dispose(),
   });
+  if (embedded) embeddedViews.set(view, { id, content: content.kind as string, owned });
+  return view;
 }
 
 // An inline edit passes each value to `validate`, whose message is shown
@@ -2197,14 +2208,17 @@ function compositeTab(given: Rec, titleRequired: boolean) {
   return { title: title as string | undefined, icon: icon ?? null, resource: (resource ?? null) as string | null };
 }
 /** The layout JSON of a composite's row or column, or of one member of it. */
-function compositeLayout(node: unknown, root: boolean): Rec {
+function compositeLayout(node: unknown, root: boolean, inTabs = false): Rec {
   const given = record(node, "composite layout must be an object");
-  const { type, size, focused } = given;
-  if (type !== "row" && type !== "column" && type !== "editor") {
-    throw new TypeError("composite layout type must be row, column, or editor");
+  const { type, size, focused, title } = given;
+  if (type !== "row" && type !== "column" && type !== "tabs" && type !== "editor" && type !== "text" && type !== "tree") {
+    throw new TypeError("composite layout type must be row, column, tabs, editor, text, or tree");
   }
-  if (root && type === "editor") throw new TypeError("composite layout must be a row or column");
+  if (root && type !== "row" && type !== "column") throw new TypeError("composite layout must be a row or column");
   if (focused !== undefined && typeof focused !== "boolean") throw new TypeError("composite focused must be a boolean");
+  if (inTabs ? typeof title !== "string" : title !== undefined) {
+    throw new TypeError("a member of tabs needs a title, and no other member has one");
+  }
   if (size !== undefined) {
     const given = record(size, "composite size must be an object");
     const keys = Object.keys(given);
@@ -2214,14 +2228,26 @@ function compositeLayout(node: unknown, root: boolean): Rec {
       throw new TypeError("composite size must be a positive weight or pixels");
     }
   }
-  const wire: Rec = { type, ...(size === undefined ? {} : { size }), ...(focused === undefined ? {} : { focused }) };
+  const wire: Rec = {
+    type,
+    ...(size === undefined ? {} : { size }),
+    ...(focused === undefined ? {} : { focused }),
+    ...(title === undefined ? {} : { title }),
+  };
   if (type === "editor") {
     const buffer = isObject(given.buffer) ? bufferHandles.get(given.buffer) : undefined;
     if (buffer === undefined) throw new TypeError("composite buffer must be a buffer of buffers.create");
     wire.buffer = buffer;
+  } else if (type === "text" || type === "tree") {
+    const embedded = isObject(given.view) ? embeddedViews.get(given.view) : undefined;
+    if (embedded === undefined || embedded.content !== type) {
+      throw new TypeError(`composite ${type} must be a ${type} view registered with embedded`);
+    }
+    embedded.owned.assertActive();
+    wire.view = embedded.id;
   } else {
     if (!Array.isArray(given.children)) throw new TypeError("composite children must be an array");
-    const children = given.children.map((child) => compositeLayout(child, false));
+    const children = given.children.map((child) => compositeLayout(child, false, type === "tabs"));
     if (children.filter((child) => child.focused === true).length > 1) {
       throw new TypeError("a composite group has one focused member");
     }
@@ -2242,7 +2268,7 @@ export async function registerComposite(contribution: unknown) {
       const given = record(options, "composite options must be an object");
       const tab = compositeTab(given, true);
       const wire = compositeLayout(given.layout, true);
-      if (!JSON.stringify(wire).includes('"type":"editor"')) throw new TypeError("composite layout needs an editor");
+      if (!/"type":"(editor|text|tree)"/.test(JSON.stringify(wire))) throw new TypeError("composite layout needs a view");
       const layout = JSON.stringify(wire);
       const value = await registration.track(request("openComposite", destinationAuthority(given), id,
         tab.title, tab.icon === null ? null : JSON.stringify(tab.icon), tab.resource, layout));

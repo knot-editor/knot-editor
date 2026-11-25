@@ -342,9 +342,7 @@ impl Workbench {
             PresentationView::Editor(editor) => CommandView::Editor(editor.clone()),
             PresentationView::Terminal(view) => CommandView::Terminal(view.clone()),
             PresentationView::Diff(_, target, _) => CommandView::Editor(target.editor().clone()),
-            PresentationView::Composite(_, target, _) => {
-                CommandView::Editor(target.editor().clone())
-            }
+            PresentationView::Composite(_, target, _) => target.command_view(),
             PresentationView::Tool(content) => content.command_view(),
         })
     }
@@ -622,6 +620,7 @@ impl Workbench {
         &mut self,
         tab: CompositeTab,
         layout: GroupSpec,
+        window: &str,
         cx: &mut Context<Self>,
     ) -> (PaneId, TabId) {
         let id = super::composite_view::allocate_composite_id();
@@ -629,7 +628,7 @@ impl Workbench {
             .layout
             .open_composite_in_center(id)
             .expect("a new composite view has a fresh identity");
-        let view = cx.new(|cx| CompositeView::new(tab, layout, cx));
+        let view = cx.new(|cx| CompositeView::new(tab, layout, window, cx));
         let target = view.read(cx).command_target();
         let subscriptions = (
             cx.subscribe(&view, |_, _, _: &ViewTreeChanged, cx| {

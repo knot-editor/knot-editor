@@ -206,15 +206,19 @@ impl ProductCommandTarget {
         let workbench = workbench.read(cx);
         let tab = workbench.tab(tab.pane, tab.tab)?;
         let view = workbench.command_view(tab)?;
-        match (self.leaf, view) {
-            (Some(leaf), crate::app::workbench::CommandView::Editor(_)) => workbench
-                .view_node(tab, cx)?
-                .path_to(leaf)?
-                .last()?
-                .editor
-                .clone()
-                .map(crate::app::workbench::CommandView::Editor),
-            (_, view) => Some(view),
+        let Some(leaf) = self.leaf else {
+            return Some(view);
+        };
+        // A captured editor stays the command's editor wherever focus moved.
+        match workbench
+            .view_node(tab, cx)?
+            .path_to(leaf)?
+            .last()?
+            .editor
+            .clone()
+        {
+            Some(editor) => Some(crate::app::workbench::CommandView::Editor(editor)),
+            None => Some(view),
         }
     }
 

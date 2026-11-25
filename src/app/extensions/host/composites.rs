@@ -6,13 +6,15 @@
 //! lifecycle ends.
 
 use gpui::{App, Context};
-use knot_protocol::{BufferHandle, DocumentDestination, ExtensionKey, PresentationTarget};
+use knot_protocol::{
+    BufferHandle, DocumentDestination, ExtensionKey, PresentationTarget, ViewContentKind,
+};
 use serde::Deserialize;
 
 use super::ProductExtensionHost;
 use super::handlers::{AccessError, OpenError};
 use crate::app::composite_view::{
-    CompositeTab, ContentSpec, GroupSpec, LayoutAxis, LayoutSize, MemberSpec,
+    Arrangement, CompositeTab, ContentSpec, GroupSpec, LayoutSize, MemberSpec,
 };
 use crate::app::extensions::semantics::SemanticError;
 use crate::app::product;
@@ -41,31 +43,43 @@ impl CompositeTabSpec {
     }
 }
 
-/// A layout as the package sends it: a row or column of editors on buffers
-/// and nested rows and columns.
+/// One member of a layout as the package sends it.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
-#[serde(tag = "type", rename_all = "camelCase", deny_unknown_fields)]
-pub(crate) enum LayoutWire {
+#[serde(rename_all = "camelCase")]
+pub(crate) struct LayoutWire {
+    #[serde(default)]
+    size: SizeWire,
+    #[serde(default)]
+    focused: bool,
+    /// The label of a member of tabs.
+    #[serde(default)]
+    title: Option<String>,
+    #[serde(flatten)]
+    content: ContentWire,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(tag = "type", rename_all = "camelCase")]
+enum ContentWire {
     Editor {
         buffer: u64,
-        #[serde(default)]
-        size: SizeWire,
-        #[serde(default)]
-        focused: bool,
+    },
+    /// A text frame of the embedded view of this ID.
+    Text {
+        view: String,
+    },
+    /// A tree of the embedded view of this ID.
+    Tree {
+        view: String,
     },
     Row {
         children: Vec<LayoutWire>,
-        #[serde(default)]
-        size: SizeWire,
-        #[serde(default)]
-        focused: bool,
     },
     Column {
         children: Vec<LayoutWire>,
-        #[serde(default)]
-        size: SizeWire,
-        #[serde(default)]
-        focused: bool,
+    },
+    Tabs {
+        children: Vec<LayoutWire>,
     },
 }
 
@@ -83,110 +97,75 @@ impl Default for SizeWire {
 }
 
 impl LayoutWire {
-    /// The root of a layout is a row or a column with at least one editor
-    /// beneath it, at most one member asking for focus per group, and sizes
-    /// that are positive and finite.
+    fn children(&self) -> Option<(Arrangement, &[LayoutWire])> {
+        match &self.content {
+            ContentWire::Row { children } => Some((Arrangement::Row, children)),
+            ContentWire::Column { children } => Some((Arrangement::Column, children)),
+            ContentWire::Tabs { children } => Some((Arrangement::Tabs, children)),
+            _ => None,
+        }
+    }
+
+    /// The root of a layout is a row or column with at least one view
+    /// beneath it, at most one member asking for focus per group, sizes that
+    /// are positive and finite, and a title on exactly the members of tabs.
     pub(crate) fn check(&self) -> Result<(), &'static str> {
-        fn check(node: &LayoutWire, root: bool) -> Result<usize, &'static str> {
-            let (size, focused, children) = match node {
-                LayoutWire::Editor { size, focused, .. } => (size, focused, None),
-                LayoutWire::Row {
-                    children,
-                    size,
-                    focused,
-                }
-                | LayoutWire::Column {
-                    children,
-                    size,
-                    focused,
-                } => (size, focused, Some(children)),
-            };
-            let (SizeWire::Weight(value) | SizeWire::Pixels(value)) = size;
-            if !value.is_finite() || *value <= 0. {
+        fn check(node: &LayoutWire, root: bool, in_tabs: bool) -> Result<usize, &'static str> {
+            let (SizeWire::Weight(value) | SizeWire::Pixels(value)) = node.size;
+            if !value.is_finite() || value <= 0. {
                 return Err("composite size must be a positive number");
             }
-            if root && (children.is_none() || *focused) {
+            match (in_tabs, &node.title) {
+                (true, None) => return Err("a composite tab needs a title"),
+                (false, Some(_)) => return Err("only a member of tabs has a title"),
+                _ => {}
+            }
+            let group = node.children();
+            if root
+                && (node.focused
+                    || group.is_none_or(|(arrangement, _)| arrangement == Arrangement::Tabs))
+            {
                 return Err("composite layout must be a row or column");
             }
-            let Some(children) = children else {
+            let Some((arrangement, children)) = group else {
                 return Ok(1);
             };
-            let asking = children
-                .iter()
-                .filter(|child| match child {
-                    LayoutWire::Editor { focused, .. }
-                    | LayoutWire::Row { focused, .. }
-                    | LayoutWire::Column { focused, .. } => *focused,
-                })
-                .count();
-            if asking > 1 {
+            if children.iter().filter(|child| child.focused).count() > 1 {
                 return Err("a composite group has one focused member");
             }
-            children
-                .iter()
-                .try_fold(0, |editors, child| Ok(editors + check(child, false)?))
+            children.iter().try_fold(0, |views, child| {
+                Ok(views + check(child, false, arrangement == Arrangement::Tabs)?)
+            })
         }
-        match check(self, true)? {
-            0 => Err("composite layout needs an editor"),
+        match check(self, true, false)? {
+            0 => Err("composite layout needs a view"),
             _ => Ok(()),
         }
     }
 
-    /// The spec of a checked root, with each editor's buffer from `model`.
+    /// The spec of a checked layout, with each leaf's content from `leaf`.
     fn spec<E>(
         &self,
-        model: &mut impl FnMut(BufferHandle) -> Result<gpui::Entity<crate::app::model::Buffer>, E>,
+        leaf: &mut impl FnMut(&ContentWire) -> Result<ContentSpec, E>,
     ) -> Result<MemberSpec, E> {
-        let (size, focused, content) = match self {
-            Self::Editor {
-                buffer,
-                size,
-                focused,
-            } => (
-                size,
-                focused,
-                ContentSpec::Editor(model(BufferHandle::new(*buffer))?),
-            ),
-            Self::Row {
-                children,
-                size,
-                focused,
-            } => (
-                size,
-                focused,
-                ContentSpec::Group(Self::group(LayoutAxis::Row, children, model)?),
-            ),
-            Self::Column {
-                children,
-                size,
-                focused,
-            } => (
-                size,
-                focused,
-                ContentSpec::Group(Self::group(LayoutAxis::Column, children, model)?),
-            ),
+        let content = match self.children() {
+            Some((arrangement, children)) => ContentSpec::Group(GroupSpec {
+                arrangement,
+                members: children
+                    .iter()
+                    .map(|child| child.spec(leaf))
+                    .collect::<Result<_, _>>()?,
+            }),
+            None => leaf(&self.content)?,
         };
         Ok(MemberSpec {
-            size: match size {
-                SizeWire::Weight(weight) => LayoutSize::Weight(*weight),
-                SizeWire::Pixels(pixels) => LayoutSize::Pixels(*pixels),
+            size: match self.size {
+                SizeWire::Weight(weight) => LayoutSize::Weight(weight),
+                SizeWire::Pixels(pixels) => LayoutSize::Pixels(pixels),
             },
-            focused: *focused,
+            focused: self.focused,
+            title: self.title.clone(),
             content,
-        })
-    }
-
-    fn group<E>(
-        axis: LayoutAxis,
-        children: &[LayoutWire],
-        model: &mut impl FnMut(BufferHandle) -> Result<gpui::Entity<crate::app::model::Buffer>, E>,
-    ) -> Result<GroupSpec, E> {
-        Ok(GroupSpec {
-            axis,
-            members: children
-                .iter()
-                .map(|child| child.spec(model))
-                .collect::<Result<_, _>>()?,
         })
     }
 }
@@ -245,19 +224,34 @@ impl ProductExtensionHost {
         if self.composite_kinds.get(&kind) != Some(&owner) {
             return Err(AccessError::InvalidTarget.into());
         }
-        let mut model = |buffer| {
-            self.extension_buffers
-                .get(&buffer)
+        let mut leaf = |content: &ContentWire| match content {
+            ContentWire::Editor { buffer } => self
+                .extension_buffers
+                .get(&BufferHandle::new(*buffer))
                 .filter(|state| state.owner() == owner)
-                .map(|state| state.model.clone())
-                .ok_or(OpenError::BufferClosed)
+                .map(|state| ContentSpec::Editor(state.model.clone()))
+                .ok_or(OpenError::BufferClosed),
+            ContentWire::Text { view } => self
+                .embedded_view(view, owner, ViewContentKind::Text)
+                .map(|_| ContentSpec::Text(view.clone())),
+            ContentWire::Tree { view } => self
+                .embedded_view(view, owner, ViewContentKind::Tree)
+                .map(|_| ContentSpec::Tree(view.clone())),
+            ContentWire::Row { .. } | ContentWire::Column { .. } | ContentWire::Tabs { .. } => {
+                Err(AccessError::InvalidTarget.into())
+            }
         };
         // The root is a row or column, so its spec is a group.
-        let ContentSpec::Group(layout) = layout.spec(&mut model)?.content else {
+        let ContentSpec::Group(layout) = layout.spec(&mut leaf)?.content else {
             return Err(AccessError::InvalidTarget.into());
         };
         let tab = tab.tab()?;
-        let target = product::operations::open_composite(destination, tab, layout, cx)?;
+        let (target, window, hosted) =
+            product::operations::open_composite(destination, tab, layout, cx)?;
+        for view in hosted {
+            let kind = view.kind(cx);
+            self.attach_view(kind, window.clone(), view, cx);
+        }
         self.owned_composites
             .entry(owner)
             .or_default()
@@ -266,6 +260,19 @@ impl ProductExtensionHost {
                 target: target.clone(),
             });
         Ok(target)
+    }
+
+    /// Whether `owner` registered an embedded view `id` with `content`.
+    fn embedded_view(
+        &self,
+        id: &str,
+        owner: ExtensionKey,
+        content: ViewContentKind,
+    ) -> Result<(), OpenError> {
+        match self.semantics.embedded_content(id, owner) {
+            Some(found) if found == content => Ok(()),
+            _ => Err(AccessError::InvalidTarget.into()),
+        }
     }
 
     pub(crate) fn update_composite(
