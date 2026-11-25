@@ -260,21 +260,12 @@ docs follow in checkpoint 14.
 
 #### 12. Document editors as children ✅
 
-A composite's `editor` member takes a `document` (a `DocumentId`) instead of a
-`buffer`, and the editor edits the document's shared buffer. The tab is one
-view of each document its editors show, once however many editors it holds on
-it: `Workbench::shown_documents` and `view_count` in
-`crates/knot-model/src/workbench.rs`, and `ClosureView.documents` in the closure
-model, so closing the composite prompts once for each dirty document it is the
-final view of, and a document's own tab closes without asking while the
-composite shows it. The tab shows the unsaved-changes marker exactly when
-closing it would prompt (`composite_asks_on_close`); extensions cannot set it.
-`@knot/projects` counts a tab's views from its editors at any depth
-(`tabDocuments`), diff tabs included. Covered by model closure tests and app
-tests with one and two dirty documents and two editors on one document. Closure
-behavior is the review gate; the architecture note is in
-[workbench and lifecycle](../architecture/workbench-and-lifecycle.md), and the
-rest of the reference docs follow in checkpoint 14.
+A composite's `editor` member takes a `document` instead of a `buffer`. The tab
+is one view of each document its editors show, so closing it prompts once for
+each dirty document it shows last, and its unsaved-changes marker follows the
+same rule (see [workbench and lifecycle](../architecture/workbench-and-lifecycle.md)).
+`@knot/projects` counts a tab's views from its editors at any depth, diff tabs
+included. Reference docs follow in checkpoint 14.
 
 #### 13. Layout updates
 
