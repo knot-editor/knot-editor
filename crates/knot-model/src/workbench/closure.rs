@@ -56,14 +56,14 @@ impl From<ViewKey> for CloseOrigin {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ClosureView {
     pub key: ViewKey,
     pub pinned: bool,
     /// The area of the view's pane.
     pub area: Area,
-    /// The document the view shows or edits, if any.
-    pub document: Option<DocumentId>,
+    /// The documents the view shows or edits, each once.
+    pub documents: Vec<DocumentId>,
 }
 
 /// A document's state as a close sees it.
@@ -159,8 +159,8 @@ fn document_counts<'a>(
     views: impl IntoIterator<Item = &'a ClosureView>,
 ) -> HashMap<DocumentId, usize> {
     let mut counts = HashMap::new();
-    for document in views.into_iter().filter_map(|view| view.document) {
-        *counts.entry(document).or_insert(0usize) += 1;
+    for document in views.into_iter().flat_map(|view| &view.documents) {
+        *counts.entry(*document).or_insert(0usize) += 1;
     }
     counts
 }
@@ -197,16 +197,15 @@ pub fn plan(
     let mut prompted = HashSet::new();
     let mut prompts = Vec::new();
     for view in scoped_views(&scope, views) {
-        let (key, Some(document)) = (&view.key, view.document) else {
-            continue;
-        };
-        let loses_final_view =
-            kind == CloseKind::Quit || scoped.get(&document) == total.get(&document);
-        if loses_final_view
-            && prompted.insert(document)
-            && status(document).is_some_and(|d| d.dirty)
-        {
-            prompts.push((document, *key));
+        for &document in &view.documents {
+            let loses_final_view =
+                kind == CloseKind::Quit || scoped.get(&document) == total.get(&document);
+            if loses_final_view
+                && prompted.insert(document)
+                && status(document).is_some_and(|d| d.dirty)
+            {
+                prompts.push((document, view.key));
+            }
         }
     }
     if kind == CloseKind::Quit
@@ -326,9 +325,9 @@ mod tests {
             key,
             pinned: false,
             area: Area::Center,
-            document: match key.surface {
-                TabSurfaceId::Document(document) => Some(document),
-                _ => None,
+            documents: match key.surface {
+                TabSurfaceId::Document(document) => vec![document],
+                _ => Vec::new(),
             },
         }
     }
@@ -349,10 +348,10 @@ mod tests {
             ..key(1, 2, 0)
         };
         let diff = ClosureView {
-            document: Some(DocumentId::new(1)),
+            documents: vec![DocumentId::new(1)],
             ..view(diff_tab)
         };
-        let views = [view(document_tab), diff];
+        let views = [view(document_tab), diff.clone()];
         let documents = [status(1, true)];
 
         // The document tab is not the final view while the diff edits it.
@@ -380,6 +379,64 @@ mod tests {
         let plan =
             super::plan(CloseKind::Pane, &diff_tab.into(), false, &views, &documents).unwrap();
         assert_eq!(plan.prompts.len(), 1);
+    }
+
+    fn composite_tab(tab: u64, documents: &[u64]) -> ClosureView {
+        let key = ViewKey {
+            surface: TabSurfaceId::Composite(crate::workbench::CompositeViewId(tab)),
+            ..key(1, tab, 0)
+        };
+        ClosureView {
+            documents: documents.iter().map(|id| DocumentId::new(*id)).collect(),
+            ..view(key)
+        }
+    }
+
+    #[test]
+    fn closing_a_composite_asks_about_each_dirty_document_that_loses_its_final_view() {
+        let composite = composite_tab(5, &[1, 2]);
+        let origin = composite.key;
+        let documents = [status(1, true), status(2, true)];
+        let plan = plan(
+            CloseKind::Tab,
+            &origin.into(),
+            false,
+            std::slice::from_ref(&composite),
+            &documents,
+        )
+        .unwrap();
+        assert_eq!(
+            plan.prompts,
+            vec![(DocumentId::new(1), origin), (DocumentId::new(2), origin)]
+        );
+
+        // A document tab keeping the first document open spares its prompt.
+        let kept = view(key(1, 1, 1));
+        let plan = super::plan(
+            CloseKind::Tab,
+            &origin.into(),
+            false,
+            &[kept, composite],
+            &documents,
+        )
+        .unwrap();
+        assert_eq!(plan.prompts, vec![(DocumentId::new(2), origin)]);
+    }
+
+    #[test]
+    fn a_dirty_composite_document_is_not_asked_about_while_a_tab_shows_it() {
+        let composite = composite_tab(5, &[1]);
+        let origin = composite.key;
+        let other = composite_tab(6, &[1]);
+        let plan = plan(
+            CloseKind::Tab,
+            &origin.into(),
+            false,
+            &[composite, other],
+            &[status(1, true)],
+        )
+        .unwrap();
+        assert!(plan.prompts.is_empty());
     }
 
     #[test]
@@ -466,9 +523,9 @@ mod tests {
         });
         let views = [
             view(origin),
-            pinned,
-            sibling,
-            other_pane,
+            pinned.clone(),
+            sibling.clone(),
+            other_pane.clone(),
             dock,
             other_window,
         ];

@@ -432,6 +432,7 @@ pub struct Workbench {
     bell_marks: HashSet<TerminalSessionId>,
     /// The document each diff view edits on its modified side.
     diff_documents: HashMap<DiffViewId, DocumentId>,
+    composite_documents: HashMap<CompositeViewId, Vec<DocumentId>>,
 }
 
 impl Workbench {
@@ -450,6 +451,7 @@ impl Workbench {
             previous_pane: None,
             bell_marks: HashSet::new(),
             diff_documents: HashMap::new(),
+            composite_documents: HashMap::new(),
         }
     }
 
@@ -1103,12 +1105,36 @@ impl Workbench {
         self.diff_documents.get(&diff).copied()
     }
 
-    /// The document `tab` shows or edits: a document tab's own, or a diff
-    /// tab's modified side.
-    pub fn shown_document(&self, tab: &WorkbenchTab) -> Option<DocumentId> {
+    /// Record the documents the editors of `composite` show, so its tab counts
+    /// as one view of each, however many editors it holds on it.
+    pub fn set_composite_documents(
+        &mut self,
+        composite: CompositeViewId,
+        documents: Vec<DocumentId>,
+    ) {
+        let mut distinct = Vec::new();
+        for document in documents {
+            if !distinct.contains(&document) {
+                distinct.push(document);
+            }
+        }
+        self.composite_documents.insert(composite, distinct);
+    }
+
+    /// The documents `composite` shows, each once.
+    pub fn composite_documents(&self, composite: CompositeViewId) -> &[DocumentId] {
+        self.composite_documents
+            .get(&composite)
+            .map_or(&[], Vec::as_slice)
+    }
+
+    /// The documents `tab` shows or edits, each once: a document tab's own, a
+    /// diff tab's modified side, or those of a composite's editors.
+    pub fn shown_documents(&self, tab: &WorkbenchTab) -> Vec<DocumentId> {
         match tab.surface {
-            TabSurfaceId::Diff(diff) => self.diff_document(diff),
-            _ => tab.document_id(),
+            TabSurfaceId::Diff(diff) => self.diff_document(diff).into_iter().collect(),
+            TabSurfaceId::Composite(composite) => self.composite_documents(composite).to_vec(),
+            _ => tab.document_id().into_iter().collect(),
         }
     }
 
@@ -1116,7 +1142,7 @@ impl Workbench {
         self.panes
             .iter()
             .flat_map(|pane| &pane.tabs)
-            .filter(|tab| self.shown_document(tab) == Some(document_id))
+            .filter(|tab| self.shown_documents(tab).contains(&document_id))
             .count()
     }
 
@@ -1551,6 +1577,11 @@ mod tests {
         assert_eq!(workbench.pane(pane).unwrap().active_tab_id(), tab);
         assert_eq!(workbench.tab(pane, tab).unwrap().document_id(), None);
         assert_eq!(workbench.view_count(document), 1);
+
+        // Editors on a document make the tab one view of it, however many.
+        workbench.set_composite_documents(composite, vec![document, document]);
+        assert_eq!(workbench.composite_documents(composite), &[document]);
+        assert_eq!(workbench.view_count(document), 2);
 
         assert!(
             workbench
