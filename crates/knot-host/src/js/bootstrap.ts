@@ -2208,14 +2208,25 @@ function compositeTab(given: Rec, titleRequired: boolean) {
   return { title: title as string | undefined, icon: icon ?? null, resource: (resource ?? null) as string | null };
 }
 /** The layout JSON of a composite's row or column, or of one member of it. */
-function compositeLayout(node: unknown, root: boolean, inTabs = false): Rec {
+function compositeLayoutJson(node: unknown): string {
+  const wire = compositeLayout(node, true);
+  if (!/"type":"(editor|text|tree)"/.test(JSON.stringify(wire))) throw new TypeError("composite layout needs a view");
+  return JSON.stringify(wire);
+}
+function compositeLayout(node: unknown, root: boolean, inTabs = false, keys = new Set<string>()): Rec {
   const given = record(node, "composite layout must be an object");
-  const { type, size, focused, title } = given;
+  const { type, size, focused, title, key } = given;
   if (type !== "row" && type !== "column" && type !== "tabs" && type !== "editor" && type !== "text" && type !== "tree") {
     throw new TypeError("composite layout type must be row, column, tabs, editor, text, or tree");
   }
   if (root && type !== "row" && type !== "column") throw new TypeError("composite layout must be a row or column");
   if (focused !== undefined && typeof focused !== "boolean") throw new TypeError("composite focused must be a boolean");
+  if (key !== undefined) {
+    if (typeof key !== "string" || key === "" || keys.has(key)) {
+      throw new TypeError("a composite key is a non-empty string that names one member");
+    }
+    keys.add(key);
+  }
   if (inTabs ? typeof title !== "string" : title !== undefined) {
     throw new TypeError("a member of tabs needs a title, and no other member has one");
   }
@@ -2230,6 +2241,7 @@ function compositeLayout(node: unknown, root: boolean, inTabs = false): Rec {
   }
   const wire: Rec = {
     type,
+    ...(key === undefined ? {} : { key }),
     ...(size === undefined ? {} : { size }),
     ...(focused === undefined ? {} : { focused }),
     ...(title === undefined ? {} : { title }),
@@ -2251,7 +2263,7 @@ function compositeLayout(node: unknown, root: boolean, inTabs = false): Rec {
     wire.view = embedded.id;
   } else {
     if (!Array.isArray(given.children)) throw new TypeError("composite children must be an array");
-    const children = given.children.map((child) => compositeLayout(child, false, type === "tabs"));
+    const children = given.children.map((child) => compositeLayout(child, false, type === "tabs", keys));
     if (children.filter((child) => child.focused === true).length > 1) {
       throw new TypeError("a composite group has one focused member");
     }
@@ -2271,9 +2283,7 @@ export async function registerComposite(contribution: unknown) {
       registration.assertActive();
       const given = record(options, "composite options must be an object");
       const tab = compositeTab(given, true);
-      const wire = compositeLayout(given.layout, true);
-      if (!/"type":"(editor|text|tree)"/.test(JSON.stringify(wire))) throw new TypeError("composite layout needs a view");
-      const layout = JSON.stringify(wire);
+      const layout = compositeLayoutJson(given.layout);
       const value = await registration.track(request("openComposite", destinationAuthority(given), id,
         tab.title, tab.icon === null ? null : JSON.stringify(tab.icon), tab.resource, layout));
       const target = presentationTarget(value.target);
@@ -2288,6 +2298,7 @@ export async function registerComposite(contribution: unknown) {
         async update(changes: unknown) {
           const given = record(changes, "composite update must be an object");
           const next = compositeTab(given, false);
+          const layout = given.layout === undefined ? null : compositeLayoutJson(given.layout);
           owned.assertActive();
           current = {
             title: next.title ?? current.title,
@@ -2295,7 +2306,7 @@ export async function registerComposite(contribution: unknown) {
             resource: given.resource === undefined ? current.resource : next.resource,
           };
           await owned.track(request("updateComposite", destinationAuthority({ target }),
-            current.title, current.icon === null ? null : JSON.stringify(current.icon), current.resource));
+            current.title, current.icon === null ? null : JSON.stringify(current.icon), current.resource, layout));
         },
         async close(closeOptions?: Opts) {
           try {

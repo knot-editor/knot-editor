@@ -5,7 +5,8 @@
 //! ordinary view, so commands, keymaps, and editor-driven packages work in
 //! it as anywhere else.
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -71,6 +72,9 @@ pub(crate) struct GroupSpec {
 }
 
 pub(crate) struct MemberSpec {
+    /// The name that keeps the member's view when the package replaces the
+    /// layout, unique in the layout. A member without one is always new.
+    pub key: Option<String>,
     pub size: LayoutSize,
     /// Has focus when the composite opens; a group gives it to its first
     /// view. In tabs it also selects the member.
@@ -180,7 +184,7 @@ impl Leaf {
         }
     }
 
-    fn entity_id(&self) -> EntityId {
+    pub(crate) fn entity_id(&self) -> EntityId {
         match self {
             Self::Editor(view) => view.entity_id(),
             Self::Text(view) => view.entity_id(),
@@ -222,13 +226,50 @@ impl Leaf {
     }
 }
 
+/// What a built member shows, which a layout update compares to decide
+/// whether a view of the same key is still the right one.
+#[derive(Clone, PartialEq)]
+enum Source {
+    Buffer(Entity<Buffer>),
+    Text(String),
+    Tree(String),
+    Group,
+}
+
+impl Source {
+    fn of(content: &ContentSpec) -> Self {
+        match content {
+            ContentSpec::Editor { buffer, .. } => Self::Buffer(buffer.clone()),
+            ContentSpec::Text(kind) => Self::Text(kind.clone()),
+            ContentSpec::Tree(kind) => Self::Tree(kind.clone()),
+            ContentSpec::Group(_) => Self::Group,
+        }
+    }
+}
+
+/// The instances of the contributed views among `leaves`.
+fn hosted_ids(leaves: &[Leaf], cx: &App) -> Vec<ViewId> {
+    leaves
+        .iter()
+        .filter_map(Leaf::hosted)
+        .map(|view| view.instance_id(cx))
+        .collect()
+}
+
 /// A member of a built group.
 struct Member {
+    key: Option<String>,
+    source: Source,
     size: LayoutSize,
     title: Option<String>,
     content: Content,
 }
 
+/// The keyed views of the layout being replaced, which the new one takes
+/// from.
+type Kept = HashMap<String, (Source, Content)>;
+
+#[derive(Clone)]
 enum Content {
     Leaf(Leaf),
     Group(Entity<GroupView>),
@@ -267,43 +308,65 @@ struct Group {
 struct GroupView(Group);
 
 impl Group {
-    /// Build `spec` for the window `window`. `leaf` counts the leaves built
-    /// so far and `focus` is the index of the one with focus, whose tabs are
-    /// the ones shown.
-    fn build(spec: GroupSpec, window: &str, focus: usize, leaf: &mut usize, cx: &mut App) -> Self {
-        let mut active = 0;
-        let members = spec
+    /// Build `spec` for the window `window`. A keyed member takes the view
+    /// of the same key from `kept` when it shows the same thing. `shown` is
+    /// the key of the member tabs showed before, which stays shown if it is
+    /// still there.
+    fn build(
+        spec: GroupSpec,
+        window: &str,
+        kept: &mut Kept,
+        shown: Option<&str>,
+        cx: &mut App,
+    ) -> Self {
+        let mut active = None;
+        let mut named = None;
+        let members: Vec<Member> = spec
             .members
             .into_iter()
             .enumerate()
             .map(|(index, member)| {
-                let first = *leaf;
-                let content = match member.content {
-                    ContentSpec::Editor { buffer, .. } => {
-                        *leaf += 1;
+                let source = Source::of(&member.content);
+                let reused = member.key.as_ref().and_then(|key| {
+                    if kept.get(key).is_some_and(|(found, _)| *found == source) {
+                        kept.remove(key).map(|(_, content)| content)
+                    } else {
+                        None
+                    }
+                });
+                if member.focused && active.is_none() {
+                    active = Some(index);
+                }
+                if member.key.as_deref().is_some_and(|key| Some(key) == shown) {
+                    named = Some(index);
+                }
+                let content = match (member.content, reused) {
+                    (ContentSpec::Group(group), Some(Content::Group(entity))) => {
+                        let before = entity.read(cx).0.shown_key();
+                        entity.update(cx, |view, cx| {
+                            view.0 = Self::build(group, window, kept, before.as_deref(), cx);
+                            cx.notify();
+                        });
+                        Content::Group(entity)
+                    }
+                    (_, Some(content)) => content,
+                    (ContentSpec::Editor { buffer, .. }, None) => {
                         Content::Leaf(Leaf::Editor(cx.new(|cx| EditorView::new(buffer, cx))))
                     }
-                    ContentSpec::Text(kind) => {
-                        *leaf += 1;
-                        Content::Leaf(Leaf::Text(
-                            cx.new(|cx| TextView::new(kind, window.to_owned(), cx)),
-                        ))
-                    }
-                    ContentSpec::Tree(kind) => {
-                        *leaf += 1;
-                        Content::Leaf(Leaf::Tree(
-                            cx.new(|cx| TreeView::new(kind, window.to_owned(), cx)),
-                        ))
-                    }
-                    ContentSpec::Group(group) => {
-                        let group = Self::build(group, window, focus, leaf, cx);
+                    (ContentSpec::Text(kind), None) => Content::Leaf(Leaf::Text(
+                        cx.new(|cx| TextView::new(kind, window.to_owned(), cx)),
+                    )),
+                    (ContentSpec::Tree(kind), None) => Content::Leaf(Leaf::Tree(
+                        cx.new(|cx| TreeView::new(kind, window.to_owned(), cx)),
+                    )),
+                    (ContentSpec::Group(group), None) => {
+                        let group = Self::build(group, window, kept, None, cx);
                         Content::Group(cx.new(|_| GroupView(group)))
                     }
                 };
-                if (first..*leaf).contains(&focus) {
-                    active = index;
-                }
                 Member {
+                    key: member.key,
+                    source,
                     size: member.size,
                     title: member.title,
                     content,
@@ -313,8 +376,50 @@ impl Group {
         Self {
             arrangement: spec.arrangement,
             members,
-            active,
+            active: named.or(active).unwrap_or(0),
         }
+    }
+
+    /// The key of the member tabs show, if it has one.
+    fn shown_key(&self) -> Option<String> {
+        match self.arrangement {
+            Arrangement::Tabs => self.members.get(self.active)?.key.clone(),
+            _ => None,
+        }
+    }
+
+    /// Move the keyed members beneath this group into `kept`.
+    fn keep(&self, kept: &mut Kept, cx: &App) {
+        for member in &self.members {
+            if let Some(key) = &member.key {
+                kept.insert(key.clone(), (member.source.clone(), member.content.clone()));
+            }
+            if let Content::Group(group) = &member.content {
+                group.read(cx).0.keep(kept, cx);
+            }
+        }
+    }
+
+    /// Show the members that lead to the view `focus`, so the tabs show it.
+    /// Returns whether the view is beneath this group.
+    fn reveal(&mut self, focus: EntityId, cx: &mut App) -> bool {
+        for (index, member) in self.members.iter().enumerate() {
+            let contains = match &member.content {
+                Content::Leaf(leaf) => leaf.entity_id() == focus,
+                Content::Group(group) => group.update(cx, |view, cx| {
+                    let found = view.0.reveal(focus, cx);
+                    cx.notify();
+                    found
+                }),
+            };
+            if contains {
+                if self.arrangement == Arrangement::Tabs {
+                    self.active = index;
+                }
+                return true;
+            }
+        }
+        false
     }
 
     /// The index of the member that has focus or shows, for the group's node.
@@ -496,27 +601,51 @@ impl Render for GroupView {
 }
 
 /// The views of a composite and which one commands act on.
+struct Shared {
+    leaves: RefCell<Rc<[Leaf]>>,
+    focused: Cell<usize>,
+}
+
+impl Shared {
+    fn leaves(&self) -> Rc<[Leaf]> {
+        self.leaves.borrow().clone()
+    }
+
+    fn focused_leaf(&self) -> Leaf {
+        self.leaves.borrow()[self.focused.get()].clone()
+    }
+}
+
 #[derive(Clone)]
 pub(crate) struct CompositeCommandTarget {
-    leaves: Rc<[Leaf]>,
-    focused: Rc<Cell<usize>>,
+    shared: Rc<Shared>,
 }
 
 impl CompositeCommandTarget {
     pub(crate) fn command_view(&self) -> CommandView {
-        self.leaves[self.focused.get()].command_view()
+        self.shared.focused_leaf().command_view()
     }
+}
+
+/// What replacing a layout did beyond the views themselves.
+pub(crate) struct LayoutChange {
+    /// The contributed views the new layout added, which the host binds.
+    pub attached: Vec<ExtensionView>,
+    /// The focused view was removed, so another has focus.
+    pub focus_moved: bool,
 }
 
 pub(crate) struct CompositeView {
     tab: CompositeTab,
     root: Group,
-    /// The views in layout order; the layout holds at least one.
-    leaves: Rc<[Leaf]>,
-    /// The index of the view that has focus, or had it last.
-    focused: Rc<Cell<usize>>,
-    /// Watches each view's focus; set up on the first render, which has the
-    /// window.
+    /// The views in layout order, which the layout holds at least one of, and
+    /// the index of the one that has focus or had it last.
+    shared: Rc<Shared>,
+    /// The instances of the contributed views, which the host unbinds when
+    /// the composite is released.
+    hosted: Vec<ViewId>,
+    /// Watches each view's focus; set up on the first render after the layout
+    /// changes, which has the window.
     _focus_subscriptions: Vec<Subscription>,
 }
 
@@ -531,29 +660,87 @@ impl CompositeView {
     ) -> Self {
         debug_assert!(layout.leaf_count() > 0 && layout.arrangement != Arrangement::Tabs);
         let focused = layout.focused_leaf().unwrap_or(0);
-        let root = Group::build(layout, window, focused, &mut 0, cx);
+        let mut root = Group::build(layout, window, &mut Kept::new(), None, cx);
         let leaves: Rc<[Leaf]> = root.leaves(cx).into();
-        let hosted: Vec<ViewId> = leaves
-            .iter()
-            .filter_map(Leaf::hosted)
-            .map(|view| view.instance_id(cx))
-            .collect();
-        if !hosted.is_empty() {
-            cx.on_release(move |_, cx| {
+        root.reveal(leaves[focused].entity_id(), cx);
+        let hosted = hosted_ids(&leaves, cx);
+        cx.on_release(|this, cx| {
+            let hosted = std::mem::take(&mut this.hosted);
+            if !hosted.is_empty() {
                 cx.defer(move |cx| {
                     for view in hosted {
                         crate::app::extensions::host::detach_view_instance(view, cx);
                     }
                 });
-            })
-            .detach();
-        }
+            }
+        })
+        .detach();
         Self {
             tab,
             root,
-            leaves,
-            focused: Rc::new(Cell::new(focused)),
+            shared: Rc::new(Shared {
+                leaves: RefCell::new(leaves),
+                focused: Cell::new(focused),
+            }),
+            hosted,
             _focus_subscriptions: Vec::new(),
+        }
+    }
+
+    /// Replace the layout with `layout`, which like the first is a row or
+    /// column that holds at least one view. A keyed member keeps its view
+    /// when it shows the same thing, and so keeps the view's handle, state,
+    /// and focus. When the focused view goes, the layout's own initial focus
+    /// takes over.
+    pub(crate) fn update_layout(
+        &mut self,
+        layout: GroupSpec,
+        window: &str,
+        cx: &mut Context<Self>,
+    ) -> LayoutChange {
+        debug_assert!(layout.leaf_count() > 0 && layout.arrangement != Arrangement::Tabs);
+        let before = self.shared.leaves();
+        let focused = self.shared.focused_leaf().entity_id();
+        let initial = layout.focused_leaf().unwrap_or(0);
+        let mut kept = Kept::new();
+        self.root.keep(&mut kept, cx);
+        self.root = Group::build(layout, window, &mut kept, None, cx);
+        let leaves: Rc<[Leaf]> = self.root.leaves(cx).into();
+        let kept_focus = leaves.iter().position(|leaf| leaf.entity_id() == focused);
+        let index = kept_focus.unwrap_or(initial);
+        self.root.reveal(leaves[index].entity_id(), cx);
+        let new = |leaf: &&Leaf| !before.iter().any(|old| old.entity_id() == leaf.entity_id());
+        let attached = leaves.iter().filter(new).filter_map(Leaf::hosted).collect();
+        let gone: Vec<ViewId> = before
+            .iter()
+            .filter(|old| {
+                !leaves
+                    .iter()
+                    .any(|leaf| leaf.entity_id() == old.entity_id())
+            })
+            .filter_map(Leaf::hosted)
+            .map(|view| view.instance_id(cx))
+            .collect();
+        self.hosted = hosted_ids(&leaves, cx);
+        *self.shared.leaves.borrow_mut() = leaves;
+        self.shared.focused.set(index);
+        self._focus_subscriptions.clear();
+        if !gone.is_empty() {
+            cx.defer(move |cx| {
+                for view in gone {
+                    crate::app::extensions::host::detach_view_instance(view, cx);
+                }
+            });
+        }
+        let focus_moved = kept_focus.is_none();
+        cx.emit(ViewTreeChanged);
+        if focus_moved {
+            cx.emit(ViewFocusChanged);
+        }
+        cx.notify();
+        LayoutChange {
+            attached,
+            focus_moved,
         }
     }
 
@@ -568,32 +755,35 @@ impl CompositeView {
 
     /// The contributed views the composite holds, which the host binds.
     pub(crate) fn hosted_views(&self) -> Vec<ExtensionView> {
-        self.leaves.iter().filter_map(Leaf::hosted).collect()
+        self.shared
+            .leaves()
+            .iter()
+            .filter_map(Leaf::hosted)
+            .collect()
     }
 
     /// The views in layout order.
     #[cfg(test)]
-    pub(crate) fn leaves(&self) -> &[Leaf] {
-        &self.leaves
+    pub(crate) fn leaves(&self) -> Vec<Leaf> {
+        self.shared.leaves().to_vec()
     }
 
     /// The focus handle of the view commands act on.
     fn focused_handle(&self, cx: &App) -> FocusHandle {
-        self.leaves[self.focused.get()].focus_handle(cx)
+        self.shared.focused_leaf().focus_handle(cx)
     }
 
     /// Treat the `index`th view as the one with focus, as its gaining focus
     /// does.
     pub(crate) fn set_focused_leaf(&mut self, index: usize, cx: &mut Context<Self>) {
-        if self.focused.replace(index) != index {
+        if self.shared.focused.replace(index) != index {
             cx.emit(ViewFocusChanged);
         }
     }
 
     pub(crate) fn command_target(&self) -> CompositeCommandTarget {
         CompositeCommandTarget {
-            leaves: self.leaves.clone(),
-            focused: self.focused.clone(),
+            shared: self.shared.clone(),
         }
     }
 
@@ -616,11 +806,8 @@ impl CompositeView {
 impl ViewTree for Entity<CompositeView> {
     fn view_node(&self, cx: &App) -> ViewNode {
         let view = self.read(cx);
-        view.root.node(
-            self.entity_id(),
-            view.leaves[view.focused.get()].entity_id(),
-            cx,
-        )
+        view.root
+            .node(self.entity_id(), view.shared.focused_leaf().entity_id(), cx)
     }
 }
 
@@ -636,12 +823,22 @@ impl Focusable for CompositeView {
 impl Render for CompositeView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if self._focus_subscriptions.is_empty() {
-            for (index, leaf) in self.leaves.iter().enumerate() {
+            for leaf in self.shared.leaves().iter() {
                 let handle = leaf.focus_handle(cx);
+                let id = leaf.entity_id();
                 self._focus_subscriptions.push(cx.on_focus_in(
                     &handle,
                     window,
-                    move |this, _, cx| this.set_focused_leaf(index, cx),
+                    move |this, _, cx| {
+                        let index = this
+                            .shared
+                            .leaves()
+                            .iter()
+                            .position(|leaf| leaf.entity_id() == id);
+                        if let Some(index) = index {
+                            this.set_focused_leaf(index, cx);
+                        }
+                    },
                 ));
             }
         }

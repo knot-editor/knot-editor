@@ -646,6 +646,24 @@ impl Workbench {
         (pane, tab_id)
     }
 
+    /// Replace the layout of the composite view in `pane`'s tab `tab`.
+    pub(crate) fn update_composite_layout(
+        &mut self,
+        pane: PaneId,
+        tab: TabId,
+        layout: GroupSpec,
+        window: &str,
+        cx: &mut Context<Self>,
+    ) -> Option<super::composite_view::LayoutChange> {
+        let tab = self.tab(pane, tab)?;
+        let TabSurfaceId::Composite(id) = tab.surface_id() else {
+            return None;
+        };
+        let view = self.composite_view(tab)?.clone();
+        self.layout.set_composite_documents(id, layout.documents());
+        Some(view.update(cx, |view, cx| view.update_layout(layout, window, cx)))
+    }
+
     pub(crate) fn request_close_composite_tab(
         &mut self,
         pane_id: PaneId,

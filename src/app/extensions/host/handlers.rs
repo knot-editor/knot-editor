@@ -158,6 +158,10 @@ pub(crate) enum OpenError {
     BufferClosed,
     #[error(code = "DocumentNotFound", message = "DocumentNotFound")]
     DocumentNotFound,
+    /// The change would drop the final view of a document with unsaved
+    /// changes.
+    #[error(code = "DocumentUnsaved", message = "DocumentUnsaved")]
+    DocumentUnsaved,
 }
 
 impl From<AccessError> for OpenError {
@@ -857,6 +861,7 @@ pub(crate) async fn open_composite(
 pub(crate) struct UpdateCompositeArguments {
     target: knot_protocol::PresentationTarget,
     tab: super::composites::CompositeTabSpec,
+    layout: Option<super::composites::LayoutWire>,
 }
 
 impl HostArguments for UpdateCompositeArguments {
@@ -865,20 +870,31 @@ impl HostArguments for UpdateCompositeArguments {
         Ok(Self {
             target,
             tab: decode_composite_tab(reader, 3)?,
+            layout: reader
+                .optional_text(6, "composite layout must be text or null")?
+                .map(|json| decode_composite_layout(&json))
+                .transpose()?,
         })
     }
 }
 
 /// Replace the title, icon, and resource of a composite view the caller
-/// opened.
+/// opened, and its layout when given.
 #[host_operation("updateComposite")]
 pub(crate) async fn update_composite(
     context: HostContext,
     arguments: UpdateCompositeArguments,
 ) -> Result<(), OpenError> {
     let owner = ExtensionKey::new(context.request.extension, context.request.lifecycle);
-    context
-        .foreground(|host, cx| host.update_composite(owner, &arguments.target, arguments.tab, cx))?
+    context.foreground(|host, cx| {
+        host.update_composite(
+            owner,
+            &arguments.target,
+            arguments.tab,
+            arguments.layout,
+            cx,
+        )
+    })?
 }
 
 #[derive(Clone, Debug, PartialEq)]

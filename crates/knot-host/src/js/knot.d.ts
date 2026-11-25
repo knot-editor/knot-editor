@@ -1469,7 +1469,7 @@ declare module "knot" {
     | "ProviderRegistrationNotFound"
     | "ContractNotFound" | "ContractViolation" | "PersistKeyInUse"
     | "CommandNameInUse" | "CommandNotFound"
-    | "InvalidUri" | "DocumentNotFound" | "OperationInProgress" | "PersistenceFailed" | "ResourceNotFound" | "ResourceWrongKind" | "ResourceAlreadyExists" | "InvalidUtf8" | "ProviderFailure" | "StorageUnavailable"
+    | "InvalidUri" | "DocumentNotFound" | "DocumentUnsaved" | "OperationInProgress" | "PersistenceFailed" | "ResourceNotFound" | "ResourceWrongKind" | "ResourceAlreadyExists" | "InvalidUtf8" | "ProviderFailure" | "StorageUnavailable"
     | "CaptureNotFound" | "RecoveryUnavailable" | "SessionConflict"
     | "UnknownGrammar" | "InvalidQuery" | "LanguageRegistrationNotFound"
     | "DuplicateSetting" | "SettingTypeMismatch"
@@ -3004,6 +3004,11 @@ declare module "knot" {
     | { readonly weight: number }
     | { readonly pixels: number };
   interface CompositeLayoutMember {
+    /** Names the member across `update`. A member of the new layout with the
+     * key of one in the old and the same content keeps its view, with its
+     * handle, state, and focus. Unique in the layout and not empty; a member
+     * without a key is always new. */
+    readonly key?: string;
     readonly size?: CompositeSize;
     /** The member that has focus when the tab opens; a group gives it to its
      * first view, and tabs show the member. At most one member of a group
@@ -3058,13 +3063,24 @@ declare module "knot" {
     readonly target: ViewTarget;
     /**
      * Change what the tab shows; a field left out keeps its value and a
-     * `null` icon or resource clears it.
-     * @throws HostError with InvalidTarget for a tab that was closed, InvalidUri,
-     * OwnershipDisposed after disposal, or Cancelled; TypeError for invalid fields.
+     * `null` icon or resource clears it. A `layout` replaces the old one:
+     * a keyed member that shows the same thing, the same buffer or document
+     * for an editor and the same embedded view for a text frame or tree,
+     * keeps its view, and a group keeps its identity with its members
+     * replaced the same way. Other members are new views, and views left out
+     * close. The view that had focus keeps it; when it closes, the new
+     * layout's initial focus takes over as on open, and a `focused` member
+     * that is not that does not move focus.
+     * @throws TypeError for invalid fields or layout; HostError with
+     * InvalidTarget for a tab that was closed, InvalidUri, BufferClosed,
+     * DocumentNotFound, DocumentUnsaved when the layout drops the final view of
+     * a document with unsaved changes, OwnershipDisposed after disposal, or
+     * Cancelled. A failed update changes nothing.
      */
     update(changes: Partial<Omit<CompositeTab, "icon" | "resource">> & {
       readonly icon?: IconRef | null;
       readonly resource?: string | null;
+      readonly layout?: CompositeGroup;
     }): Promise<void>;
     /** Close the tab as `workbench.close` does; a tab already closed resolves
      * as closed. */

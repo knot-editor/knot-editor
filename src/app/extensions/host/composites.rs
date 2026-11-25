@@ -10,6 +10,7 @@ use knot_protocol::{
     BufferHandle, DocumentDestination, ExtensionKey, PresentationTarget, ViewContentKind,
 };
 use serde::Deserialize;
+use std::collections::HashSet;
 
 use super::ProductExtensionHost;
 use super::handlers::{AccessError, OpenError};
@@ -47,6 +48,9 @@ impl CompositeTabSpec {
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct LayoutWire {
+    /// Names the member across layout updates.
+    #[serde(default)]
+    key: Option<String>,
     #[serde(default)]
     size: SizeWire,
     #[serde(default)]
@@ -113,9 +117,20 @@ impl LayoutWire {
 
     /// The root of a layout is a row or column with at least one view
     /// beneath it, at most one member asking for focus per group, sizes that
-    /// are positive and finite, and a title on exactly the members of tabs.
+    /// are positive and finite, a title on exactly the members of tabs, and
+    /// keys that are not empty and name one member each.
     pub(crate) fn check(&self) -> Result<(), &'static str> {
-        fn check(node: &LayoutWire, root: bool, in_tabs: bool) -> Result<usize, &'static str> {
+        fn check(
+            node: &LayoutWire,
+            root: bool,
+            in_tabs: bool,
+            keys: &mut HashSet<String>,
+        ) -> Result<usize, &'static str> {
+            if let Some(key) = &node.key
+                && (key.is_empty() || !keys.insert(key.clone()))
+            {
+                return Err("a composite key is not empty and names one member");
+            }
             let (SizeWire::Weight(value) | SizeWire::Pixels(value)) = node.size;
             if !value.is_finite() || value <= 0. {
                 return Err("composite size must be a positive number");
@@ -144,10 +159,10 @@ impl LayoutWire {
                 return Err("a composite group has one focused member");
             }
             children.iter().try_fold(0, |views, child| {
-                Ok(views + check(child, false, arrangement == Arrangement::Tabs)?)
+                Ok(views + check(child, false, arrangement == Arrangement::Tabs, keys)?)
             })
         }
-        match check(self, true, false)? {
+        match check(self, true, false, &mut HashSet::new())? {
             0 => Err("composite layout needs a view"),
             _ => Ok(()),
         }
@@ -169,6 +184,7 @@ impl LayoutWire {
             None => leaf(&self.content)?,
         };
         Ok(MemberSpec {
+            key: self.key.clone(),
             size: match self.size {
                 SizeWire::Weight(weight) => LayoutSize::Weight(weight),
                 SizeWire::Pixels(pixels) => LayoutSize::Pixels(pixels),
@@ -222,18 +238,14 @@ impl ProductExtensionHost {
         }
     }
 
-    pub(crate) fn open_composite(
-        &mut self,
+    /// The spec of `layout`, whose buffers, documents, and views must be
+    /// `owner`'s.
+    fn composite_spec(
+        &self,
         owner: ExtensionKey,
-        destination: DocumentDestination,
-        kind: String,
-        tab: CompositeTabSpec,
         layout: LayoutWire,
-        cx: &mut Context<Self>,
-    ) -> Result<PresentationTarget, OpenError> {
-        if self.composite_kinds.get(&kind) != Some(&owner) {
-            return Err(AccessError::InvalidTarget.into());
-        }
+        cx: &App,
+    ) -> Result<GroupSpec, OpenError> {
         let mut leaf = |content: &ContentWire| match content {
             ContentWire::Editor {
                 buffer: Some(buffer),
@@ -250,7 +262,7 @@ impl ProductExtensionHost {
             ContentWire::Editor {
                 document: Some(identity),
                 ..
-            } => product::operations::document_model(identity, &*cx).map(|(document, buffer)| {
+            } => product::operations::document_model(identity, cx).map(|(document, buffer)| {
                 ContentSpec::Editor {
                     buffer,
                     document: Some(document),
@@ -271,6 +283,22 @@ impl ProductExtensionHost {
         let ContentSpec::Group(layout) = layout.spec(&mut leaf)?.content else {
             return Err(AccessError::InvalidTarget.into());
         };
+        Ok(layout)
+    }
+
+    pub(crate) fn open_composite(
+        &mut self,
+        owner: ExtensionKey,
+        destination: DocumentDestination,
+        kind: String,
+        tab: CompositeTabSpec,
+        layout: LayoutWire,
+        cx: &mut Context<Self>,
+    ) -> Result<PresentationTarget, OpenError> {
+        if self.composite_kinds.get(&kind) != Some(&owner) {
+            return Err(AccessError::InvalidTarget.into());
+        }
+        let layout = self.composite_spec(owner, layout, &*cx)?;
         let tab = tab.tab()?;
         let (target, window, hosted) =
             product::operations::open_composite(destination, tab, layout, cx)?;
@@ -301,12 +329,14 @@ impl ProductExtensionHost {
         }
     }
 
+    /// Replace what the tab shows and, when `layout` is given, the layout.
     pub(crate) fn update_composite(
         &mut self,
         owner: ExtensionKey,
         target: &PresentationTarget,
         tab: CompositeTabSpec,
-        cx: &mut App,
+        layout: Option<LayoutWire>,
+        cx: &mut Context<Self>,
     ) -> Result<(), OpenError> {
         if !self
             .owned_composites
@@ -315,7 +345,15 @@ impl ProductExtensionHost {
         {
             return Err(AccessError::InvalidTarget.into());
         }
-        product::operations::update_composite(target, tab.tab()?, cx)?;
+        let layout = layout
+            .map(|layout| self.composite_spec(owner, layout, &*cx))
+            .transpose()?;
+        let (window, hosted) =
+            product::operations::update_composite(target, tab.tab()?, layout, cx)?;
+        for view in hosted {
+            let kind = view.kind(cx);
+            self.attach_view(kind, window.clone(), view, cx);
+        }
         Ok(())
     }
 

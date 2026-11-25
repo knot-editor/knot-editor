@@ -2534,6 +2534,32 @@ impl KnotWindow {
         )
     }
 
+    /// Replace the layout of the composite view in `pane`'s tab `tab` and
+    /// return the contributed views it added.
+    fn update_composite_layout(
+        &mut self,
+        pane: PaneId,
+        tab: TabId,
+        layout: crate::app::composite_view::GroupSpec,
+        cx: &mut Context<Self>,
+    ) -> Vec<super::workbench::ExtensionView> {
+        let window = window_id(cx.entity_id());
+        let change = self.workbench.update(cx, |workbench, cx| {
+            workbench.update_composite_layout(pane, tab, layout, &window, cx)
+        });
+        let Some(change) = change else {
+            return Vec::new();
+        };
+        for view in &change.attached {
+            self.observe_hosted_view(view, cx);
+        }
+        if change.focus_moved && self.focus == Focus::Workbench {
+            self.focus_active_surface(cx);
+        }
+        cx.notify();
+        change.attached
+    }
+
     #[cfg(test)]
     fn split(&mut self, direction: SplitDirection, cx: &mut Context<Self>) {
         let Some(pane) = self.workbench.read(cx).focused_pane_id() else {

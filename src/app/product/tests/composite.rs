@@ -122,6 +122,120 @@ await commands.register("composite.open-document", async () => {
     ] },
   });
 });
+// Layout updates: a member named by a key keeps its view.
+let keyed;
+const keyedKind = async () => registration ?? (registration = await workbench.registerComposite({ id: "example.view" }));
+await commands.register("composite.open-keyed", async () => {
+  const kind = await keyedKind();
+  const [a, b, c, d] = await Promise.all(["a\n", "b\n", "c\n", "d\n"].map((text) => buffers.create({ text })));
+  keyed = { a, b, c, d };
+  instance = await kind.open({
+    title: "Keyed",
+    layout: { type: "column", children: [
+      { type: "editor", key: "a", buffer: a },
+      { type: "row", key: "pair", children: [
+        { type: "editor", key: "b", buffer: b },
+        { type: "editor", key: "c", buffer: c, focused: true },
+      ] },
+    ] },
+  });
+});
+// `a` and `c` stay in new places, `pair` stays as a column, `b` goes and `d`
+// is new; `d` asks for focus, which stays where it was.
+await commands.register("composite.relayout", async () => {
+  const { a, c, d } = keyed;
+  await instance.update({ layout: { type: "row", children: [
+    { type: "editor", key: "c", buffer: c },
+    { type: "column", key: "pair", children: [
+      { type: "editor", key: "a", buffer: a },
+      { type: "editor", key: "d", buffer: d, focused: true },
+    ] },
+  ] } });
+});
+// The focused `c` goes; `d` is the layout's initial focus.
+await commands.register("composite.relayout-drop-focused", async () => {
+  const { a, d } = keyed;
+  await instance.update({ layout: { type: "row", children: [
+    { type: "editor", key: "a", buffer: a },
+    { type: "editor", key: "d", buffer: d, focused: true },
+  ] } });
+});
+await commands.register("composite.relayout-drop-focused-default", async () => {
+  const { a, d } = keyed;
+  await instance.update({ layout: { type: "row", children: [
+    { type: "editor", key: "d", buffer: d },
+    { type: "editor", key: "a", buffer: a },
+  ] } });
+});
+// `a` keeps its key and shows another buffer; nothing else has a key.
+await commands.register("composite.relayout-replace", async () => {
+  const { b, d } = keyed;
+  await instance.update({ layout: { type: "row", children: [
+    { type: "editor", key: "a", buffer: d },
+    { type: "editor", buffer: b },
+  ] } });
+});
+await commands.register("composite.relayout-invalid", async () => {
+  const { a, b } = keyed;
+  const rejected = async (children, message) => {
+    try { await instance.update({ layout: { type: "row", children } }); } catch (error) {
+      check(error instanceof TypeError, message);
+      return;
+    }
+    throw new Error(message);
+  };
+  await rejected([{ type: "editor", key: "x", buffer: a }, { type: "editor", key: "x", buffer: b }], "duplicate key");
+  await rejected([{ type: "editor", key: "", buffer: a }], "empty key");
+  await rejected([{ type: "editor", key: 1, buffer: a }], "key not text");
+  await rejected([{ type: "row", key: "g", children: [{ type: "editor", key: "g", buffer: a }] }], "group key reused");
+  await rejected([{ type: "row", children: [] }], "no view");
+});
+// Tabs `x` and `y`, of which `y` is shown after a click; reordered.
+await commands.register("composite.open-keyed-tabs", async () => {
+  const kind = await keyedKind();
+  const [a, b] = await Promise.all(["x\n", "y\n"].map((text) => buffers.create({ text })));
+  keyed = { a, b };
+  instance = await kind.open({
+    title: "Keyed tabs",
+    layout: { type: "row", children: [{ type: "tabs", key: "t", children: [
+      { type: "editor", key: "x", title: "X", buffer: a },
+      { type: "editor", key: "y", title: "Y", buffer: b },
+    ] }] },
+  });
+});
+await commands.register("composite.relayout-tabs", async () => {
+  const { a, b } = keyed;
+  await instance.update({ layout: { type: "row", children: [{ type: "tabs", key: "t", children: [
+    { type: "editor", key: "y", title: "Y", buffer: b },
+    { type: "editor", key: "x", title: "X", buffer: a },
+  ] }] } });
+});
+// A tree and a text frame; the update keeps the tree, drops the text frame,
+// and adds an editor.
+await commands.register("composite.open-keyed-views", async () => {
+  const kind = await keyedKind();
+  const tree = await workbench.registerView({
+    id: "example.keyed-files", title: "Files", embedded: true,
+    content: { kind: "tree", provider: { getChildren: () => [{ id: "a", label: "Alpha", collapsibleState: "none" }] } },
+  });
+  const log = await workbench.registerView({ id: "example.keyed-log", title: "Log", embedded: true, content: { kind: "text" } });
+  const buffer = await buffers.create({ text: "code\n" });
+  keyed = { tree, log, buffer };
+  instance = await kind.open({
+    title: "Keyed views",
+    layout: { type: "row", children: [
+      { type: "tree", key: "files", view: tree },
+      { type: "text", key: "log", view: log },
+    ] },
+  });
+});
+await commands.register("composite.relayout-views", async () => {
+  const { tree, buffer } = keyed;
+  await instance.update({ layout: { type: "column", children: [
+    { type: "editor", buffer },
+    { type: "tree", key: "files", view: tree },
+  ] } });
+});
 await commands.register("composite.invalid-layouts", async () => {
   const kind = registration ?? (registration = await workbench.registerComposite({ id: "example.view" }));
   const buffer = await buffers.create();
@@ -217,6 +331,32 @@ fn run(
         CommandOutcome::Completed,
         "{name}"
     );
+    cx.run_until_parked();
+}
+
+/// Run `name` from the document's tab and then select the composite's, as an
+/// update that removes the view a command ran in would leave that command's
+/// target gone.
+fn run_elsewhere(
+    window: &Entity<KnotWindow>,
+    native_window: gpui::AnyWindowHandle,
+    name: &'static str,
+    cx: &mut TestAppContext,
+) {
+    focus_document_tab(window, cx);
+    run(window, native_window, name, cx);
+    window.update(cx, |window, cx| {
+        window.workbench.update(cx, |workbench, _| {
+            let pane = workbench.focused_pane_id().unwrap();
+            let composite = workbench
+                .tabs()
+                .find(|tab| matches!(tab.surface_id(), TabSurfaceId::Composite(_)))
+                .unwrap()
+                .id();
+            workbench.activate_tab(pane, composite);
+        });
+        window.focus_active_surface(cx);
+    });
     cx.run_until_parked();
 }
 
@@ -569,15 +709,33 @@ fn select_tab(
     index: usize,
     cx: &mut TestAppContext,
 ) {
+    // The tabs follow the tree and the editor in layout order.
+    select_tab_in(window, native_window, 0, index, cx);
+}
+
+/// Show the `index`th member of the composite's `group`th tabs group and move
+/// focus into it; the group's members are the first views in layout order,
+/// after `group`'s... one view when the group follows a tree.
+fn select_tab_in(
+    window: &Entity<KnotWindow>,
+    native_window: gpui::AnyWindowHandle,
+    group: usize,
+    index: usize,
+    cx: &mut TestAppContext,
+) {
     let view = cx.read(|cx| {
         let workbench = window.read(cx).workbench.read(cx);
         let tab = workbench.focused_pane().unwrap().active_tab();
         workbench.composite_view(tab).unwrap().clone()
     });
-    view.update(cx, |view, cx| view.select_tab(0, index, cx))
+    view.update(cx, |view, cx| view.select_tab(group, index, cx))
         .unwrap();
-    // The tabs follow the tree and the editor in layout order.
-    focus_leaf(window, native_window, 1 + index, cx);
+    let before = if group == 0 && cx.read(|cx| view.read(cx).leaves().len()) > 2 {
+        1
+    } else {
+        0
+    };
+    focus_leaf(window, native_window, before + index, cx);
 }
 
 fn command_view_kind(window: &Entity<KnotWindow>, cx: &TestAppContext) -> &'static str {
@@ -699,6 +857,190 @@ fn clicking_a_tab_title_shows_its_member_and_focuses_it(cx: &mut TestAppContext)
     assert!(focused);
 }
 
+/// The focused composite's views in layout order, by identity.
+fn leaf_ids(window: &Entity<KnotWindow>, cx: &TestAppContext) -> Vec<gpui::EntityId> {
+    cx.read(|cx| {
+        let workbench = window.read(cx).workbench.read(cx);
+        let tab = workbench.focused_pane().unwrap().active_tab();
+        workbench
+            .composite_view(tab)
+            .unwrap()
+            .read(cx)
+            .leaves()
+            .iter()
+            .map(crate::app::composite_view::Leaf::entity_id)
+            .collect()
+    })
+}
+
+/// The group views beneath the focused composite's root, by identity.
+fn group_ids(info: &knot_protocol::WindowInfo) -> Vec<String> {
+    fn walk(node: &knot_protocol::ViewNodeInfo, ids: &mut Vec<String>) {
+        for child in &node.children {
+            if child.kind == "composite" {
+                ids.push(format!("{:?}", child.target));
+            }
+            walk(child, ids);
+        }
+    }
+    let mut ids = Vec::new();
+    walk(composite_root(info), &mut ids);
+    ids
+}
+
+#[gpui::test]
+fn an_update_keeps_the_views_of_kept_children_and_replaces_the_rest(cx: &mut TestAppContext) {
+    let (window, native_window, _, _) = window_with_extension(cx);
+    run(&window, native_window, "composite.open-keyed", cx);
+    let [a, b, c] = leaf_ids(&window, cx)[..] else {
+        panic!("three views");
+    };
+    let crate::app::composite_view::Leaf::Editor(view) = leaf_of(&window, 1, cx) else {
+        panic!("the second view is an editor");
+    };
+    let weak_b = view.downgrade();
+    drop(view);
+    let groups = group_ids(&info(&window, cx));
+    assert_eq!(groups.len(), 1);
+
+    run(&window, native_window, "composite.relayout", cx);
+    let now = leaf_ids(&window, cx);
+    assert_eq!(now.len(), 3);
+    // `c` and `a` kept their views in their new places; `d` is new.
+    assert_eq!((now[0], now[1]), (c, a));
+    assert!(!now.contains(&b) && now[2] != b);
+    // `b` is gone.
+    assert!(weak_b.upgrade().is_none());
+    // The kept group is the same view, now holding two editors.
+    assert_eq!(group_ids(&info(&window, cx)), groups);
+    let info = info(&window, cx);
+    let root = composite_root(&info);
+    assert_eq!(
+        root.children
+            .iter()
+            .map(|c| c.kind.as_str())
+            .collect::<Vec<_>>(),
+        ["editor", "composite"]
+    );
+    assert_eq!(root.children[1].children.len(), 2);
+    // The buffers are the kept ones.
+    let crate::app::composite_view::Leaf::Editor(new) = leaf_of(&window, 2, cx) else {
+        panic!("the third view is an editor");
+    };
+    assert_eq!(cx.read(|cx| new.read(cx).model().read(cx).text()), "d\n");
+}
+
+#[gpui::test]
+fn an_update_keeps_the_focus_where_it_was(cx: &mut TestAppContext) {
+    let (window, native_window, _, _) = window_with_extension(cx);
+    run(&window, native_window, "composite.open-keyed", cx);
+    // `c` had focus on open, and the new layout's `d` asks for it.
+    assert_eq!(command_text(&window, cx), "c\n");
+    run(&window, native_window, "composite.relayout", cx);
+    assert_eq!(command_text(&window, cx), "c\n");
+    let info = info(&window, cx);
+    assert_eq!(
+        info.focused_view.as_ref(),
+        Some(&composite_root(&info).children[0].target)
+    );
+
+    // Focus moved by the user is the focus kept.
+    focus_leaf(&window, native_window, 1, cx);
+    assert_eq!(command_text(&window, cx), "a\n");
+    run(
+        &window,
+        native_window,
+        "composite.relayout-drop-focused-default",
+        cx,
+    );
+    assert_eq!(command_text(&window, cx), "a\n");
+}
+
+#[gpui::test]
+fn removing_the_focused_child_moves_focus_to_the_layouts_initial_one(cx: &mut TestAppContext) {
+    let (window, native_window, _, _) = window_with_extension(cx);
+    run(&window, native_window, "composite.open-keyed", cx);
+    assert_eq!(command_text(&window, cx), "c\n");
+    run_elsewhere(
+        &window,
+        native_window,
+        "composite.relayout-drop-focused",
+        cx,
+    );
+    assert_eq!(command_text(&window, cx), "d\n");
+    let info = info(&window, cx);
+    assert_eq!(
+        info.focused_view.as_ref(),
+        Some(&composite_root(&info).children[1].target)
+    );
+
+    // Without a focused member the first view in layout order has it.
+    let (window, native_window, _, _) = window_with_extension(cx);
+    run(&window, native_window, "composite.open-keyed", cx);
+    run_elsewhere(
+        &window,
+        native_window,
+        "composite.relayout-drop-focused-default",
+        cx,
+    );
+    assert_eq!(command_text(&window, cx), "d\n");
+}
+
+#[gpui::test]
+fn a_key_that_shows_another_buffer_and_unkeyed_members_are_new_views(cx: &mut TestAppContext) {
+    let (window, native_window, _, _) = window_with_extension(cx);
+    run(&window, native_window, "composite.open-keyed", cx);
+    let before = leaf_ids(&window, cx);
+    run_elsewhere(&window, native_window, "composite.relayout-replace", cx);
+    let after = leaf_ids(&window, cx);
+    assert_eq!(after.len(), 2);
+    assert!(after.iter().all(|id| !before.contains(id)));
+}
+
+#[gpui::test]
+fn an_invalid_update_changes_nothing(cx: &mut TestAppContext) {
+    let (window, native_window, _, _) = window_with_extension(cx);
+    run(&window, native_window, "composite.open-keyed", cx);
+    let before = leaf_ids(&window, cx);
+    run(&window, native_window, "composite.relayout-invalid", cx);
+    assert_eq!(leaf_ids(&window, cx), before);
+}
+
+#[gpui::test]
+fn tabs_keep_the_member_they_show_when_the_members_move(cx: &mut TestAppContext) {
+    let (window, native_window, _, _) = window_with_extension(cx);
+    run(&window, native_window, "composite.open-keyed-tabs", cx);
+    let [x, y] = leaf_ids(&window, cx)[..] else {
+        panic!("two views");
+    };
+    select_tab_in(&window, native_window, 0, 1, cx);
+    assert_eq!(command_text(&window, cx), "y\n");
+    run(&window, native_window, "composite.relayout-tabs", cx);
+    assert_eq!(leaf_ids(&window, cx), [y, x]);
+    // `y` is still the shown member and has focus.
+    assert_eq!(command_text(&window, cx), "y\n");
+    let info = info(&window, cx);
+    let tabs = &composite_root(&info).children[0];
+    assert_eq!(info.focused_view.as_ref(), Some(&tabs.children[0].target));
+}
+
+#[gpui::test]
+fn contributed_views_are_kept_dropped_and_unbound_by_an_update(cx: &mut TestAppContext) {
+    let (window, native_window, _, _) = window_with_extension(cx);
+    run(&window, native_window, "composite.open-keyed-views", cx);
+    let tree = leaf_of(&window, 0, cx);
+    let crate::app::composite_view::Leaf::Text(log) = leaf_of(&window, 1, cx) else {
+        panic!("the second view is a text frame");
+    };
+    let weak_log = log.downgrade();
+    drop(log);
+    run(&window, native_window, "composite.relayout-views", cx);
+    let now = leaf_ids(&window, cx);
+    assert_eq!(now.len(), 2);
+    assert_eq!(now[1], tree.entity_id());
+    assert!(weak_log.upgrade().is_none());
+}
+
 mod documents {
     //! Editors on documents make the composite a view of them.
     use super::*;
@@ -742,6 +1084,7 @@ mod documents {
         let (a_model, b_model) = (model(a, cx), model(b, cx));
         let (window, native_window) = product_window(a, a_model.clone(), cx);
         let editor = |document, buffer: &Entity<crate::app::model::Buffer>| MemberSpec {
+            key: None,
             size: LayoutSize::default(),
             focused: false,
             title: None,
@@ -876,6 +1219,108 @@ mod documents {
             let documents = KnotWindow::documents(cx).read(cx);
             assert!(documents.get(a).is_some());
             assert!(documents.get(b).is_none());
+        });
+    }
+
+    /// `update_composite` with a layout of editors on `documents`, which
+    /// need not be the composite's.
+    fn relayout(
+        window: &Entity<KnotWindow>,
+        documents: &[DocumentId],
+        cx: &mut TestAppContext,
+    ) -> Result<(), crate::app::extensions::host::handlers::OpenError> {
+        let target = window.update(cx, |window, cx| {
+            let (pane, tab) = window
+                .workbench
+                .read(cx)
+                .tabs()
+                .find_map(|tab| {
+                    matches!(tab.surface_id(), TabSurfaceId::Composite(_)).then(|| {
+                        (
+                            window.workbench.read(cx).focused_pane_id().unwrap(),
+                            tab.id(),
+                        )
+                    })
+                })
+                .unwrap();
+            crate::app::product::OpenTarget::at(cx.weak_entity(), &window.workbench, pane, tab, cx)
+                .public_target()
+        });
+        let layout = GroupSpec {
+            arrangement: Arrangement::Row,
+            members: documents
+                .iter()
+                .map(|&document| {
+                    let buffer = cx.read(|cx| {
+                        KnotWindow::documents(cx)
+                            .read(cx)
+                            .get(document)
+                            .unwrap()
+                            .model()
+                            .clone()
+                    });
+                    MemberSpec {
+                        key: None,
+                        size: LayoutSize::default(),
+                        focused: false,
+                        title: None,
+                        content: ContentSpec::Editor {
+                            buffer,
+                            document: Some(document),
+                        },
+                    }
+                })
+                .collect(),
+        };
+        let result = cx.update(|cx| {
+            crate::app::product::operations::update_composite(
+                &target,
+                CompositeTab::default(),
+                Some(layout),
+                cx,
+            )
+        });
+        cx.run_until_parked();
+        result.map(|_| ())
+    }
+
+    #[gpui::test]
+    fn an_update_that_drops_the_final_view_of_a_document_with_changes_is_refused(
+        cx: &mut TestAppContext,
+    ) {
+        use crate::app::extensions::host::handlers::OpenError;
+        let (window, _, a, b) = window_with_composite(cx);
+        dirty(b, cx);
+        assert!(matches!(
+            relayout(&window, &[a], cx),
+            Err(OpenError::DocumentUnsaved)
+        ));
+        // Nothing changed: the composite still shows `b`.
+        cx.read(|cx| {
+            let workbench = window.read(cx).workbench.read(cx);
+            assert_eq!(workbench.view_count(b), 1);
+            assert!(KnotWindow::documents(cx).read(cx).get(b).is_some());
+        });
+    }
+
+    #[gpui::test]
+    fn an_update_closes_a_clean_document_it_drops_the_final_view_of_and_keeps_shared_ones(
+        cx: &mut TestAppContext,
+    ) {
+        let (window, _, a, b) = window_with_composite(cx);
+        // `a` also has its own tab, so dropping it from the layout keeps it.
+        relayout(&window, &[b], cx).unwrap();
+        cx.read(|cx| {
+            let workbench = window.read(cx).workbench.read(cx);
+            assert_eq!(workbench.view_count(a), 1);
+            assert_eq!(workbench.view_count(b), 1);
+        });
+        relayout(&window, &[a], cx).unwrap();
+        cx.read(|cx| {
+            let documents = KnotWindow::documents(cx).read(cx);
+            assert!(documents.get(a).is_some());
+            assert!(documents.get(b).is_none());
+            assert_eq!(window.read(cx).workbench.read(cx).view_count(a), 2);
         });
     }
 }

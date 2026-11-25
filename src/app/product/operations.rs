@@ -4,6 +4,7 @@ use super::super::extensions::host::handlers::{
     AccessError, CloseError, OpenError, WorkspaceError,
 };
 use super::*;
+use crate::app::documents::DocumentDirty as _;
 use knot_protocol::ExtensionKey;
 use knot_protocol::{
     CommandInvocationId, DocumentDestination, PaneTarget, PresentationTarget, WindowTarget,
@@ -136,7 +137,7 @@ fn capture_destination(
 
 impl OpenTarget {
     /// The public identity of the tab an open landed in.
-    fn public_target(&self) -> PresentationTarget {
+    pub(super) fn public_target(&self) -> PresentationTarget {
         let tab = self.tab.expect("opened targets name their tab");
         PresentationTarget {
             pane: PaneTarget {
@@ -380,27 +381,69 @@ pub(crate) fn open_composite(
     Ok((target.public_target(), id, hosted))
 }
 
-/// Replace what the tab of the composite view `target` names shows.
+/// Replace what the tab of the composite view `target` names shows, and its
+/// layout when given. Returns the window's ID and the contributed views the
+/// new layout added.
+///
+/// A document the new layout drops stays open while another tab shows it. One
+/// whose view this was refuses the change when it has unsaved changes, and is
+/// closed otherwise.
 pub(crate) fn update_composite(
     target: &PresentationTarget,
     tab: crate::app::composite_view::CompositeTab,
+    layout: Option<crate::app::composite_view::GroupSpec>,
     cx: &mut App,
-) -> Result<(), AccessError> {
+) -> Result<(String, Vec<crate::app::workbench::ExtensionView>), OpenError> {
     let (window, open) = capture_destination(&DocumentDestination::View(target.clone()), cx)?;
     let workbench = open.workbench.upgrade().ok_or(AccessError::InvalidTarget)?;
     let location = open.tab.ok_or(AccessError::InvalidTarget)?;
-    let view = {
+    let (view, dropped) = {
         let workbench = workbench.read(cx);
-        workbench
+        let tab = workbench
             .tab(location.pane, location.tab)
-            .and_then(|tab| workbench.composite_view(tab))
+            .ok_or(AccessError::InvalidTarget)?;
+        let view = workbench
+            .composite_view(tab)
             .cloned()
-            .ok_or(AccessError::InvalidTarget)?
+            .ok_or(AccessError::InvalidTarget)?;
+        let kept = layout.as_ref().map(|layout| layout.documents());
+        let dropped: Vec<DocumentId> = workbench
+            .shown_documents(tab)
+            .into_iter()
+            .filter(|document| kept.as_ref().is_some_and(|kept| !kept.contains(document)))
+            .collect();
+        (view, dropped)
     };
+    // The tab is each of these documents' only view when no other shows it.
+    let finals: Vec<DocumentId> = dropped
+        .into_iter()
+        .filter(|document| cx.global::<ApplicationWindows>().view_count(*document, cx) == 1)
+        .collect();
+    let documents = KnotWindow::documents(cx);
+    if finals.iter().any(|document| {
+        documents
+            .read(cx)
+            .get(*document)
+            .is_some_and(|document| document.is_dirty(cx))
+    }) {
+        return Err(OpenError::DocumentUnsaved);
+    }
+    let id = super::window_id(window.entity_id());
+    let hosted = match layout {
+        Some(layout) => window.update(cx, |window, cx| {
+            window.update_composite_layout(location.pane, location.tab, layout, cx)
+        }),
+        None => Vec::new(),
+    };
+    for document in finals {
+        documents.update(cx, |documents, cx| {
+            documents.remove(document, cx);
+        });
+    }
     view.update(cx, |view, cx| view.set_tab(tab, cx));
     window.update(cx, |_, cx| cx.notify());
     crate::app::extensions::host::application_changed(cx);
-    Ok(())
+    Ok((id, hosted))
 }
 
 /// Close the tab `presentation` names with the usual prompts, for an owner
