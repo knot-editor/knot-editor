@@ -267,19 +267,28 @@ same rule (see [workbench and lifecycle](../architecture/workbench-and-lifecycle
 `@knot/projects` counts a tab's views from its editors at any depth, diff tabs
 included. Reference docs follow in checkpoint 14.
 
-#### 13. Layout updates
+#### 13. Layout updates ✅
 
-Deliverables: the package replaces an open instance's layout; kept children
-keep identity, handles, and focus. Removing the focused child moves focus to
-the layout's initial focus child.
+`instance.update({ layout })` replaces the layout. A member names itself with
+an optional `key`, unique in the layout; a keyed member keeps its view when
+the new layout has the key and the same content (the same buffer or document
+for an editor, the same embedded view for a text frame or tree, any group), so
+it keeps its handle, state, and focus wherever it moves. A group keeps its
+identity and takes the new arrangement and members. A member without a key,
+or whose key shows something else, is a new view; views left out close.
 
-Validation: tests for kept, added, and removed children, including the focused
-one.
+The focused view keeps focus. When it is removed, the layout's initial focus
+takes over as on open; a `focused` member of an update does not move focus
+otherwise. A tabs group keeps the member it showed when that member is kept.
+A command that removes the view it ran in ends `InvalidTarget`, as one that
+closes its own tab does.
 
-Review gate: child naming.
+A dropped document that was the final view of its document is closed, and an
+update that would drop the final view of one with unsaved changes fails with
+`DocumentUnsaved` and changes nothing.
 
-Implementation context: the composite view from 9–10; stale-handle refresh
-from 3.
+Review gate: child naming. Try it with the playground's "Open Keyed Composite"
+and "Next Layout". Reference docs follow in checkpoint 14.
 
 #### 14. Toolbar
 
