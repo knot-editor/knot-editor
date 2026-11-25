@@ -230,28 +230,16 @@ The tab closes with the instance, the registration, or the lifecycle. Opening
 takes no `arguments` until the toolbar's commands (14) need them. Reference
 docs follow in checkpoint 14.
 
-#### 10. Layout tree
+#### 10. Layout tree ✅
 
-Deliverables: rows and columns with sizes, nested composites. The layout names
-the child focused on open, defaulting to the first editor in layout order, or
-the first child without one; reselecting the tab restores the child focused
-last.
-
-Validation: layout and focus-traversal tests, and tests for focus on open and
-on reselection.
-
-Review gate: the layout data's shape.
-
-Implemented, awaiting review: `open({ title, layout })` takes a `row` or
-`column` whose `children` are `editor` members (on a `buffers.create` buffer)
-or nested rows and columns, each nested group a `composite` view in the tree.
-A member's `size` is `{ weight }` (default 1) or `{ pixels }`, and `focused`
-names the member focused on open. The layout needs an editor and cannot be
-replaced yet; children have no key until layout updates (13) need one. Text and
-tree children join in 11.
-
-Implementation context: the composite's native view beside `DiffView`'s
-side-by-side layout in `src/app/diff_view.rs`.
+`open({ title, layout })` takes a `row` or `column` of `editor` members (on
+extension buffers) and nested rows and columns, each nested group a
+`composite` view in the tree. A member's `size` is `{ weight }` or
+`{ pixels }`; `focused` names the member focused on open, defaulting to the
+first editor, and reselecting the tab restores the editor focused last. The
+layout needs an editor and cannot be replaced until 13; children get a key
+then. Text and tree children join in 11. A command in a composite captures
+the focused editor and its buffer, and `@knot/find` follows the focused view.
 
 #### 11. More child kinds
 
