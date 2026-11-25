@@ -12,10 +12,11 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use gpui::{prelude::*, *};
 use knot_model::workbench::{CompositeViewId, DocumentId};
-use knot_protocol::{IconRef, ViewId};
+use knot_protocol::{Command, CommandArgumentValue, IconRef, ViewId};
 
 use super::convert::ThemePaint as _;
 use super::editor::EditorView;
+use super::icons::{AppIcon, ref_definition};
 use super::model::Buffer;
 use super::resource::ResourceUri;
 use super::text_view::TextView;
@@ -23,6 +24,7 @@ use super::theme::{color, theme};
 use super::tree_view::TreeView;
 use super::view_tree::{ViewFocusChanged, ViewKind, ViewNode, ViewTree, ViewTreeChanged};
 use super::workbench::{CommandView, ExtensionView};
+use super::zoom;
 
 static NEXT_COMPOSITE_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -31,13 +33,37 @@ pub(crate) fn allocate_composite_id() -> CompositeViewId {
     CompositeViewId(NEXT_COMPOSITE_ID.fetch_add(1, Ordering::Relaxed))
 }
 
-/// What the tab of a composite view shows.
+/// What the tab of a composite view shows, and its toolbar.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct CompositeTab {
     pub title: String,
     pub icon: Option<IconRef>,
     /// The resource whose decorations the tab shows, as a document tab does.
     pub resource: Option<ResourceUri>,
+    pub toolbar: Vec<ToolbarButton>,
+}
+
+/// An icon button of a composite's toolbar, which runs a command with the
+/// composite as its target.
+#[derive(Clone, Debug, PartialEq, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct ToolbarButton {
+    /// The tooltip.
+    pub label: String,
+    pub icon: IconRef,
+    pub command: String,
+    #[serde(default = "no_arguments")]
+    pub arguments: CommandArgumentValue,
+    /// Shown pressed.
+    #[serde(default)]
+    pub toggled: bool,
+    /// Shown dimmed, and does nothing when clicked.
+    #[serde(default)]
+    pub disabled: bool,
+}
+
+fn no_arguments() -> CommandArgumentValue {
+    CommandArgumentValue::Null
 }
 
 /// How much of a group's main axis a member takes.
@@ -820,6 +846,68 @@ impl Focusable for CompositeView {
     }
 }
 
+impl CompositeView {
+    /// The bar of buttons above the layout, when the composite has any.
+    fn toolbar(&self, cx: &Context<Self>) -> Option<Stateful<Div>> {
+        if self.tab.toolbar.is_empty() {
+            return None;
+        }
+        let theme = theme(cx);
+        let text = theme.paint_color(color::TEXT);
+        let hover = theme.paint_color(color::BUTTON_HOVER_BACKGROUND);
+        let pressed = theme.paint_color(color::LIST_SELECTED_BACKGROUND);
+        let view = cx.entity();
+        let buttons = self.tab.toolbar.iter().enumerate().map(|(index, button)| {
+            let label = SharedString::from(button.label.clone());
+            let command = Command {
+                name: button.command.as_str().into(),
+                arguments: button.arguments.clone(),
+            };
+            let view = view.clone();
+            div()
+                .id(("composite-toolbar-button", index))
+                .debug_selector(move || format!("composite-toolbar-{index}"))
+                .p(zoom::rems(3.))
+                .rounded(zoom::rems(4.))
+                .text_color(text)
+                .when(button.toggled, |button| button.bg(pressed))
+                .when(button.disabled, |button| button.opacity(0.4))
+                .when(!button.disabled, |button| {
+                    button
+                        .cursor_pointer()
+                        .hover(|style| style.bg(hover))
+                        .on_click(move |_, window, cx| {
+                            let handle = window.window_handle();
+                            let (view, command) = (view.clone(), command.clone());
+                            cx.defer(move |cx| {
+                                crate::app::product::run_toolbar_command(handle, view, command, cx);
+                            });
+                        })
+                })
+                .child(AppIcon::new(ref_definition(&button.icon, false, cx)))
+                .tooltip(move |window, cx| {
+                    gpui_component::tooltip::Tooltip::new(label.clone())
+                        .text_xs()
+                        .build(window, cx)
+                })
+        });
+        Some(
+            div()
+                .id("composite-toolbar")
+                .flex()
+                .flex_row()
+                .flex_none()
+                .items_center()
+                .gap(zoom::rems(2.))
+                .px(zoom::rems(6.))
+                .py(zoom::rems(2.))
+                .border_b_1()
+                .border_color(theme.paint_color(color::BORDER))
+                .children(buttons),
+        )
+    }
+}
+
 impl Render for CompositeView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if self._focus_subscriptions.is_empty() {
@@ -842,6 +930,17 @@ impl Render for CompositeView {
                 ));
             }
         }
-        self.root.render(cx)
+        div()
+            .size_full()
+            .flex()
+            .flex_col()
+            .children(self.toolbar(cx))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .min_h_0()
+                    .child(self.root.render(cx)),
+            )
     }
 }

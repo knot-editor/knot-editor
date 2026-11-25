@@ -788,7 +788,8 @@ pub(crate) async fn unregister_composite(
     Ok(())
 }
 
-/// The tab of a composite view: title, icon as JSON, and resource URI.
+/// The tab of a composite view: title, icon as JSON, resource URI, and
+/// toolbar as JSON.
 fn decode_composite_tab(
     reader: &mut dyn ArgumentReader,
     first: usize,
@@ -803,6 +804,8 @@ fn decode_composite_tab(
         title: reader.text(first, "composite title must be text")?,
         icon,
         resource: reader.optional_text(first + 2, "composite resource must be text or null")?,
+        toolbar: serde_json::from_str(&reader.text(first + 3, "composite toolbar must be text")?)
+            .map_err(|_| DecodeError::Type("composite toolbar is invalid"))?,
     })
 }
 
@@ -828,7 +831,7 @@ impl HostArguments for OpenCompositeArguments {
             target: reader.destination(2)?,
             kind: reader.text(3, "composite kind must be text")?,
             tab: decode_composite_tab(reader, 4)?,
-            layout: decode_composite_layout(&reader.text(7, "composite layout must be text")?)?,
+            layout: decode_composite_layout(&reader.text(8, "composite layout must be text")?)?,
         })
     }
 }
@@ -871,7 +874,7 @@ impl HostArguments for UpdateCompositeArguments {
             target,
             tab: decode_composite_tab(reader, 3)?,
             layout: reader
-                .optional_text(6, "composite layout must be text or null")?
+                .optional_text(7, "composite layout must be text or null")?
                 .map(|json| decode_composite_layout(&json))
                 .transpose()?,
         })

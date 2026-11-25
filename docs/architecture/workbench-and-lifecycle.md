@@ -362,6 +362,36 @@ and a view that leaves the tree invalidates its targets.
 `focusedView` and `statusView` are the leaves of the focused tab and of the
 [status editor](extension-host.md#application-metadata-queries).
 
+## Composite views
+
+A `CompositeView` (`src/app/composite_view.rs`) is a center tab, `TabSurfaceId::Composite`, whose
+layout a package describes as data and the user cannot rearrange. A package
+reserves a kind and opens instances through `src/app/extensions/host/composites.rs`;
+the lifecycle that registered a kind owns it and its instances, which close
+when the instance, the kind, or the lifecycle ends. Instances are left out of
+window layouts, hot exit, and Reopen Closed Tab.
+
+The layout is a tree of groups (row, column, tabs) whose leaves are editors,
+trees, and text frames. Each nested group is a view of its own in the
+[view tree](#view-tree), so every view has an identity, and focus and command
+captures name the leaf. A composite has no state of its own beyond which leaf
+has focus, which reselecting the tab restores. Tree and text leaves are
+instances of a view registered `embedded`, which no tool window hosts; the
+composite binds each as a contributed view of its window and unbinds it when
+the view leaves the layout or the composite is released. An editor on a
+document is a view of that document, counted once per tab for closure.
+
+Replacing the layout builds the new one against the old, taking the view of
+each keyed member that shows the same buffer, document, or embedded view, so
+its handle and state survive. The focused view keeps focus when it survives;
+otherwise the layout's initial focus takes over. The host refuses an update
+that would drop the final view of a document with unsaved changes before
+changing anything.
+
+The toolbar belongs to the tab's data. A click captures a command target for
+the composite's own tab and its focused leaf, as a click on an editor
+contribution does, and dispatches the command there whatever has focus.
+
 ## Diff view
 
 A `DiffView` (`src/app/diff_view.rs`) is a center-only tab of two ordinary

@@ -232,9 +232,7 @@ fake in `scripts/extensions/testing` implements it.
 `workbench.registerComposite({ id })` reserves a kind, and its registration's
 `open` makes a center tab (`TabSurfaceId::Composite`) with one editor on a
 `buffers.create` buffer; `update` changes the tab's title, icon, and resource.
-The tab closes with the instance, the registration, or the lifecycle. Opening
-takes no `arguments` until the toolbar's commands (14) need them. Reference
-docs follow in checkpoint 14.
+The tab closes with the instance, the registration, or the lifecycle.
 
 #### 10. Layout tree ✅
 
@@ -255,8 +253,7 @@ it shows one instance, so instances share the registration's content
 (`setText`, provider, `invalidate`) and its view commands. A `tabs` group shows
 one member at a time, each with a `title`; a focused member is shown. A layout
 needs one view, not one editor. The tab strip is mouse-only and its styling is
-plain; a tree's frame actions do not show until the toolbar (14). Reference
-docs follow in checkpoint 14.
+plain; a tree's frame actions do not show; the composite's toolbar carries buttons.
 
 #### 12. Document editors as children ✅
 
@@ -265,7 +262,7 @@ is one view of each document its editors show, so closing it prompts once for
 each dirty document it shows last, and its unsaved-changes marker follows the
 same rule (see [workbench and lifecycle](../architecture/workbench-and-lifecycle.md)).
 `@knot/projects` counts a tab's views from its editors at any depth, diff tabs
-included. Reference docs follow in checkpoint 14.
+included.
 
 #### 13. Layout updates ✅
 
@@ -274,22 +271,19 @@ an optional `key`; a keyed member keeps its view, handle, and focus when the
 new layout has the key and the same content, and members without a key are
 new views. The focused view keeps focus, or the layout's initial focus takes
 over when it is removed. An update that would drop the final view of a
-document with unsaved changes fails with `DocumentUnsaved`. Reference docs
-follow in checkpoint 14.
+document with unsaved changes fails with `DocumentUnsaved`.
 
-#### 14. Toolbar
+#### 14. Toolbar 🔎
 
-Deliverables: an instance's toolbar of command buttons with icons, tooltips,
-and toggled or disabled state the package updates. A button runs its command
-with its own instance as the target, wherever focus is. Phase D documentation.
-
-Validation: tests for buttons running commands, including with focus outside
-the instance, and state updates.
-
-Review gate: the toolbar; phase D docs.
-
-Implementation context: the diff toolbar in `src/app/diff_view.rs` and tree
-frame actions (`TreeAction`) as models.
+`open` and `update` take a `toolbar` of icon buttons (`label` tooltip, `icon`,
+`command`, `arguments`, `toggled`, `disabled`); an update replaces the whole
+list. A click runs the command with the instance's tab as its target and the
+view focused there as its focus, wherever focus is. Documented in the
+[extension guide](../extension-api/ui.md#open-a-composite-view) and the
+[composite views](../architecture/workbench-and-lifecycle.md#composite-views)
+reference, which also cover the layout, embedded views, document editors, and
+keys of checkpoints 9 to 13. Review gate: the toolbar by hand with the
+playground's `Playground: Open Composite with Toolbar`, and the phase D docs.
 
 ### Phase E — Editor primitives
 

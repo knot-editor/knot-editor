@@ -15,17 +15,18 @@ use std::collections::HashSet;
 use super::ProductExtensionHost;
 use super::handlers::{AccessError, OpenError};
 use crate::app::composite_view::{
-    Arrangement, CompositeTab, ContentSpec, GroupSpec, LayoutSize, MemberSpec,
+    Arrangement, CompositeTab, ContentSpec, GroupSpec, LayoutSize, MemberSpec, ToolbarButton,
 };
 use crate::app::extensions::semantics::SemanticError;
 use crate::app::product;
 
-/// What `openComposite` and `updateComposite` set on a tab.
+/// What `openComposite` and `updateComposite` set on a tab and its toolbar.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct CompositeTabSpec {
     pub title: String,
     pub icon: Option<knot_protocol::IconRef>,
     pub resource: Option<String>,
+    pub toolbar: Vec<ToolbarButton>,
 }
 
 impl CompositeTabSpec {
@@ -40,6 +41,7 @@ impl CompositeTabSpec {
                         .map_err(|_| OpenError::InvalidUri)
                 })
                 .transpose()?,
+            toolbar: self.toolbar,
         })
     }
 }

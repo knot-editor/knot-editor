@@ -522,6 +522,25 @@ pub(crate) fn run_contribution_action(
     window.update(cx, |window, cx| window.run_contribution_action(&action, cx));
 }
 
+/// Run the command of a clicked toolbar button of `composite`, in the window
+/// it was clicked in.
+pub(crate) fn run_toolbar_command(
+    native_window: AnyWindowHandle,
+    composite: Entity<super::composite_view::CompositeView>,
+    command: knot_protocol::Command,
+    cx: &mut App,
+) {
+    let Some(window) = cx
+        .try_global::<ApplicationWindows>()
+        .and_then(|windows| windows.in_native_window(native_window))
+    else {
+        return;
+    };
+    window.update(cx, |window, cx| {
+        window.run_toolbar_command(&composite, command, cx)
+    });
+}
+
 /// The native window an open window is shown in, without reading the window.
 pub(crate) fn native_window(window: EntityId, cx: &App) -> Option<AnyWindowHandle> {
     cx.global::<ApplicationWindows>().native_window(window)
@@ -1771,6 +1790,46 @@ impl KnotWindow {
         let command = knot_protocol::Command {
             name: action.command.name.as_str().into(),
             arguments: knot_protocol::CommandArgumentValue::Object(arguments),
+        };
+        self.dispatch_command(command, target, cx);
+    }
+
+    /// Run `command` with the tab of `composite` as its target and the view
+    /// focused there as its focus, wherever focus is.
+    fn run_toolbar_command(
+        &mut self,
+        composite: &Entity<super::composite_view::CompositeView>,
+        command: knot_protocol::Command,
+        cx: &mut Context<Self>,
+    ) {
+        let workbench = self.workbench.read(cx);
+        let found = workbench.panes().iter().find_map(|pane| {
+            let tab = pane
+                .tabs()
+                .iter()
+                .find(|tab| workbench.composite_view(tab) == Some(composite))?;
+            Some((pane.id(), tab))
+        });
+        let Some((pane, tab)) = found else {
+            return;
+        };
+        let target = ProductCommandTarget {
+            window: cx.entity().downgrade(),
+            workbench: self.workbench.downgrade(),
+            tab: Some(TargetTab {
+                pane,
+                tab: tab.id(),
+                surface: tab.surface_id(),
+                presentation: tab.presentation(),
+            }),
+            focused: true,
+            view: match workbench.command_view(tab) {
+                Some(super::workbench::CommandView::Extension(extension)) => {
+                    Some(extension.instance_id(cx))
+                }
+                _ => None,
+            },
+            leaf: workbench.focused_leaf(tab, cx),
         };
         self.dispatch_command(command, target, cx);
     }

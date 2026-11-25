@@ -156,6 +156,60 @@ unless the registration passes `gutter: true`; its line numbers then follow
 numbers, and `editor.folding` set to `false` the fold lane; with both off, only
 the marker lane remains.
 
+## Open a composite view
+
+A composite view is a center tab whose layout of child views you describe and
+the user cannot rearrange. Reserve a kind with `workbench.registerComposite`,
+then open instances of it; the tab belongs to your package and closes when you
+close or dispose the instance or the registration, or when the package unloads.
+Instances are not restored with their window.
+
+```js
+const kind = await workbench.registerComposite({ id: "example.compare" });
+const [left, right] = await Promise.all([buffers.create({ text: "a\n" }), buffers.create({ text: "b\n" })]);
+const instance = await kind.open({
+  title: "Compare",
+  icon: "git-compare",
+  layout: {
+    type: "row",
+    children: [
+      { type: "editor", key: "left", buffer: left },
+      { type: "editor", key: "right", buffer: right, size: { pixels: 320 }, focused: true },
+    ],
+  },
+  toolbar: [{ label: "Next change", icon: "arrow-down", command: "example.next" }],
+});
+```
+
+The layout is a `row` or `column` of members: an `editor` on an
+[extension buffer](application.md#own-a-buffer) or on a `document`, a `tree` or
+`text` frame of a view registered with `embedded: true`, nested rows and
+columns, and `tabs`, which show one titled member at a time. A member's `size`
+is a `weight` (a share of what the `pixels` members leave, 1 by default) or
+`pixels`. `focused` names the member that has focus on open; reselecting the
+tab restores the view focused last. Every view, nested groups included, is in
+the [view tree](application.md#inspect-and-change-application-state), so
+commands, keymaps, and editor-driven packages such as Vim work in each editor.
+An editor on a document counts the tab as a view of that document, once however
+many editors show it, so closing the tab asks about unsaved changes when it is
+the document's last view.
+
+`instance.update({ title, icon, resource, layout, toolbar })` changes what the
+tab shows; a field left out keeps its value. A member with a `key` that the new
+layout also has, with the same buffer, document, or view, keeps its view and so
+its handle, text position, history, and focus; members without a key are new
+views. The view that had focus keeps it, and the layout's `focused` member takes
+over when it is removed. An update that would drop the final view of a document
+with unsaved changes rejects `DocumentUnsaved`.
+
+The `toolbar` is a bar of icon buttons above the layout. A button's `label` is
+its tooltip, and it runs `command` with `arguments` when clicked, with the
+instance's tab as the command's target and the view focused in it as its focus,
+wherever focus is, so a handler finds its instance in `target.viewChain`.
+`toggled` shows the button pressed and `disabled` dims it and ignores clicks.
+An update replaces the whole list, so send it again to change a button's state;
+`toolbar: []` removes the bar.
+
 ## Ask the user transiently
 
 `workbench` exposes window-local pickers, text input, and a native confirmation

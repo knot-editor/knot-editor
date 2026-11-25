@@ -2196,8 +2196,29 @@ export async function openDiff(options: unknown) {
     [Symbol.asyncDispose]: () => owned.dispose(),
   });
 }
+function compositeToolbar(value: unknown): string {
+  if (!Array.isArray(value)) throw new TypeError("composite toolbar must be an array");
+  return JSON.stringify(value.map((item) => {
+    const button = record(item, "composite toolbar button must be an object");
+    const icon = iconRef(button.icon);
+    if (icon === null) throw new TypeError("composite toolbar button needs an icon");
+    for (const field of ["toggled", "disabled"]) {
+      if (button[field] !== undefined && typeof button[field] !== "boolean") {
+        throw new TypeError(`composite toolbar button ${field} must be a boolean`);
+      }
+    }
+    return {
+      label: string(button.label, "composite toolbar button label must be text"),
+      icon,
+      command: string(button.command, "composite toolbar button command must be text"),
+      arguments: button.arguments === undefined ? null : validateJsonValue(button.arguments),
+      toggled: button.toggled ?? false,
+      disabled: button.disabled ?? false,
+    };
+  }));
+}
 function compositeTab(given: Rec, titleRequired: boolean) {
-  const { title, icon, resource } = given;
+  const { title, icon, resource, toolbar } = given;
   if (title === undefined ? titleRequired : typeof title !== "string") {
     throw new TypeError("composite title must be a string");
   }
@@ -2205,7 +2226,12 @@ function compositeTab(given: Rec, titleRequired: boolean) {
     throw new TypeError("composite icon must be an icon reference");
   }
   if (resource != null && typeof resource !== "string") throw new TypeError("composite resource must be a string");
-  return { title: title as string | undefined, icon: icon ?? null, resource: (resource ?? null) as string | null };
+  return {
+    title: title as string | undefined,
+    icon: icon ?? null,
+    resource: (resource ?? null) as string | null,
+    toolbar: toolbar === undefined ? undefined : compositeToolbar(toolbar),
+  };
 }
 /** The layout JSON of a composite's row or column, or of one member of it. */
 function compositeLayoutJson(node: unknown): string {
@@ -2285,9 +2311,9 @@ export async function registerComposite(contribution: unknown) {
       const tab = compositeTab(given, true);
       const layout = compositeLayoutJson(given.layout);
       const value = await registration.track(request("openComposite", destinationAuthority(given), id,
-        tab.title, tab.icon === null ? null : JSON.stringify(tab.icon), tab.resource, layout));
+        tab.title, tab.icon === null ? null : JSON.stringify(tab.icon), tab.resource, tab.toolbar ?? "[]", layout));
       const target = presentationTarget(value.target);
-      let current = { title: tab.title as string, icon: tab.icon, resource: tab.resource };
+      let current = { title: tab.title as string, icon: tab.icon, resource: tab.resource, toolbar: tab.toolbar ?? "[]" };
       const owned = ownership(() => {}, async () => {
         try { await closePresentation(target); } catch (error) {
           if ((error as { code?: unknown }).code !== "InvalidTarget") throw error;
@@ -2300,13 +2326,16 @@ export async function registerComposite(contribution: unknown) {
           const next = compositeTab(given, false);
           const layout = given.layout === undefined ? null : compositeLayoutJson(given.layout);
           owned.assertActive();
-          current = {
+          const merged = {
             title: next.title ?? current.title,
             icon: given.icon === undefined ? current.icon : next.icon,
             resource: given.resource === undefined ? current.resource : next.resource,
+            toolbar: next.toolbar ?? current.toolbar,
           };
           await owned.track(request("updateComposite", destinationAuthority({ target }),
-            current.title, current.icon === null ? null : JSON.stringify(current.icon), current.resource, layout));
+            merged.title, merged.icon === null ? null : JSON.stringify(merged.icon), merged.resource,
+            merged.toolbar, layout));
+          current = merged;
         },
         async close(closeOptions?: Opts) {
           try {

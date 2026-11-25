@@ -2997,6 +2997,20 @@ declare module "knot" {
      * shows as a document tab does. */
     readonly resource?: string;
   }
+  /** An icon button of a composite's toolbar. Clicking it runs the command
+   * with the composite's tab as the target and the view focused there as its
+   * focus, wherever focus is. */
+  export interface CompositeButton {
+    /** The tooltip. */
+    readonly label: string;
+    readonly icon: IconRef;
+    readonly command: string;
+    readonly arguments?: JsonValue;
+    /** Shows the button pressed. Defaults to false. */
+    readonly toggled?: boolean;
+    /** Dims the button and ignores clicks. Defaults to false. */
+    readonly disabled?: boolean;
+  }
   /** How much of its group's main axis a layout member takes. */
   export type CompositeSize =
     /** A share of the space the `pixels` members leave, in proportion to the
@@ -3057,6 +3071,8 @@ declare module "knot" {
     /** The layout, which the user cannot rearrange: a row or column holding at
      * least one editor, text frame, or tree at any depth. */
     readonly layout: CompositeGroup;
+    /** The buttons of a bar above the layout, in order; none shows no bar. */
+    readonly toolbar?: readonly CompositeButton[];
   }
   /** An open composite view. Disposing it closes the tab, as `close` does. */
   export interface CompositeInstance extends AsyncDisposable {
@@ -3070,7 +3086,8 @@ declare module "knot" {
      * replaced the same way. Other members are new views, and views left out
      * close. The view that had focus keeps it; when it closes, the new
      * layout's initial focus takes over as on open, and a `focused` member
-     * that is not that does not move focus.
+     * that is not that does not move focus. A `toolbar` replaces the buttons,
+     * so state changes by sending the list again; `[]` removes the bar.
      * @throws TypeError for invalid fields or layout; HostError with
      * InvalidTarget for a tab that was closed, InvalidUri, BufferClosed,
      * DocumentNotFound, DocumentUnsaved when the layout drops the final view of
@@ -3081,6 +3098,7 @@ declare module "knot" {
       readonly icon?: IconRef | null;
       readonly resource?: string | null;
       readonly layout?: CompositeGroup;
+      readonly toolbar?: readonly CompositeButton[];
     }): Promise<void>;
     /** Close the tab as `workbench.close` does; a tab already closed resolves
      * as closed. */

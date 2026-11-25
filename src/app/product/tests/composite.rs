@@ -110,6 +110,36 @@ await commands.register("composite.capture", async (context) => {
   check(context.editor !== null && context.buffer !== null, "editor and buffer captured");
   check(context.target.focusedView !== null, "focused view");
 });
+// A toolbar whose buttons run a command that records what it was given; the
+// second button is disabled.
+const button = { label: "Press", icon: "arrow-down", command: "composite.toolbar-press", arguments: { n: 1 } };
+let pressed = [];
+await commands.register("composite.toolbar-press", async (context) => {
+  pressed.push(
+    context.editor !== null && context.target.viewChain.length === 1 && context.arguments.n === 1,
+  );
+});
+await commands.register("composite.toolbar-expect-one", async () => {
+  check(pressed.length === 1 && pressed[0], `one press with the composite as target: ${pressed}`);
+});
+await commands.register("composite.toolbar-expect-none", async () => {
+  check(pressed.length === 0, `no press: ${pressed}`);
+});
+await commands.register("composite.open-toolbar", async () => {
+  const kind = registration ?? (registration = await workbench.registerComposite({ id: "example.view" }));
+  const buffer = await buffers.create({ text: "one\n" });
+  instance = await kind.open({
+    title: "Toolbar",
+    layout: { type: "row", children: [{ type: "editor", buffer }] },
+    toolbar: [button, { ...button, label: "Off", icon: "lock", disabled: true }],
+  });
+});
+await commands.register("composite.toolbar-toggle", async () => {
+  await instance.update({ toolbar: [{ ...button, toggled: true }] });
+});
+await commands.register("composite.toolbar-clear", async () => {
+  await instance.update({ toolbar: [] });
+});
 // Editors on the first document, twice.
 await commands.register("composite.open-document", async () => {
   const kind = registration ?? (registration = await workbench.registerComposite({ id: "example.view" }));
@@ -855,6 +885,74 @@ fn clicking_a_tab_title_shows_its_member_and_focuses_it(cx: &mut TestAppContext)
         })
         .unwrap();
     assert!(focused);
+}
+
+/// Click the toolbar button of the debug selector `selector`.
+fn click_toolbar_button(
+    native_window: gpui::AnyWindowHandle,
+    selector: &'static str,
+    cx: &mut TestAppContext,
+) {
+    cx.refresh().unwrap();
+    let mut visual = gpui::VisualTestContext::from_window(native_window, cx);
+    let button = visual.debug_bounds(selector).unwrap().center();
+    visual.simulate_mouse_down(button, gpui::MouseButton::Left, gpui::Modifiers::default());
+    visual.simulate_mouse_up(button, gpui::MouseButton::Left, gpui::Modifiers::default());
+    cx.run_until_parked();
+}
+
+#[gpui::test]
+fn a_toolbar_button_runs_its_command_with_the_composite_as_target(cx: &mut TestAppContext) {
+    let (window, native_window, _, _) = window_with_extension(cx);
+    run(&window, native_window, "composite.open-toolbar", cx);
+    let toolbar = tab_state(&window, cx).toolbar;
+    assert_eq!(toolbar.len(), 2);
+    assert!(toolbar[1].disabled && !toolbar[0].toggled);
+
+    click_toolbar_button(native_window, "composite-toolbar-1", cx);
+    run(&window, native_window, "composite.toolbar-expect-none", cx);
+    click_toolbar_button(native_window, "composite-toolbar-0", cx);
+    run(&window, native_window, "composite.toolbar-expect-one", cx);
+}
+
+#[gpui::test]
+fn a_toolbar_button_targets_its_composite_when_focus_is_elsewhere(cx: &mut TestAppContext) {
+    let (window, native_window, _, _) = window_with_extension(cx);
+    run(&window, native_window, "composite.open-toolbar", cx);
+    let view = cx.read(|cx| {
+        let workbench = window.read(cx).workbench.read(cx);
+        let tab = workbench.focused_pane().unwrap().active_tab();
+        workbench.composite_view(tab).unwrap().clone()
+    });
+    focus_document_tab(&window, cx);
+    let button = tab_state(&window, cx).toolbar[0].clone();
+    cx.update(|cx| {
+        crate::app::product::run_toolbar_command(
+            native_window,
+            view,
+            knot_protocol::Command {
+                name: button.command.as_str().into(),
+                arguments: button.arguments,
+            },
+            cx,
+        );
+    });
+    cx.run_until_parked();
+    run(&window, native_window, "composite.toolbar-expect-one", cx);
+}
+
+#[gpui::test]
+fn an_update_replaces_the_toolbar_and_other_updates_keep_it(cx: &mut TestAppContext) {
+    let (window, native_window, _, _) = window_with_extension(cx);
+    run(&window, native_window, "composite.open-toolbar", cx);
+    run(&window, native_window, "composite.update", cx);
+    assert_eq!(tab_state(&window, cx).toolbar.len(), 2);
+    run(&window, native_window, "composite.toolbar-toggle", cx);
+    let toolbar = tab_state(&window, cx).toolbar;
+    assert_eq!(toolbar.len(), 1);
+    assert!(toolbar[0].toggled);
+    run(&window, native_window, "composite.toolbar-clear", cx);
+    assert!(tab_state(&window, cx).toolbar.is_empty());
 }
 
 /// The focused composite's views in layout order, by identity.

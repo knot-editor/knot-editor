@@ -295,7 +295,7 @@ export type FakeComposite = {
   kind: string;
   options: Knot.OpenCompositeOptions;
   /** What the tab shows now, after any `update`. */
-  tab: { title: string; icon: Knot.IconRef | null; resource: string | null };
+  tab: { title: string; icon: Knot.IconRef | null; resource: string | null; toolbar: readonly Knot.CompositeButton[] };
   closed: boolean;
 };
 
@@ -2994,7 +2994,12 @@ export const api: KnotApi = {
           const composite: FakeComposite = {
             kind: id,
             options,
-            tab: { title: options.title, icon: options.icon ?? null, resource: options.resource ?? null },
+            tab: {
+              title: options.title,
+              icon: options.icon ?? null,
+              resource: options.resource ?? null,
+              toolbar: options.toolbar ?? [],
+            },
             closed: false,
           };
           state.composites.push(composite);
@@ -3012,6 +3017,7 @@ export const api: KnotApi = {
                 title: changes.title ?? composite.tab.title,
                 icon: changes.icon === undefined ? composite.tab.icon : changes.icon,
                 resource: changes.resource === undefined ? composite.tab.resource : changes.resource,
+                toolbar: changes.toolbar ?? composite.tab.toolbar,
               };
             },
             close,

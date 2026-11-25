@@ -13,12 +13,32 @@ test("a kind is unique and an instance shows its tab until closed", async () => 
   const buffer = await buffers.create({ text: "hello" });
   const instance = await registration.open({ title: "Example", icon: "file", layout: { type: "row", children: [{ type: "editor", buffer }] } });
   const composite = host.composites()[0]!;
-  assert.deepEqual(composite.tab, { title: "Example", icon: "file", resource: null });
+  assert.deepEqual(composite.tab, { title: "Example", icon: "file", resource: null, toolbar: [] });
   await instance.update({ title: "Renamed", resource: "file:///a.txt" });
   await instance.update({ icon: null });
-  assert.deepEqual(composite.tab, { title: "Renamed", icon: null, resource: "file:///a.txt" });
+  assert.deepEqual(composite.tab, { title: "Renamed", icon: null, resource: "file:///a.txt", toolbar: [] });
   assert.deepEqual(await instance.close(), { kind: "closed" });
   await assert.rejects(() => instance.update({ title: "Late" }), { code: "InvalidTarget" });
+});
+
+test("a toolbar of buttons is replaced by an update and kept otherwise", async () => {
+  const registration = await workbench.registerComposite({ id: "example.view" });
+  host.openWindow();
+  const buffer = await buffers.create();
+  const next = { label: "Next", icon: "arrow-down", command: "example.next" };
+  const instance = await registration.open({
+    title: "Example",
+    layout: { type: "row", children: [{ type: "editor", buffer }] },
+    toolbar: [next],
+  });
+  const composite = host.composites()[0]!;
+  assert.deepEqual(composite.tab.toolbar, [next]);
+  await instance.update({ title: "Renamed" });
+  assert.deepEqual(composite.tab.toolbar, [next]);
+  await instance.update({ toolbar: [{ ...next, toggled: true }] });
+  assert.deepEqual(composite.tab.toolbar, [{ ...next, toggled: true }]);
+  await instance.update({ toolbar: [] });
+  assert.deepEqual(composite.tab.toolbar, []);
 });
 
 test("disposing a registration closes its instances and frees the kind", async () => {
