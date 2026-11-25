@@ -64,6 +64,10 @@ await commands.register("composite.open-default", async () => {
     },
   });
 });
+await commands.register("composite.capture", async (context) => {
+  check(context.editor !== null && context.buffer !== null, "editor and buffer captured");
+  check(context.target.focusedView !== null, "focused view");
+});
 await commands.register("composite.invalid-layouts", async () => {
   const kind = registration ?? (registration = await workbench.registerComposite({ id: "example.view" }));
   const buffer = await buffers.create();
@@ -401,6 +405,8 @@ fn focus_moves_between_editors_and_reselecting_the_tab_restores_the_last(cx: &mu
         Some(&root.children[1].children[0].target)
     );
     assert_eq!(command_text(&window, cx), "b\n");
+    // A command captures the focused editor, as find needs.
+    run(&window, native_window, "composite.capture", cx);
 
     focus_editor(&window, native_window, 0, cx);
     let info_now = info(&window, cx);

@@ -3,8 +3,8 @@
 // the bar, or the next and previous commands anywhere, step between matches.
 // Replace adds a second bar beneath it that replaces the current match or
 // every match, natively, in one undo step.
-import { commands, icons, keymaps, platform, storage, windows, workbench } from "knot";
-import type { Buffer, ByteRange, CommandContext, Disposable, Editor, EditorHandle, ViewNodeTarget, ViewTarget } from "knot";
+import { commands, icons, keymaps, platform, storage, workbench } from "knot";
+import type { Buffer, ByteRange, CommandContext, Disposable, Editor, EditorHandle, ViewNodeTarget } from "knot";
 import { endOf, highlights, invalidPattern, matchBefore, matchFrom, rebase, sameRange, summary } from "./search.js";
 import type { Options } from "./search.js";
 
@@ -82,27 +82,25 @@ type Session = {
 
 // Pending until the session follows its editor, so overlapping commands
 // share one.
-const sessions = new Map<ViewTarget, Promise<Session>>();
+const sessions = new Map<ViewNodeTarget, Promise<Session>>();
 
 function isInvalid(error: unknown) {
   return (error as { code?: string }).code === "InvalidTarget";
 }
 
 async function sessionOf(context: CommandContext, editor: Editor, buffer: Buffer): Promise<Session> {
-  const info = await windows.get(context.target.windowTarget);
-  const target = info?.currentTarget;
-  const view = info === null || info === undefined || target == null ? undefined : windows.findView(info, target)?.view;
-  if (target == null || view?.kind !== "editor") commands.unavailable();
-  let session = sessions.get(target);
+  const view = context.target.focusedView;
+  if (view === null) commands.unavailable();
+  let session = sessions.get(view);
   if (session === undefined) {
-    session = follow(target, view.target, buffer);
-    sessions.set(target, session);
-    session.catch(() => sessions.delete(target));
+    session = follow(view, buffer);
+    sessions.set(view, session);
+    session.catch(() => sessions.delete(view));
   }
   return session;
 }
 
-async function follow(target: ViewTarget, view: ViewNodeTarget, buffer: Buffer): Promise<Session> {
+async function follow(view: ViewNodeTarget, buffer: Buffer): Promise<Session> {
   const handle = await workbench.editor(view);
   const session: Session = {
     editor: handle,
@@ -117,7 +115,7 @@ async function follow(target: ViewTarget, view: ViewNodeTarget, buffer: Buffer):
     refreshing: false,
     disposables: [handle],
   };
-  handle.onDidClose(() => void sessions.delete(target));
+  handle.onDidClose(() => void sessions.delete(view));
   session.disposables.push(
     await handle.onDidEditBar(async (edit) => {
       if (!session.open) return;
@@ -457,8 +455,8 @@ function growScope(session: Session, growth: number, revision: number) {
 /** The session of the command's editor while its bar is open. A session that
  * failed to follow its editor never opened. */
 async function openSession(context: CommandContext): Promise<Session | undefined> {
-  const target = (await windows.get(context.target.windowTarget))?.currentTarget;
-  const session = target == null ? undefined : await sessions.get(target)?.catch(() => undefined);
+  const view = context.target.focusedView;
+  const session = view === null ? undefined : await sessions.get(view)?.catch(() => undefined);
   return session?.open ? session : undefined;
 }
 

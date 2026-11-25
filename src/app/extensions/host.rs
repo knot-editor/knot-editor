@@ -3128,14 +3128,10 @@ impl ProductExtensionHost {
         if target.view.is_some() {
             return None;
         }
-        target.document_id(cx).ok()?;
-        let workbench = target.workbench.upgrade()?;
-        let workbench = workbench.read(cx);
-        let captured = target.tab?;
-        let tab = workbench
-            .tab(captured.pane, captured.tab)
-            .filter(|tab| tab.surface_id() == captured.surface)?;
-        let model = workbench.editor(tab)?.read(cx).model().clone();
+        let crate::app::workbench::CommandView::Editor(editor) = target.command_view(cx)? else {
+            return None;
+        };
+        let model = editor.read(cx).model().clone();
         Some(self.track_buffer(&model, cx))
     }
 
