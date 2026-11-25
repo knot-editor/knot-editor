@@ -134,6 +134,12 @@ Each is decided at the review gate of the checkpoint named.
 Each phase's last checkpoint updates the architecture references, extension
 guide, and decisions for that phase, so documentation never lags a phase.
 
+A development playground, `scripts/dev/playground.sh`, runs Knot with
+`scripts/dev/playground/knot/post-init.js` as its personal config and leaves the
+real one alone. Its palette commands open composites for checking a checkpoint
+by hand; each checkpoint that adds something to try adds a command. Checkpoint
+21 removes it.
+
 ### Phase A — The view tree
 
 #### 1. View identity ✅
@@ -386,7 +392,7 @@ tests in `crates/knot-ext-vcs/tests/vcs/diff.rs`.
 
 #### 21. Remove the native diff
 
-Deliverables: native `DiffView`, `workbench.openDiff`, `diff.toggle-read-only`,
+Deliverables: the development playground (`scripts/dev/`), native `DiffView`, `workbench.openDiff`, `diff.toggle-read-only`,
 the per-view `Editor` read-only flag, and native diff commands and settings are
 removed. Phase F documentation, including replacing the [diff view decision](../decisions/workbench-and-lifecycle.md#diff-view).
 D229 leaves the roadmap, is marked ✅ in the [version control plan](vcs.md),
