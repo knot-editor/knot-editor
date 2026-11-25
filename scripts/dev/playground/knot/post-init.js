@@ -2,7 +2,7 @@
 // composite views so their behavior can be checked by hand. Run it with
 // scripts/dev/playground.sh, which points Knot at this directory as its
 // personal config. Removed with the plan.
-import { buffers, commands, documents, workbench } from "knot";
+import { buffers, commands, documents, icons, workbench } from "knot";
 
 let kind;
 const composites = async () =>
@@ -72,14 +72,17 @@ await commands.register("playground.composite-next-layout", async () => {
 // on, "Toggle" flips the first button's pressed state, and "Off" is disabled.
 // Click a button with focus in another tab or tool window: the command still
 // runs with this composite as its target (the title counts the presses).
+await icons.define("playground.count", { lucide: "plus" });
+await icons.define("playground.toggle", { lucide: "toggle-left" });
+await icons.define("playground.off", { lucide: "lock" });
 await commands.register("playground.composite-toolbar", async () => {
   const buffer = await buffers.create({ text: "toolbar\n" });
   let presses = 0;
   let on = false;
   const buttons = () => [
-    { label: "Count", icon: "plus", command: "playground.toolbar-count", toggled: on },
-    { label: "Toggle", icon: "toggle-left", command: "playground.toolbar-toggle" },
-    { label: "Off", icon: "lock", command: "playground.toolbar-count", disabled: true },
+    { label: "Count", icon: "playground.count", command: "playground.toolbar-count", toggled: on },
+    { label: "Toggle", icon: "playground.toggle", command: "playground.toolbar-toggle" },
+    { label: "Off", icon: "playground.off", command: "playground.toolbar-count", disabled: true },
   ];
   const instance = await (await composites()).open({
     title: "Toolbar",
