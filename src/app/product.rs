@@ -229,8 +229,8 @@ struct ProtectedCloseRequest {
 struct ProtectedView {
     key: ProtectedViewKey,
     pinned: bool,
-    /// The document the view shows or edits, if any.
-    document: Option<DocumentId>,
+    /// The documents the view shows or edits, each once.
+    documents: Vec<DocumentId>,
     /// The area of the view's pane.
     area: Area,
     target: Option<ProductCommandTarget>,

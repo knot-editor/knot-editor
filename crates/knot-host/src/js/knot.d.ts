@@ -3014,11 +3014,16 @@ declare module "knot" {
      * for no other member. */
     readonly title?: string;
   }
-  /** An editor on a buffer of `buffers.create`. */
-  export interface CompositeEditor extends CompositeLayoutMember {
+  /** An editor on a buffer of `buffers.create` or on a document. A document's
+   * editor edits the document and counts the composite as one of its views,
+   * once however many editors the composite holds on it: the tab asks about
+   * unsaved changes when closing it would close the document's last view. */
+  export type CompositeEditor = CompositeLayoutMember & {
     readonly type: "editor";
-    readonly buffer: ExtensionBuffer;
-  }
+  } & (
+    | { readonly buffer: ExtensionBuffer; readonly document?: never }
+    | { readonly document: DocumentId; readonly buffer?: never }
+  );
   /** A text frame of a view registered with `embedded`. */
   export interface CompositeText extends CompositeLayoutMember {
     readonly type: "text";

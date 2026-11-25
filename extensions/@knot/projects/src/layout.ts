@@ -1,12 +1,25 @@
 // What a window presents, described as session entries. Clean files are
 // references only; dirty and untitled documents also record their identity.
 import { workbench } from "knot";
-import type { CaptureId, DocumentId, DocumentInfo, WindowInfo } from "knot";
+import type { CaptureId, DocumentId, DocumentInfo, PresentationInfo, ViewNodeInfo, WindowInfo } from "knot";
 import { sameRoots } from "./registry.js";
 import type { Entry, SessionWindow } from "./session.js";
 
 export function windowRoots(window: WindowInfo): string[] {
   return window.workspace.roots.map((root) => root.uri);
+}
+
+function nodeDocuments(node: ViewNodeInfo, ids: DocumentId[]) {
+  if (node.document !== null && !ids.includes(node.document)) ids.push(node.document);
+  for (const child of node.children) nodeDocuments(child, ids);
+}
+
+/** The documents a tab presents, each once: those of its editors at any depth,
+ * so a composite view counts as one view of each document it edits. */
+export function tabDocuments(tab: PresentationInfo): DocumentId[] {
+  const ids: DocumentId[] = tab.document === null ? [] : [tab.document];
+  nodeDocuments(tab.root, ids);
+  return ids;
 }
 
 /** Distinct documents presented in windows, in tab order. */
@@ -15,7 +28,7 @@ export function presentedDocuments(list: readonly WindowInfo[]): DocumentId[] {
   for (const window of list) {
     for (const pane of window.panes) {
       for (const tab of pane.tabs) {
-        if (tab.document !== null && !ids.includes(tab.document)) ids.push(tab.document);
+        for (const id of tabDocuments(tab)) if (!ids.includes(id)) ids.push(id);
       }
     }
   }
@@ -26,7 +39,7 @@ export function viewCount(list: readonly WindowInfo[], document: DocumentId) {
   let count = 0;
   for (const window of list) {
     for (const pane of window.panes) {
-      for (const tab of pane.tabs) if (tab.document === document) count += 1;
+      for (const tab of pane.tabs) if (tabDocuments(tab).includes(document)) count += 1;
     }
   }
   return count;

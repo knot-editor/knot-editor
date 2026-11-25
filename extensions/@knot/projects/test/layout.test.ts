@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
 import { documents, windows } from "knot";
+import type { DocumentId, PresentationInfo, ViewNodeInfo, WindowInfo } from "knot";
 import * as host from "knot/testing";
 import { ALPHA } from "./support.js";
 import {
@@ -10,6 +11,7 @@ import {
   isReusable,
   presentedDocuments,
   selectedDocument,
+  tabDocuments,
   viewCount,
 } from "../src/layout.js";
 
@@ -50,6 +52,32 @@ test("windows list each document once, in tab order, with its selection", async 
   // The clean, empty untitled document is not recorded, so nothing is selected.
   assert.deepEqual(described.entries, [{ uri: "file:///a" }, { uri: "file:///b" }]);
   assert.equal(described.selected, null);
+});
+
+test("a composite counts as one view of each document its editors show", async () => {
+  const a = host.addDocument({ uri: "file:///a" });
+  const b = host.addDocument({ uri: "file:///b" });
+  host.openWindow({ documents: [a] });
+  const [window] = await windows.list();
+  const editor = (document: DocumentId | null) =>
+    ({ kind: "editor", document, children: [] }) as unknown as ViewNodeInfo;
+  const composite = {
+    kind: "composite",
+    document: null,
+    root: {
+      kind: "composite",
+      document: null,
+      children: [editor(a), editor(a), editor(b), editor(null)],
+    },
+  } as unknown as PresentationInfo;
+  assert.deepEqual(tabDocuments(composite), [a, b]);
+
+  const list = [
+    { ...window!, panes: [{ ...window!.panes[0]!, tabs: [...window!.panes[0]!.tabs, composite] }] },
+  ] as unknown as WindowInfo[];
+  assert.equal(viewCount(list, a), 2);
+  assert.equal(viewCount(list, b), 1);
+  assert.deepEqual(presentedDocuments(list), [a, b]);
 });
 
 test("a rootless window with at most one clean, empty untitled document is reusable", async () => {

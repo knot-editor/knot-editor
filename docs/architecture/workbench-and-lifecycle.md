@@ -308,7 +308,9 @@ Panes every tab of the window's other panes in the origin's area. Window and
 quit closes need no origin tab. The
 coordinator captures exact window, workbench, tab, surface, and presentation identities,
 counts live document views across windows, and deduplicates dirty documents
-losing their final view. Native Save / Don't Save / Cancel prompts run serially;
+losing their final view. A tab is one view of each document its editors show,
+once however many editors a composite view holds on it, and a composite's tab
+shows the unsaved-changes marker exactly when closing it would prompt. Native Save / Don't Save / Cancel prompts run serially;
 Save reuses the ordinary persistence path. Quit is a hot exit: it first commits
 every dirty document to [durable
 recovery](documents-and-persistence.md#durable-unsaved-document-recovery) and

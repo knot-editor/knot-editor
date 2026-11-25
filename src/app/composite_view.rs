@@ -10,7 +10,7 @@ use std::rc::Rc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use gpui::{prelude::*, *};
-use knot_model::workbench::CompositeViewId;
+use knot_model::workbench::{CompositeViewId, DocumentId};
 use knot_protocol::{IconRef, ViewId};
 
 use super::convert::ThemePaint as _;
@@ -81,7 +81,12 @@ pub(crate) struct MemberSpec {
 }
 
 pub(crate) enum ContentSpec {
-    Editor(Entity<Buffer>),
+    /// An editor on `buffer`, which is the text of `document` when given and
+    /// an extension buffer otherwise.
+    Editor {
+        buffer: Entity<Buffer>,
+        document: Option<DocumentId>,
+    },
     /// A text frame of the contributed view of this kind.
     Text(String),
     /// A tree of the contributed view of this kind.
@@ -96,6 +101,17 @@ impl ContentSpec {
             _ => 1,
         }
     }
+
+    fn collect_documents(&self, documents: &mut Vec<DocumentId>) {
+        match self {
+            Self::Editor {
+                document: Some(document),
+                ..
+            } if !documents.contains(document) => documents.push(*document),
+            Self::Group(group) => group.collect_documents(documents),
+            _ => {}
+        }
+    }
 }
 
 impl GroupSpec {
@@ -104,6 +120,19 @@ impl GroupSpec {
             .iter()
             .map(|member| member.content.leaf_count())
             .sum()
+    }
+
+    /// The documents the editors beneath the group show, each once.
+    pub(crate) fn documents(&self) -> Vec<DocumentId> {
+        let mut documents = Vec::new();
+        self.collect_documents(&mut documents);
+        documents
+    }
+
+    fn collect_documents(&self, documents: &mut Vec<DocumentId>) {
+        for member in &self.members {
+            member.content.collect_documents(documents);
+        }
     }
 
     /// The layout-order index of the view that has focus on open, if the
@@ -250,7 +279,7 @@ impl Group {
             .map(|(index, member)| {
                 let first = *leaf;
                 let content = match member.content {
-                    ContentSpec::Editor(buffer) => {
+                    ContentSpec::Editor { buffer, .. } => {
                         *leaf += 1;
                         Content::Leaf(Leaf::Editor(cx.new(|cx| EditorView::new(buffer, cx))))
                     }

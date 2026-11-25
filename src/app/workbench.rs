@@ -628,6 +628,7 @@ impl Workbench {
             .layout
             .open_composite_in_center(id)
             .expect("a new composite view has a fresh identity");
+        self.layout.set_composite_documents(id, layout.documents());
         let view = cx.new(|cx| CompositeView::new(tab, layout, window, cx));
         let target = view.read(cx).command_target();
         let subscriptions = (
@@ -779,6 +780,12 @@ impl Workbench {
             && let Some(document) = self.layout.diff_document(diff)
         {
             destination.layout.set_diff_document(diff, document);
+        }
+        if let TabSurfaceId::Composite(composite) = source.tab.surface {
+            destination.layout.set_composite_documents(
+                composite,
+                self.layout.composite_documents(composite).to_vec(),
+            );
         }
         Some(moved)
     }

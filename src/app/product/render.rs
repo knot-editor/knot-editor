@@ -445,6 +445,9 @@ impl KnotWindow {
                     TabSurfaceId::Document(document_id) => {
                         documents.get(document_id).unwrap().is_dirty(cx)
                     }
+                    // Closing a composite asks about each dirty document it
+                    // shows last.
+                    TabSurfaceId::Composite(_) => composite_asks_on_close(workbench, tab, cx),
                     _ => false,
                 };
                 let bell_marked = matches!(
@@ -1326,4 +1329,18 @@ pub(super) fn tab_foreground(
         None if active => color::TAB_ACTIVE_FOREGROUND,
         None => color::TAB_INACTIVE_FOREGROUND,
     }
+}
+
+/// Whether closing the composite `tab` asks about unsaved changes: one of the
+/// documents it shows is dirty and the tab is its last view.
+pub(super) fn composite_asks_on_close(
+    workbench: &Workbench,
+    tab: &knot_model::workbench::WorkbenchTab,
+    cx: &App,
+) -> bool {
+    let documents = KnotWindow::documents(cx).read(cx);
+    workbench.shown_documents(tab).into_iter().any(|document| {
+        documents.get(document).is_some_and(|d| d.is_dirty(cx))
+            && cx.global::<ApplicationWindows>().view_count(document, cx) == 1
+    })
 }

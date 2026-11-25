@@ -4,7 +4,7 @@ use knot_model::workbench::TabSurfaceId;
 use knot_protocol::SurfaceKind;
 
 const SOURCE: &str = r#"
-import { buffers, commands, workbench } from "knot";
+import { buffers, commands, documents, workbench } from "knot";
 const check = (condition, message) => { if (!condition) throw new Error(message); };
 const expectCode = async (operation, code) => {
   try { await operation(); } catch (error) { if (error.code === code) return; throw error; }
@@ -110,6 +110,18 @@ await commands.register("composite.capture", async (context) => {
   check(context.editor !== null && context.buffer !== null, "editor and buffer captured");
   check(context.target.focusedView !== null, "focused view");
 });
+// Editors on the first document, twice.
+await commands.register("composite.open-document", async () => {
+  const kind = registration ?? (registration = await workbench.registerComposite({ id: "example.view" }));
+  const [document] = await documents.list();
+  instance = await kind.open({
+    title: "Document",
+    layout: { type: "row", children: [
+      { type: "editor", document: document.id },
+      { type: "editor", document: document.id },
+    ] },
+  });
+});
 await commands.register("composite.invalid-layouts", async () => {
   const kind = registration ?? (registration = await workbench.registerComposite({ id: "example.view" }));
   const buffer = await buffers.create();
@@ -140,6 +152,14 @@ await commands.register("composite.invalid-layouts", async () => {
   });
   await rejected({ type: "row", children: [{ type: "text", view: tree }] }, "wrong content kind");
   await rejected({ type: "row", children: [{ type: "editor", buffer: {} }] }, "foreign buffer");
+  const [document] = await documents.list();
+  const scratch = await buffers.create({ text: "x" });
+  await rejected({ type: "row", children: [{ type: "editor", buffer: scratch, document: document.id }] }, "buffer and document");
+  await rejected({ type: "row", children: [{ type: "editor", document: 5 }] }, "document not an ID");
+  await expectCode(
+    () => kind.open({ title: "x", layout: { type: "row", children: [{ type: "editor", document: "nope" }] } }),
+    "DocumentNotFound",
+  );
 });
 await commands.register("composite.update", async () => {
   await instance.update({ title: "Renamed", resource: "file:///a.txt" });
@@ -303,6 +323,34 @@ fn an_extension_opens_a_composite_with_an_editor_in_its_view_tree(cx: &mut TestA
             .text()
     });
     assert_eq!(text, "one\ntwo\n");
+}
+
+#[gpui::test]
+fn an_extension_opens_editors_on_a_document_and_the_composite_is_one_view_of_it(
+    cx: &mut TestAppContext,
+) {
+    let (window, native_window, _, _) = window_with_extension(cx);
+    run(&window, native_window, "composite.open-document", cx);
+    let document = cx.read(|cx| {
+        let workbench = window.read(cx).workbench.read(cx);
+        workbench.tabs().next().unwrap().document_id().unwrap()
+    });
+    cx.read(|cx| {
+        assert_eq!(window.read(cx).workbench.read(cx).view_count(document), 2);
+    });
+    let info = info(&window, cx);
+    let tab = info
+        .panes
+        .iter()
+        .flat_map(|pane| &pane.tabs)
+        .find(|tab| tab.kind == SurfaceKind::Composite)
+        .unwrap();
+    assert_eq!(tab.root.children.len(), 2);
+    for editor in &tab.root.children {
+        assert_eq!(editor.kind, "editor");
+        assert!(editor.document.is_some());
+        assert_eq!(editor.read_only, Some(false));
+    }
 }
 
 #[gpui::test]
@@ -649,4 +697,185 @@ fn clicking_a_tab_title_shows_its_member_and_focuses_it(cx: &mut TestAppContext)
         })
         .unwrap();
     assert!(focused);
+}
+
+mod documents {
+    //! Editors on documents make the composite a view of them.
+    use super::*;
+    use crate::app::commands::dispatch::CLOSE_TAB_COMMAND;
+    use crate::app::composite_view::{
+        Arrangement, CompositeTab, ContentSpec, GroupSpec, LayoutSize, MemberSpec,
+    };
+    use crate::app::documents::DocumentId;
+
+    fn dirty(document: DocumentId, cx: &mut TestAppContext) {
+        let model = cx.read(|cx| {
+            KnotWindow::documents(cx)
+                .read(cx)
+                .get(document)
+                .unwrap()
+                .model()
+                .clone()
+        });
+        model.update(cx, |model, cx| {
+            model.replace(0..0, "text").unwrap();
+            cx.notify();
+        });
+    }
+
+    /// A window whose first tab shows document `a`, and a composite of
+    /// editors on `a`, `a` again, and `b`, focused beside it.
+    fn window_with_composite(
+        cx: &mut TestAppContext,
+    ) -> (
+        Entity<KnotWindow>,
+        gpui::AnyWindowHandle,
+        DocumentId,
+        DocumentId,
+    ) {
+        let documents = install_globals(cx);
+        let a = cx.update(|cx| create_untitled_document(&documents, cx));
+        let b = cx.update(|cx| create_untitled_document(&documents, cx));
+        let model = |document: DocumentId, cx: &TestAppContext| {
+            cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone())
+        };
+        let (a_model, b_model) = (model(a, cx), model(b, cx));
+        let (window, native_window) = product_window(a, a_model.clone(), cx);
+        let editor = |document, buffer: &Entity<crate::app::model::Buffer>| MemberSpec {
+            size: LayoutSize::default(),
+            focused: false,
+            title: None,
+            content: ContentSpec::Editor {
+                buffer: buffer.clone(),
+                document: Some(document),
+            },
+        };
+        window.update(cx, |window, cx| {
+            window.workbench.update(cx, |workbench, cx| {
+                workbench.open_composite_in_center(
+                    CompositeTab::default(),
+                    GroupSpec {
+                        arrangement: Arrangement::Row,
+                        members: vec![
+                            editor(a, &a_model),
+                            editor(a, &a_model),
+                            editor(b, &b_model),
+                        ],
+                    },
+                    "window",
+                    cx,
+                );
+            });
+            window.focus_active_surface(cx);
+        });
+        cx.run_until_parked();
+        (window, native_window, a, b)
+    }
+
+    fn marker(window: &Entity<KnotWindow>, cx: &TestAppContext) -> bool {
+        cx.read(|cx| {
+            let workbench = window.read(cx).workbench.read(cx);
+            let tab = workbench
+                .tabs()
+                .find(|tab| matches!(tab.surface_id(), TabSurfaceId::Composite(_)))
+                .unwrap();
+            crate::app::product::render::composite_asks_on_close(workbench, tab, cx)
+        })
+    }
+
+    #[gpui::test]
+    fn a_composite_is_one_view_of_each_document_however_many_editors_it_holds(
+        cx: &mut TestAppContext,
+    ) {
+        let (window, _, a, b) = window_with_composite(cx);
+        cx.read(|cx| {
+            let workbench = window.read(cx).workbench.read(cx);
+            assert_eq!(workbench.view_count(a), 2);
+            assert_eq!(workbench.view_count(b), 1);
+        });
+    }
+
+    #[gpui::test]
+    fn the_marker_shows_exactly_when_closing_the_tab_would_ask(cx: &mut TestAppContext) {
+        let (window, native_window, a, b) = window_with_composite(cx);
+        assert!(!marker(&window, cx));
+
+        // `a` is dirty but its own tab is another view; `b` has only the
+        // composite.
+        dirty(a, cx);
+        assert!(!marker(&window, cx));
+        dirty(b, cx);
+        assert!(marker(&window, cx));
+
+        // Closing the document's tab leaves the composite its last view.
+        focus_document_tab(&window, cx);
+        let execution = dispatch_product_command(&window, native_window, CLOSE_TAB_COMMAND, cx);
+        cx.run_until_parked();
+        assert!(!cx.has_pending_prompt());
+        drop(execution);
+        assert!(marker(&window, cx));
+    }
+
+    #[gpui::test]
+    async fn closing_a_composite_asks_about_each_dirty_document_it_shows_last(
+        cx: &mut TestAppContext,
+    ) {
+        let (window, native_window, a, b) = window_with_composite(cx);
+        dirty(a, cx);
+        dirty(b, cx);
+        // The document's tab closes without asking: the composite shows it.
+        focus_document_tab(&window, cx);
+        let execution = dispatch_product_command(&window, native_window, CLOSE_TAB_COMMAND, cx);
+        assert_eq!(
+            execution.completion.await.unwrap(),
+            CommandOutcome::Completed
+        );
+        assert!(!cx.has_pending_prompt());
+
+        // Closing the composite asks once per document, not per editor.
+        let execution = dispatch_product_command(&window, native_window, CLOSE_TAB_COMMAND, cx);
+        cx.run_until_parked();
+        assert!(cx.has_pending_prompt());
+        cx.simulate_prompt_answer("Cancel");
+        assert_eq!(
+            execution.completion.await.unwrap(),
+            CommandOutcome::Cancelled
+        );
+        assert_eq!(composite_tabs(&window, cx), 1);
+
+        let execution = dispatch_product_command(&window, native_window, CLOSE_TAB_COMMAND, cx);
+        cx.run_until_parked();
+        cx.simulate_prompt_answer("Don't Save");
+        cx.run_until_parked();
+        cx.simulate_prompt_answer("Don't Save");
+        assert_eq!(
+            execution.completion.await.unwrap(),
+            CommandOutcome::Completed
+        );
+        assert!(!cx.has_pending_prompt());
+        assert_eq!(composite_tabs(&window, cx), 0);
+        cx.read(|cx| {
+            let documents = KnotWindow::documents(cx).read(cx);
+            assert!(documents.get(a).is_none() && documents.get(b).is_none());
+        });
+    }
+
+    #[gpui::test]
+    async fn closing_a_composite_keeps_a_document_another_tab_shows(cx: &mut TestAppContext) {
+        let (window, native_window, a, b) = window_with_composite(cx);
+        dirty(a, cx);
+        let execution = dispatch_product_command(&window, native_window, CLOSE_TAB_COMMAND, cx);
+        cx.run_until_parked();
+        // `b` is clean, and `a` still has its tab: nothing asks.
+        assert!(!cx.has_pending_prompt());
+        assert_eq!(
+            execution.completion.await.unwrap(),
+            CommandOutcome::Completed
+        );
+        cx.read(|cx| {
+            let documents = KnotWindow::documents(cx).read(cx);
+            assert!(documents.get(a).is_some());
+            assert!(documents.get(b).is_none());
+        });
+    }
 }

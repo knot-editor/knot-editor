@@ -252,26 +252,23 @@ needs one view, not one editor. The tab strip is mouse-only and its styling is
 plain; a tree's frame actions do not show until the toolbar (14). Reference
 docs follow in checkpoint 14.
 
-#### 12. Document editors as children
+#### 12. Document editors as children ✅
 
-Deliverables: an editor child on a document counts as a view of it, once per
-tab however many editors the composite holds on it, so removing one of them in
-a layout update never prompts; closing the composite prompts for each dirty
-final view. The tab shows the
-unsaved-changes marker exactly when closing it would prompt; extensions cannot
-set it.
-
-Validation: closure tests with one and two dirty documents and with two
-editors on one document; the marker with
-and without another view of the dirty document.
-
-Review gate: closure behavior.
-
-Implementation context: `diff_documents`, `shown_document`, and `view_count`
-in `crates/knot-model/src/workbench.rs` generalize to composites; the closure
-path in `src/app/workbench.rs` and `src/app/product.rs`. `@knot/projects`
-counts a document's views by `tab.document` (`src/layout.ts`, `src/adopt.ts`)
-and must see composite children.
+A composite's `editor` member takes a `document` (a `DocumentId`) instead of a
+`buffer`, and the editor edits the document's shared buffer. The tab is one
+view of each document its editors show, once however many editors it holds on
+it: `Workbench::shown_documents` and `view_count` in
+`crates/knot-model/src/workbench.rs`, and `ClosureView.documents` in the closure
+model, so closing the composite prompts once for each dirty document it is the
+final view of, and a document's own tab closes without asking while the
+composite shows it. The tab shows the unsaved-changes marker exactly when
+closing it would prompt (`composite_asks_on_close`); extensions cannot set it.
+`@knot/projects` counts a tab's views from its editors at any depth
+(`tabDocuments`), diff tabs included. Covered by model closure tests and app
+tests with one and two dirty documents and two editors on one document. Closure
+behavior is the review gate; the architecture note is in
+[workbench and lifecycle](../architecture/workbench-and-lifecycle.md), and the
+rest of the reference docs follow in checkpoint 14.
 
 #### 13. Layout updates
 

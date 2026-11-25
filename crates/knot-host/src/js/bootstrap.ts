@@ -2234,7 +2234,11 @@ function compositeLayout(node: unknown, root: boolean, inTabs = false): Rec {
     ...(focused === undefined ? {} : { focused }),
     ...(title === undefined ? {} : { title }),
   };
-  if (type === "editor") {
+  if (type === "editor" && given.document !== undefined) {
+    if (given.buffer !== undefined) throw new TypeError("a composite editor shows a buffer or a document");
+    if (typeof given.document !== "string") throw new TypeError("composite document must be a document ID");
+    wire.document = given.document;
+  } else if (type === "editor") {
     const buffer = isObject(given.buffer) ? bufferHandles.get(given.buffer) : undefined;
     if (buffer === undefined) throw new TypeError("composite buffer must be a buffer of buffers.create");
     wire.buffer = buffer;

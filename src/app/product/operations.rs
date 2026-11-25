@@ -723,6 +723,21 @@ fn document_by_identity(id: &str, cx: &App) -> Result<DocumentId, OpenError> {
         .ok_or(OpenError::DocumentNotFound)
 }
 
+/// The document named by `identity` and the buffer holding its text.
+pub(crate) fn document_model(
+    identity: &str,
+    cx: &App,
+) -> Result<(DocumentId, Entity<crate::app::model::Buffer>), OpenError> {
+    let document = document_by_identity(identity, cx)?;
+    let model = KnotWindow::documents(cx)
+        .read(cx)
+        .get(document)
+        .ok_or(OpenError::DocumentNotFound)?
+        .model()
+        .clone();
+    Ok((document, model))
+}
+
 /// Make the document's text its file's again; see [`document_watch::reload`].
 pub(crate) fn reload_document(
     id: &str,

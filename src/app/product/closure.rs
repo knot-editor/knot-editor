@@ -31,7 +31,7 @@ fn closure_views(views: &[ProtectedView]) -> Vec<model::ClosureView> {
             key: view.key,
             pinned: view.pinned,
             area: view.area,
-            document: view.document,
+            documents: view.documents.clone(),
         })
         .collect()
 }
@@ -65,7 +65,7 @@ impl KnotWindow {
             let workbench = window.read(cx).workbench.clone();
             let snapshots = workbench.read(cx).tab_snapshots();
             views.extend(snapshots.into_iter().map(|snapshot| {
-                let (has_editor, pinned, presentation, document) = {
+                let (has_editor, pinned, presentation, documents) = {
                     let workbench = workbench.read(cx);
                     let tab = workbench
                         .tab(snapshot.pane_id, snapshot.tab_id)
@@ -76,7 +76,7 @@ impl KnotWindow {
                             || workbench.composite_view(tab).is_some(),
                         tab.is_pinned(),
                         tab.presentation(),
-                        workbench.shown_document(tab),
+                        workbench.shown_documents(tab),
                     )
                 };
                 ProtectedView {
@@ -89,7 +89,7 @@ impl KnotWindow {
                         surface: snapshot.surface,
                     },
                     pinned,
-                    document,
+                    documents,
                     area: workbench
                         .read(cx)
                         .pane_area(snapshot.pane_id)
@@ -675,36 +675,35 @@ impl KnotWindow {
             cx.notify();
             return Ok(());
         }
-        if let TabSurfaceId::Diff(diff) = surface {
+        if matches!(surface, TabSurfaceId::Diff(_) | TabSurfaceId::Composite(_)) {
             let (outcome, released) = self.workbench.update(cx, |workbench, _| {
-                let document = workbench
+                let documents = workbench
                     .tab(pane, tab)
-                    .and_then(|t| workbench.shown_document(t));
-                let outcome = workbench.request_close_diff_tab(pane, tab, diff);
-                let released = document.filter(|document| workbench.view_count(*document) == 0);
+                    .map(|t| workbench.shown_documents(t))
+                    .unwrap_or_default();
+                let outcome = match surface {
+                    TabSurfaceId::Diff(diff) => workbench.request_close_diff_tab(pane, tab, diff),
+                    TabSurfaceId::Composite(composite) => {
+                        workbench.request_close_composite_tab(pane, tab, composite)
+                    }
+                    _ => unreachable!(),
+                };
+                let released = documents
+                    .into_iter()
+                    .filter(|document| workbench.view_count(*document) == 0)
+                    .collect::<Vec<_>>();
                 (outcome, released)
             });
             if outcome.is_none() {
                 return Err(ProtectedCloseFailure::InvalidTarget);
             }
-            // The diff was the document's last view in this workbench.
-            if let Some(document) = released
-                && cx.global::<ApplicationWindows>().view_count(document, cx) == 0
-            {
-                Self::documents(cx).update(cx, |documents, cx| {
-                    documents.remove(document, cx);
-                });
-            }
-            self.focus_active_surface(cx);
-            cx.notify();
-            return Ok(());
-        }
-        if let TabSurfaceId::Composite(composite) = surface {
-            let outcome = self.workbench.update(cx, |workbench, _| {
-                workbench.request_close_composite_tab(pane, tab, composite)
-            });
-            if outcome.is_none() {
-                return Err(ProtectedCloseFailure::InvalidTarget);
+            // The tab was each of these documents' last view in this workbench.
+            for document in released {
+                if cx.global::<ApplicationWindows>().view_count(document, cx) == 0 {
+                    Self::documents(cx).update(cx, |documents, cx| {
+                        documents.remove(document, cx);
+                    });
+                }
             }
             self.focus_active_surface(cx);
             cx.notify();

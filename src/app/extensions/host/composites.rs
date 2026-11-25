@@ -61,8 +61,13 @@ pub(crate) struct LayoutWire {
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(tag = "type", rename_all = "camelCase")]
 enum ContentWire {
+    /// An editor on a buffer of `buffers.create` or on a document, by
+    /// identity.
     Editor {
-        buffer: u64,
+        #[serde(default)]
+        buffer: Option<u64>,
+        #[serde(default)]
+        document: Option<String>,
     },
     /// A text frame of the embedded view of this ID.
     Text {
@@ -119,6 +124,11 @@ impl LayoutWire {
                 (true, None) => return Err("a composite tab needs a title"),
                 (false, Some(_)) => return Err("only a member of tabs has a title"),
                 _ => {}
+            }
+            if let ContentWire::Editor { buffer, document } = &node.content
+                && buffer.is_some() == document.is_some()
+            {
+                return Err("a composite editor shows a buffer or a document");
             }
             let group = node.children();
             if root
@@ -225,12 +235,28 @@ impl ProductExtensionHost {
             return Err(AccessError::InvalidTarget.into());
         }
         let mut leaf = |content: &ContentWire| match content {
-            ContentWire::Editor { buffer } => self
+            ContentWire::Editor {
+                buffer: Some(buffer),
+                ..
+            } => self
                 .extension_buffers
                 .get(&BufferHandle::new(*buffer))
                 .filter(|state| state.owner() == owner)
-                .map(|state| ContentSpec::Editor(state.model.clone()))
+                .map(|state| ContentSpec::Editor {
+                    buffer: state.model.clone(),
+                    document: None,
+                })
                 .ok_or(OpenError::BufferClosed),
+            ContentWire::Editor {
+                document: Some(identity),
+                ..
+            } => product::operations::document_model(identity, &*cx).map(|(document, buffer)| {
+                ContentSpec::Editor {
+                    buffer,
+                    document: Some(document),
+                }
+            }),
+            ContentWire::Editor { .. } => Err(AccessError::InvalidTarget.into()),
             ContentWire::Text { view } => self
                 .embedded_view(view, owner, ViewContentKind::Text)
                 .map(|_| ContentSpec::Text(view.clone())),
