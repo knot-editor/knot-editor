@@ -16,12 +16,12 @@ use gpui::{prelude::*, *};
 use knot_model::diff::{
     DiffOptions, DiffSide, LineHunk, adjacent_hunk, hunk_decorations, line_hunks, map_line,
 };
-use knot_model::editor::{Block, BlockLine, Reveal};
+use knot_model::editor::{Block, Reveal};
 use knot_model::workbench::{DiffViewId, DocumentId};
 use knot_protocol::{ExtensionId, ExtensionKey, ExtensionLifecycleId};
 
 use super::convert::ThemePaint as _;
-use super::editor::{EditorView, Scrolled};
+use super::editor::{EditorView, Scrolled, block_line};
 use super::icons::AppIcon;
 use super::model::{Buffer, BufferModel};
 use super::settings::{self, DiffLayout};
@@ -308,20 +308,11 @@ impl DiffView {
                 line: hunk.new.start as usize,
                 lines: (hunk.old.start..hunk.old.end)
                     .map(|line| {
-                        let range = original.line_range(line as usize);
-                        let text = original.read(range.clone());
-                        let text = text.trim_end_matches(['\n', '\r']);
-                        BlockLine {
-                            highlights: original
-                                .syntax_highlights(range.start..range.start + text.len())
-                                .into_iter()
-                                .map(|(span, highlight)| {
-                                    (span.start - range.start..span.end - range.start, highlight)
-                                })
-                                .collect(),
-                            text: text.to_owned(),
-                            key: Some(key::DIFF_REMOVED_BACKGROUND.to_owned()),
-                        }
+                        block_line(
+                            original,
+                            line as usize,
+                            Some(key::DIFF_REMOVED_BACKGROUND.to_owned()),
+                        )
                     })
                     .collect(),
             })

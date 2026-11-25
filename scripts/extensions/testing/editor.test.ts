@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
-import { commands, diff, workbench } from "knot";
+import { buffers, commands, diff, workbench } from "knot";
 import type { CommandContext, FindOptions } from "knot";
 import * as host from "knot/testing";
 
@@ -181,6 +181,22 @@ test("an editor handle sets and clears its cursor style", async () => {
   await assert.rejects(editor.setCursorStyle("beam"), TypeError);
   await host.closeTab(target);
   await assert.rejects(editor.setCursorStyle("block"), { code: "InvalidTarget" });
+});
+
+test("an editor handle shows lines of a source buffer as block rows", async () => {
+  const window = host.openWindow({ documents: [host.addDocument({ text: "a\nb" })] });
+  const editor = await workbench.editor(host.viewTarget(window, 0));
+  const source = await buffers.create({ text: "one\ntwo\nthree" });
+  await editor.setBlocks([{ line: 1, source, lines: { start: 1, end: 5 }, color: "diff.removed.background" }]);
+  assert.deepEqual(host.blockRows(window), [
+    { line: 1, lines: ["two", "three"], color: "diff.removed.background" },
+  ]);
+  await source.applyEdits([{ range: { startByteOffset: 4, endByteOffset: 7 }, text: "2" }], { ifRevision: 0 });
+  assert.deepEqual(host.blockRows(window)[0]!.lines, ["2", "three"]);
+  await assert.rejects(editor.setBlocks([{ line: 0, source: {} as never, lines: { start: 0, end: 1 } }]), TypeError);
+  await assert.rejects(editor.setBlocks([{ line: 0, source, lines: { start: 2, end: 1 } }]), RangeError);
+  await editor.setBlocks([]);
+  assert.deepEqual(host.blockRows(window), []);
 });
 
 test("an editor handle opens bars, focuses fields, and hears typing", async () => {

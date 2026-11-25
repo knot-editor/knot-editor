@@ -3788,6 +3788,8 @@ pub(crate) enum EditorError {
     OperationInProgress,
     #[error(code = "RevisionConflict", message = "RevisionConflict")]
     RevisionConflict,
+    #[error(code = "BufferClosed", message = "BufferClosed")]
+    BufferClosed,
 }
 impl From<AccessError> for EditorError {
     fn from(error: AccessError) -> Self {
@@ -4099,6 +4101,76 @@ pub(crate) async fn editor_set_decorations(
                 }
                 ContributionError::InvalidRange => EditorError::InvalidRange,
             })
+    })?
+}
+
+/// One block of rows, as the package sends it.
+#[derive(Clone, Debug, PartialEq, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct BlockRowsWire {
+    line: usize,
+    source: u64,
+    start: usize,
+    end: usize,
+    color: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct SetBlocksArguments {
+    pub authority: EditorAuthority,
+    blocks: Vec<BlockRowsWire>,
+}
+impl HostArguments for SetBlocksArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        let authority = EditorAuthority::decode(reader, 2)?;
+        let json = reader.text(3, "blocks must be text")?;
+        let blocks: Vec<BlockRowsWire> =
+            serde_json::from_str(&json).map_err(|_| DecodeError::Type("blocks are invalid"))?;
+        if blocks.iter().any(|block| block.start > block.end) {
+            return Err(DecodeError::Range(
+                "a block's lines must not end before they start",
+            ));
+        }
+        Ok(Self { authority, blocks })
+    }
+}
+
+/// Replace the caller's block rows on the captured editor: lines of source
+/// buffers shown above its lines. Only that view paints them; they last until
+/// replaced, the view closes, or the caller's lifecycle ends.
+#[host_operation("editorSetBlocks")]
+pub(crate) async fn editor_set_blocks(
+    context: HostContext,
+    arguments: SetBlocksArguments,
+) -> Result<(), EditorError> {
+    let request = context.request;
+    context.foreground(|host, cx| {
+        let editor = host.contextual_editor(&request, arguments.authority, cx)?;
+        let owner = ExtensionKey::new(request.extension, request.lifecycle);
+        let commands = &host.commands;
+        let mut rows = Vec::with_capacity(arguments.blocks.len());
+        for block in arguments.blocks {
+            let source = host
+                .buffers
+                .model(
+                    &request,
+                    BufferHandle::new(block.source),
+                    || commands.is_cancelled(request.invocation),
+                    cx,
+                )
+                .map_err(|error| match error {
+                    BufferError::BufferClosed => EditorError::BufferClosed,
+                    _ => AccessError::Cancelled.into(),
+                })?;
+            rows.push(crate::app::editor::BlockRows {
+                line: block.line,
+                source,
+                lines: block.start..block.end,
+                key: block.color,
+            });
+        }
+        host.set_editor_block_rows(owner, editor, rows, cx);
+        Ok(())
     })?
 }
 

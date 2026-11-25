@@ -164,6 +164,20 @@ impl ExtensionBufferBridge {
         read(model.read(cx))
     }
 
+    /// A buffer's entity, for a view that shows its lines.
+    pub(crate) fn model(
+        &mut self,
+        request: &RequestContext,
+        buffer: BufferHandle,
+        mut cancelled: impl FnMut() -> bool,
+        cx: &mut App,
+    ) -> Result<Entity<Buffer>, BufferError> {
+        self.validate(request, &mut cancelled)?;
+        self.buffers
+            .resolve(buffer, cx)
+            .map_err(|_| BufferError::BufferClosed)
+    }
+
     pub(crate) fn apply_edits(
         &mut self,
         request: &RequestContext,

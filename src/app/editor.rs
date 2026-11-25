@@ -118,8 +118,49 @@ pub struct Editor {
     completion_tasks: Vec<(u64, ProviderRegistrationId, Task<()>)>,
     /// The text field behind each field of the open bars.
     bar_inputs: Vec<bars::BarInput>,
+    /// The blocks the application set directly.
+    native_blocks: Vec<Block>,
+    /// The block rows each extension lifecycle set.
+    owned_blocks: Vec<OwnedBlocks>,
     _model_subscription: Subscription,
     _release_subscription: Subscription,
+}
+
+/// Lines of a source buffer shown above a line of an editor; see
+/// [`Editor::set_block_rows`].
+#[derive(Clone)]
+pub(crate) struct BlockRows {
+    /// The line of the editor the rows sit above.
+    pub line: usize,
+    pub source: Entity<Buffer>,
+    /// The source's lines to show, clamped to its line count.
+    pub lines: Range<usize>,
+    /// The decoration key whose background bands the rows.
+    pub key: Option<String>,
+}
+
+/// The block rows one lifecycle shows, with the observers that keep them
+/// current as their sources change.
+struct OwnedBlocks {
+    owner: knot_protocol::ExtensionKey,
+    rows: Vec<BlockRows>,
+    _observers: Vec<Subscription>,
+}
+
+/// The block line showing line `line` of `model`, with its syntax highlights.
+pub(crate) fn block_line(model: &BufferModel, line: usize, key: Option<String>) -> BlockLine {
+    let range = model.line_range(line);
+    let text = model.read(range.clone());
+    let text = text.trim_end_matches(['\n', '\r']);
+    BlockLine {
+        highlights: model
+            .syntax_highlights(range.start..range.start + text.len())
+            .into_iter()
+            .map(|(span, highlight)| (span.start - range.start..span.end - range.start, highlight))
+            .collect(),
+        text: text.to_owned(),
+        key,
+    }
 }
 
 impl Deref for Editor {
@@ -158,6 +199,8 @@ impl Editor {
             model,
             completion_tasks: Vec::new(),
             bar_inputs: Vec::new(),
+            native_blocks: Vec::new(),
+            owned_blocks: Vec::new(),
             _model_subscription: model_subscription,
             _release_subscription: release_subscription,
         }
@@ -318,6 +361,9 @@ impl Editor {
         let model = self.model.clone();
         model.update(cx, |buffer, _| self.state.remove_owner_state(owner, buffer));
         self.sync_bar_inputs(cx);
+        if self.owned_blocks.iter().any(|blocks| blocks.owner == owner) {
+            self.set_block_rows(owner, Vec::new(), cx);
+        }
         cx.notify();
     }
 
@@ -697,9 +743,61 @@ impl Editor {
     }
 
     /// Show read-only `blocks` above their lines; see
-    /// [`EditorState::set_blocks`].
-    pub(crate) fn set_blocks(&mut self, blocks: Vec<Block>, cx: &App) {
+    /// [`EditorState::set_blocks`]. Block rows an extension set stay.
+    pub(crate) fn set_blocks(&mut self, blocks: Vec<Block>, cx: &mut Context<Self>) {
+        self.native_blocks = blocks;
+        self.show_blocks(cx);
+    }
+
+    /// Replace `owner`'s block rows with `rows`, each showing lines of a
+    /// source buffer above a line of this editor. They repaint when a source's
+    /// text or syntax changes, and a source that ends leaves its last lines.
+    pub(crate) fn set_block_rows(
+        &mut self,
+        owner: knot_protocol::ExtensionKey,
+        rows: Vec<BlockRows>,
+        cx: &mut Context<Self>,
+    ) {
+        self.owned_blocks.retain(|blocks| blocks.owner != owner);
+        if !rows.is_empty() {
+            let mut sources: Vec<Entity<Buffer>> = Vec::new();
+            for row in &rows {
+                if !sources.contains(&row.source) {
+                    sources.push(row.source.clone());
+                }
+            }
+            let observers = sources
+                .iter()
+                .map(|source| cx.observe(source, |this, _, cx| this.show_blocks(cx)))
+                .collect();
+            self.owned_blocks.push(OwnedBlocks {
+                owner,
+                rows,
+                _observers: observers,
+            });
+        }
+        self.show_blocks(cx);
+    }
+
+    /// Show the application's blocks and every lifecycle's block rows, read
+    /// from their sources as they are now.
+    fn show_blocks(&mut self, cx: &mut Context<Self>) {
+        let mut blocks = self.native_blocks.clone();
+        for owned in &self.owned_blocks {
+            for row in &owned.rows {
+                let source = row.source.read(cx);
+                let end = row.lines.end.min(source.line_count());
+                let lines = (row.lines.start..end)
+                    .map(|line| block_line(source, line, row.key.clone()))
+                    .collect();
+                blocks.push(Block {
+                    line: row.line,
+                    lines,
+                });
+            }
+        }
         self.state.set_blocks(blocks, self.model.read(cx));
+        cx.notify();
     }
 
     /// Lay out as a view `rows` rows tall and `columns` cells wide would,

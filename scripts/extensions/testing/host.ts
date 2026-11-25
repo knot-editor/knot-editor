@@ -40,6 +40,8 @@ type FakeTab = {
   /** The caret style the extension chose, or null for the default bar. */
   cursorStyle: Knot.CursorStyle | null;
   decorations: readonly Knot.ViewDecoration[];
+  /** The block rows the package set. */
+  blocks: readonly Knot.EditorBlockRows[];
   /** Close listeners of the long-lived handles bound to this tab. */
   closeListeners: Set<() => void | Promise<void>>;
   /** Selection listeners of the long-lived handles bound to this tab. The
@@ -975,6 +977,7 @@ export function present(target: Knot.WindowTarget, id: Knot.DocumentId) {
     folds: [],
     cursorStyle: null,
     decorations: [],
+    blocks: [],
     viewportLines: 10,
     closeListeners: new Set(),
     selectionListeners: new Map(),
@@ -1618,6 +1621,21 @@ export function viewDecorations(window: Knot.WindowTarget = state.windows[0]!.ta
   return selectedTab(window).decorations;
 }
 
+/**
+ * The block rows the package set on the window's selected editor, with the
+ * text of their source lines as it is now: one entry per row set, in the order
+ * given, as the host shows them.
+ */
+export function blockRows(
+  window: Knot.WindowTarget = state.windows[0]!.target,
+): readonly { line: number; lines: readonly string[]; color: string | null }[] {
+  return selectedTab(window).blocks.map(({ line, source, lines, color }) => {
+    const text = bufferDocuments.get(source)?.text ?? "";
+    const all = text.split("\n");
+    return { line, lines: all.slice(lines.start, Math.min(lines.end, all.length)), color: color ?? null };
+  });
+}
+
 export function cursorStyle(window: Knot.WindowTarget = state.windows[0]!.target): Knot.CursorStyle {
   return selectedTab(window).cursorStyle ?? "bar";
 }
@@ -1766,6 +1784,14 @@ function editor(tab: FakeTab): Knot.Editor {
       if (ifRevision !== document(tab.document).revision) throw hostError("RevisionConflict");
       tab.decorations = structuredClone(items);
     },
+    setBlocks: async (blocks) => {
+      const tab = live();
+      for (const { source, lines } of blocks) {
+        if (!bufferDocuments.has(source)) throw new TypeError("block rows source must be a buffer");
+        if (lines.start > lines.end) throw new RangeError("block rows lines must not end before they start");
+      }
+      tab.blocks = [...blocks];
+    },
     setCursorStyle: async (style) => {
       if (style !== null && style !== "bar" && style !== "block" && style !== "underline") {
         throw new TypeError("cursor style must be bar, block, underline or null");
@@ -1901,6 +1927,7 @@ function editorHandle(target: Knot.ViewNodeTarget): Knot.EditorHandle {
     columnAtCells: guard(live.columnAtCells),
     setCursorStyle: guard(live.setCursorStyle),
     setDecorations: guard(live.setDecorations),
+    setBlocks: guard(live.setBlocks),
     beginUndoGroup: guard(live.beginUndoGroup),
     record: guard(live.record),
     openBar: guard(live.openBar),

@@ -418,7 +418,7 @@ fn commands_on_other_surfaces_have_no_editor(cx: &mut TestAppContext) {
 }
 
 const HANDLE_SOURCE: &str = r#"
-import { commands, workbench } from "knot";
+import { buffers, commands, workbench } from "knot";
 let handle;
 let closed = 0;
 await commands.register("handle.attach", async () => {
@@ -433,6 +433,14 @@ await commands.register("handle.decorate", async ({ editor, buffer }) => {
   await editor.setDecorations([word], { ifRevision: revision });
   let code = "accepted";
   try { await editor.setDecorations([], { ifRevision: revision + 1 }); } catch (error) { code = error.code; }
+  await workbench.writeClipboardText(code);
+});
+await commands.register("handle.blocks", async () => {
+  const source = await buffers.create({ text: "old one\nold two" });
+  await handle.setBlocks([{ line: 0, source, lines: { start: 0, end: 2 }, color: "diff.removed.background" }]);
+  await source[Symbol.asyncDispose]();
+  let code = "accepted";
+  try { await handle.setBlocks([{ line: 0, source, lines: { start: 0, end: 1 } }]); } catch (error) { code = error.code; }
   await workbench.writeClipboardText(code);
 });
 await commands.register("handle.block", async () => { await handle.setCursorStyle("block"); });
@@ -752,6 +760,50 @@ fn view_decorations_paint_only_their_view_and_end_with_its_tab_or_lifecycle(
     assert_eq!(painted(&first, cx), [(0..3, "word".to_owned())]);
     host.update(cx, |host, cx| host.unload(key, cx).unwrap());
     assert!(painted(&first, cx).is_empty());
+}
+
+#[gpui::test]
+fn block_rows_show_a_source_buffer_above_a_line_until_the_lifecycle_ends(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    let (host, key) = load_handle_extension(cx);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let window = headless_window(document, model.clone(), cx);
+    let native_window = Headless;
+    cx.run_until_parked();
+    cx.update(|cx| {
+        model.update(cx, |model, cx| {
+            model.replace(0..0, "foo\nbar").unwrap();
+            cx.notify();
+        });
+    });
+    let run = |name: &'static str, cx: &mut TestAppContext| {
+        let execution = dispatch_product_command(&window, native_window, name, cx);
+        assert_eq!(wait_for_command(execution, cx), CommandOutcome::Completed);
+    };
+    let editor = active_editor(&window, cx);
+    let shown = |cx: &mut TestAppContext| {
+        cx.read(|cx| {
+            let editor = editor.read(cx);
+            (0..editor.wrap().row_count())
+                .filter_map(|row| editor.wrap().block_row(row))
+                .map(|row| (row.line, row.block_line.text.clone()))
+                .collect::<Vec<_>>()
+        })
+    };
+    run("handle.attach", cx);
+    // The source ends after the rows are set; the second set names it and is
+    // refused, so the first rows stay as they were.
+    run("handle.blocks", cx);
+    let reported = cx.read(|cx| cx.read_from_clipboard().unwrap().text().unwrap());
+    assert_eq!(reported, "BufferClosed");
+    assert_eq!(
+        shown(cx),
+        [(0, "old one".to_owned()), (0, "old two".to_owned())]
+    );
+
+    host.update(cx, |host, cx| host.unload(key, cx).unwrap());
+    assert!(shown(cx).is_empty());
 }
 
 #[gpui::test]

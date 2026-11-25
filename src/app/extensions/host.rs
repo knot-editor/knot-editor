@@ -2577,6 +2577,19 @@ impl ProductExtensionHost {
         Ok(())
     }
 
+    /// Replace the calling lifecycle's block rows on an editor, remembering
+    /// the editor so teardown clears them.
+    pub(super) fn set_editor_block_rows(
+        &mut self,
+        owner: ExtensionKey,
+        editor: Entity<crate::app::editor::Editor>,
+        rows: Vec<crate::app::editor::BlockRows>,
+        cx: &mut App,
+    ) {
+        editor.update(cx, |editor, cx| editor.set_block_rows(owner, rows, cx));
+        self.track_owned_editor(owner, &editor);
+    }
+
     fn track_owned_editor(
         &mut self,
         owner: ExtensionKey,

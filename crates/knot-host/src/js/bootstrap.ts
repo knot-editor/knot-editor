@@ -405,6 +405,20 @@ function viewDecoration(value: unknown) {
   if (painted === null) throw new TypeError("view decoration needs a decoration");
   return { range: byteRange(value.range), decoration: painted, gutter: null, command: null };
 }
+function blockRows(value: unknown) {
+  expectRecord(value, "block rows must be an object");
+  const source = isObject(value.source) ? bufferHandles.get(value.source) : undefined;
+  if (source === undefined) throw new TypeError("block rows source must be a buffer");
+  expectRecord(value.lines, "block rows lines must be an object");
+  const { start, end } = value.lines;
+  if (!isNonNegativeInteger(value.line)) throw new TypeError("block rows line must be a non-negative safe integer");
+  if (!isNonNegativeInteger(start) || !isNonNegativeInteger(end)) {
+    throw new TypeError("block rows lines must be non-negative safe integers");
+  }
+  if (start > end) throw new RangeError("block rows lines must not end before they start");
+  const color = value.color == null ? null : string(value.color, "block rows color must be text");
+  return { line: value.line, source, start, end, color };
+}
 function iterableItems<T>(value: unknown, convert: (item: unknown) => T): T[] {
   if (value == null || typeof value === "string" ||
       typeof (value as Partial<Iterable<unknown>>)[Symbol.iterator] !== "function") {
@@ -970,6 +984,10 @@ function editorFor(authority: Native) {
     async setDecorations(items: unknown, options?: Opts) {
       const converted = arrayItems(items, viewDecoration);
       await request("editorSetDecorations", authority, converted, revision(options));
+    },
+    async setBlocks(blocks: unknown) {
+      const converted = arrayItems(blocks, blockRows);
+      await request("editorSetBlocks", authority, JSON.stringify(converted));
     },
     async setCursorStyle(style: unknown) {
       if (style !== null && style !== "bar" && style !== "block" && style !== "underline") {

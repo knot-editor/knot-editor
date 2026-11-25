@@ -1631,6 +1631,23 @@ declare module "knot" {
     /** Paints the range, ordered among overlaps as contributions are. */
     readonly decoration: Decoration;
   }
+  /**
+   * Lines of a source buffer that an editor shows above one of its own lines;
+   * see `Editor.setBlocks`.
+   */
+  export interface EditorBlockRows {
+    /** The 0-based line of the editor the rows sit above. A line past the
+     * last shows them above the last line. */
+    readonly line: number;
+    /** The buffer whose text and syntax highlighting the rows show. */
+    readonly source: Buffer;
+    /** The 0-based lines of `source` to show, `end` exclusive. Lines past the
+     * source's last are left out, and an empty range shows nothing. */
+    readonly lines: { readonly start: number; readonly end: number };
+    /** Bands the rows in the color of a theme key, as a `line` decoration
+     * does; without one they have no band. */
+    readonly color?: ColorKey | null;
+  }
   export interface FindOptions {
     /**
      * Compare characters exactly. The default folds case one character at a
@@ -2078,6 +2095,23 @@ declare module "knot" {
      * Cancelled; TypeError for a malformed item.
      */
     setDecorations(items: readonly ViewDecoration[], options: RevisionOptions): Promise<void>;
+    /**
+     * Atomically replace the caller's block rows on this editor; an empty list
+     * clears them. Each block shows lines of a source buffer, in that buffer's
+     * syntax highlighting, as read-only rows above a line of this editor. The
+     * rows belong to no line of the text: the caret skips them, a click on one
+     * lands at the start of the line below, and they take no line number. Rows
+     * of several blocks on one line stack in the order given. They follow
+     * their line through edits, repaint when the source's text or syntax
+     * changes, and wrap with the editor. If the source ends, its rows keep the
+     * text they last showed. The set belongs to the caller's lifecycle, as
+     * decorations do: teardown clears it. It is presentation state, never
+     * recorded, and lasts until replaced or the view closes.
+     * @throws HostError with BufferClosed, InvalidTarget, or Cancelled;
+     * TypeError for a malformed block or a source that is not a buffer;
+     * RangeError for lines that end before they start.
+     */
+    setBlocks(blocks: readonly EditorBlockRows[]): Promise<void>;
     /**
      * Draw this editor's caret as a thin "bar" (the default), a "block" over
      * the character under it, or an "underline" beneath it; `null` clears the
