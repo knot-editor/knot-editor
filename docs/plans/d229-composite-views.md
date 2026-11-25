@@ -241,25 +241,16 @@ cannot be replaced until 13; children get a key then. A command in a composite
 captures the focused editor and its buffer, and `@knot/find` follows the
 focused view.
 
-#### 11. More child kinds 🚧
+#### 11. More child kinds ✅
 
-Deliverables: text frame and tree children; internal tabs.
-
-Implemented, awaiting the review gate. A `tree` or `text` member takes a view
-registered with `registerView({ embedded: true })`: no tool window, and each
-composite holding it shows one instance, so instances share the registration's
-content (`setText`, provider, `invalidate`) and its view commands. A `tabs`
-group shows one member at a time, and each member has a `title`; a focused
-member is shown. A layout needs one view, not one editor. The tab strip has no
-keyboard switching and a tree's frame actions do not show until the toolbar
-(14).
-
-Validation: tests per child kind and for tab switching inside a composite.
-
-Review gate: child kinds by hand.
-
-Implementation context: `TreeView` (`src/app/tree_view.rs`) and `TextView`
-(`src/app/text_view.rs`) as children.
+A `tree` or `text` member takes a view registered with
+`registerView({ embedded: true })`: no tool window, and each composite holding
+it shows one instance, so instances share the registration's content
+(`setText`, provider, `invalidate`) and its view commands. A `tabs` group shows
+one member at a time, each with a `title`; a focused member is shown. A layout
+needs one view, not one editor. The tab strip is mouse-only and its styling is
+plain; a tree's frame actions do not show until the toolbar (14). Reference
+docs follow in checkpoint 14.
 
 #### 12. Document editors as children
 
