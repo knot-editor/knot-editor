@@ -68,4 +68,38 @@ await commands.register("playground.composite-next-layout", async () => {
   await cycling.instance.update({ layout: layouts(...cycling.buffers)[step] });
 }, { title: "Playground: Next Layout" });
 
+// A toolbar: "Count" counts presses in the tab title and shows pressed while
+// on, "Toggle" flips the first button's pressed state, and "Off" is disabled.
+// Click a button with focus in another tab or tool window: the command still
+// runs with this composite as its target (the title counts the presses).
+await commands.register("playground.composite-toolbar", async () => {
+  const buffer = await buffers.create({ text: "toolbar\n" });
+  let presses = 0;
+  let on = false;
+  const buttons = () => [
+    { label: "Count", icon: "plus", command: "playground.toolbar-count", toggled: on },
+    { label: "Toggle", icon: "toggle-left", command: "playground.toolbar-toggle" },
+    { label: "Off", icon: "lock", command: "playground.toolbar-count", disabled: true },
+  ];
+  const instance = await (await composites()).open({
+    title: "Toolbar",
+    layout: { type: "row", children: [{ type: "editor", buffer }] },
+    toolbar: buttons(),
+  });
+  const refresh = () => instance.update({ title: `Toolbar (${presses})`, toolbar: buttons() });
+  toolbar = {
+    count: async (context) => {
+      presses += 1;
+      await refresh();
+    },
+    toggle: async () => {
+      on = !on;
+      await refresh();
+    },
+  };
+}, { title: "Playground: Open Composite with Toolbar" });
+let toolbar;
+await commands.register("playground.toolbar-count", (context) => toolbar?.count(context));
+await commands.register("playground.toolbar-toggle", () => toolbar?.toggle());
+
 console.info("playground loaded");
