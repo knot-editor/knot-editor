@@ -38,4 +38,34 @@ await commands.register("playground.composite-buffers", async () => {
   });
 }, { title: "Playground: Open Composite on Buffers" });
 
+// A composite whose layout "Playground: Next Layout" cycles through. Type in
+// each editor, move the caret, then cycle: keyed editors keep their text
+// position, scroll, undo history, and focus when they move or regroup; the
+// third layout drops `c`, so focus moves to the layout's initial editor when
+// `c` had it (the command then ends as InvalidTarget, as one that closes its
+// own view does).
+let cycling;
+let step = 0;
+const layouts = (a, b, c) => {
+  const editor = (key, buffer, rest = {}) => ({ type: "editor", key, buffer, ...rest });
+  return [
+    { type: "column", children: [editor("a", a), { type: "row", key: "pair", children: [editor("b", b), editor("c", c)] }] },
+    { type: "row", children: [editor("c", c), { type: "column", key: "pair", children: [editor("a", a), editor("b", b)] }] },
+    { type: "row", children: [editor("b", b), editor("a", a, { focused: true })] },
+  ];
+};
+await commands.register("playground.composite-keyed", async () => {
+  const buffersOf = await Promise.all(["alpha\n", "bravo\n", "charlie\n"].map((text) => buffers.create({ text })));
+  step = 0;
+  cycling = { buffers: buffersOf, instance: await (await composites()).open({
+    title: "Keyed composite",
+    layout: layouts(...buffersOf)[0],
+  }) };
+}, { title: "Playground: Open Keyed Composite" });
+await commands.register("playground.composite-next-layout", async () => {
+  if (cycling === undefined) return;
+  step = (step + 1) % 3;
+  await cycling.instance.update({ layout: layouts(...cycling.buffers)[step] });
+}, { title: "Playground: Next Layout" });
+
 console.info("playground loaded");
