@@ -288,6 +288,20 @@ keys of checkpoints 9 to 13.
 
 #### 15. Block rows
 
+Implemented, awaiting the API review. `editor.setBlocks([{ line, source, lines:
+{ start, end }, color }])` replaces the caller's block rows on an editor
+handle or a command's editor. `source` is any buffer handle, `lines` are its
+0-based lines (`end` exclusive, clamped to its line count), and `color` is a
+theme key. The editor reads the text and highlights from the source and again
+whenever the source's text or syntax changes; a source that ends leaves its
+last text. Plain text is not accepted: a package that wants text makes an
+extension buffer. Rows are per lifecycle and sit beside the native diff's
+blocks. Documented in the
+[extension guide](../extension-api/languages-and-themes.md#show-lines-of-another-buffer)
+and the [editor reference](../architecture/editor-and-languages.md#editor-views).
+The playground has `Playground: Show Block Rows`, `Edit Block Rows Source`, and
+`Clear Block Rows`.
+
 Deliverables: a package sets read-only block rows above lines of an editor it
 holds, each showing a line range of a source buffer with that buffer's
 highlighting and an optional band color key; rows repaint when the source's

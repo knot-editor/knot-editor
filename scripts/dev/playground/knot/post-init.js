@@ -105,4 +105,27 @@ let toolbar;
 await commands.register("playground.toolbar-count", (context) => toolbar?.count(context));
 await commands.register("playground.toolbar-toggle", () => toolbar?.toggle());
 
+// Block rows: shows three lines of a Rust buffer above the focused editor's
+// second line and one above its last, banded as removed lines. Try it in a
+// document, in a composite's editor, and in a diff side; wrap, edit above the
+// rows, scroll, and click a row (the caret goes to the line below). "Edit
+// Source" changes the source's text: the rows follow it.
+let source;
+await commands.register("playground.block-rows", async ({ editor }) => {
+  if (editor === undefined) return;
+  source ??= await buffers.create({ text: "fn removed() {\n    let x = 1; // gone\n}\n", language: "rust" });
+  await editor.setBlocks([
+    { line: 1, source, lines: { start: 0, end: 3 }, color: "diff.removed.background" },
+    { line: 9999, source, lines: { start: 1, end: 2 }, color: "diff.removed.background" },
+  ]);
+}, { title: "Playground: Show Block Rows" });
+await commands.register("playground.block-rows-edit", async () => {
+  if (source === undefined) return;
+  const { revision } = await source.snapshot();
+  await source.applyEdits([{ range: { startByteOffset: 0, endByteOffset: 0 }, text: "// edited\n" }], { ifRevision: revision });
+}, { title: "Playground: Edit Block Rows Source" });
+await commands.register("playground.block-rows-clear", async ({ editor }) => {
+  await editor?.setBlocks([]);
+}, { title: "Playground: Clear Block Rows" });
+
 console.info("playground loaded");

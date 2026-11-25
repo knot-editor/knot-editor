@@ -243,6 +243,27 @@ follow one view, such as matches around its caret, go through
 `{ range, decoration }` items and replaces the caller's set on that editor
 alone.
 
+### Show lines of another buffer
+
+`editor.setBlocks(blocks)` shows lines of a source buffer as read-only rows
+above a line of that editor, in the source's syntax highlighting, as a diff
+shows the lines a change removed.
+
+```js
+await editor.setBlocks([
+  { line: 4, source: original, lines: { start: 2, end: 5 },
+    color: "diff.removed.background" },
+]);
+```
+
+The rows belong to no line of the text: the caret skips them, a click on one
+lands at the start of the line below, and they take no line number. They
+follow their line through edits, wrap with the editor, and repaint when the
+source's text or syntax changes. Blocks on one line stack in the order given.
+The call replaces the caller's blocks on that editor and `[]` clears them.
+`color` bands the rows in a theme key's color. A source that ends leaves its
+rows as they last were.
+
 ## Define icons, packs, and associations
 
 Icons are named, such as `file.rust` or `action.refresh`, and trees, tabs,

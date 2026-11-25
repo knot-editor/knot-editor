@@ -211,6 +211,12 @@ folded anchor line, and follow their line through edits. They hold no caret:
 `position` reports a block row as the first row of the line below, vertical
 moves step over them, and a point on one is the start of that line.
 
+An extension sets block rows as `{ line, source, lines, color }`: the editor
+entity reads the lines and their syntax highlights from the source buffer and
+sets them as blocks beside the application's own. It observes each source, so
+the rows read again when its text or syntax changes. They are per lifecycle and
+view, and teardown clears them.
+
 A view folds line regions, which stay per view. A collapsed fold keeps its
 first line visible, with an `editor.foldPlaceholder` `…` after it, and gives
 its other lines no rows: the wrap map treats hidden lines as zero-row lines, so
