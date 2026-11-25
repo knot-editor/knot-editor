@@ -74,7 +74,15 @@ fn resolve_environment(shell: Option<&str>, timeout: Duration) -> Vec<(String, S
     }
 }
 
-/// Runs `shell` as a login interactive shell that prints its environment.
+/// Asks the user's shell what environment it builds, by running it once and
+/// reading what `env` prints.
+///
+/// A program launched from Finder or the Dock gets a minimal environment, not
+/// the one of a terminal: the `PATH` entries from Homebrew, rustup or nvm and
+/// the variables from `.zprofile` and `.zshrc` are missing, so the processes
+/// Knot starts could not find their tools. Only a shell can run those files.
+/// It is `-l` to read `.zprofile` and `-i` to read `.zshrc`, where many people
+/// keep their `PATH` setup.
 fn login_shell_environment(
     shell: &str,
     timeout: Duration,
@@ -89,8 +97,24 @@ fn login_shell_environment(
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null());
+    // Run the shell in a new session, so it has no terminal. An interactive
+    // shell makes itself the terminal's foreground group and leaves a dead one
+    // behind when it exits, after which Ctrl-C in a terminal Knot was started
+    // from reaches nobody. As session leader the shell is also its own group
+    // leader, so the timeout can kill it and its children by pid.
     #[cfg(unix)]
-    std::os::unix::process::CommandExt::process_group(&mut command, 0);
+    {
+        // SAFETY: the closure runs between fork and exec and only calls
+        // `setsid`, which is async-signal-safe.
+        unsafe {
+            std::os::unix::process::CommandExt::pre_exec(&mut command, || {
+                if libc::setsid() == -1 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                Ok(())
+            });
+        }
+    }
     let mut child = command.spawn().map_err(|error| error.to_string())?;
     let group = child.id();
     let mut stdout = child.stdout.take().expect("stdout is piped");
@@ -312,6 +336,32 @@ mod tests {
                 .iter()
                 .any(|(name, value)| name == "KNOT_FROM_SHELL" && value == "yes")
         );
+    }
+
+    #[test]
+    fn the_shell_leads_its_own_group() {
+        // The timeout kills the shell's process group by the shell's pid, and
+        // the shell runs in its own session so it cannot take over Knot's
+        // terminal; see `login_shell_environment`.
+        let directory = tempfile::tempdir().unwrap();
+        let shell = directory.path().join("shell");
+        std::fs::write(
+            &shell,
+            "#!/bin/sh\nshift 3\nPGID=$(ps -o pgid= -p $$ | tr -d ' ')\nexport PGID\nPID=$$\nexport PID\neval \"$1\"\n",
+        )
+        .unwrap();
+        use std::os::unix::fs::PermissionsExt as _;
+        std::fs::set_permissions(&shell, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let environment =
+            login_shell_environment(shell.to_str().unwrap(), Duration::from_secs(10)).unwrap();
+        let get = |name: &str| {
+            environment
+                .iter()
+                .find(|(key, _)| key == name)
+                .map(|(_, value)| value.clone())
+                .unwrap()
+        };
+        assert_eq!(get("PGID"), get("PID"));
     }
 
     #[test]
