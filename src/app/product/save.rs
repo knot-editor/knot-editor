@@ -62,8 +62,9 @@ impl KnotWindow {
         let selection = if let Some(dialog) = cx.try_global::<ApplicationSaveDialog>() {
             dialog.0.select(suggested_name)
         } else {
-            let directory =
-                std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("/"));
+            let directory = self
+                .default_directory()
+                .unwrap_or_else(|| std::path::PathBuf::from("/"));
             let selection = cx.prompt_for_new_path(&directory, Some(&suggested_name));
             Box::pin(async move {
                 match selection.await {

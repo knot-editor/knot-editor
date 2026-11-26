@@ -1216,9 +1216,10 @@ impl KnotWindow {
             .and_then(|session| session.read(cx).current_directory())
     }
 
-    /// The directory a terminal starts in when its opener names none: the
-    /// first local workspace root, else the home directory.
-    fn default_terminal_directory(&self) -> Option<std::path::PathBuf> {
+    /// The directory a terminal starts in, or a save dialog opens in, when the
+    /// caller names none: the first local workspace root, else the home
+    /// directory.
+    fn default_directory(&self) -> Option<std::path::PathBuf> {
         self.root_uris()
             .iter()
             .find_map(|root| root.as_url().to_file_path().ok())
@@ -1444,7 +1445,7 @@ impl KnotWindow {
         &mut self,
         cx: &mut Context<Self>,
     ) -> (TerminalSessionId, Entity<TerminalView>) {
-        self.create_terminal_in(self.default_terminal_directory(), cx)
+        self.create_terminal_in(self.default_directory(), cx)
     }
 
     fn create_terminal_in(
@@ -2505,7 +2506,7 @@ impl KnotWindow {
                 None => Destination::Center,
             },
         };
-        let directory = directory.or_else(|| self.default_terminal_directory());
+        let directory = directory.or_else(|| self.default_directory());
         let (id, view) = self.create_terminal_in(directory, cx);
         let Some((pane, tab)) = self.workbench.update(cx, |workbench, _| match destination {
             Destination::Pane(pane) => workbench
@@ -2610,7 +2611,7 @@ impl KnotWindow {
         };
         let new_session = terminal.map(|id| {
             let directory = Self::terminal_session_directory(id, cx)
-                .or_else(|| self.default_terminal_directory());
+                .or_else(|| self.default_directory());
             self.create_terminal_in(directory, cx)
         });
         let split = self
