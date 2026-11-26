@@ -13,7 +13,7 @@ Every item has the same shape:
 - **Description** says what is missing today and when it becomes worth doing,
   then what to build.
 
-The next unused ID is **D232**, and for bugs **B002**; take it for a new item and bump this line.
+The next unused ID is **D234**, and for bugs **B002**; take it for a new item and bump this line.
 
 Each section is ordered so that an item comes after the items it depends on,
 wherever the sections allow it. Items with no dependencies are ordered by
@@ -35,6 +35,7 @@ The [version control plan](plans/vcs.md) comes first, in its milestone order:
 
 Then:
 
+- D233 — Preview diff tabs.
 - D231 — Inline zones.
 - D225 — Gutter mark tooltips.
 - D174 — Show Difference for files changed on disk.
@@ -438,6 +439,21 @@ milestones these items belong to.
     grouping, and looks unfinished next to the rest of the workbench. Design
     the bar like the other tab toolbars, with clear button states, tooltips,
     and a hunk position indicator.
+
+- **D233 — Preview diff tabs** 🚧
+  - Depends on: none
+  - Description: Every diff opened from the Changes view or the gutter takes
+    a new tab, and a working-copy diff also opens a document tab. Open diffs
+    in the pane's shared preview slot, as the explorer opens files; see the
+    [plan](plans/d233-preview-diffs.md).
+
+- **D232 — Multi-file diff view**
+  - Depends on: D233
+  - Description: Changes can only be read one file per tab. Do it when
+    reviewing a set of changes file by file becomes the bottleneck, as before
+    committing or in a commit's details (D218): one scrollable tab showing
+    the diffs of all changed files, each collapsible, with navigation between
+    files and hunks, as Zed's project diff and VS Code's multi-diff editor do.
 
 ### Package manager
 
