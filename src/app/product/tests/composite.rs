@@ -317,6 +317,61 @@ await commands.register("composite.close", async () => {
   check((await instance.close()).kind === "closed", "closed again");
   await expectCode(() => instance.update({ title: "Late" }), "InvalidTarget");
 });
+// Two editors of a hundred lines, the second with ten more at line 10, linked.
+const hundred = (from, to) => Array.from({ length: to - from }, (_, line) => `line ${from + line}\n`).join("");
+// An invalid link is a TypeError, which has no code, or a host error with one.
+const expectLinkError = async (operation, code) => {
+  try { await operation(); } catch (error) {
+    if (code === undefined ? error instanceof TypeError : error.code === code) return;
+    throw error;
+  }
+  throw new Error(`expected ${code ?? "TypeError"}`);
+};
+const insertion = [{ first: { start: 10, end: 10 }, second: { start: 10, end: 20 } }];
+await commands.register("composite.open-linked", async () => {
+  const kind = await keyedKind();
+  const first = await buffers.create({ text: hundred(0, 100) });
+  const second = await buffers.create({ text: hundred(0, 10) + hundred(200, 210) + hundred(10, 100) });
+  keyed = { first, second };
+  instance = await kind.open({
+    title: "Linked",
+    layout: { type: "row", children: [
+      { type: "editor", key: "first", buffer: first },
+      { type: "column", key: "group", children: [{ type: "editor", key: "second", buffer: second }] },
+    ] },
+    scrollLink: { first: "first", second: "second", map: insertion },
+  });
+});
+await commands.register("composite.link-map", async () => {
+  await instance.update({ scrollLink: { first: "first", second: "second", map: [] } });
+});
+await commands.register("composite.unlink", async () => {
+  await instance.update({ scrollLink: null });
+});
+await commands.register("composite.link-kept-by-other-updates", async () => {
+  await instance.update({ title: "Renamed" });
+});
+await commands.register("composite.invalid-links", async () => {
+  const link = (first, second, map = []) => ({ first, second, map });
+  const bad = async (scrollLink, code) => {
+    await expectLinkError(() => instance.update({ scrollLink }), code);
+  };
+  await bad(link("first", "first"), undefined);
+  await bad(link("first", "nope"), "InvalidTarget");
+  await bad(link("first", "second", [{ first: { start: 3, end: 2 }, second: { start: 0, end: 1 } }]), undefined);
+  await bad(link("first", "second", [
+    { first: { start: 0, end: 5 }, second: { start: 0, end: 5 } },
+    { first: { start: 4, end: 6 }, second: { start: 5, end: 6 } },
+  ]), undefined);
+  // The group's key names a member that is not an editor.
+  await bad(link("first", "group"), "InvalidTarget");
+  // A layout without a linked key is refused while the link stays.
+  const scratch = await buffers.create();
+  await expectLinkError(() => instance.update({ layout: { type: "row", children: [
+    { type: "editor", key: "first", buffer: keyed.first },
+    { type: "editor", buffer: scratch },
+  ] } }), "InvalidTarget");
+});
 await commands.register("composite.dispose-registration", async () => {
   await registration[Symbol.asyncDispose]();
   registration = undefined;
@@ -343,7 +398,7 @@ fn load(
             .read(cx)
             .catalog()
             .borrow()
-            .resolve("composite.invalid-layouts")
+            .resolve("composite.dispose-registration")
             .is_ok()
     });
     (host, key)
@@ -1421,4 +1476,74 @@ mod documents {
             assert_eq!(window.read(cx).workbench.read(cx).view_count(a), 2);
         });
     }
+}
+
+/// The linked editors' scroll lines.
+fn linked_scrolls(window: &Entity<KnotWindow>, cx: &TestAppContext) -> [f32; 2] {
+    [0, 1].map(|index| {
+        let crate::app::composite_view::Leaf::Editor(view) = leaf_of(window, index, cx) else {
+            panic!("an editor");
+        };
+        cx.read(|cx| view.read(cx).editor().read(cx).scroll_line())
+    })
+}
+
+fn scroll_linked(window: &Entity<KnotWindow>, index: usize, line: f32, cx: &mut TestAppContext) {
+    let crate::app::composite_view::Leaf::Editor(view) = leaf_of(window, index, cx) else {
+        panic!("an editor");
+    };
+    let editor = cx.read(|cx| view.read(cx).editor().clone());
+    editor.update(cx, |editor, cx| editor.scroll_to_line(line, cx));
+    cx.run_until_parked();
+}
+
+#[gpui::test]
+fn linked_editors_scroll_together_through_the_package_map(cx: &mut TestAppContext) {
+    let (window, native_window, _, _) = window_with_extension(cx);
+    run(&window, native_window, "composite.open-linked", cx);
+    // Ten lines are inserted at line 10 of the second editor, at any depth.
+    scroll_linked(&window, 0, 50., cx);
+    assert_eq!(linked_scrolls(&window, cx), [50., 60.]);
+    scroll_linked(&window, 1, 30., cx);
+    assert_eq!(linked_scrolls(&window, cx), [20., 30.]);
+    scroll_linked(&window, 1, 4., cx);
+    assert_eq!(linked_scrolls(&window, cx), [4., 4.]);
+    scroll_linked(&window, 1, 15., cx);
+    assert_eq!(linked_scrolls(&window, cx), [10., 15.]);
+}
+
+#[gpui::test]
+fn a_new_map_brings_the_second_editor_in_line_with_the_first(cx: &mut TestAppContext) {
+    let (window, native_window, _, _) = window_with_extension(cx);
+    run(&window, native_window, "composite.open-linked", cx);
+    scroll_linked(&window, 0, 50., cx);
+    run(&window, native_window, "composite.link-map", cx);
+    assert_eq!(linked_scrolls(&window, cx), [50., 50.]);
+    // Other updates keep the link.
+    run(
+        &window,
+        native_window,
+        "composite.link-kept-by-other-updates",
+        cx,
+    );
+    scroll_linked(&window, 1, 30., cx);
+    assert_eq!(linked_scrolls(&window, cx), [30., 30.]);
+}
+
+#[gpui::test]
+fn removing_the_link_lets_the_editors_scroll_apart(cx: &mut TestAppContext) {
+    let (window, native_window, _, _) = window_with_extension(cx);
+    run(&window, native_window, "composite.open-linked", cx);
+    run(&window, native_window, "composite.unlink", cx);
+    scroll_linked(&window, 0, 50., cx);
+    assert_eq!(linked_scrolls(&window, cx), [50., 0.]);
+}
+
+#[gpui::test]
+fn a_link_that_does_not_join_two_editors_is_refused_and_changes_nothing(cx: &mut TestAppContext) {
+    let (window, native_window, _, _) = window_with_extension(cx);
+    run(&window, native_window, "composite.open-linked", cx);
+    run(&window, native_window, "composite.invalid-links", cx);
+    scroll_linked(&window, 0, 50., cx);
+    assert_eq!(linked_scrolls(&window, cx), [50., 60.]);
 }

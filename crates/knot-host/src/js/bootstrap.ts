@@ -2235,6 +2235,33 @@ function compositeToolbar(value: unknown): string {
     };
   }));
 }
+function lineRange(value: unknown, side: string, floor: number): { start: number; end: number } {
+  const range = record(value, `composite scroll link ${side} must be a line range`);
+  const { start, end } = range;
+  if (!Number.isInteger(start) || !Number.isInteger(end) || (start as number) < floor || (end as number) < (start as number)) {
+    throw new TypeError(`composite scroll link ${side} must be a line range after the one before it`);
+  }
+  return { start: start as number, end: end as number };
+}
+/** The scroll link JSON of a composite, or null for none. */
+function compositeScrollLink(value: unknown): string | null {
+  if (value === null) return null;
+  const link = record(value, "composite scroll link must be an object");
+  const first = string(link.first, "composite scroll link first must be a member key");
+  const second = string(link.second, "composite scroll link second must be a member key");
+  if (first === second) throw new TypeError("a composite scroll link joins two editors");
+  if (!Array.isArray(link.map)) throw new TypeError("composite scroll link map must be an array");
+  const floor = { first: 0, second: 0 };
+  const map = link.map.map((item) => {
+    const region = record(item, "composite scroll link region must be an object");
+    const one = lineRange(region.first, "first", floor.first);
+    const two = lineRange(region.second, "second", floor.second);
+    floor.first = one.end;
+    floor.second = two.end;
+    return { first: one, second: two };
+  });
+  return JSON.stringify({ first, second, map });
+}
 function compositeTab(given: Rec, titleRequired: boolean) {
   const { title, icon, resource, toolbar } = given;
   if (title === undefined ? titleRequired : typeof title !== "string") {
@@ -2249,6 +2276,7 @@ function compositeTab(given: Rec, titleRequired: boolean) {
     icon: icon ?? null,
     resource: (resource ?? null) as string | null,
     toolbar: toolbar === undefined ? undefined : compositeToolbar(toolbar),
+    scrollLink: given.scrollLink === undefined ? undefined : compositeScrollLink(given.scrollLink),
   };
 }
 /** The layout JSON of a composite's row or column, or of one member of it. */
@@ -2329,9 +2357,11 @@ export async function registerComposite(contribution: unknown) {
       const tab = compositeTab(given, true);
       const layout = compositeLayoutJson(given.layout);
       const value = await registration.track(request("openComposite", destinationAuthority(given), id,
-        tab.title, tab.icon === null ? null : JSON.stringify(tab.icon), tab.resource, tab.toolbar ?? "[]", layout));
+        tab.title, tab.icon === null ? null : JSON.stringify(tab.icon), tab.resource, tab.toolbar ?? "[]",
+        tab.scrollLink ?? null, layout));
       const target = presentationTarget(value.target);
-      let current = { title: tab.title as string, icon: tab.icon, resource: tab.resource, toolbar: tab.toolbar ?? "[]" };
+      let current = { title: tab.title as string, icon: tab.icon, resource: tab.resource, toolbar: tab.toolbar ?? "[]",
+        scrollLink: tab.scrollLink ?? null };
       const owned = ownership(() => {}, async () => {
         try { await closePresentation(target); } catch (error) {
           if ((error as { code?: unknown }).code !== "InvalidTarget") throw error;
@@ -2349,10 +2379,11 @@ export async function registerComposite(contribution: unknown) {
             icon: given.icon === undefined ? current.icon : next.icon,
             resource: given.resource === undefined ? current.resource : next.resource,
             toolbar: next.toolbar ?? current.toolbar,
+            scrollLink: next.scrollLink === undefined ? current.scrollLink : next.scrollLink,
           };
           await owned.track(request("updateComposite", destinationAuthority({ target }),
             merged.title, merged.icon === null ? null : JSON.stringify(merged.icon), merged.resource,
-            merged.toolbar, layout));
+            merged.toolbar, merged.scrollLink, layout));
           current = merged;
         },
         async close(closeOptions?: Opts) {

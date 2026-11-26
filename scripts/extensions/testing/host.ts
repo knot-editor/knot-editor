@@ -298,6 +298,8 @@ export type FakeComposite = {
   options: Knot.OpenCompositeOptions;
   /** What the tab shows now, after any `update`. */
   tab: { title: string; icon: Knot.IconRef | null; resource: string | null; toolbar: readonly Knot.CompositeButton[] };
+  /** The scroll link now, after any `update`; the fake does not scroll. */
+  scrollLink: Knot.CompositeScrollLink | null;
   closed: boolean;
 };
 
@@ -3027,6 +3029,7 @@ export const api: KnotApi = {
               resource: options.resource ?? null,
               toolbar: options.toolbar ?? [],
             },
+            scrollLink: options.scrollLink ?? null,
             closed: false,
           };
           state.composites.push(composite);
@@ -3046,6 +3049,7 @@ export const api: KnotApi = {
                 resource: changes.resource === undefined ? composite.tab.resource : changes.resource,
                 toolbar: changes.toolbar ?? composite.tab.toolbar,
               };
+              if (changes.scrollLink !== undefined) composite.scrollLink = changes.scrollLink;
             },
             close,
             [Symbol.asyncDispose]: async () => void (await close()),

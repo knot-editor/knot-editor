@@ -7,15 +7,17 @@
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
+use std::ops::Range;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use gpui::{prelude::*, *};
+use knot_model::diff::{DiffSide, LineHunk, map_line};
 use knot_model::workbench::{CompositeViewId, DocumentId};
 use knot_protocol::{Command, CommandArgumentValue, IconRef, ViewId};
 
 use super::convert::ThemePaint as _;
-use super::editor::EditorView;
+use super::editor::{Editor, EditorView, Scrolled};
 use super::icons::{AppIcon, ref_definition};
 use super::model::Buffer;
 use super::resource::ResourceUri;
@@ -41,6 +43,59 @@ pub(crate) struct CompositeTab {
     /// The resource whose decorations the tab shows, as a document tab does.
     pub resource: Option<ResourceUri>,
     pub toolbar: Vec<ToolbarButton>,
+    /// Two editors whose scrolling follows each other.
+    pub link: Option<ScrollLink>,
+}
+
+/// Which lines of two editors lie side by side, so scrolling one scrolls the
+/// other to the same place.
+#[derive(Clone, Debug, PartialEq, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ScrollLink {
+    /// The key of the first editor's member.
+    pub first: String,
+    /// The key of the second editor's member.
+    pub second: String,
+    /// The regions where the two texts differ, ascending and disjoint; lines
+    /// between them match one for one.
+    pub map: Vec<LinkedLines>,
+}
+
+/// A region of the first editor's lines that stands for a region of the
+/// second's.
+#[derive(Clone, Debug, PartialEq, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct LinkedLines {
+    pub first: Range<u32>,
+    pub second: Range<u32>,
+}
+
+impl ScrollLink {
+    /// Whether the link joins two different editors, which `is_editor`
+    /// finds by member key.
+    pub(crate) fn joins(&self, is_editor: impl Fn(&str) -> bool) -> bool {
+        self.first != self.second && is_editor(&self.first) && is_editor(&self.second)
+    }
+
+    fn hunks(&self) -> Vec<LineHunk> {
+        self.map
+            .iter()
+            .map(|region| LineHunk {
+                old: region.first.clone(),
+                new: region.second.clone(),
+            })
+            .collect()
+    }
+}
+
+/// A scroll link resolved to its editors.
+struct Linked {
+    first: Entity<Editor>,
+    second: Entity<Editor>,
+    hunks: Vec<LineHunk>,
+    /// Where each editor was scrolled to when last brought in line.
+    synced: [f32; 2],
+    _subscriptions: Vec<Subscription>,
 }
 
 /// An icon button of a composite's toolbar, which runs a command with the
@@ -163,6 +218,15 @@ impl GroupSpec {
         for member in &self.members {
             member.content.collect_documents(documents);
         }
+    }
+
+    /// Whether an editor member beneath the group has this key.
+    pub(crate) fn has_editor_key(&self, key: &str) -> bool {
+        self.members.iter().any(|member| match &member.content {
+            ContentSpec::Group(group) => group.has_editor_key(key),
+            ContentSpec::Editor { .. } => member.key.as_deref() == Some(key),
+            _ => false,
+        })
     }
 
     /// The layout-order index of the view that has focus on open, if the
@@ -426,6 +490,19 @@ impl Group {
         }
     }
 
+    /// The editor of the member keyed `key`, at any depth.
+    fn keyed_editor(&self, key: &str, cx: &App) -> Option<Entity<EditorView>> {
+        self.members
+            .iter()
+            .find_map(|member| match &member.content {
+                Content::Leaf(Leaf::Editor(view)) if member.key.as_deref() == Some(key) => {
+                    Some(view.clone())
+                }
+                Content::Group(group) => group.read(cx).0.keyed_editor(key, cx),
+                _ => None,
+            })
+    }
+
     /// Show the members that lead to the view `focus`, so the tabs show it.
     /// Returns whether the view is beneath this group.
     fn reveal(&mut self, focus: EntityId, cx: &mut App) -> bool {
@@ -670,6 +747,9 @@ pub(crate) struct CompositeView {
     /// The instances of the contributed views, which the host unbinds when
     /// the composite is released.
     hosted: Vec<ViewId>,
+    /// The editors the tab's scroll link joins, when it names two the layout
+    /// has.
+    linked: Option<Linked>,
     /// Watches each view's focus; set up on the first render after the layout
     /// changes, which has the window.
     _focus_subscriptions: Vec<Subscription>,
@@ -701,7 +781,7 @@ impl CompositeView {
             }
         })
         .detach();
-        Self {
+        let mut view = Self {
             tab,
             root,
             shared: Rc::new(Shared {
@@ -709,8 +789,11 @@ impl CompositeView {
                 focused: Cell::new(focused),
             }),
             hosted,
+            linked: None,
             _focus_subscriptions: Vec::new(),
-        }
+        };
+        view.relink(cx);
+        view
     }
 
     /// Replace the layout with `layout`, which like the first is a row or
@@ -759,6 +842,7 @@ impl CompositeView {
             });
         }
         let focus_moved = kept_focus.is_none();
+        self.relink(cx);
         cx.emit(ViewTreeChanged);
         if focus_moved {
             cx.emit(ViewFocusChanged);
@@ -775,8 +859,70 @@ impl CompositeView {
     }
 
     pub(crate) fn set_tab(&mut self, tab: CompositeTab, cx: &mut Context<Self>) {
+        let relink = tab.link != self.tab.link;
         self.tab = tab;
+        if relink {
+            self.relink(cx);
+        }
         cx.notify();
+    }
+
+    /// Whether an editor member of the layout has this key.
+    pub(crate) fn has_editor_key(&self, key: &str, cx: &App) -> bool {
+        self.root.keyed_editor(key, cx).is_some()
+    }
+
+    /// Join the editors the tab's link names, which the first leads until
+    /// either scrolls.
+    fn relink(&mut self, cx: &mut Context<Self>) {
+        self.linked = None;
+        let Some(link) = self.tab.link.clone() else {
+            return;
+        };
+        let (Some(first), Some(second)) = (
+            self.root.keyed_editor(&link.first, cx),
+            self.root.keyed_editor(&link.second, cx),
+        ) else {
+            return;
+        };
+        let [first, second] = [first, second].map(|view| view.read(cx).editor().clone());
+        let mut subscriptions = Vec::new();
+        for editor in [&first, &second] {
+            subscriptions.push(cx.observe(editor, |this, _, cx| this.sync_scroll(cx)));
+            subscriptions
+                .push(cx.subscribe(editor, |this, _, _: &Scrolled, cx| this.sync_scroll(cx)));
+        }
+        self.linked = Some(Linked {
+            first,
+            second,
+            hunks: link.hunks(),
+            synced: [f32::NAN; 2],
+            _subscriptions: subscriptions,
+        });
+        self.sync_scroll(cx);
+    }
+
+    /// Scroll the linked editor that did not move to where the other is,
+    /// through the link's map. Scrolling it notifies this again, which finds
+    /// both where they were left and stops there.
+    fn sync_scroll(&mut self, cx: &mut Context<Self>) {
+        let Some(linked) = &self.linked else {
+            return;
+        };
+        let scrolls = [&linked.first, &linked.second].map(|editor| editor.read(cx).scroll_top());
+        if scrolls == linked.synced {
+            return;
+        }
+        let (from, to, side) = if scrolls[0] != linked.synced[0] {
+            (&linked.first, &linked.second, DiffSide::Original)
+        } else {
+            (&linked.second, &linked.first, DiffSide::Modified)
+        };
+        let target = map_line(&linked.hunks, side, from.read(cx).scroll_line());
+        let to = to.clone();
+        to.update(cx, |editor, cx| editor.scroll_to_line(target, cx));
+        let linked = self.linked.as_mut().expect("checked above");
+        linked.synced = [&linked.first, &linked.second].map(|editor| editor.read(cx).scroll_top());
     }
 
     /// The contributed views the composite holds, which the host binds.

@@ -3101,7 +3101,27 @@ declare module "knot" {
     readonly children: readonly CompositeLayout[];
   }
   export type CompositeLayout = CompositeEditor | CompositeText | CompositeTree | CompositeGroup | CompositeTabs;
+  /** Which lines of two editors lie side by side, so scrolling one scrolls
+   * the other to the same place. */
+  export interface CompositeScrollLink {
+    /** The `key` of the first editor member. */
+    readonly first: string;
+    /** The `key` of the second editor member, another one. */
+    readonly second: string;
+    /**
+     * The regions where the two texts differ, ascending and disjoint, as
+     * `diff` returns them with `old` as the first editor's lines and `new`
+     * as the second's. Lines between regions match one for one; the lines of
+     * a region map proportionally onto the other side's, and a region with
+     * no lines on one side sits at the boundary the other's lines belong to.
+     */
+    readonly map: readonly { readonly first: LineRange; readonly second: LineRange }[];
+  }
   export interface OpenCompositeOptions extends DocumentDestinationOptions, CompositeTab {
+    /** Links the scrolling of two editor members; the first leads at the
+     * start. A link naming a key that no editor member has, or the same twice,
+     * is an InvalidTarget. */
+    readonly scrollLink?: CompositeScrollLink;
     /** The layout, which the user cannot rearrange: a row or column holding at
      * least one editor, text frame, or tree at any depth. */
     readonly layout: CompositeGroup;
@@ -3121,10 +3141,14 @@ declare module "knot" {
      * close. The view that had focus keeps it; when it closes, the new
      * layout's initial focus takes over as on open, and a `focused` member
      * that is not that does not move focus. A `toolbar` replaces the buttons,
-     * so state changes by sending the list again; `[]` removes the bar.
+     * so state changes by sending the list again; `[]` removes the bar. A
+     * `scrollLink` replaces the link and brings the second editor in line with
+     * the first; `null` removes it. A layout
+     * without a key the link names needs a new link or `null` with it.
      * @throws TypeError for invalid fields or layout; HostError with
-     * InvalidTarget for a tab that was closed, InvalidUri, BufferClosed,
-     * DocumentNotFound, DocumentUnsaved when the layout drops the final view of
+     * InvalidTarget for a tab that was closed or a scroll link, given or kept, that
+     * does not join two editors of the layout, InvalidUri, BufferClosed, DocumentNotFound,
+     * DocumentUnsaved when the layout drops the final view of
      * a document with unsaved changes, OwnershipDisposed after disposal, or
      * Cancelled. A failed update changes nothing.
      */
@@ -3133,6 +3157,7 @@ declare module "knot" {
       readonly resource?: string | null;
       readonly layout?: CompositeGroup;
       readonly toolbar?: readonly CompositeButton[];
+      readonly scrollLink?: CompositeScrollLink | null;
     }): Promise<void>;
     /** Close the tab as `workbench.close` does; a tab already closed resolves
      * as closed. */

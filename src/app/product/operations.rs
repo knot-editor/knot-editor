@@ -375,6 +375,11 @@ pub(crate) fn open_composite(
     ),
     OpenError,
 > {
+    if let Some(link) = &tab.link
+        && !link.joins(|key| layout.has_editor_key(key))
+    {
+        return Err(AccessError::InvalidTarget.into());
+    }
     let (window, _) = capture_destination(&destination, cx)?;
     let id = super::window_id(window.entity_id());
     let (target, hosted) = window.update(cx, |window, cx| window.open_composite(tab, layout, cx));
@@ -397,6 +402,7 @@ pub(crate) fn update_composite(
     let (window, open) = capture_destination(&DocumentDestination::View(target.clone()), cx)?;
     let workbench = open.workbench.upgrade().ok_or(AccessError::InvalidTarget)?;
     let location = open.tab.ok_or(AccessError::InvalidTarget)?;
+    let new_link = tab.link.clone();
     let (view, dropped) = {
         let workbench = workbench.read(cx);
         let tab = workbench
@@ -406,6 +412,14 @@ pub(crate) fn update_composite(
             .composite_view(tab)
             .cloned()
             .ok_or(AccessError::InvalidTarget)?;
+        if let Some(link) = &new_link
+            && !link.joins(|key| match &layout {
+                Some(layout) => layout.has_editor_key(key),
+                None => view.read(cx).has_editor_key(key, cx),
+            })
+        {
+            return Err(AccessError::InvalidTarget.into());
+        }
         let kept = layout.as_ref().map(|layout| layout.documents());
         let dropped: Vec<DocumentId> = workbench
             .shown_documents(tab)

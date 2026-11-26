@@ -15,7 +15,8 @@ use std::collections::HashSet;
 use super::ProductExtensionHost;
 use super::handlers::{AccessError, OpenError};
 use crate::app::composite_view::{
-    Arrangement, CompositeTab, ContentSpec, GroupSpec, LayoutSize, MemberSpec, ToolbarButton,
+    Arrangement, CompositeTab, ContentSpec, GroupSpec, LayoutSize, MemberSpec, ScrollLink,
+    ToolbarButton,
 };
 use crate::app::extensions::semantics::SemanticError;
 use crate::app::product;
@@ -27,6 +28,7 @@ pub(crate) struct CompositeTabSpec {
     pub icon: Option<knot_protocol::IconRef>,
     pub resource: Option<String>,
     pub toolbar: Vec<ToolbarButton>,
+    pub link: Option<ScrollLink>,
 }
 
 impl CompositeTabSpec {
@@ -42,6 +44,7 @@ impl CompositeTabSpec {
                 })
                 .transpose()?,
             toolbar: self.toolbar,
+            link: self.link,
         })
     }
 }

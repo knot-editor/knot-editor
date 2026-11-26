@@ -41,6 +41,26 @@ test("a toolbar of buttons is replaced by an update and kept otherwise", async (
   assert.deepEqual(composite.tab.toolbar, []);
 });
 
+test("a scroll link is replaced or removed by an update and kept otherwise", async () => {
+  const registration = await workbench.registerComposite({ id: "example.view" });
+  host.openWindow();
+  const [a, b] = await Promise.all([buffers.create(), buffers.create()]);
+  const link = { first: "a", second: "b", map: [{ first: { start: 1, end: 1 }, second: { start: 1, end: 3 } }] };
+  const instance = await registration.open({
+    title: "Linked",
+    layout: { type: "row", children: [{ type: "editor", key: "a", buffer: a }, { type: "editor", key: "b", buffer: b }] },
+    scrollLink: link,
+  });
+  const composite = host.composites()[0]!;
+  assert.deepEqual(composite.scrollLink, link);
+  await instance.update({ title: "Renamed" });
+  assert.deepEqual(composite.scrollLink, link);
+  await instance.update({ scrollLink: { ...link, map: [] } });
+  assert.deepEqual(composite.scrollLink, { ...link, map: [] });
+  await instance.update({ scrollLink: null });
+  assert.equal(composite.scrollLink, null);
+});
+
 test("disposing a registration closes its instances and frees the kind", async () => {
   const registration = await workbench.registerComposite({ id: "example.view" });
   host.openWindow();
