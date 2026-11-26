@@ -158,8 +158,20 @@ export async function registerChanges(deps: ChangesDeps): Promise<Changes> {
     }
   }
 
-  /** Opens the file's changes in its group, or shows the diff already open for them. */
-  async function showFileChanges({ target, arguments: args }: CommandContext) {
+  let showing: Promise<unknown> = Promise.resolve();
+
+  /**
+   * Opens the file's changes in its group, or shows the diff already open for
+   * them. Requests run one at a time, so a second gesture on a row sees the diff
+   * the first one is still opening.
+   */
+  function showFileChanges(context: CommandContext) {
+    const run = showing.then(() => openFileChanges(context));
+    showing = run.catch(() => {});
+    return run;
+  }
+
+  async function openFileChanges({ target, arguments: args }: CommandContext) {
     const request = requestOf(args);
     if (request === null) return;
     const { preview } = request;
