@@ -388,6 +388,12 @@ otherwise the layout's initial focus takes over. The host refuses an update
 that would drop the final view of a document with unsaved changes before
 changing anything.
 
+A scroll link, also tab data, joins two keyed editors. The composite
+subscribes to both, and when one scrolls it moves the other to the line
+`knot_model::diff::map_line` gives through the package's map, then records both
+positions so the echo of its own scroll stops there. Setting or replacing a link,
+or replacing the layout, brings the second editor in line with the first.
+
 The toolbar belongs to the tab's data. A click captures a command target for
 the composite's own tab and its focused leaf, as a click on an editor
 contribution does, and dispatches the command there whatever has focus.

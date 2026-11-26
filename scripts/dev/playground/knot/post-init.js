@@ -128,4 +128,31 @@ await commands.register("playground.block-rows-clear", async ({ editor }) => {
   await editor?.setBlocks([]);
 }, { title: "Playground: Clear Block Rows" });
 
+// Linked scrolling: two editors of a hundred lines, the right with ten lines
+// inserted at line 10. Scroll either, by wheel or keys: the other follows
+// through the map, level before line 10 and offset by ten after. "Relink"
+// sends an empty map, so they scroll one to one from then on.
+const numbered = (from, to) => Array.from({ length: to - from }, (_, line) => `line ${from + line}\n`).join("");
+let linked;
+await commands.register("playground.composite-linked", async () => {
+  const left = await buffers.create({ text: numbered(0, 100) });
+  const right = await buffers.create({ text: numbered(0, 10) + numbered(200, 210) + numbered(10, 100) });
+  linked = await (await composites()).open({
+    title: "Linked scrolling",
+    icon: "file",
+    layout: { type: "row", children: [
+      { type: "editor", key: "left", buffer: left },
+      { type: "editor", key: "right", buffer: right },
+    ] },
+    scrollLink: { first: "left", second: "right",
+      map: [{ first: { start: 10, end: 10 }, second: { start: 10, end: 20 } }] },
+  });
+}, { title: "Playground: Open Linked Scrolling" });
+await commands.register("playground.composite-relink", async () => {
+  await linked?.update({ scrollLink: { first: "left", second: "right", map: [] } });
+}, { title: "Playground: Relink Scrolling One to One" });
+await commands.register("playground.composite-unlink", async () => {
+  await linked?.update({ scrollLink: null });
+}, { title: "Playground: Unlink Scrolling" });
+
 console.info("playground loaded");

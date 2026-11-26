@@ -298,6 +298,15 @@ and the [editor reference](../architecture/editor-and-languages.md#editor-views)
 
 #### 16. Linked scrolling
 
+Done, awaiting the review gate. `open` and `update` take a `scrollLink`
+`{ first, second, map }` naming two editor members by `key`, with `map` the
+regions where the texts differ as `{ first, second }` line ranges (the shape of
+`diff`'s hunks); `null` removes it. The first editor leads when a link is set,
+and a link must join two editors of the layout the tab shows. Documented in the
+[extension guide](../extension-api/ui.md#open-a-composite-view) and the
+[composite views](../architecture/workbench-and-lifecycle.md#composite-views)
+reference. The playground has `Open Linked Scrolling`.
+
 Deliverables: a composite links two editor children's scrolling through a line
 map the package supplies and replaces.
 

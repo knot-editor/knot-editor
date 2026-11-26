@@ -210,6 +210,30 @@ wherever focus is, so a handler finds its instance in `target.viewChain`.
 An update replaces the whole list, so send it again to change a button's state;
 `toolbar: []` removes the bar.
 
+A `scrollLink` makes two editors scroll together, wherever they sit in the
+layout:
+
+```js
+const hunks = (await diff(left, right)).hunks;
+await instance.update({
+  scrollLink: {
+    first: "left",
+    second: "right",
+    map: hunks.map(({ old, new: updated }) => ({ first: old, second: updated })),
+  },
+});
+```
+
+`first` and `second` are the `key`s of two editor members, and `map` lists the
+regions where their texts differ, ascending and disjoint, as `diff` returns
+them. Lines between regions match one for one, and the lines of a region map
+proportionally onto the other side's. Scrolling either editor, by wheel, caret,
+or code, scrolls the other to match. Sending a link brings the second editor in
+line with the first, so send a new map after each rediff; `scrollLink: null`
+removes it. A link must name two different editors of the layout the tab shows:
+`open` and `update` reject `InvalidTarget` otherwise, including an update whose
+new layout lacks a key the kept link names.
+
 ## Ask the user transiently
 
 `workbench` exposes window-local pickers, text input, and a native confirmation
