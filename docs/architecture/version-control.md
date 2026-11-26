@@ -38,7 +38,32 @@ debounce, using the extension API's `diff`. Each hunk becomes one contribution:
 a `diff.added` bar for an insertion, a `diff.modified` bar for a replacement,
 and a `diff.removed` wedge for a removal. The contributions are replaced at the
 revision that was diffed, and a diff an edit raced is repeated. A click on a
-mark runs `vcs.showChanges`.
+mark runs `vcs.showHunk`.
+
+## Hunk popup
+
+`vcs.showHunk` (Show Hunk) opens a popover under the hunk of the clicked mark,
+or of the caret's line from the palette; it has no default key and is
+unavailable when the caret is on no hunk. The popover has the ID `vcs.hunk` and
+shows the hunk's baseline lines in a read-only buffer in the document's
+language, banded `diff.removed.background`; the current lines stay in the editor
+beside it. An insertion has no baseline lines, so its popover is only the
+toolbar. A hunk with current lines anchors to them; a removal anchors to the
+line before it, or line 0 at the top of the file. Changes inside a line are not
+highlighted.
+
+The toolbar has Previous Hunk, Next Hunk, Revert Hunk, Compare with Last Commit
+(`vcs.showChanges` at the hunk's line), and Copy Hunk, which an insertion omits.
+`vcs.revertHunk` replaces the hunk's current lines with its baseline lines in
+one edit at the diffed revision, one undo step, restoring a missing final
+newline exactly. `vcs.copyHunk` copies the baseline lines. Both work from the
+palette on the hunk at the caret.
+
+A document has one popup. Opening it on another hunk updates it in place, and
+[navigation](#navigation) moves it while it is open. Knot's popover rules close
+it (Escape, a click outside, an edit, a deleted anchor), and `@knot/vcs` also
+closes it when the document's baseline is fetched again or goes away and when
+the document closes, rather than following a hunk that may have moved.
 
 ## File status
 
@@ -80,8 +105,9 @@ change.
 `vcs.nextHunk` and `vcs.previousHunk` (Alt+F5 and Alt+Shift+F5 in editors,
 `]c` and `[c` in Vim mode) diff the focused editor against its cached baseline
 and move the caret to the first line of the nearest hunk, wrapping at the ends.
-A removal's line is the one that followed the removed lines. A document without
-a baseline or changes leaves the caret where it is.
+A removal's line is the one that followed the removed lines. While the
+[hunk popup](#hunk-popup) is open on the focused editor, it moves to the new
+hunk. A document without a baseline or changes leaves the caret where it is.
 
 ## Showing changes
 
@@ -89,8 +115,8 @@ a baseline or changes leaves the caret where it is.
 (Ctrl+D elsewhere) in editors, opens the focused file's diff through the `diff` contract of
 [`@knot/diff`](#the-diff-package), which `@knot/vcs` requires: the baseline as
 a snapshot labeled with the backend's ref (or "Baseline" without one), against
-the document, which stays editable. It starts the caret at the clicked mark's
-line, or the caret's line from the palette. A file without a baseline leaves
+the document, which stays editable. It starts the caret at the hunk popup's line, or the
+caret's line from the palette. A file without a baseline leaves
 the command unavailable, and a file equal to its baseline raises a "No changes"
 notice instead of a tab. Each document keeps at most one such diff: a second
 request closes the open one and opens a new tab. The open diff's original side

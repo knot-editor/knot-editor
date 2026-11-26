@@ -239,6 +239,23 @@ on clones of two repositories of about 15,000 files, and about 0.4 s with
 
 References: [version control](../architecture/version-control.md#file-status).
 
+## Hunk popup
+
+The popup shows only the baseline's lines, banded as removed, with the current
+lines left in the editor beside it, rather than a baseline-against-current
+diff: the editor already shows the current side, and `diff` reports no
+changes inside a line to highlight. A pure insertion shows only the toolbar,
+as IntelliJ does, because an empty editor read as a bug; this meant letting a
+popover's layout hold no view. A removal anchors to the line before it so the
+popup sits where the lines were.
+
+Names follow Git's: hunks in every command, title, icon, and the code, after
+comparing editors, which split between "change" (VS Code, Zed, IntelliJ's UI)
+and "hunk". Showing the deleted lines inline between the editor's lines, as Zed
+does, was left to the inline zones of D231.
+
+References: [version control](../architecture/version-control.md#hunk-popup).
+
 ## Git baseline
 
 Git's baseline is HEAD, as in IntelliJ, read with `git cat-file --filters` so

@@ -80,9 +80,8 @@ gutter and change navigation. See [version control](../architecture/version-cont
   and [the diff package](../architecture/version-control.md#the-diff-package).
 - ✅ **D220 — Anchored popovers.** Split from D145, which keeps virtual
   text for later consumers. See [editor popovers](../architecture/editor-and-languages.md#editor-popovers).
-- 🚧 **D221 — Hunk popup.** The hunk's baseline against the current lines, with
-  revert, hunk navigation, and opening the diff. Depends on D211.
-  [Plan](d221-hunk-popup.md).
+- ✅ **D221 — Hunk popup.** See
+  [the hunk popup](../architecture/version-control.md#hunk-popup).
 
 ### 4. Changes and commit
 

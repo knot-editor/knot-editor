@@ -30,7 +30,6 @@ point.
 
 The [version control plan](plans/vcs.md) comes first, in its milestone order:
 
-- D221 — Hunk popup.
 - D214 — VCS changes view.
 - D215 — VCS commit.
 - D216 — Git operations.
@@ -287,7 +286,7 @@ hold the analyses that support some items.
     toolbar and a composite layout, with a popover's natural sizing), at any pixel
     height, with views inside them that take focus, clicks, and typing, and
     that scroll, fold, and follow edits as block rows do. Then show the hunk
-    popup (D221) inline, as Zed does: the deleted lines as rows between the
+    popup inline, as Zed does: the deleted lines as rows between the
     editor's lines, above the current ones, with the popup's actions.
 
 - **D115 — Lifecycle hooks and native command overrides**
@@ -397,13 +396,6 @@ hold the analyses that support some items.
 The [version control plan](plans/vcs.md) holds the agreed architecture and the
 milestones these items belong to.
 
-- **D221 — Hunk popup** 🚧
-  - Depends on: none
-  - Description: A gutter marker shows that lines changed, not how. Clicking
-    it opens a popup anchored to the hunk that shows the baseline's lines
-    against the current ones, with revert, next and previous hunk, and opening
-    the file's diff. See the [plan](plans/d221-hunk-popup.md).
-
 - **D214 — VCS changes view** 🚧
   - Depends on: none
   - Description: There is no list of changed files. Add a changes view that
@@ -423,7 +415,7 @@ milestones these items belong to.
   - Description: Staging, branches, push and pull, stash, and other
     Git-specific workflows stay outside the shared provider contract. Build
     them in `@knot/git` as the plan's last milestone. Let backends add their
-    own actions to the hunk popup (D221) through the contract, starting with
+    own actions to the hunk popup through the contract, starting with
     staging a hunk.
 
 - **D217 — Blame**

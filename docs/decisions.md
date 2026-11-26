@@ -184,6 +184,9 @@ touches.
   against the baseline, not the index; disk only; a snapshot painted by
   `@knot/vcs`, which sets folder colors itself; untracked files listed one by
   one up to a limit.
+- [Hunk popup](decisions/bundled-packages.md#hunk-popup): the baseline's lines
+  only, toolbar-only for an insertion, anchored to the hunk; "hunk" names
+  everywhere.
 - [Git baseline](decisions/bundled-packages.md#git-baseline): HEAD through
   `cat-file --filters`, not the index; roots derived from URIs, not Git's
   absolute paths; watching, not polling, with a hidden-entry opt-in.
