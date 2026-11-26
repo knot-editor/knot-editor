@@ -319,33 +319,18 @@ paint; the strip was checked by hand.
 
 ### Phase F — The diff package
 
-#### 18. `@knot/diff` side by side
+#### 18. `@knot/diff` side by side ✅
 
-🔎 Built, awaiting the review gate. The package lives beside `@knot/vcs` in
-`crates/knot-ext-vcs`; its contract (`diffs`: `open`, `setText`, `close`) and
-the architecture and guide text are in place. Decisions taken: a diff's sides
-carry no label header (the tab title holds both labels); `setText` on a
-snapshot shows a new buffer, as a read-only buffer takes no edits; view
-decorations take a gutter mark so wedges stay in their view; a keymap context
-slot of an extension now beats the preset's. The package's keys and `diff`
-context sit beside the native ones until 21. Try it with the playground's
-`Playground: Open Diff …` commands.
-
-Deliverables: the package opens a diff as a composite through a typed
-contract: either side a document or snapshot, bands, gutter wedges, rediff
-after edits, linked scrolling, the strip, hunk commands, and a toolbar. Vim's
-`]c` and `[c` run the hunk commands.
-
-Validation: package behavior tests matching today's diff tests; Vim cases for
-`]c`/`[c` wrapping.
-
-Review gate: the diff by hand against the native one.
-
-Implementation context: model on `@knot/vcs`/`@knot/git` for package layout
-and contracts (`crates/knot-ext-vcs`); the native line diff from
-[compare texts](../extension-api/application.md#compare-texts); behavior to
-match in `src/app/diff_view.rs` and its tests; Vim bindings beside the named
-keys in `extensions/@knot/vim/src/extension.ts`.
+`@knot/diff` (in `crates/knot-ext-vcs`) opens a side by side diff as a
+composite tab through its `diffs` contract (`open`, `setText`, `close`); see
+the [version control](../architecture/version-control.md#the-diff-package)
+reference and the [extension guide](../extension-api/application.md). Either
+side is a document or a read-only snapshot; `setText` on a snapshot shows a new
+buffer. Sides carry no label header: the tab title holds both labels. View
+decorations take a gutter mark so wedges stay in their view, and an extension's
+keymap context slot beats the preset's. Its keys and `diff` context sit beside
+the native ones until 21. Vim's `]c` and `[c` run `diff.nextHunk` and
+`diff.previousHunk` first.
 
 #### 19. Inline layout
 
