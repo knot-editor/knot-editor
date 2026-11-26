@@ -27,6 +27,13 @@ const DELAY = 150;
 /** The key context of a diff's editors, for bindings that apply only in a diff. */
 export const DIFF_CONTEXT = "diff";
 
+declare module "knot" {
+  interface Settings {
+    /** How a diff tab opens: side by side, or inline above the modified text. */
+    "diff.layout": "sideBySide" | "inline";
+  }
+}
+
 export const NEXT_HUNK = "diff.nextHunk";
 export const PREVIOUS_HUNK = "diff.previousHunk";
 export const TOGGLE_LAYOUT = "diff.toggleLayout";
@@ -89,6 +96,13 @@ export async function start(): Promise<Disposable> {
   const open = new Map<string, Open>();
   let counter = 0;
 
+  await settings.define({
+    key: "diff.layout",
+    type: "string",
+    default: "sideBySide",
+    description:
+      'How a diff tab opens: "sideBySide" shows the original and modified texts in two editors, "inline" shows the modified text with the original\'s changed lines above it.',
+  });
   await icons.define("diff.tab", { lucide: "git-compare" });
   await icons.define("diff.previous", { lucide: "arrow-up" });
   await icons.define("diff.next", { lucide: "arrow-down" });

@@ -1,5 +1,6 @@
 //! Composite views: opening, the view tree, tab updates, and closing.
 use super::*;
+use crate::app::commands::dispatch::CLOSE_TAB_COMMAND;
 use knot_model::workbench::TabSurfaceId;
 use knot_protocol::SurfaceKind;
 
@@ -613,6 +614,66 @@ fn an_extension_opens_editors_on_a_document_and_the_composite_is_one_view_of_it(
         assert!(editor.document.is_some());
         assert_eq!(editor.read_only, Some(false));
     }
+}
+
+#[gpui::test]
+async fn closing_the_final_dirty_view_of_a_document_through_its_composite_prompts(
+    cx: &mut TestAppContext,
+) {
+    let (window, native_window, _, _) = window_with_extension(cx);
+    run(&window, native_window, "composite.open-document", cx);
+    let (document, model) = cx.read(|cx| {
+        let workbench = window.read(cx).workbench.read(cx);
+        let document = workbench.tabs().next().unwrap().document_id().unwrap();
+        let model = KnotWindow::documents(cx)
+            .read(cx)
+            .get(document)
+            .unwrap()
+            .model()
+            .clone();
+        (document, model)
+    });
+    model.update(cx, |model, _| model.replace(0..0, "one\n").unwrap());
+    // Close the document's own tab first: the composite still views it.
+    focus_document_tab(&window, cx);
+    let execution = dispatch_product_command(&window, native_window, CLOSE_TAB_COMMAND, cx);
+    assert_eq!(
+        execution.completion.await.unwrap(),
+        CommandOutcome::Completed
+    );
+    assert!(!cx.has_pending_prompt());
+    cx.read(|cx| {
+        let workbench = window.read(cx).workbench.read(cx);
+        assert_eq!(workbench.view_count(document), 1);
+        assert!(
+            workbench
+                .focused_pane()
+                .unwrap()
+                .active_tab()
+                .document_id()
+                .is_none()
+        );
+    });
+
+    // Closing the composite, the last view, asks about the dirty document.
+    let execution = dispatch_product_command(&window, native_window, CLOSE_TAB_COMMAND, cx);
+    cx.run_until_parked();
+    assert!(cx.has_pending_prompt());
+    cx.simulate_prompt_answer("Cancel");
+    assert_eq!(
+        execution.completion.await.unwrap(),
+        CommandOutcome::Cancelled
+    );
+    let execution = dispatch_product_command(&window, native_window, CLOSE_TAB_COMMAND, cx);
+    cx.run_until_parked();
+    cx.simulate_prompt_answer("Don't Save");
+    assert_eq!(
+        execution.completion.await.unwrap(),
+        CommandOutcome::Completed
+    );
+    cx.read(|cx| {
+        assert!(KnotWindow::documents(cx).read(cx).get(document).is_none());
+    });
 }
 
 #[gpui::test]

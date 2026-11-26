@@ -182,7 +182,6 @@ impl ProductCommandTarget {
             }
             crate::app::workbench::TabSurfaceId::Document(_)
             | crate::app::workbench::TabSurfaceId::Terminal(_)
-            | crate::app::workbench::TabSurfaceId::Diff(_)
             | crate::app::workbench::TabSurfaceId::Composite(_) => None,
         }
     }
@@ -194,7 +193,6 @@ impl ProductCommandTarget {
         match self.validate_tab(cx)?.surface {
             crate::app::workbench::TabSurfaceId::Document(document) => Ok(document),
             crate::app::workbench::TabSurfaceId::Terminal(_)
-            | crate::app::workbench::TabSurfaceId::Diff(_)
             | crate::app::workbench::TabSurfaceId::Composite(_)
             | crate::app::workbench::TabSurfaceId::Tool(_) => Err(CommandOutcome::Unavailable),
         }
@@ -244,16 +242,6 @@ impl ProductCommandTarget {
         root.path_to(leaf)
             .map(|path| path.into_iter().rev().map(|node| node.id).collect())
             .unwrap_or_default()
-    }
-
-    /// The diff view the captured tab presents, if it is a diff tab.
-    pub(crate) fn diff_view(&self, cx: &App) -> Option<Entity<crate::app::diff_view::DiffView>> {
-        let tab = self.validate_tab(cx).ok()?;
-        let workbench = self.workbench.upgrade()?;
-        let workbench = workbench.read(cx);
-        workbench
-            .diff_view(workbench.tab(tab.pane, tab.tab)?)
-            .cloned()
     }
 
     /// Validate the captured tab and its view, or, for a target captured

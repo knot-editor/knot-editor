@@ -439,10 +439,7 @@ async fn terminal_command_focuses_a_live_view_and_split_creates_an_independent_s
         assert_eq!(workbench.panes().len(), 2);
         match workbench.focused_pane().unwrap().active_tab().surface_id() {
             TabSurfaceId::Terminal(id) => id,
-            TabSurfaceId::Document(_)
-            | TabSurfaceId::Diff(_)
-            | TabSurfaceId::Composite(_)
-            | TabSurfaceId::Tool(_) => {
+            TabSurfaceId::Document(_) | TabSurfaceId::Composite(_) | TabSurfaceId::Tool(_) => {
                 panic!("split did not create terminal")
             }
         }

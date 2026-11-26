@@ -4,7 +4,7 @@ import {
   storageRead, storageWrite, storageDelete, storageList,
   historyRecent, historyRecord, historyForget, historyOrder,
   recoveryList, recoveryRetain, recoveryRelease, recoveryRestore,
-  observeWorkbench, trackDocuments, closePresentation, openDiff, registerComposite, openEditor, replaceWindows, captureLayout,
+  observeWorkbench, trackDocuments, closePresentation, registerComposite, openEditor, replaceWindows, captureLayout,
   openDocument, createUntitled, presentDocument, reloadDocument, saveDocument, listDocuments, getDocument, setDocumentLanguage, listWindows, getWindow, findView, openWindow, focusWindow, getWorkspace, openFolder, replaceWorkspaceRoots, pickFolder, readFileText, listFiles, searchFiles, isFileIgnored, statFile, writeFileText, createFile, createDirectory, renameFile, copyFile, revealFile, deleteFile, watchFiles, runProcess, spawnProcess, openTerminal,
   invalidCommandArguments,
   unavailableCommand,
@@ -79,7 +79,6 @@ export const commands = Object.freeze({
 export const workbench = Object.freeze({
   observe: observeWorkbench,
   close: closePresentation,
-  openDiff,
   registerComposite,
   editor: openEditor,
   replaceWindows,

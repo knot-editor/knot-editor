@@ -8,9 +8,6 @@ impl EditorState {
     /// text, is [`Self::paste`].
     pub fn execute_editing_command(&mut self, command: &str, buffer: &mut BufferModel) -> bool {
         if command == commands::UNDO_COMMAND || command == commands::REDO_COMMAND {
-            if self.read_only {
-                return true;
-            }
             self.break_history_group(buffer);
             self.marked_range_utf16 = None;
             self.preferred_column = None;

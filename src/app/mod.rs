@@ -15,7 +15,6 @@ mod components;
 mod composite_view;
 mod context_menu;
 mod convert;
-mod diff_view;
 mod documents;
 mod editor;
 #[cfg(test)]

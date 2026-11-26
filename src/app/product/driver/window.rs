@@ -548,52 +548,6 @@ impl TestWindow {
         })
     }
 
-    /// The original and modified text of each diff tab, in layout order.
-    pub fn diff_texts(&self, cx: &mut TestAppContext) -> Vec<(String, String)> {
-        cx.read(|cx| {
-            let workbench = self.window.read(cx).workbench.read(cx);
-            workbench
-                .tabs()
-                .filter_map(|tab| workbench.diff_view(tab))
-                .map(|view| {
-                    let [original, modified] = view.read(cx).editors();
-                    (
-                        original.read(cx).model().read(cx).text(),
-                        modified.read(cx).model().read(cx).text(),
-                    )
-                })
-                .collect()
-        })
-    }
-
-    /// Treat the original or modified side of the first diff tab as the one
-    /// with focus, as its editor gaining focus does.
-    pub fn focus_diff_side(&self, modified: bool, cx: &mut TestAppContext) {
-        use knot_model::diff::DiffSide;
-        let side = if modified {
-            DiffSide::Modified
-        } else {
-            DiffSide::Original
-        };
-        let view = cx.read(|cx| {
-            let workbench = self.window.read(cx).workbench.read(cx);
-            workbench
-                .tabs()
-                .find_map(|tab| workbench.diff_view(tab).cloned())
-        });
-        let view = view.expect("a diff tab");
-        view.update(cx, |view, cx| view.set_focused_side(side, cx));
-        let editor = cx.read(|cx| view.read(cx).editors()[usize::from(modified)].clone());
-        cx.update(|cx| {
-            let handle = editor.focus_handle(cx);
-            self.window
-                .update(cx, |window, cx| window.focus_view(&handle, cx));
-        });
-        self.window
-            .update(cx, |window, cx| window.focus_active_surface(cx));
-        super::park_packages(cx);
-    }
-
     /// The composite view of the center's first composite tab.
     fn first_composite(
         &self,
@@ -742,26 +696,6 @@ impl TestWindow {
         super::park_packages(cx);
     }
 
-    /// The text of a side of the first diff tab, with `‸` at its caret, or
-    /// at both ends of a selection.
-    pub fn diff_marked(&self, modified: bool, cx: &mut TestAppContext) -> String {
-        cx.read(|cx| {
-            let workbench = self.window.read(cx).workbench.read(cx);
-            let view = workbench
-                .tabs()
-                .find_map(|tab| workbench.diff_view(tab))
-                .expect("a diff tab");
-            let editor = view.read(cx).editors()[usize::from(modified)].read(cx);
-            let (anchor, caret) = editor.editor().read(cx).selection(cx);
-            let mut text = editor.editor().read(cx).model().read(cx).text();
-            text.insert(anchor.max(caret), crate::test_support::cases::CARET);
-            if anchor != caret {
-                text.insert(anchor.min(caret), crate::test_support::cases::CARET);
-            }
-            text
-        })
-    }
-
     /// The text of editor `index` of the first composite tab, with `‸` at its
     /// caret, or at both ends of a selection.
     pub fn composite_marked(&self, index: usize, cx: &mut TestAppContext) -> String {
@@ -782,25 +716,6 @@ impl TestWindow {
                 text.insert(anchor.min(caret), crate::test_support::cases::CARET);
             }
             text
-        })
-    }
-
-    /// The key contexts of a side of the first diff tab's editor.
-    pub fn diff_contexts(&self, modified: bool, cx: &mut TestAppContext) -> Vec<String> {
-        cx.read(|cx| {
-            let workbench = self.window.read(cx).workbench.read(cx);
-            let view = workbench
-                .tabs()
-                .find_map(|tab| workbench.diff_view(tab))
-                .expect("a diff tab");
-            let editor = view.read(cx).editors()[usize::from(modified)].read(cx);
-            editor
-                .editor()
-                .read(cx)
-                .key_contexts()
-                .into_iter()
-                .map(str::to_owned)
-                .collect()
         })
     }
 

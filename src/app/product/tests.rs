@@ -7,7 +7,6 @@ mod composite;
 mod context_menus;
 mod contracts;
 mod contribution_clicks;
-mod diff;
 mod dock_header;
 mod document_watch;
 mod editing;

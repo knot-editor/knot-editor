@@ -71,9 +71,7 @@ impl KnotWindow {
                         .tab(snapshot.pane_id, snapshot.tab_id)
                         .expect("snapshots name live tabs");
                     (
-                        workbench.editor(tab).is_some()
-                            || workbench.diff_view(tab).is_some()
-                            || workbench.composite_view(tab).is_some(),
+                        workbench.editor(tab).is_some() || workbench.composite_view(tab).is_some(),
                         tab.is_pinned(),
                         tab.presentation(),
                         workbench.shown_documents(tab),
@@ -586,7 +584,6 @@ impl KnotWindow {
                         current_scope.iter().filter_map(|key| match key.surface {
                             TabSurfaceId::Terminal(id) => Some(id),
                             TabSurfaceId::Document(_)
-                            | TabSurfaceId::Diff(_)
                             | TabSurfaceId::Composite(_)
                             | TabSurfaceId::Tool(_) => None,
                         }),
@@ -601,7 +598,6 @@ impl KnotWindow {
                     current_scope.iter().filter_map(|key| match key.surface {
                         TabSurfaceId::Terminal(id) => Some(id),
                         TabSurfaceId::Document(_)
-                        | TabSurfaceId::Diff(_)
                         | TabSurfaceId::Composite(_)
                         | TabSurfaceId::Tool(_) => None,
                     }),
@@ -675,19 +671,13 @@ impl KnotWindow {
             cx.notify();
             return Ok(());
         }
-        if matches!(surface, TabSurfaceId::Diff(_) | TabSurfaceId::Composite(_)) {
+        if let TabSurfaceId::Composite(composite) = surface {
             let (outcome, released) = self.workbench.update(cx, |workbench, _| {
                 let documents = workbench
                     .tab(pane, tab)
                     .map(|t| workbench.shown_documents(t))
                     .unwrap_or_default();
-                let outcome = match surface {
-                    TabSurfaceId::Diff(diff) => workbench.request_close_diff_tab(pane, tab, diff),
-                    TabSurfaceId::Composite(composite) => {
-                        workbench.request_close_composite_tab(pane, tab, composite)
-                    }
-                    _ => unreachable!(),
-                };
+                let outcome = workbench.request_close_composite_tab(pane, tab, composite);
                 let released = documents
                     .into_iter()
                     .filter(|document| workbench.view_count(*document) == 0)

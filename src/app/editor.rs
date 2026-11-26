@@ -118,8 +118,6 @@ pub struct Editor {
     completion_tasks: Vec<(u64, ProviderRegistrationId, Task<()>)>,
     /// The text field behind each field of the open bars.
     bar_inputs: Vec<bars::BarInput>,
-    /// The blocks the application set directly.
-    native_blocks: Vec<Block>,
     /// The block rows each extension lifecycle set.
     owned_blocks: Vec<OwnedBlocks>,
     _model_subscription: Subscription,
@@ -199,7 +197,6 @@ impl Editor {
             model,
             completion_tasks: Vec::new(),
             bar_inputs: Vec::new(),
-            native_blocks: Vec::new(),
             owned_blocks: Vec::new(),
             _model_subscription: model_subscription,
             _release_subscription: release_subscription,
@@ -397,13 +394,6 @@ impl Editor {
     ) {
         self.update_state(cx, |editor, buffer| {
             editor.set_selection(anchor, caret, reveal, buffer)
-        });
-    }
-
-    /// Put the caret at the start of `line`; see [`EditorState::move_to_line`].
-    pub(crate) fn move_to_line(&mut self, line: usize, reveal: Reveal, cx: &mut Context<Self>) {
-        self.update_state(cx, |editor, buffer| {
-            editor.move_to_line(line, reveal, buffer)
         });
     }
 
@@ -742,13 +732,6 @@ impl Editor {
         self.state.set_wrap(wrap, self.model.read(cx));
     }
 
-    /// Show read-only `blocks` above their lines; see
-    /// [`EditorState::set_blocks`]. Block rows an extension set stay.
-    pub(crate) fn set_blocks(&mut self, blocks: Vec<Block>, cx: &mut Context<Self>) {
-        self.native_blocks = blocks;
-        self.show_blocks(cx);
-    }
-
     /// Replace `owner`'s block rows with `rows`, each showing lines of a
     /// source buffer above a line of this editor. They repaint when a source's
     /// text or syntax changes, and a source that ends leaves its last lines.
@@ -779,10 +762,10 @@ impl Editor {
         self.show_blocks(cx);
     }
 
-    /// Show the application's blocks and every lifecycle's block rows, read
+    /// Show every lifecycle's block rows, read
     /// from their sources as they are now.
     fn show_blocks(&mut self, cx: &mut Context<Self>) {
-        let mut blocks = self.native_blocks.clone();
+        let mut blocks = Vec::new();
         for owned in &self.owned_blocks {
             for row in &owned.rows {
                 let source = row.source.read(cx);

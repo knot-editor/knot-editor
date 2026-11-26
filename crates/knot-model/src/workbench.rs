@@ -63,10 +63,6 @@ pub struct WorkbenchTabSnapshot {
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct TerminalSessionId(pub u64);
 
-/// The identity of a diff view, unique across the application.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct DiffViewId(pub u64);
-
 /// The identity of a composite view, unique across the application.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct CompositeViewId(pub u64);
@@ -75,7 +71,6 @@ pub struct CompositeViewId(pub u64);
 pub enum TabSurfaceId {
     Document(DocumentId),
     Terminal(TerminalSessionId),
-    Diff(DiffViewId),
     Composite(CompositeViewId),
     Tool(ToolFrameId),
 }
@@ -265,7 +260,6 @@ pub enum Area {
 pub enum TabKind {
     Document,
     Terminal,
-    Diff,
     Composite,
     Tool,
 }
@@ -275,7 +269,6 @@ impl TabSurfaceId {
         match self {
             Self::Document(_) => TabKind::Document,
             Self::Terminal(_) => TabKind::Terminal,
-            Self::Diff(_) => TabKind::Diff,
             Self::Composite(_) => TabKind::Composite,
             Self::Tool(_) => TabKind::Tool,
         }
@@ -316,10 +309,7 @@ impl WorkbenchTab {
     pub fn document_id(&self) -> Option<DocumentId> {
         match self.surface {
             TabSurfaceId::Document(document_id) => Some(document_id),
-            TabSurfaceId::Terminal(_)
-            | TabSurfaceId::Diff(_)
-            | TabSurfaceId::Composite(_)
-            | TabSurfaceId::Tool(_) => None,
+            TabSurfaceId::Terminal(_) | TabSurfaceId::Composite(_) | TabSurfaceId::Tool(_) => None,
         }
     }
 }
@@ -430,8 +420,6 @@ pub struct Workbench {
     previous_pane: Option<PaneId>,
     /// Terminals that rang the bell while their tab was not shown.
     bell_marks: HashSet<TerminalSessionId>,
-    /// The document each diff view edits on its modified side.
-    diff_documents: HashMap<DiffViewId, DocumentId>,
     composite_documents: HashMap<CompositeViewId, Vec<DocumentId>>,
 }
 
@@ -450,7 +438,6 @@ impl Workbench {
             focused_pane: None,
             previous_pane: None,
             bell_marks: HashSet::new(),
-            diff_documents: HashMap::new(),
             composite_documents: HashMap::new(),
         }
     }
@@ -497,10 +484,7 @@ impl Workbench {
     /// in the center.
     pub fn allows(&self, surface: TabSurfaceId, area: Area) -> bool {
         match (surface, area) {
-            (
-                TabSurfaceId::Document(_) | TabSurfaceId::Diff(_) | TabSurfaceId::Composite(_),
-                area,
-            ) => area == Area::Center,
+            (TabSurfaceId::Document(_) | TabSurfaceId::Composite(_), area) => area == Area::Center,
             (TabSurfaceId::Terminal(_), Area::Center) => true,
             (TabSurfaceId::Terminal(_), Area::Tool(id)) => self
                 .tool(id)
@@ -868,23 +852,6 @@ impl Workbench {
         self.insert_tab(pane_id, TabSurfaceId::Terminal(session_id))
     }
 
-    pub fn open_diff_tab(&mut self, pane_id: PaneId, diff: DiffViewId) -> Option<TabId> {
-        if self.has_diff(diff) {
-            return None;
-        }
-        self.insert_tab(pane_id, TabSurfaceId::Diff(diff))
-    }
-
-    /// Open a diff in the center pane, creating the center's first pane when
-    /// the center is empty.
-    pub fn open_diff_in_center(&mut self, diff: DiffViewId) -> Option<(PaneId, TabId)> {
-        if self.has_diff(diff) {
-            return None;
-        }
-        let pane = self.ensure_center_pane();
-        self.open_diff_tab(pane, diff).map(|tab| (pane, tab))
-    }
-
     /// Open a composite view in the center pane, creating the center's first
     /// pane when the center is empty.
     pub fn open_composite_in_center(
@@ -1029,25 +996,6 @@ impl Workbench {
         )
     }
 
-    /// Split a captured pane showing a diff, opening the diff `new_diff` in
-    /// the new pane.
-    pub fn split_pane_with_diff(
-        &mut self,
-        pane_id: PaneId,
-        direction: SplitDirection,
-        placement: SplitPlacement,
-        new_diff: DiffViewId,
-    ) -> Option<PaneId> {
-        if !matches!(
-            self.pane(pane_id)?.active_tab().surface_id(),
-            TabSurfaceId::Diff(_)
-        ) || self.has_diff(new_diff)
-        {
-            return None;
-        }
-        self.split_with(pane_id, direction, placement, TabSurfaceId::Diff(new_diff))
-    }
-
     /// Split a pane within its area, showing `surface` in the new pane when
     /// the area allows its kind.
     fn split_with(
@@ -1094,17 +1042,6 @@ impl Workbench {
         tabs.into_iter().map(|(_, _, document)| document).collect()
     }
 
-    /// Record that `diff` edits `document` on its modified side, so its tab
-    /// counts as a view of the document.
-    pub fn set_diff_document(&mut self, diff: DiffViewId, document: DocumentId) {
-        self.diff_documents.insert(diff, document);
-    }
-
-    /// The document `diff` edits, if it edits one.
-    pub fn diff_document(&self, diff: DiffViewId) -> Option<DocumentId> {
-        self.diff_documents.get(&diff).copied()
-    }
-
     /// Record the documents the editors of `composite` show, so its tab counts
     /// as one view of each, however many editors it holds on it.
     pub fn set_composite_documents(
@@ -1128,11 +1065,10 @@ impl Workbench {
             .map_or(&[], Vec::as_slice)
     }
 
-    /// The documents `tab` shows or edits, each once: a document tab's own, a
-    /// diff tab's modified side, or those of a composite's editors.
+    /// The documents `tab` shows or edits, each once: a document tab's own, or
+    /// those of a composite's editors.
     pub fn shown_documents(&self, tab: &WorkbenchTab) -> Vec<DocumentId> {
         match tab.surface {
-            TabSurfaceId::Diff(diff) => self.diff_document(diff).into_iter().collect(),
             TabSurfaceId::Composite(composite) => self.composite_documents(composite).to_vec(),
             _ => tab.document_id().into_iter().collect(),
         }
@@ -1144,11 +1080,6 @@ impl Workbench {
             .flat_map(|pane| &pane.tabs)
             .filter(|tab| self.shown_documents(tab).contains(&document_id))
             .count()
-    }
-
-    fn has_diff(&self, diff: DiffViewId) -> bool {
-        self.tabs()
-            .any(|tab| tab.surface_id() == TabSurfaceId::Diff(diff))
     }
 
     fn has_composite(&self, composite: CompositeViewId) -> bool {
@@ -1198,10 +1129,9 @@ impl Workbench {
                     .expect("a tool tab shows a registered tool")
                     .presentation
             }
-            TabSurfaceId::Document(_)
-            | TabSurfaceId::Terminal(_)
-            | TabSurfaceId::Diff(_)
-            | TabSurfaceId::Composite(_) => self.allocate_presentation(),
+            TabSurfaceId::Document(_) | TabSurfaceId::Terminal(_) | TabSurfaceId::Composite(_) => {
+                self.allocate_presentation()
+            }
         };
         WorkbenchTab {
             id: self.allocate_tab_id(),
@@ -1487,68 +1417,6 @@ mod tests {
         assert!(!workbench.tool_visible(tool) && !workbench.tool_visible(terminal));
         assert!(workbench.tool_is_empty(terminal));
         assert_eq!(workbench.tool_tab(tool).unwrap().0, right);
-    }
-
-    #[test]
-    fn diff_tabs_live_only_in_the_center_and_split_into_their_own_diff() {
-        let document = DocumentId::new(1);
-        let workbench = &mut Workbench::new_for_document(document);
-        let pane = workbench.focused_pane_id().unwrap();
-        let container = workbench.register_tool(
-            "terminals",
-            "Terminals",
-            Slot::BottomLeft,
-            ToolKind::Container,
-        );
-        let diff = DiffViewId(5);
-
-        assert!(!workbench.allows(TabSurfaceId::Diff(diff), Area::Tool(container)));
-        assert!(workbench.allows(TabSurfaceId::Diff(diff), Area::Center));
-        assert_eq!(TabSurfaceId::Diff(diff).kind(), TabKind::Diff);
-
-        let tab = workbench.open_diff_tab(pane, diff).unwrap();
-        assert!(workbench.open_diff_tab(pane, diff).is_none());
-        assert!(workbench.open_diff_in_center(diff).is_none());
-        assert_eq!(workbench.pane(pane).unwrap().active_tab_id(), tab);
-        assert_eq!(workbench.tab(pane, tab).unwrap().document_id(), None);
-        assert_eq!(workbench.view_count(document), 1);
-
-        // A diff does not split as a document, and splits into a fresh diff.
-        assert!(
-            workbench
-                .split_pane(pane, SplitDirection::Horizontal, SplitPlacement::After)
-                .is_none()
-        );
-        assert!(
-            workbench
-                .split_pane_with_diff(
-                    pane,
-                    SplitDirection::Horizontal,
-                    SplitPlacement::After,
-                    diff,
-                )
-                .is_none()
-        );
-        let split = workbench
-            .split_pane_with_diff(
-                pane,
-                SplitDirection::Horizontal,
-                SplitPlacement::After,
-                DiffViewId(6),
-            )
-            .unwrap();
-        assert_eq!(
-            workbench.pane(split).unwrap().active_tab().surface_id(),
-            TabSurfaceId::Diff(DiffViewId(6))
-        );
-
-        let transition = workbench
-            .request_close_diff_tab(pane, tab, DiffViewId(6))
-            .is_none();
-        assert!(transition);
-        let transition = workbench.request_close_diff_tab(pane, tab, diff).unwrap();
-        assert_eq!(transition.document, None);
-        assert!(workbench.tab(pane, tab).is_none());
     }
 
     #[test]

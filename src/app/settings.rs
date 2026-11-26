@@ -185,28 +185,6 @@ pub(crate) fn editor_folding(context: &SettingsScope, cx: &App) -> Folding {
     }
 }
 
-/// How a diff tab lays out its two texts.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub(crate) enum DiffLayout {
-    /// Two editors beside each other.
-    #[default]
-    SideBySide,
-    /// The modified text, with the original's changed lines above it.
-    Inline,
-}
-
-/// How a diff tab opens.
-pub(crate) fn diff_layout(cx: &App) -> DiffLayout {
-    match resolve(DIFF_LAYOUT, &SettingsScope::default(), cx, |value| {
-        value.as_str().map(str::to_owned)
-    })
-    .as_deref()
-    {
-        Some("inline") => DiffLayout::Inline,
-        _ => DiffLayout::SideBySide,
-    }
-}
-
 /// What the editor gutter's fold lane shows.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) enum Folding {

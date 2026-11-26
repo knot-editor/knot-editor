@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use knot_protocol::{ExtensionId, ExtensionKey, ExtensionLifecycleId};
 
-use super::super::{Block, BlockLine, BlockRows, Buffer, BufferModel, Editor, EditorView};
+use super::super::{BlockRows, Buffer, BufferModel, Editor, EditorView};
 use crate::app::syntax::{SyntaxLanguage, SyntaxState};
 
 #[gpui::test]
@@ -13,17 +13,16 @@ fn block_rows_paint_apart_from_text_and_take_no_clicks(cx: &mut TestAppContext) 
     let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
     cx.simulate_resize(size(px(400.), px(300.)));
     cx.run_until_parked();
-    let line = |text: &str| BlockLine {
-        text: text.into(),
-        highlights: Vec::new(),
-        key: Some("diff.removed.background".into()),
-    };
+    let source = cx.new(|_| Buffer::new(BufferModel::from_text("removed one\nremoved two")));
     let state = cx.read(|cx| editor.read(cx).editor().clone());
     state.update(cx, |state, cx| {
-        state.set_blocks(
-            vec![Block {
+        state.set_block_rows(
+            owner(),
+            vec![BlockRows {
                 line: 1,
-                lines: vec![line("removed one"), line("removed two")],
+                source: source.clone(),
+                lines: 0..2,
+                key: Some("diff.removed.background".into()),
             }],
             cx,
         );
@@ -150,26 +149,9 @@ fn source_rows_show_lines_of_another_buffer_with_its_highlighting(cx: &mut TestA
         );
     });
 
-    // The application's blocks stay beside them, and clearing the owner's
-    // rows leaves only those.
-    state.update(cx, |state, cx| {
-        state.set_blocks(
-            vec![Block {
-                line: 0,
-                lines: vec![BlockLine {
-                    text: "native".into(),
-                    highlights: Vec::new(),
-                    key: None,
-                }],
-            }],
-            cx,
-        );
-    });
-    cx.read(|cx| assert_eq!(block_texts(state.read(cx)).len(), 2));
+    // Clearing the owner's rows leaves nothing.
     state.update(cx, |state, cx| state.remove_owner_state(owner(), cx));
-    cx.read(|cx| {
-        assert_eq!(block_texts(state.read(cx)), [(0, "native".into(), None, 0)]);
-    });
+    cx.read(|cx| assert!(block_texts(state.read(cx)).is_empty()));
 }
 
 #[gpui::test]

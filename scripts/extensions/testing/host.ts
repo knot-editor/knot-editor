@@ -145,8 +145,6 @@ function emptyState() {
     fileWatches: [] as { uri: string; recursive: boolean; listener: (uris: readonly string[]) => void | Promise<void> }[],
     /** The `documents.open` calls, oldest first. */
     opens: [] as { uri: string; options: Knot.OpenDocumentOptions }[],
-    /** The `workbench.openDiff` calls, oldest first. */
-    diffs: [] as FakeDiff[],
     /** The composite kinds registered, and the instances opened of them, oldest first. */
     compositeKinds: new Set<string>(),
     composites: [] as FakeComposite[],
@@ -268,16 +266,6 @@ export function bindContract(key: string, methods: string[]) {
 export function contractClient(key: string): Promise<any> {
   return bindContract(key, []).client();
 }
-
-/** A diff tab opened through `workbench.openDiff`; the fake keeps it outside the window's tabs. */
-export type FakeDiff = {
-  options: Knot.OpenDiffOptions;
-  /** The text of the original side now, after any `setText`. */
-  original: string;
-  /** The text of the modified side now when it is a snapshot, else null. */
-  modified: string | null;
-  closed: boolean;
-};
 
 function hasView(layout: Knot.CompositeLayout): boolean {
   if (layout.type === "connector") return false;
@@ -1495,12 +1483,6 @@ export function clipboard() {
   return state.clipboard;
 }
 
-/** The `documents.open` calls so far. */
-/** The diffs opened through `workbench.openDiff`, oldest first, closed ones included. */
-export function diffs(): readonly FakeDiff[] {
-  return state.diffs;
-}
-
 /** The composite views opened, oldest first, closed ones included. */
 export function composites(): readonly FakeComposite[] {
   return state.composites;
@@ -1511,11 +1493,7 @@ export function closeComposite(composite: FakeComposite) {
   composite.closed = true;
 }
 
-/** Closes a diff tab as the user would; its handle then rejects `setText`. */
-export function closeDiff(diff: FakeDiff) {
-  diff.closed = true;
-}
-
+/** The `documents.open` calls so far. */
 export function opens(): readonly { uri: string; options: Knot.OpenDocumentOptions }[] {
   return state.opens;
 }
@@ -3009,31 +2987,6 @@ export const api: KnotApi = {
       };
     },
     close: notFaked("workbench.close"),
-    openDiff: async (options) => {
-      const window = destinationWindow(options.target);
-      const diff: FakeDiff = {
-        options,
-        original: options.original.text,
-        modified: "text" in options.modified ? options.modified.text : null,
-        closed: false,
-      };
-      state.diffs.push(diff);
-      const target = { window: window.target, pane: window.pane } as unknown as Knot.ViewTarget;
-      const close = async () => {
-        diff.closed = true;
-        return { kind: "closed" } as const;
-      };
-      return {
-        target,
-        setText: async (side, text) => {
-          if (diff.closed || (side === "modified" && diff.modified === null)) throw hostError("InvalidTarget");
-          if (side === "original") diff.original = text;
-          else diff.modified = text;
-        },
-        close,
-        [Symbol.asyncDispose]: async () => void (await close()),
-      };
-    },
     registerComposite: async (contribution) => {
       const id = contribution.id;
       if (id.length === 0 || id.startsWith("knot.") || /\s/.test(id)) throw hostError("InvalidViewId");

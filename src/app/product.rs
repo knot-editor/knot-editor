@@ -633,10 +633,7 @@ impl OpenFailure {
 fn target_document(target: &ProductCommandTarget) -> Option<DocumentId> {
     match target.surface()? {
         TabSurfaceId::Document(document) => Some(document),
-        TabSurfaceId::Terminal(_)
-        | TabSurfaceId::Diff(_)
-        | TabSurfaceId::Composite(_)
-        | TabSurfaceId::Tool(_) => None,
+        TabSurfaceId::Terminal(_) | TabSurfaceId::Composite(_) | TabSurfaceId::Tool(_) => None,
     }
 }
 
@@ -1303,7 +1300,6 @@ impl KnotWindow {
                             kind: match tab.surface_id() {
                                 TabSurfaceId::Document(_) => SurfaceKind::Document,
                                 TabSurfaceId::Terminal(_) => SurfaceKind::Terminal,
-                                TabSurfaceId::Diff(_) => SurfaceKind::Diff,
                                 TabSurfaceId::Composite(_) => SurfaceKind::Composite,
                                 TabSurfaceId::Tool(_) => SurfaceKind::Tool,
                             },
@@ -1320,7 +1316,6 @@ impl KnotWindow {
                                 }
                                 TabSurfaceId::Document(_)
                                 | TabSurfaceId::Terminal(_)
-                                | TabSurfaceId::Diff(_)
                                 | TabSurfaceId::Composite(_) => None,
                             },
                             directory: match tab.surface_id() {
@@ -1332,7 +1327,6 @@ impl KnotWindow {
                                     })
                                 }
                                 TabSurfaceId::Document(_)
-                                | TabSurfaceId::Diff(_)
                                 | TabSurfaceId::Composite(_)
                                 | TabSurfaceId::Tool(_) => None,
                             },
@@ -1356,17 +1350,15 @@ impl KnotWindow {
         // shown; a focused terminal describes no editor.
         let status_target = match current_kind {
             Some(TabSurfaceId::Document(_)) => current_target.clone(),
-            Some(
-                TabSurfaceId::Terminal(_) | TabSurfaceId::Diff(_) | TabSurfaceId::Composite(_),
-            ) => None,
+            Some(TabSurfaceId::Terminal(_) | TabSurfaceId::Composite(_)) => None,
             _ => last_editor_target,
         };
-        // The same rule by view, which also covers editors inside a diff.
+        // The same rule by view, which also covers editors inside a composite view.
         let status_view = match current_kind {
             Some(TabSurfaceId::Terminal(_)) => None,
-            Some(
-                TabSurfaceId::Document(_) | TabSurfaceId::Diff(_) | TabSurfaceId::Composite(_),
-            ) => focused_view.clone().filter(|_| focused_leaf_is_editor),
+            Some(TabSurfaceId::Document(_) | TabSurfaceId::Composite(_)) => {
+                focused_view.clone().filter(|_| focused_leaf_is_editor)
+            }
             _ => last_editor_view,
         };
         let workspace = self.workspace.snapshot();
@@ -1440,9 +1432,7 @@ impl KnotWindow {
             language: editor
                 .as_ref()
                 .map(|(_, model)| super::languages::effective_language(model, cx)),
-            read_only: editor
-                .as_ref()
-                .map(|(view, model)| view.editor().read(cx).is_read_only() || !model.is_editable()),
+            read_only: editor.as_ref().map(|(_, model)| !model.is_editable()),
         }
     }
 
@@ -2538,31 +2528,6 @@ impl KnotWindow {
         ))
     }
 
-    /// Open a diff in the center and focus it.
-    fn open_diff(
-        &mut self,
-        original: crate::app::diff_view::SnapshotSpec,
-        modified: crate::app::diff_view::ModifiedSource,
-        line: Option<usize>,
-        cx: &mut Context<Self>,
-    ) -> OpenTarget {
-        let (pane, tab) = self.workbench.update(cx, |workbench, cx| {
-            let (pane, tab) = workbench.open_diff_in_center(original, modified, cx);
-            if let Some(line) = line
-                && let Some(view) = workbench
-                    .tab(pane, tab)
-                    .and_then(|tab| workbench.diff_view(tab))
-                    .cloned()
-            {
-                view.update(cx, |view, cx| view.go_to_line(line, cx));
-            }
-            (pane, tab)
-        });
-        self.focus_active_surface(cx);
-        cx.notify();
-        OpenTarget::at(cx.weak_entity(), &self.workbench, pane, tab, cx)
-    }
-
     /// Open a composite view in the center and focus it.
     fn open_composite(
         &mut self,
@@ -2639,16 +2604,6 @@ impl KnotWindow {
             .read(cx)
             .pane(pane)
             .map(|pane| pane.active_tab().surface_id());
-        if matches!(active, Some(TabSurfaceId::Diff(_))) {
-            let split = self.workbench.update(cx, |workbench, cx| {
-                workbench.split_pane_with_diff(pane, direction, placement, cx)
-            });
-            if split.is_some() {
-                self.focus_active_surface(cx);
-                cx.notify();
-            }
-            return split.is_some();
-        }
         let terminal = match active {
             Some(TabSurfaceId::Terminal(id)) => Some(id),
             _ => None,

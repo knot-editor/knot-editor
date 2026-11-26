@@ -108,8 +108,8 @@ declare module "knot" {
   /** One view of a tab's view tree. */
   export interface ViewNodeInfo {
     readonly target: ViewNodeTarget;
-    /** `editor`, `terminal`, `tree`, `text`, `diff`, or `composite`. */
-    readonly kind: "editor" | "terminal" | "tree" | "text" | "diff" | "composite";
+    /** `editor`, `terminal`, `tree`, `text`, or `composite`. */
+    readonly kind: "editor" | "terminal" | "tree" | "text" | "composite";
     /** The views this one contains, in layout order; empty for a leaf. */
     readonly children: readonly ViewNodeInfo[];
     /** An editor's document; null for a buffer outside document identity and
@@ -141,9 +141,9 @@ declare module "knot" {
   }
   export interface PresentationInfo {
     readonly target: ViewTarget;
-    readonly kind: "document" | "terminal" | "diff" | "composite" | "tool";
-    /** The tab's root view and, beneath it, the views it contains. A diff
-     * lists its visible editors: both sides, or only the modified one inline. */
+    readonly kind: "document" | "terminal" | "composite" | "tool";
+    /** The tab's root view and, beneath it, the views it contains. A composite
+     * view lists its views in layout order. */
     readonly root: ViewNodeInfo;
     readonly document: DocumentId | null;
     readonly buffer: Buffer | null;
@@ -172,8 +172,8 @@ declare module "knot" {
      * last focused editor while its tab is shown; null while a terminal has
      * focus or before any editor was. */
     readonly statusTarget: ViewTarget | null;
-    /** The focused leaf view of the focused tab, such as the editor on the
-     * side of a diff that has focus; null for focus outside tabs. */
+    /** The focused leaf view of the focused tab, such as the editor in a
+     * composite view that has focus; null for focus outside tabs. */
     readonly focusedView: ViewNodeTarget | null;
     /** The editor view a status display describes, at any depth: the focused
      * editor view, else the last focused one while its tab is shown; null
@@ -460,11 +460,6 @@ declare module "knot" {
      * the pointer is over the gutter, or "always". A collapsed fold always
      * shows one. Native default "mouseover"; other text means "mouseover". */
     "editor.showFoldingControls": "mouseover" | "always";
-    /** How a diff tab opens: "sideBySide", with the original and modified
-     * texts in two editors, or "inline", with the original's changed lines
-     * above the modified text. Native default "sideBySide"; other text means
-     * "sideBySide". */
-    "diff.layout": "sideBySide" | "inline";
     /** Whether saving trims trailing spaces and tabs from every line except
      * the cursor's: "all" or "off". Native default "all". */
     "files.trimTrailingWhitespace": "all" | "off";
@@ -2987,39 +2982,6 @@ declare module "knot" {
     unavailable(): never;
   }>;
   export type PresentationCloseOutcome = Readonly<{ kind: "closed" | "cancelled" }>;
-  /** A snapshot side of a diff: text outside document identity, read-only. */
-  export interface DiffSnapshotSide {
-    /** Shown above the side and in the tab title. */
-    readonly label: string;
-    readonly text: string;
-    /** The language the text is highlighted as, such as "typescript". */
-    readonly language?: string;
-  }
-  /** A diff side that is an open document, shown as an editable view of it. */
-  export interface DiffDocumentSide {
-    readonly label: string;
-    readonly document: DocumentId;
-  }
-  export interface OpenDiffOptions extends DocumentDestinationOptions {
-    readonly original: DiffSnapshotSide;
-    readonly modified: DiffSnapshotSide | DiffDocumentSide;
-    /** The line of the modified side the caret starts at, 0-based and clamped
-     * to the last line. Defaults to the first. */
-    readonly line?: number;
-  }
-  /** An open diff tab. Disposing it closes the tab, as `close` does. */
-  export interface DiffHandle extends AsyncDisposable {
-    readonly target: ViewTarget;
-    /**
-     * Replace the text of a snapshot side, for example with a new baseline.
-     * @throws HostError with InvalidTarget for a document side or a tab that
-     * was closed, or Cancelled; TypeError for an invalid side or text.
-     */
-    setText(side: "original" | "modified", text: string): Promise<void>;
-    /** Close the tab as `workbench.close` does; a tab already closed resolves
-     * as closed. */
-    close(options?: CloseOptions): Promise<PresentationCloseOutcome>;
-  }
   /** A composite view kind, registered with `workbench.registerComposite`. */
   export interface CompositeContribution {
     /** Stable, unique, namespaced identity; `knot.` is reserved. */
@@ -3409,19 +3371,6 @@ declare module "knot" {
      * close commits.
      * @throws TypeError for invalid options. */
     close(target: ViewTarget, options?: CloseOptions): Promise<PresentationCloseOutcome>;
-    /**
-     * Open a diff tab comparing two texts in the center of the destination's
-     * window and focus it. The original side is a read-only snapshot. The
-     * modified side is a snapshot or an open document, which the tab edits
-     * live; the tab shows the changes between the sides and keeps them current
-     * as either changes. A diff is not restored with its window. The caller's
-     * lifecycle owns the tab: it closes, with the usual prompt for unsaved
-     * changes, when the extension unloads or the handle is disposed.
-     * @throws TypeError for invalid options; HostError with DocumentNotFound
-     * for a document that is not open, InvalidTarget for a stale destination, or
-     * Cancelled on teardown.
-     */
-    openDiff(options: OpenDiffOptions): Promise<DiffHandle>;
     /**
      * Register a composite view kind: a center tab whose views the package
      * lays out and the user cannot rearrange. The ID is unique across

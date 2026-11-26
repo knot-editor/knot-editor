@@ -341,20 +341,20 @@ mod tests {
     }
 
     #[test]
-    fn a_diff_tab_counts_as_a_view_of_its_document() {
+    fn a_composite_tab_counts_as_a_view_of_its_document() {
         let document_tab = key(1, 1, 1);
-        let diff_tab = ViewKey {
-            surface: TabSurfaceId::Diff(crate::workbench::DiffViewId(7)),
+        let composite_tab = ViewKey {
+            surface: TabSurfaceId::Composite(crate::workbench::CompositeViewId(7)),
             ..key(1, 2, 0)
         };
-        let diff = ClosureView {
+        let composite = ClosureView {
             documents: vec![DocumentId::new(1)],
-            ..view(diff_tab)
+            ..view(composite_tab)
         };
-        let views = [view(document_tab), diff.clone()];
+        let views = [view(document_tab), composite.clone()];
         let documents = [status(1, true)];
 
-        // The document tab is not the final view while the diff edits it.
+        // The document tab is not the final view while the composite edits it.
         let plan = plan(
             CloseKind::Tab,
             &document_tab.into(),
@@ -364,20 +364,26 @@ mod tests {
         )
         .unwrap();
         assert!(plan.prompts.is_empty());
-        // Closing the diff tab last asks about the dirty document.
-        let only_diff = [diff];
+        // Closing the composite tab last asks about the dirty document.
+        let only_composite = [composite];
         let plan = super::plan(
             CloseKind::Tab,
-            &diff_tab.into(),
+            &composite_tab.into(),
             false,
-            &only_diff,
+            &only_composite,
             &documents,
         )
         .unwrap();
-        assert_eq!(plan.prompts, vec![(DocumentId::new(1), diff_tab)]);
+        assert_eq!(plan.prompts, vec![(DocumentId::new(1), composite_tab)]);
         // Closing both asks once.
-        let plan =
-            super::plan(CloseKind::Pane, &diff_tab.into(), false, &views, &documents).unwrap();
+        let plan = super::plan(
+            CloseKind::Pane,
+            &composite_tab.into(),
+            false,
+            &views,
+            &documents,
+        )
+        .unwrap();
         assert_eq!(plan.prompts.len(), 1);
     }
 

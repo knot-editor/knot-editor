@@ -54,8 +54,6 @@ pub const EDITOR_LINE_NUMBERS: &str = "editor.lineNumbers";
 pub const EDITOR_FOLDING: &str = "editor.folding";
 /// When the fold lane shows chevrons on foldable lines: `mouseover` or `always`.
 pub const EDITOR_SHOW_FOLDING_CONTROLS: &str = "editor.showFoldingControls";
-/// How a diff tab opens: `sideBySide` or `inline`.
-pub const DIFF_LAYOUT: &str = "diff.layout";
 /// Whether saving trims trailing whitespace: `off` or `all`.
 pub const FILES_TRIM_TRAILING_WHITESPACE: &str = "files.trimTrailingWhitespace";
 /// Whether saving ends a non-empty file with a line terminator.
@@ -367,11 +365,6 @@ fn native_definitions() -> Vec<SettingDefinition> {
             EDITOR_SHOW_FOLDING_CONTROLS,
             "mouseover",
             "When the fold lane shows chevrons on foldable lines: \"mouseover\" while the pointer is over the gutter, or \"always\"; collapsed folds always show one",
-        ),
-        text(
-            DIFF_LAYOUT,
-            "sideBySide",
-            "How a diff tab opens: \"sideBySide\" shows the original and modified texts in two editors, \"inline\" shows the modified text with the original's changed lines above it",
         ),
         text(
             FILES_TRIM_TRAILING_WHITESPACE,

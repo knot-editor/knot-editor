@@ -13,7 +13,7 @@ use gpui::{App, AppContext, Context, Entity, EntityId, FocusHandle, Focusable, S
 use knot_model::workbench as layout;
 pub(crate) use knot_model::workbench::{
     Area, Arrangement, BottomDockLayout, CloseConfirmation, CloseRequestOutcome, CompositeViewId,
-    DiffViewId, DockLocation, DocumentCloseDisposition, DocumentId, PaneId, PresentationId, Slot,
+    DockLocation, DocumentCloseDisposition, DocumentId, PaneId, PresentationId, Slot,
     SplitDirection, SplitEdge, SplitPlacement, StripeClick, Stripes, TabId, TabMoveCapture,
     TabMoveDestination, TabMovePlacement, TabSurfaceId, TerminalSessionId, ToolBadge, ToolFrameId,
     ToolKind, WorkbenchLayout, WorkbenchTab, neighbor,
@@ -21,7 +21,6 @@ pub(crate) use knot_model::workbench::{
 
 use super::{
     composite_view::{CompositeCommandTarget, CompositeTab, CompositeView, GroupSpec},
-    diff_view::DiffView,
     editor::{EditorView, EditorViewState},
     model::Buffer,
     terminal::view::TerminalView,
@@ -134,14 +133,6 @@ impl CommandView {
 enum PresentationView {
     Editor(Entity<EditorView>),
     Terminal(Entity<TerminalView>),
-    /// A diff view and the editor commands act on.
-    /// Its subscriptions report layout and focus changes to the application
-    /// observer.
-    Diff(
-        Entity<DiffView>,
-        super::diff_view::DiffCommandTarget,
-        #[allow(dead_code)] (Subscription, Subscription),
-    ),
     /// A composite view and the editor commands act on.
     /// Its subscriptions report tree and focus changes to the application
     /// observer.
@@ -260,7 +251,6 @@ impl Workbench {
         match self.views.get(&tab.presentation())? {
             PresentationView::Editor(editor) => Some(editor),
             PresentationView::Terminal(_)
-            | PresentationView::Diff(..)
             | PresentationView::Composite(..)
             | PresentationView::Tool(_) => None,
         }
@@ -276,7 +266,6 @@ impl Workbench {
         Some(match self.views.get(&tab.presentation())? {
             PresentationView::Editor(editor) => editor.view_node(cx),
             PresentationView::Terminal(view) => view.view_node(cx),
-            PresentationView::Diff(view, ..) => view.view_node(cx),
             PresentationView::Composite(view, ..) => view.view_node(cx),
             PresentationView::Tool(ToolContent::Extension(view)) => view.view_node(cx),
         })
@@ -287,18 +276,6 @@ impl Workbench {
         match self.views.get(&tab.presentation())? {
             PresentationView::Terminal(view) => Some(view),
             PresentationView::Editor(_)
-            | PresentationView::Diff(..)
-            | PresentationView::Composite(..)
-            | PresentationView::Tool(_) => None,
-        }
-    }
-
-    /// The view a diff tab presents.
-    pub(crate) fn diff_view(&self, tab: &WorkbenchTab) -> Option<&Entity<DiffView>> {
-        match self.views.get(&tab.presentation())? {
-            PresentationView::Diff(view, ..) => Some(view),
-            PresentationView::Editor(_)
-            | PresentationView::Terminal(_)
             | PresentationView::Composite(..)
             | PresentationView::Tool(_) => None,
         }
@@ -332,8 +309,7 @@ impl Workbench {
             PresentationView::Tool(content) => Some(content),
             PresentationView::Editor(_)
             | PresentationView::Terminal(_)
-            | PresentationView::Composite(..)
-            | PresentationView::Diff(..) => None,
+            | PresentationView::Composite(..) => None,
         }
     }
 
@@ -341,7 +317,6 @@ impl Workbench {
         Some(match self.views.get(&tab.presentation())? {
             PresentationView::Editor(editor) => CommandView::Editor(editor.clone()),
             PresentationView::Terminal(view) => CommandView::Terminal(view.clone()),
-            PresentationView::Diff(_, target, _) => CommandView::Editor(target.editor().clone()),
             PresentationView::Composite(_, target, _) => target.command_view(),
             PresentationView::Tool(content) => content.command_view(),
         })
@@ -539,82 +514,6 @@ impl Workbench {
         Some(pane)
     }
 
-    fn attach_diff(
-        &mut self,
-        diff: DiffViewId,
-        presentation: PresentationId,
-        view: Entity<DiffView>,
-        cx: &mut Context<Self>,
-    ) {
-        let target = view.read(cx).command_target();
-        let subscription = (
-            cx.subscribe(&view, |_, _, _: &ViewTreeChanged, cx| {
-                super::extensions::host::application_changed(cx);
-            }),
-            cx.subscribe(&view, |_, _, _: &ViewFocusChanged, cx| {
-                super::extensions::host::application_changed(cx);
-            }),
-        );
-        if let Some(document) = view.read(cx).document() {
-            self.layout.set_diff_document(diff, document);
-        }
-        self.views.insert(
-            presentation,
-            PresentationView::Diff(view, target, subscription),
-        );
-    }
-
-    /// Open a diff in the center and return its tab.
-    pub(crate) fn open_diff_in_center(
-        &mut self,
-        original: super::diff_view::SnapshotSpec,
-        modified: impl Into<super::diff_view::ModifiedSource>,
-        cx: &mut Context<Self>,
-    ) -> (PaneId, TabId) {
-        let id = super::diff_view::allocate_diff_id();
-        let (pane, tab) = self
-            .layout
-            .open_diff_in_center(id)
-            .expect("a new diff has a fresh identity");
-        let view = cx.new(|cx| DiffView::new(original, modified, cx));
-        self.attach_diff(id, self.presentation_of(pane, tab), view, cx);
-        (pane, tab)
-    }
-
-    /// Split a captured pane showing a diff into one showing the same
-    /// comparison, as it is now, in a fresh view.
-    pub(crate) fn split_pane_with_diff(
-        &mut self,
-        pane_id: PaneId,
-        direction: SplitDirection,
-        placement: SplitPlacement,
-        cx: &mut Context<Self>,
-    ) -> Option<PaneId> {
-        let (original, modified) = self
-            .diff_view(self.pane(pane_id)?.active_tab())?
-            .read(cx)
-            .specs(cx);
-        let id = super::diff_view::allocate_diff_id();
-        let pane = self
-            .layout
-            .split_pane_with_diff(pane_id, direction, placement, id)?;
-        let view = cx.new(|cx| DiffView::new(original, modified, cx));
-        let presentation = self.pane(pane).unwrap().active_tab().presentation();
-        self.attach_diff(id, presentation, view, cx);
-        Some(pane)
-    }
-
-    pub(crate) fn request_close_diff_tab(
-        &mut self,
-        pane_id: PaneId,
-        tab_id: TabId,
-        diff: DiffViewId,
-    ) -> Option<layout::CloseTransition> {
-        let transition = self.layout.request_close_diff_tab(pane_id, tab_id, diff);
-        self.drop_ended_views();
-        transition
-    }
-
     /// Open a composite view in the center and return its tab.
     pub(crate) fn open_composite_in_center(
         &mut self,
@@ -793,11 +692,6 @@ impl Workbench {
         };
         if let Some(view) = view {
             destination.views.insert(arrived, view);
-        }
-        if let TabSurfaceId::Diff(diff) = source.tab.surface
-            && let Some(document) = self.layout.diff_document(diff)
-        {
-            destination.layout.set_diff_document(diff, document);
         }
         if let TabSurfaceId::Composite(composite) = source.tab.surface {
             destination.layout.set_composite_documents(

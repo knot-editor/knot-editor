@@ -38,12 +38,6 @@ impl KnotWindow {
         }
         match source.tab.tab.surface {
             TabSurfaceId::Tool(_) => true,
-            TabSurfaceId::Diff(_) => {
-                let workbench = self.workbench.read(cx);
-                workbench
-                    .tab(source.tab.tab.pane_id, source.tab.tab.tab_id)
-                    .is_some_and(|tab| workbench.diff_view(tab).is_some())
-            }
             TabSurfaceId::Composite(_) => {
                 let workbench = self.workbench.read(cx);
                 workbench
@@ -143,7 +137,6 @@ impl KnotWindow {
                         .get(&id)
                         .cloned(),
                     TabSurfaceId::Document(_)
-                    | TabSurfaceId::Diff(_)
                     | TabSurfaceId::Composite(_)
                     | TabSurfaceId::Tool(_) => None,
                 };
