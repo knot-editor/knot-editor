@@ -111,9 +111,17 @@ decorations, sends the strip's links, and links the editors' scrolling. A
 comparison that an edit raced is dropped, and the edit's own notification
 compares again.
 
+The `diff.layout` setting picks how a tab opens, and `diff.toggleLayout` (the
+toolbar's last button) switches an open one. Inline keeps only the `modified`
+editor and drops the strip and the scroll link; the package shows each hunk's
+original lines above the modified lines they precede as block rows sourced from
+the original's buffer, banded `diff.removed.background`. Switching keeps the
+modified editor, its caret, and its focus, and fails with `DocumentUnsaved`
+when the original is a document with unsaved changes.
+
 `diff.nextHunk` and `diff.previousHunk` (Alt+F5 and Alt+Shift+F5 in a diff's
 editors, `]c` and `[c` in Vim mode, and the tab's toolbar) move the caret of the
-focused side to the first line of the nearest hunk, wrapping at the ends. Both
+focused side (the modified one inline) to the first line of the nearest hunk, wrapping at the ends. Both
 editors hold the `diff` key context while the tab is open, and the package
 releases its snapshots when the tab closes.
 

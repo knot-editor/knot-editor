@@ -181,7 +181,9 @@ changes. A diff tab is not restored with its window, and `setText` rejects
 
 A package that requires `@knot/diff` opens the same comparison through its
 contract, which also keeps the gutter, strip, and scrolling current and moves
-between hunks:
+between hunks. The tab opens side by side or, as the `diff.layout` setting
+says, inline, with the original's changed lines above the modified text; the
+toolbar and `diff.toggleLayout` switch it:
 
 ```js
 import { diffs } from "@knot/diff";

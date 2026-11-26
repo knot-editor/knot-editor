@@ -196,7 +196,8 @@ await commands.register("playground.composite-connector-move", async () => {
 // against a snapshot of its text now. Scroll either side and type in the
 // document side: bands, wedges, the strip, and the scroll link follow. Alt+F5
 // and Alt+Shift+F5 (and ]c and [c in Vim) move between hunks, and the toolbar
-// arrows do the same.
+// arrows do the same. The toolbar's last button, or Toggle Diff Layout, shows
+// the original's changed lines above the modified text instead of beside it.
 let playgroundDiff;
 await commands.register("playground.diff-snapshots", async () => {
   const lines = numbered(0, 100).split("\n");

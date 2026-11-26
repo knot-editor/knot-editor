@@ -332,17 +332,19 @@ keymap context slot beats the preset's. Its keys and `diff` context sit beside
 the native ones until 21. Vim's `]c` and `[c` run `diff.nextHunk` and
 `diff.previousHunk` first.
 
-#### 19. Inline layout
+#### 19. Inline layout 🔎
 
-Deliverables: the inline layout through block rows, the layout toggle, and the
-layout setting.
+The inline layout is built and tested; the review gate, inline by hand, is
+pending. `@knot/diff` reads the native `diff.layout` setting when a diff opens
+and offers `diff.toggleLayout` and a toolbar button. Inline keeps the modified
+editor, drops the strip and the scroll link, and shows each hunk's original
+lines as block rows. See the
+[version control](../architecture/version-control.md#the-diff-package)
+reference. Its setting stays native until 21. Switching to inline fails with
+`DocumentUnsaved` while the original is a document with unsaved changes.
 
-Validation: tests for inline bands and toggling.
-
-Review gate: inline by hand.
-
-Implementation context: inline rows in `src/app/diff_view.rs`; `diff_layout`
-in `src/app/settings.rs`.
+Review gate: inline by hand, with `Playground: Open Diff of Snapshots` and the
+toolbar's layout button, and with a document side while typing.
 
 #### 20. Switch `@knot/vcs`
 
