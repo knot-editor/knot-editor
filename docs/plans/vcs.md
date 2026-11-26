@@ -78,8 +78,8 @@ gutter and change navigation. See [version control](../architecture/version-cont
 - ✅ **D229 — Composite views and the diff as a package.** See
   [composite views](../architecture/workbench-and-lifecycle.md#composite-views)
   and [the diff package](../architecture/version-control.md#the-diff-package).
-- **D220 — Anchored floating panels.** Split from D145, which keeps virtual
-  text for later consumers.
+- 🚧 **D220 — Anchored popovers.** Split from D145, which keeps virtual
+  text for later consumers. See [its plan](d220-anchored-popovers.md).
 - **D221 — Hunk popup.** The hunk's baseline against the current lines, with
   revert, hunk navigation, opening the diff, and backend actions. Depends on
   D211, D220.

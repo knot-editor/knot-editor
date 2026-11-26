@@ -13,7 +13,7 @@ Every item has the same shape:
 - **Description** says what is missing today and when it becomes worth doing,
   then what to build.
 
-The next unused ID is **D231**, and for bugs **B002**; take it for a new item and bump this line.
+The next unused ID is **D232**, and for bugs **B002**; take it for a new item and bump this line.
 
 Each section is ordered so that an item comes after the items it depends on,
 wherever the sections allow it. Items with no dependencies are ordered by
@@ -30,7 +30,7 @@ point.
 
 The [version control plan](plans/vcs.md) comes first, in its milestone order:
 
-- D220 — Anchored floating panels.
+- D220 — Anchored popovers.
 - D221 — Hunk popup.
 - D214 — VCS changes view.
 - D215 — VCS commit.
@@ -38,6 +38,7 @@ The [version control plan](plans/vcs.md) comes first, in its milestone order:
 
 Then:
 
+- D231 — Inline zones.
 - D225 — Gutter mark tooltips.
 - D174 — Show Difference for files changed on disk.
 - D022 — Editor autocompletion.
@@ -277,14 +278,26 @@ hold the analyses that support some items.
     diagnostic text, or blame (D217) needs annotations: design them against a
     real language server, as inline virtual text.
 
-- **D220 — Anchored floating panels** 🚧
+- **D220 — Anchored popovers** 🚧
   - Depends on: none
-  - Description: Extensions cannot anchor a floating panel to a position in
+  - Description: Extensions cannot anchor a floating popover to a position in
     an editor. The hunk popup (D221) is the first consumer, and language-server
     hover (D067) the next: add an anchored floating surface that reuses the
     semantic tree and text content kinds, with focus, dismissal, and
     positioning that follows the anchor. Part of the
-    [version control plan](plans/vcs.md).
+    [version control plan](plans/vcs.md); see the
+    [plan](plans/d220-anchored-popovers.md).
+
+- **D231 — Inline zones**
+  - Depends on: D220
+  - Description: Block rows show read-only lines between an editor's lines,
+    and popovers (D220) float over the text, but extensions cannot push
+    lines apart to show live content between them. Do it when a consumer
+    needs it, such as a peek-style hunk view, inline review comments, or an
+    inline diff hunk with actions: let block rows host a popover's content (a
+    toolbar and a composite layout, with D220's natural sizing), at any pixel
+    height, with views inside them that take focus, clicks, and typing, and
+    that scroll, fold, and follow edits as block rows do.
 
 - **D115 — Lifecycle hooks and native command overrides**
   - Depends on: none
