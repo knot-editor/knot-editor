@@ -2281,32 +2281,57 @@ function compositeTab(given: Rec, titleRequired: boolean) {
 }
 /** The layout JSON of a composite's row or column, or of one member of it. */
 function compositeLayoutJson(node: unknown): string {
-  const wire = compositeLayout(node, true);
+  const seen: CompositeSeen = { keys: new Set(), editors: new Set(), connectors: [] };
+  const wire = compositeLayout(node, true, false, seen);
   if (!/"type":"(editor|text|tree)"/.test(JSON.stringify(wire))) throw new TypeError("composite layout needs a view");
+  for (const [first, second] of seen.connectors) {
+    if (first === second || !seen.editors.has(first) || !seen.editors.has(second)) {
+      throw new TypeError("a composite connector joins two editors of the layout by key");
+    }
+  }
   return JSON.stringify(wire);
 }
-function compositeLayout(node: unknown, root: boolean, inTabs = false, keys = new Set<string>()): Rec {
+type CompositeSeen = { keys: Set<string>; editors: Set<string>; connectors: [string, string][] };
+function compositeConnector(given: Rec, seen: CompositeSeen): Rec {
+  const first = string(given.first, "composite connector first must be a member key");
+  const second = string(given.second, "composite connector second must be a member key");
+  if (!Array.isArray(given.links)) throw new TypeError("composite connector links must be an array");
+  const links = given.links.map((item) => {
+    const link = record(item, "composite connector link must be an object");
+    return {
+      first: lineRange(link.first, "first", 0),
+      second: lineRange(link.second, "second", 0),
+      color: string(link.color, "composite connector color must be a color key"),
+    };
+  });
+  seen.connectors.push([first, second]);
+  return { first, second, links };
+}
+function compositeLayout(node: unknown, root: boolean, inTabs: boolean, seen: CompositeSeen): Rec {
   const given = record(node, "composite layout must be an object");
   const { type, size, focused, title, key } = given;
-  if (type !== "row" && type !== "column" && type !== "tabs" && type !== "editor" && type !== "text" && type !== "tree") {
-    throw new TypeError("composite layout type must be row, column, tabs, editor, text, or tree");
+  if (type !== "row" && type !== "column" && type !== "tabs" && type !== "editor" && type !== "text" && type !== "tree" && type !== "connector") {
+    throw new TypeError("composite layout type must be row, column, tabs, editor, text, tree, or connector");
   }
   if (root && type !== "row" && type !== "column") throw new TypeError("composite layout must be a row or column");
+  if (type === "connector" && (key !== undefined || focused !== undefined || inTabs)) {
+    throw new TypeError("a composite connector has no key or focus and is not in tabs");
+  }
   if (focused !== undefined && typeof focused !== "boolean") throw new TypeError("composite focused must be a boolean");
   if (key !== undefined) {
-    if (typeof key !== "string" || key === "" || keys.has(key)) {
+    if (typeof key !== "string" || key === "" || seen.keys.has(key)) {
       throw new TypeError("a composite key is a non-empty string that names one member");
     }
-    keys.add(key);
+    seen.keys.add(key);
   }
   if (inTabs ? typeof title !== "string" : title !== undefined) {
     throw new TypeError("a member of tabs needs a title, and no other member has one");
   }
   if (size !== undefined) {
     const given = record(size, "composite size must be an object");
-    const keys = Object.keys(given);
-    const value = given[keys[0] ?? ""];
-    if (keys.length !== 1 || (keys[0] !== "weight" && keys[0] !== "pixels")
+    const names = Object.keys(given);
+    const value = given[names[0] ?? ""];
+    if (names.length !== 1 || (names[0] !== "weight" && names[0] !== "pixels")
       || typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
       throw new TypeError("composite size must be a positive weight or pixels");
     }
@@ -2318,7 +2343,10 @@ function compositeLayout(node: unknown, root: boolean, inTabs = false, keys = ne
     ...(focused === undefined ? {} : { focused }),
     ...(title === undefined ? {} : { title }),
   };
-  if (type === "editor" && given.document !== undefined) {
+  if (type === "editor" && key !== undefined) seen.editors.add(key as string);
+  if (type === "connector") {
+    Object.assign(wire, compositeConnector(given, seen));
+  } else if (type === "editor" && given.document !== undefined) {
     if (given.buffer !== undefined) throw new TypeError("a composite editor shows a buffer or a document");
     if (typeof given.document !== "string") throw new TypeError("composite document must be a document ID");
     wire.document = given.document;
@@ -2335,7 +2363,7 @@ function compositeLayout(node: unknown, root: boolean, inTabs = false, keys = ne
     wire.view = embedded.id;
   } else {
     if (!Array.isArray(given.children)) throw new TypeError("composite children must be an array");
-    const children = given.children.map((child) => compositeLayout(child, false, type === "tabs", keys));
+    const children = given.children.map((child) => compositeLayout(child, false, type === "tabs", seen));
     if (children.filter((child) => child.focused === true).length > 1) {
       throw new TypeError("a composite group has one focused member");
     }

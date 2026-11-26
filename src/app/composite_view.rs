@@ -146,6 +146,29 @@ pub(crate) enum Arrangement {
     Tabs,
 }
 
+/// A strip that joins line ranges of two editors of the layout, keyed by
+/// their members' keys, in color keys of the theme. It is not a view.
+#[derive(Clone, Debug, PartialEq, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ConnectorSpec {
+    pub first: String,
+    pub second: String,
+    pub links: Vec<ConnectorLink>,
+}
+
+/// A band that joins lines of the first editor to lines of the second.
+#[derive(Clone, Debug, PartialEq, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ConnectorLink {
+    pub first: Range<u32>,
+    pub second: Range<u32>,
+    /// The theme color key the band is filled with.
+    pub color: String,
+}
+
+/// How wide a connector is unless its member sets a size.
+pub(crate) const CONNECTOR_WIDTH: f32 = 32.;
+
 /// A group of members the package describes, in order.
 pub(crate) struct GroupSpec {
     pub arrangement: Arrangement,
@@ -176,6 +199,7 @@ pub(crate) enum ContentSpec {
     Text(String),
     /// A tree of the contributed view of this kind.
     Tree(String),
+    Connector(ConnectorSpec),
     Group(GroupSpec),
 }
 
@@ -183,6 +207,7 @@ impl ContentSpec {
     fn leaf_count(&self) -> usize {
         match self {
             Self::Group(group) => group.leaf_count(),
+            Self::Connector(_) => 0,
             _ => 1,
         }
     }
@@ -323,6 +348,7 @@ enum Source {
     Buffer(Entity<Buffer>),
     Text(String),
     Tree(String),
+    Connector,
     Group,
 }
 
@@ -332,6 +358,7 @@ impl Source {
             ContentSpec::Editor { buffer, .. } => Self::Buffer(buffer.clone()),
             ContentSpec::Text(kind) => Self::Text(kind.clone()),
             ContentSpec::Tree(kind) => Self::Tree(kind.clone()),
+            ContentSpec::Connector(_) => Self::Connector,
             ContentSpec::Group(_) => Self::Group,
         }
     }
@@ -363,6 +390,7 @@ type Kept = HashMap<String, (Source, Content)>;
 enum Content {
     Leaf(Leaf),
     Group(Entity<GroupView>),
+    Connector(Entity<ConnectorView>),
 }
 
 impl Content {
@@ -375,6 +403,7 @@ impl Content {
                 let group = &group.read(cx).0;
                 group.members.get(group.shown())?.content.entry_leaf(cx)
             }
+            Self::Connector(_) => None,
         }
     }
 
@@ -382,6 +411,7 @@ impl Content {
         match self {
             Self::Leaf(leaf) => leaf.element(),
             Self::Group(group) => group.clone().into_any_element(),
+            Self::Connector(connector) => connector.clone().into_any_element(),
         }
     }
 }
@@ -449,6 +479,12 @@ impl Group {
                     (ContentSpec::Tree(kind), None) => Content::Leaf(Leaf::Tree(
                         cx.new(|cx| TreeView::new(kind, window.to_owned(), cx)),
                     )),
+                    (ContentSpec::Connector(spec), None) => {
+                        Content::Connector(cx.new(|_| ConnectorView {
+                            spec,
+                            editors: None,
+                        }))
+                    }
                     (ContentSpec::Group(group), None) => {
                         let group = Self::build(group, window, kept, None, cx);
                         Content::Group(cx.new(|_| GroupView(group)))
@@ -503,6 +539,34 @@ impl Group {
             })
     }
 
+    /// The connectors beneath this group.
+    fn connectors(&self, cx: &App) -> Vec<Entity<ConnectorView>> {
+        let mut connectors = Vec::new();
+        for member in &self.members {
+            match &member.content {
+                Content::Connector(connector) => connectors.push(connector.clone()),
+                Content::Group(group) => connectors.extend(group.read(cx).0.connectors(cx)),
+                Content::Leaf(_) => {}
+            }
+        }
+        connectors
+    }
+
+    /// Point each connector at the editors its keys name.
+    fn connect(&self, cx: &mut App) {
+        for connector in self.connectors(cx) {
+            let editors = {
+                let spec = &connector.read(cx).spec;
+                self.keyed_editor(&spec.first, cx)
+                    .zip(self.keyed_editor(&spec.second, cx))
+            };
+            connector.update(cx, |connector, cx| {
+                connector.editors = editors.map(|(first, second)| [first, second]);
+                cx.notify();
+            });
+        }
+    }
+
     /// Show the members that lead to the view `focus`, so the tabs show it.
     /// Returns whether the view is beneath this group.
     fn reveal(&mut self, focus: EntityId, cx: &mut App) -> bool {
@@ -514,6 +578,7 @@ impl Group {
                     cx.notify();
                     found
                 }),
+                Content::Connector(_) => false,
             };
             if contains {
                 if self.arrangement == Arrangement::Tabs {
@@ -540,6 +605,7 @@ impl Group {
             match &member.content {
                 Content::Leaf(leaf) => leaves.push(leaf.clone()),
                 Content::Group(group) => leaves.extend(group.read(cx).0.leaves(cx)),
+                Content::Connector(_) => {}
             }
         }
         leaves
@@ -564,9 +630,12 @@ impl Group {
         let children: Vec<ViewNode> = self
             .members
             .iter()
-            .map(|member| match &member.content {
-                Content::Leaf(leaf) => leaf.view_node(cx),
-                Content::Group(group) => group.read(cx).0.node(group.entity_id(), focused, cx),
+            .filter_map(|member| match &member.content {
+                Content::Leaf(leaf) => Some(leaf.view_node(cx)),
+                Content::Group(group) => {
+                    Some(group.read(cx).0.node(group.entity_id(), focused, cx))
+                }
+                Content::Connector(_) => None,
             })
             .collect();
         ViewNode {
@@ -620,6 +689,104 @@ impl Group {
             group = group.child(slot.child(div().size_full().child(member.content.element())));
         }
         group
+    }
+}
+
+/// The strip between two editors, with a band joining each link's lines on
+/// one side to its lines on the other.
+struct ConnectorView {
+    spec: ConnectorSpec,
+    /// The editors the spec's keys name, when the layout has them.
+    editors: Option<[Entity<EditorView>; 2]>,
+}
+
+/// The corners of the band that joins the vertical span `first` on the left
+/// edge `x0` to the span `second` on the right edge `x1`, or nothing when
+/// both spans lie wholly above or below `visible`.
+pub(super) fn band(
+    first: (Pixels, Pixels),
+    second: (Pixels, Pixels),
+    (x0, x1): (Pixels, Pixels),
+    visible: (Pixels, Pixels),
+) -> Option<[Point<Pixels>; 4]> {
+    if (first.1 < visible.0 && second.1 < visible.0)
+        || (first.0 > visible.1 && second.0 > visible.1)
+    {
+        return None;
+    }
+    Some([
+        point(x0, first.0),
+        point(x1, second.0),
+        point(x1, second.1),
+        point(x0, first.1),
+    ])
+}
+
+impl ConnectorView {
+    /// The bands to paint between the edges `x`, each with its color key,
+    /// following both editors' scrolling as of their last paint.
+    fn bands(&self, x: (Pixels, Pixels), cx: &App) -> Vec<(&str, [Point<Pixels>; 4])> {
+        let Some([first, second]) = &self.editors else {
+            return Vec::new();
+        };
+        let (first, second) = (first.read(cx), second.read(cx));
+        let text = first.text_bounds();
+        let visible = (text.top(), text.bottom());
+        let span = |view: &EditorView, lines: &Range<u32>| {
+            (
+                view.line_top(lines.start as usize, cx),
+                view.line_top(lines.end as usize, cx),
+            )
+        };
+        self.spec
+            .links
+            .iter()
+            .filter_map(|link| {
+                let corners = band(
+                    span(first, &link.first),
+                    span(second, &link.second),
+                    x,
+                    visible,
+                )?;
+                Some((link.color.as_str(), corners))
+            })
+            .collect()
+    }
+}
+
+impl Render for ConnectorView {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let view = cx.entity();
+        canvas(
+            |_, _, _| (),
+            move |bounds, (), window, cx| {
+                let view = view.read(cx);
+                let Some([first, _]) = &view.editors else {
+                    return;
+                };
+                let text = first.read(cx).text_bounds();
+                let mask = Bounds {
+                    origin: point(bounds.origin.x, text.origin.y),
+                    size: size(bounds.size.width, text.size.height),
+                };
+                let bands = view.bands((bounds.left(), bounds.right()), cx);
+                let theme = theme(cx);
+                window.with_content_mask(Some(ContentMask { bounds: mask }), |window| {
+                    for (key, corners) in bands {
+                        let mut path = PathBuilder::fill();
+                        path.move_to(corners[0]);
+                        for corner in &corners[1..] {
+                            path.line_to(*corner);
+                        }
+                        path.close();
+                        if let Ok(path) = path.build() {
+                            window.paint_path(path, theme.paint_color(key));
+                        }
+                    }
+                });
+            },
+        )
+        .size_full()
     }
 }
 
@@ -767,6 +934,7 @@ impl CompositeView {
         debug_assert!(layout.leaf_count() > 0 && layout.arrangement != Arrangement::Tabs);
         let focused = layout.focused_leaf().unwrap_or(0);
         let mut root = Group::build(layout, window, &mut Kept::new(), None, cx);
+        root.connect(cx);
         let leaves: Rc<[Leaf]> = root.leaves(cx).into();
         root.reveal(leaves[focused].entity_id(), cx);
         let hosted = hosted_ids(&leaves, cx);
@@ -814,6 +982,7 @@ impl CompositeView {
         let mut kept = Kept::new();
         self.root.keep(&mut kept, cx);
         self.root = Group::build(layout, window, &mut kept, None, cx);
+        self.root.connect(cx);
         let leaves: Rc<[Leaf]> = self.root.leaves(cx).into();
         let kept_focus = leaves.iter().position(|leaf| leaf.entity_id() == focused);
         let index = kept_focus.unwrap_or(initial);
@@ -931,6 +1100,22 @@ impl CompositeView {
             .leaves()
             .iter()
             .filter_map(Leaf::hosted)
+            .collect()
+    }
+
+    /// The editors each connector joins, in layout order.
+    #[cfg(test)]
+    pub(crate) fn connected_editors(&self, cx: &App) -> Vec<Option<[EntityId; 2]>> {
+        self.root
+            .connectors(cx)
+            .iter()
+            .map(|connector| {
+                connector
+                    .read(cx)
+                    .editors
+                    .as_ref()
+                    .map(|editors| editors.each_ref().map(Entity::entity_id))
+            })
             .collect()
     }
 

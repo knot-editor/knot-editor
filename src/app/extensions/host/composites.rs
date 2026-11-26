@@ -15,8 +15,8 @@ use std::collections::HashSet;
 use super::ProductExtensionHost;
 use super::handlers::{AccessError, OpenError};
 use crate::app::composite_view::{
-    Arrangement, CompositeTab, ContentSpec, GroupSpec, LayoutSize, MemberSpec, ScrollLink,
-    ToolbarButton,
+    Arrangement, CONNECTOR_WIDTH, CompositeTab, ConnectorSpec, ContentSpec, GroupSpec, LayoutSize,
+    MemberSpec, ScrollLink, ToolbarButton,
 };
 use crate::app::extensions::semantics::SemanticError;
 use crate::app::product;
@@ -57,7 +57,7 @@ pub(crate) struct LayoutWire {
     #[serde(default)]
     key: Option<String>,
     #[serde(default)]
-    size: SizeWire,
+    size: Option<SizeWire>,
     #[serde(default)]
     focused: bool,
     /// The label of a member of tabs.
@@ -86,6 +86,8 @@ enum ContentWire {
     Tree {
         view: String,
     },
+    /// A strip that joins lines of two editors of the layout.
+    Connector(ConnectorSpec),
     Row {
         children: Vec<LayoutWire>,
     },
@@ -122,21 +124,28 @@ impl LayoutWire {
 
     /// The root of a layout is a row or column with at least one view
     /// beneath it, at most one member asking for focus per group, sizes that
-    /// are positive and finite, a title on exactly the members of tabs, and
-    /// keys that are not empty and name one member each.
+    /// are positive and finite, a title on exactly the members of tabs, keys
+    /// that are not empty and name one member each, and connectors that join
+    /// two editors by key and have no key, focus, or tabs of their own.
     pub(crate) fn check(&self) -> Result<(), &'static str> {
+        #[derive(Default)]
+        struct Seen {
+            keys: HashSet<String>,
+            editors: HashSet<String>,
+            connectors: Vec<(String, String)>,
+        }
         fn check(
             node: &LayoutWire,
             root: bool,
             in_tabs: bool,
-            keys: &mut HashSet<String>,
+            seen: &mut Seen,
         ) -> Result<usize, &'static str> {
             if let Some(key) = &node.key
-                && (key.is_empty() || !keys.insert(key.clone()))
+                && (key.is_empty() || !seen.keys.insert(key.clone()))
             {
                 return Err("a composite key is not empty and names one member");
             }
-            let (SizeWire::Weight(value) | SizeWire::Pixels(value)) = node.size;
+            let (SizeWire::Weight(value) | SizeWire::Pixels(value)) = node.size.unwrap_or_default();
             if !value.is_finite() || value <= 0. {
                 return Err("composite size must be a positive number");
             }
@@ -145,10 +154,21 @@ impl LayoutWire {
                 (false, Some(_)) => return Err("only a member of tabs has a title"),
                 _ => {}
             }
-            if let ContentWire::Editor { buffer, document } = &node.content
-                && buffer.is_some() == document.is_some()
-            {
-                return Err("a composite editor shows a buffer or a document");
+            if let ContentWire::Editor { buffer, document } = &node.content {
+                if buffer.is_some() == document.is_some() {
+                    return Err("a composite editor shows a buffer or a document");
+                }
+                if let Some(key) = &node.key {
+                    seen.editors.insert(key.clone());
+                }
+            }
+            if let ContentWire::Connector(connector) = &node.content {
+                if node.key.is_some() || node.focused || in_tabs {
+                    return Err("a composite connector has no key or focus and is not in tabs");
+                }
+                seen.connectors
+                    .push((connector.first.clone(), connector.second.clone()));
+                return Ok(0);
             }
             let group = node.children();
             if root
@@ -164,10 +184,17 @@ impl LayoutWire {
                 return Err("a composite group has one focused member");
             }
             children.iter().try_fold(0, |views, child| {
-                Ok(views + check(child, false, arrangement == Arrangement::Tabs, keys)?)
+                Ok(views + check(child, false, arrangement == Arrangement::Tabs, seen)?)
             })
         }
-        match check(self, true, false, &mut HashSet::new())? {
+        let mut seen = Seen::default();
+        let views = check(self, true, false, &mut seen)?;
+        if seen.connectors.iter().any(|(first, second)| {
+            first == second || !seen.editors.contains(first) || !seen.editors.contains(second)
+        }) {
+            return Err("a composite connector joins two editors of the layout by key");
+        }
+        match views {
             0 => Err("composite layout needs a view"),
             _ => Ok(()),
         }
@@ -188,9 +215,13 @@ impl LayoutWire {
             }),
             None => leaf(&self.content)?,
         };
+        let default = match self.content {
+            ContentWire::Connector(_) => SizeWire::Pixels(CONNECTOR_WIDTH),
+            _ => SizeWire::default(),
+        };
         Ok(MemberSpec {
             key: self.key.clone(),
-            size: match self.size {
+            size: match self.size.unwrap_or(default) {
                 SizeWire::Weight(weight) => LayoutSize::Weight(weight),
                 SizeWire::Pixels(pixels) => LayoutSize::Pixels(pixels),
             },
@@ -280,6 +311,7 @@ impl ProductExtensionHost {
             ContentWire::Tree { view } => self
                 .embedded_view(view, owner, ViewContentKind::Tree)
                 .map(|_| ContentSpec::Tree(view.clone())),
+            ContentWire::Connector(connector) => Ok(ContentSpec::Connector(connector.clone())),
             ContentWire::Row { .. } | ContentWire::Column { .. } | ContentWire::Tabs { .. } => {
                 Err(AccessError::InvalidTarget.into())
             }

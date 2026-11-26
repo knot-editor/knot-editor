@@ -372,6 +372,43 @@ await commands.register("composite.invalid-links", async () => {
     { type: "editor", buffer: scratch },
   ] } }), "InvalidTarget");
 });
+// Two editors with a connector between them.
+const connected = (links) => ({ type: "row", children: [
+  { type: "editor", key: "left", buffer: keyed.left },
+  { type: "connector", first: "left", second: "right", links },
+  { type: "editor", key: "right", buffer: keyed.right },
+] });
+const modified = { first: { start: 1, end: 2 }, second: { start: 1, end: 4 }, color: "diff.modified.background" };
+await commands.register("composite.open-connected", async () => {
+  const kind = await keyedKind();
+  const [left, right] = await Promise.all([buffers.create({ text: "a\nb\n" }), buffers.create({ text: "a\nx\ny\nz\n" })]);
+  keyed = { left, right };
+  instance = await kind.open({ title: "Connected", layout: connected([modified]) });
+});
+await commands.register("composite.reconnect", async () => {
+  await instance.update({ layout: connected([modified, { ...modified, color: "diff.added.background" }]) });
+});
+await commands.register("composite.invalid-connectors", async () => {
+  const editors = [
+    { type: "editor", key: "left", buffer: keyed.left },
+    { type: "editor", key: "right", buffer: keyed.right },
+  ];
+  const bad = async (layout) => {
+    await expectLinkError(() => instance.update({ layout: { type: "row", children: layout } }), undefined);
+  };
+  const connector = (first, second, extra = {}) => ({ type: "connector", first, second, links: [], ...extra });
+  await bad([...editors, connector("left", "left")]);
+  await bad([...editors, connector("left", "nope")]);
+  await bad([...editors, connector("left", "right", { key: "strip" })]);
+  await bad([...editors, connector("left", "right", { focused: true })]);
+  await bad([{ type: "tabs", children: [
+    { type: "editor", key: "left", title: "L", buffer: keyed.left },
+    { type: "editor", key: "right", title: "R", buffer: keyed.right },
+    connector("left", "right", { title: "C" }),
+  ] }]);
+  await bad([...editors, { ...connector("left", "right"), links: [{ first: { start: 2, end: 1 }, second: { start: 0, end: 1 }, color: "x" }] }]);
+  await bad([...editors, { ...connector("left", "right"), links: [{ first: { start: 0, end: 1 }, second: { start: 0, end: 1 } }] }]);
+});
 await commands.register("composite.dispose-registration", async () => {
   await registration[Symbol.asyncDispose]();
   registration = undefined;
@@ -1546,4 +1583,78 @@ fn a_link_that_does_not_join_two_editors_is_refused_and_changes_nothing(cx: &mut
     run(&window, native_window, "composite.invalid-links", cx);
     scroll_linked(&window, 0, 50., cx);
     assert_eq!(linked_scrolls(&window, cx), [50., 60.]);
+}
+
+/// The editors each connector of the shown composite joins, by entity.
+fn connected_editors(
+    window: &Entity<KnotWindow>,
+    cx: &TestAppContext,
+) -> Vec<Option<[gpui::EntityId; 2]>> {
+    cx.read(|cx| {
+        let workbench = window.read(cx).workbench.read(cx);
+        let tab = workbench.focused_pane().unwrap().active_tab();
+        workbench
+            .composite_view(tab)
+            .unwrap()
+            .read(cx)
+            .connected_editors(cx)
+    })
+}
+
+#[gpui::test]
+fn a_connector_joins_two_editors_and_is_not_a_view(cx: &mut TestAppContext) {
+    let (window, native_window, _, _) = window_with_extension(cx);
+    run(&window, native_window, "composite.open-connected", cx);
+    let editors = [0, 1].map(|index| leaf_of(&window, index, cx).entity_id());
+    assert_eq!(connected_editors(&window, cx), vec![Some(editors)]);
+
+    // The tree holds the two editors and no node for the strip.
+    let info = info(&window, cx);
+    let tab = info
+        .panes
+        .iter()
+        .flat_map(|pane| &pane.tabs)
+        .find(|tab| tab.kind == SurfaceKind::Composite)
+        .unwrap();
+    assert_eq!(tab.root.children.len(), 2);
+
+    // A new layout joins the same editors again with the new links.
+    run(&window, native_window, "composite.reconnect", cx);
+    assert_eq!(connected_editors(&window, cx), vec![Some(editors)]);
+    assert_eq!(
+        [0, 1].map(|index| leaf_of(&window, index, cx).entity_id()),
+        editors
+    );
+}
+
+#[gpui::test]
+fn a_connector_that_does_not_join_two_editors_by_key_is_refused(cx: &mut TestAppContext) {
+    let (window, native_window, _, _) = window_with_extension(cx);
+    run(&window, native_window, "composite.open-connected", cx);
+    run(&window, native_window, "composite.invalid-connectors", cx);
+    assert_eq!(connected_editors(&window, cx).len(), 1);
+}
+
+#[test]
+fn a_band_spans_both_editors_and_is_skipped_when_both_ends_are_off_screen() {
+    use super::super::super::composite_view::band;
+    let (above, below) = ((px(-60.), px(-40.)), (px(500.), px(520.)));
+    let (a, b) = ((px(10.), px(30.)), (px(20.), px(80.)));
+    let x = (px(100.), px(132.));
+    let visible = (px(0.), px(400.));
+    let corners = band(a, b, x, visible).unwrap();
+    assert_eq!(
+        corners,
+        [
+            gpui::point(px(100.), px(10.)),
+            gpui::point(px(132.), px(20.)),
+            gpui::point(px(132.), px(80.)),
+            gpui::point(px(100.), px(30.)),
+        ]
+    );
+    // One end on screen is enough; both ends on one side is not.
+    assert!(band(a, above, x, visible).is_some());
+    assert!(band(above, above, x, visible).is_none());
+    assert!(band(below, below, x, visible).is_none());
+    assert!(band(above, below, x, visible).is_some());
 }

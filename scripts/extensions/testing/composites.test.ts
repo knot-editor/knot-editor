@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
 import { buffers, workbench } from "knot";
+import type * as Knot from "knot";
 import * as host from "knot/testing";
 
 beforeEach(() => host.reset());
@@ -59,6 +60,33 @@ test("a scroll link is replaced or removed by an update and kept otherwise", asy
   assert.deepEqual(composite.scrollLink, { ...link, map: [] });
   await instance.update({ scrollLink: null });
   assert.equal(composite.scrollLink, null);
+});
+
+test("a connector joins two editors of the layout by key and is replaced with the layout", async () => {
+  const registration = await workbench.registerComposite({ id: "example.view" });
+  host.openWindow();
+  const [a, b] = await Promise.all([buffers.create(), buffers.create()]);
+  const link = { first: { start: 1, end: 2 }, second: { start: 1, end: 4 }, color: "diff.modified.background" };
+  const layout = (links: readonly (typeof link)[]): Knot.CompositeGroup => ({
+    type: "row",
+    children: [
+      { type: "editor", key: "a", buffer: a },
+      { type: "connector", first: "a", second: "b", links },
+      { type: "editor", key: "b", buffer: b },
+    ],
+  });
+  const instance = await registration.open({ title: "Diff", layout: layout([link]) });
+  const composite = host.composites()[0]!;
+  assert.deepEqual(composite.layout, layout([link]));
+  await instance.update({ layout: layout([]) });
+  assert.deepEqual(composite.layout, layout([]));
+  const bad = (children: readonly Knot.CompositeLayout[]) =>
+    registration.open({ title: "Bad", layout: { type: "row", children } });
+  const editors: Knot.CompositeLayout[] = [{ type: "editor", key: "a", buffer: a }, { type: "editor", key: "b", buffer: b }];
+  await assert.rejects(() => bad([...editors, { type: "connector", first: "a", second: "nope", links: [] }]), TypeError);
+  await assert.rejects(() => bad([...editors, { type: "connector", first: "a", second: "a", links: [] }]), TypeError);
+  await assert.rejects(() => instance.update({ layout: { type: "row", children: [editors[0]!, { type: "connector", first: "a", second: "b", links: [] }] } }), TypeError);
+  assert.deepEqual(composite.layout, layout([]));
 });
 
 test("disposing a registration closes its instances and frees the kind", async () => {

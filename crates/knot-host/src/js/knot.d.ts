@@ -3100,7 +3100,35 @@ declare module "knot" {
     readonly type: "tabs";
     readonly children: readonly CompositeLayout[];
   }
-  export type CompositeLayout = CompositeEditor | CompositeText | CompositeTree | CompositeGroup | CompositeTabs;
+  /**
+   * A strip that joins line ranges of two editor members of the layout, as
+   * a band between the lines of each, following both editors' scrolling. It
+   * is not a view: it has no key, focus, or place in the view tree, and is
+   * not a member of `tabs`. Place it between the editors in a `row`. Its
+   * `size` defaults to `{ pixels: 32 }`. It joins editors by `key`, so both
+   * keys must name editor members of the layout, and different ones; a
+   * connector that does not is a TypeError. Send the links again with an
+   * `update` of the layout when the texts change.
+   */
+  export interface CompositeConnector {
+    readonly type: "connector";
+    readonly size?: CompositeSize;
+    /** The `key` of the editor whose lines the left edge follows. */
+    readonly first: string;
+    /** The `key` of the editor whose lines the right edge follows. */
+    readonly second: string;
+    readonly links: readonly CompositeConnectorLink[];
+  }
+  export interface CompositeConnectorLink {
+    /** The lines of the first editor the band's left edge spans. */
+    readonly first: LineRange;
+    /** The lines of the second editor the band's right edge spans. */
+    readonly second: LineRange;
+    /** The theme color key the band is filled with, such as
+     * `diff.added.background`. */
+    readonly color: string;
+  }
+  export type CompositeLayout = CompositeEditor | CompositeText | CompositeTree | CompositeGroup | CompositeTabs | CompositeConnector;
   /** Which lines of two editors lie side by side, so scrolling one scrolls
    * the other to the same place. */
   export interface CompositeScrollLink {

@@ -280,14 +280,40 @@ export type FakeDiff = {
 };
 
 function hasView(layout: Knot.CompositeLayout): boolean {
+  if (layout.type === "connector") return false;
   return "children" in layout ? layout.children.some(hasView) : true;
+}
+
+/** Throws a TypeError for a connector that does not join two different editor members by key. */
+function checkConnectors(layout: Knot.CompositeLayout) {
+  const editors = new Set<string>();
+  const connectors: Knot.CompositeConnector[] = [];
+  const walk = (node: Knot.CompositeLayout) => {
+    if (node.type === "connector") {
+      if ("key" in node || "focused" in node) throw new TypeError("a composite connector has no key or focus");
+      connectors.push(node);
+    } else if ("children" in node) {
+      if (node.type === "tabs" && node.children.some((child) => child.type === "connector")) {
+        throw new TypeError("a composite connector is not in tabs");
+      }
+      node.children.forEach(walk);
+    } else if (node.type === "editor" && node.key !== undefined) {
+      editors.add(node.key);
+    }
+  };
+  walk(layout);
+  for (const { first, second } of connectors) {
+    if (first === second || !editors.has(first) || !editors.has(second)) {
+      throw new TypeError("a composite connector joins two editors of the layout by key");
+    }
+  }
 }
 
 /** Throws a TypeError for a text or tree member whose view was not registered with `embedded`. */
 function checkEmbedded(layout: Knot.CompositeLayout, views: Map<string, FakeView>) {
   if ("children" in layout) {
     for (const child of layout.children) checkEmbedded(child, views);
-  } else if (layout.type !== "editor" && views.get(layout.view.id)?.contribution.embedded !== true) {
+  } else if (layout.type !== "editor" && layout.type !== "connector" && views.get(layout.view.id)?.contribution.embedded !== true) {
     throw new TypeError(`composite ${layout.type} must be a ${layout.type} view registered with embedded`);
   }
 }
@@ -300,6 +326,8 @@ export type FakeComposite = {
   tab: { title: string; icon: Knot.IconRef | null; resource: string | null; toolbar: readonly Knot.CompositeButton[] };
   /** The scroll link now, after any `update`; the fake does not scroll. */
   scrollLink: Knot.CompositeScrollLink | null;
+  /** The layout now, after any `update`. */
+  layout: Knot.CompositeGroup;
   closed: boolean;
 };
 
@@ -3019,6 +3047,7 @@ export const api: KnotApi = {
           if (disposed) throw hostError("OwnershipDisposed");
           if (!hasView(options.layout)) throw new TypeError("composite layout needs a view");
           checkEmbedded(options.layout, state.views);
+          checkConnectors(options.layout);
           const window = destinationWindow(options.target);
           const composite: FakeComposite = {
             kind: id,
@@ -3030,6 +3059,7 @@ export const api: KnotApi = {
               toolbar: options.toolbar ?? [],
             },
             scrollLink: options.scrollLink ?? null,
+            layout: options.layout,
             closed: false,
           };
           state.composites.push(composite);
@@ -3043,6 +3073,12 @@ export const api: KnotApi = {
             target,
             update: async (changes) => {
               if (composite.closed) throw hostError("InvalidTarget");
+              if (changes.layout !== undefined) {
+                if (!hasView(changes.layout)) throw new TypeError("composite layout needs a view");
+                checkEmbedded(changes.layout, state.views);
+                checkConnectors(changes.layout);
+                composite.layout = changes.layout;
+              }
               composite.tab = {
                 title: changes.title ?? composite.tab.title,
                 icon: changes.icon === undefined ? composite.tab.icon : changes.icon,
