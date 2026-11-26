@@ -1,0 +1,12 @@
+{
+  // Bundled diff view: two texts side by side, compared as either changes.
+  "name": "@knot/diff",
+  "apiVersion": 1,
+  "version": "0.1.0",
+  "main": "dist/main.js",
+  "contract": "dist/contract.js",
+  "displayName": "Diff",
+  "description": "Compares two texts, each an open document or a read-only snapshot, side by side in a tab.",
+  "author": "Knot",
+  "license": "GPL-3.0-or-later",
+}

@@ -1,3 +1,3 @@
 fn main() {
-    knot_bundled::build::compile_packages(&["vcs", "git"]);
+    knot_bundled::build::compile_packages(&["diff", "vcs", "git"]);
 }
