@@ -179,6 +179,22 @@ tab, with the usual prompt when it is the last view of a document with unsaved
 changes. A diff tab is not restored with its window, and `setText` rejects
 `InvalidTarget` for a document side or a tab already closed.
 
+A package that requires `@knot/diff` opens the same comparison through its
+contract, which also keeps the gutter, strip, and scrolling current and moves
+between hunks:
+
+```js
+import { diffs } from "@knot/diff";
+const client = await diffs.client();
+const id = await client.open({
+  original: { label: "HEAD", text: baseline, language: "typescript" },
+  modified: { label: "Working copy", document: document.id },
+  line: 41,
+});
+await client.setText({ id, side: "original", text: newBaseline }); // a snapshot side only
+await client.close(id);
+```
+
 ## Read files
 
 `files` reads stored resources through the registered resource providers, for

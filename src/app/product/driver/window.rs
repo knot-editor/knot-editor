@@ -91,6 +91,19 @@ pub struct EditorTab {
     pub top: usize,
 }
 
+/// One editor of a composite tab, as it shows.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CompositeEditor {
+    pub text: String,
+    pub caret_line: usize,
+    /// The line bands, as line and color key.
+    pub bands: Vec<(usize, String)>,
+    /// The gutter wedges and bars, as line and color key.
+    pub wedges: Vec<(usize, String)>,
+    pub scroll_line: f32,
+    pub key_contexts: Vec<String>,
+}
+
 /// A tree a package contributes to a window.
 pub struct TestTree {
     window: Entity<KnotWindow>,
@@ -573,6 +586,144 @@ impl TestWindow {
             let handle = editor.focus_handle(cx);
             self.window
                 .update(cx, |window, cx| window.focus_view(&handle, cx));
+        });
+        self.window
+            .update(cx, |window, cx| window.focus_active_surface(cx));
+        super::park_packages(cx);
+    }
+
+    /// The composite view of the center's first composite tab.
+    fn first_composite(
+        &self,
+        cx: &gpui::App,
+    ) -> Option<Entity<crate::app::composite_view::CompositeView>> {
+        let workbench = self.window.read(cx).workbench.read(cx);
+        workbench
+            .tabs()
+            .find_map(|tab| workbench.composite_view(tab).cloned())
+    }
+
+    /// The tab title of each composite tab, in layout order.
+    pub fn composite_titles(&self, cx: &mut TestAppContext) -> Vec<String> {
+        cx.read(|cx| {
+            let workbench = self.window.read(cx).workbench.read(cx);
+            workbench
+                .tabs()
+                .filter_map(|tab| workbench.composite_view(tab))
+                .map(|view| view.read(cx).tab().title.clone())
+                .collect()
+        })
+    }
+
+    /// The editors of the first composite tab, in layout order.
+    pub fn composite_editors(&self, cx: &mut TestAppContext) -> Vec<CompositeEditor> {
+        cx.read(|cx| {
+            let view = self.first_composite(cx).expect("a composite tab");
+            view.read(cx)
+                .leaves()
+                .iter()
+                .filter_map(|leaf| leaf.editor())
+                .map(|view| {
+                    let view = view.read(cx);
+                    let editor = view.editor().read(cx);
+                    CompositeEditor {
+                        text: view.model().read(cx).text(),
+                        caret_line: editor.caret().0,
+                        bands: editor
+                            .decorations()
+                            .iter()
+                            .map(|band| (band.line, band.key.clone()))
+                            .collect(),
+                        wedges: editor
+                            .gutter_bars()
+                            .iter()
+                            .map(|wedge| (wedge.line, wedge.key.clone()))
+                            .collect(),
+                        scroll_line: editor.scroll_line(),
+                        key_contexts: editor
+                            .key_contexts()
+                            .into_iter()
+                            .map(str::to_owned)
+                            .collect(),
+                    }
+                })
+                .collect()
+        })
+    }
+
+    /// The links of the first composite tab's connectors, as the lines of
+    /// each side and the color key.
+    pub fn composite_links(
+        &self,
+        cx: &mut TestAppContext,
+    ) -> Vec<(std::ops::Range<u32>, std::ops::Range<u32>, String)> {
+        cx.read(|cx| {
+            let view = self.first_composite(cx).expect("a composite tab");
+            view.read(cx).connector_links(cx)
+        })
+    }
+
+    /// The lines of the first composite tab's toolbar buttons' commands.
+    pub fn composite_toolbar(&self, cx: &mut TestAppContext) -> Vec<String> {
+        cx.read(|cx| {
+            let view = self.first_composite(cx).expect("a composite tab");
+            view.read(cx)
+                .tab()
+                .toolbar
+                .iter()
+                .map(|button| button.command.clone())
+                .collect()
+        })
+    }
+
+    /// Scroll editor `index` of the first composite tab to `line`.
+    pub fn scroll_composite_editor(&self, index: usize, line: f32, cx: &mut TestAppContext) {
+        let editor = cx.read(|cx| {
+            let view = self.first_composite(cx).expect("a composite tab");
+            let leaves = view.read(cx).leaves();
+            let editor = leaves
+                .iter()
+                .filter_map(|leaf| leaf.editor())
+                .nth(index)
+                .expect("an editor");
+            editor.read(cx).editor().clone()
+        });
+        editor.update(cx, |editor, cx| editor.scroll_to_line(line, cx));
+        cx.run_until_parked();
+    }
+
+    /// Give focus to editor `index` of the first composite tab and select its tab.
+    pub fn focus_composite_editor(&self, index: usize, cx: &mut TestAppContext) {
+        let view = cx
+            .read(|cx| self.first_composite(cx))
+            .expect("a composite tab");
+        let (position, handle) = cx.read(|cx| {
+            let leaves = view.read(cx).leaves();
+            let (position, leaf) = leaves
+                .iter()
+                .enumerate()
+                .filter(|(_, leaf)| leaf.editor().is_some())
+                .nth(index)
+                .expect("an editor");
+            (position, leaf.focus_handle(cx))
+        });
+        view.update(cx, |view, cx| view.set_focused_leaf(position, cx));
+        let located = cx.read(|cx| {
+            let workbench = self.window.read(cx).workbench.read(cx);
+            let pane = workbench.center_pane()?;
+            let tab = workbench.pane(pane)?.tabs().iter().find(|tab| {
+                workbench
+                    .composite_view(tab)
+                    .is_some_and(|candidate| candidate == &view)
+            })?;
+            Some((pane, tab.id()))
+        });
+        let (pane, tab) = located.expect("the composite's tab");
+        self.window
+            .update(cx, |window, cx| window.activate_tab(pane, tab, cx));
+        cx.update(|cx| {
+            self.window
+                .update(cx, |window, cx| window.focus_view(&handle, cx))
         });
         self.window
             .update(cx, |window, cx| window.focus_active_surface(cx));

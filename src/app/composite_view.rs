@@ -283,7 +283,7 @@ pub(crate) enum Leaf {
 }
 
 impl Leaf {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn editor(&self) -> Option<&Entity<EditorView>> {
         match self {
             Self::Editor(view) => Some(view),
@@ -1103,6 +1103,25 @@ impl CompositeView {
             .collect()
     }
 
+    /// The links of every connector, in layout order, as the lines of each
+    /// side and the color key.
+    #[cfg(feature = "test-support")]
+    pub(crate) fn connector_links(&self, cx: &App) -> Vec<(Range<u32>, Range<u32>, String)> {
+        self.root
+            .connectors(cx)
+            .iter()
+            .flat_map(|connector| {
+                connector
+                    .read(cx)
+                    .spec
+                    .links
+                    .iter()
+                    .map(|link| (link.first.clone(), link.second.clone(), link.color.clone()))
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    }
+
     /// The editors each connector joins, in layout order.
     #[cfg(test)]
     pub(crate) fn connected_editors(&self, cx: &App) -> Vec<Option<[EntityId; 2]>> {
@@ -1120,7 +1139,7 @@ impl CompositeView {
     }
 
     /// The views in layout order.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn leaves(&self) -> Vec<Leaf> {
         self.shared.leaves().to_vec()
     }

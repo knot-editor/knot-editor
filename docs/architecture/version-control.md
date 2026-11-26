@@ -97,6 +97,26 @@ is replaced when the baseline is fetched again, and the tab closes when the file
 has no baseline any more or the document closes. The tab is a regular tab, not a
 preview.
 
+## The diff package
+
+`@knot/diff` opens comparisons as composite tabs and serves the `diff` contract
+(`open`, `setText`, `close`) to packages that show one. A tab is a row of two
+editors, `original` and `modified`, with a connector strip between them. A side
+is an open document, which the tab edits, or a read-only snapshot held in an
+extension buffer; `setText` on a snapshot shows a new buffer, as a read-only
+buffer takes no edits. After each edit of either buffer, debounced by 150 ms,
+the package compares them natively and, from the hunks and the revisions they
+describe, paints line bands and gutter wedges on each editor as view
+decorations, sends the strip's links, and links the editors' scrolling. A
+comparison that an edit raced is dropped, and the edit's own notification
+compares again.
+
+`diff.nextHunk` and `diff.previousHunk` (Alt+F5 and Alt+Shift+F5 in a diff's
+editors, `]c` and `[c` in Vim mode, and the tab's toolbar) move the caret of the
+focused side to the first line of the nearest hunk, wrapping at the ends. Both
+editors hold the `diff` key context while the tab is open, and the package
+releases its snapshots when the tab closes.
+
 ## Git
 
 `@knot/git` declares the `process` entitlement, implicitly granted to a bundled
