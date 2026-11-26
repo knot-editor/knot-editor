@@ -70,7 +70,7 @@ None.
 
 ## Checkpoints
 
-### 1. Hunk model: popup anchor and revert edit
+### 1. Hunk model: popup anchor and revert edit ✅
 
 Pure functions in `@knot/vcs` for what a hunk means, tested without a host.
 
