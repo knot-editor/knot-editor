@@ -80,9 +80,9 @@ gutter and change navigation. See [version control](../architecture/version-cont
   and [the diff package](../architecture/version-control.md#the-diff-package).
 - ✅ **D220 — Anchored popovers.** Split from D145, which keeps virtual
   text for later consumers. See [editor popovers](../architecture/editor-and-languages.md#editor-popovers).
-- **D221 — Hunk popup.** The hunk's baseline against the current lines, with
-  revert, hunk navigation, opening the diff, and backend actions. Depends on
-  D211.
+- 🚧 **D221 — Hunk popup.** The hunk's baseline against the current lines, with
+  revert, hunk navigation, and opening the diff. Depends on D211.
+  [Plan](d221-hunk-popup.md).
 
 ### 4. Changes and commit
 
@@ -94,7 +94,8 @@ gutter and change navigation. See [version control](../architecture/version-cont
 ### 5. Git operations
 
 - **D216 — Git operations.** Staging, branches, push and pull, stash, and
-  other Git-specific workflows outside the shared contract. Depends on D215.
+  other Git-specific workflows outside the shared contract, and backend
+  actions in the hunk popup, such as staging a hunk. Depends on D215.
 
 ### After this plan
 

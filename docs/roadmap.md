@@ -286,7 +286,9 @@ hold the analyses that support some items.
     inline diff hunk with actions: let block rows host a popover's content (a
     toolbar and a composite layout, with a popover's natural sizing), at any pixel
     height, with views inside them that take focus, clicks, and typing, and
-    that scroll, fold, and follow edits as block rows do.
+    that scroll, fold, and follow edits as block rows do. Then show the hunk
+    popup (D221) inline, as Zed does: the deleted lines as rows between the
+    editor's lines, above the current ones, with the popup's actions.
 
 - **D115 — Lifecycle hooks and native command overrides**
   - Depends on: none
@@ -400,8 +402,7 @@ milestones these items belong to.
   - Description: A gutter marker shows that lines changed, not how. Clicking
     it opens a popup anchored to the hunk that shows the baseline's lines
     against the current ones, with revert, next and previous hunk, and opening
-    the file's diff; backends may add their own actions, such as staging the
-    hunk in D216.
+    the file's diff. See the [plan](plans/d221-hunk-popup.md).
 
 - **D214 — VCS changes view** 🚧
   - Depends on: none
@@ -421,7 +422,9 @@ milestones these items belong to.
   - Depends on: D215
   - Description: Staging, branches, push and pull, stash, and other
     Git-specific workflows stay outside the shared provider contract. Build
-    them in `@knot/git` as the plan's last milestone.
+    them in `@knot/git` as the plan's last milestone. Let backends add their
+    own actions to the hunk popup (D221) through the contract, starting with
+    staging a hunk.
 
 - **D217 — Blame**
   - Depends on: D145
