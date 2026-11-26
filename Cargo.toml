@@ -81,7 +81,7 @@ url = "2"
 uuid = { version = "1", features = ["v4"] }
 v8 = "152.2"
 windows-sys = "0.61"
-winreg = "0.55"
+winreg = "0.56"
 
 [package]
 name = "knot"
