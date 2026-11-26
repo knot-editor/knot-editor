@@ -4066,16 +4066,18 @@ impl HostArguments for SetDecorationsArguments {
             .map(|contribution| match contribution {
                 EditorContribution {
                     range,
-                    decoration: Some(decoration),
-                    gutter: None,
+                    decoration,
+                    gutter,
                     command: None,
-                } => Ok(knot_model::editor::ViewDecoration {
-                    range,
-                    decoration: Some(decoration),
-                    gutter: None,
-                }),
+                } if decoration.is_some() || gutter.is_some() => {
+                    Ok(knot_model::editor::ViewDecoration {
+                        range,
+                        decoration,
+                        gutter,
+                    })
+                }
                 _ => Err(DecodeError::Type(
-                    "view decorations need only a range and a decoration",
+                    "view decorations need a decoration or a gutter mark, and no command",
                 )),
             })
             .collect::<Result<_, _>>()?;

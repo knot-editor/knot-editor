@@ -402,8 +402,9 @@ function contribution(value: unknown) {
 function viewDecoration(value: unknown) {
   expectRecord(value, "view decoration must be an object");
   const painted = decoration(value.decoration);
-  if (painted === null) throw new TypeError("view decoration needs a decoration");
-  return { range: byteRange(value.range), decoration: painted, gutter: null, command: null };
+  const mark = gutterMark(value.gutter);
+  if (painted === null && mark === null) throw new TypeError("view decoration needs a decoration or a gutter mark");
+  return { range: byteRange(value.range), decoration: painted, gutter: mark, command: null };
 }
 function blockRows(value: unknown) {
   expectRecord(value, "block rows must be an object");

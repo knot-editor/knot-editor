@@ -1625,11 +1625,14 @@ declare module "knot" {
     /** Runs when a gutter mark or the range's text is clicked. */
     readonly command?: ContributionCommand | null;
   }
-  /** A decoration one view paints; see `Editor.setDecorations`. */
+  /** A decoration or gutter mark one view paints; see `Editor.setDecorations`.
+   * Needs a `decoration`, a `gutter`, or both. */
   export interface ViewDecoration {
     readonly range: ByteRange;
     /** Paints the range, ordered among overlaps as contributions are. */
-    readonly decoration: Decoration;
+    readonly decoration?: Decoration | null;
+    /** Marks the gutter as a contribution's does, in this view only. */
+    readonly gutter?: GutterMark | null;
   }
   /**
    * Lines of a source buffer that an editor shows above one of its own lines;

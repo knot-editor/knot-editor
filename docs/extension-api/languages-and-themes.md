@@ -240,8 +240,8 @@ text is clicked; see [commands](commands-and-keys.md#register-a-command).
 Those belong to the buffer, so every view of it paints them. Highlights that
 follow one view, such as matches around its caret, go through
 `editor.setDecorations(items, { ifRevision })` instead, which takes
-`{ range, decoration }` items and replaces the caller's set on that editor
-alone.
+`{ range, decoration, gutter }` items, each with a `decoration`, a `gutter`
+mark, or both, and replaces the caller's set on that editor alone.
 
 ### Show lines of another buffer
 
