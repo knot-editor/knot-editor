@@ -352,6 +352,9 @@ until 21.
 
 #### 21. Remove the native diff
 
+Removed and documented; only the review gate is open. On approval, the plan is
+removed in a separate final commit.
+
 Deliverables: the development playground (`scripts/dev/`), native `DiffView`, `workbench.openDiff`, `diff.toggle-read-only`,
 the per-view `Editor` read-only flag, and native diff commands and settings are
 removed. Phase F documentation, including replacing the [diff view decision](../decisions/workbench-and-lifecycle.md#diff-view).
