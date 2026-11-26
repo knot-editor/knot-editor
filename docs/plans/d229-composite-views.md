@@ -296,26 +296,15 @@ accepted: a package makes an extension buffer for it. Documented in the
 [extension guide](../extension-api/languages-and-themes.md#show-lines-of-another-buffer)
 and the [editor reference](../architecture/editor-and-languages.md#editor-views).
 
-#### 16. Linked scrolling
+#### 16. Linked scrolling ✅
 
-Done, awaiting the review gate. `open` and `update` take a `scrollLink`
-`{ first, second, map }` naming two editor members by `key`, with `map` the
-regions where the texts differ as `{ first, second }` line ranges (the shape of
-`diff`'s hunks); `null` removes it. The first editor leads when a link is set,
-and a link must join two editors of the layout the tab shows. Documented in the
+`open` and `update` take a `scrollLink` of `{ first, second, map }`, two editor
+members by `key` and the regions where their texts differ; the first editor
+leads when it is set, and it must join two editors of the layout shown.
+Documented in the
 [extension guide](../extension-api/ui.md#open-a-composite-view) and the
 [composite views](../architecture/workbench-and-lifecycle.md#composite-views)
-reference. The playground has `Open Linked Scrolling`.
-
-Deliverables: a composite links two editor children's scrolling through a line
-map the package supplies and replaces.
-
-Validation: scroll-mapping tests matching today's `map_line` behavior.
-
-Review gate: the link's data shape.
-
-Implementation context: `sync_scroll` in `src/app/diff_view.rs` and
-`knot_model::diff::map_line`.
+reference.
 
 #### 17. Connector strip
 
