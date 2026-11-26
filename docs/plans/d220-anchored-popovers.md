@@ -172,32 +172,14 @@ pixels (scale 1). Tests drive focus inside a popover with
 
 ### 3. Size, zoom, and placement ✅
 
-Built, pending the review gate. Sizing and placement are `Extent`, `PopoverSpec::resolve_width`, and
-`place` in `crates/knot-model/src/editor/popovers.rs`; the layout builder's `Sizing::Natural` mode
-(`src/app/view_layout.rs`) sizes a popover's columns to their members and scales `pixels` with zoom;
-`EditorView::popover_frames` places each popover. `maxLines` and `maxRows` are members' options, default 12;
-`height` is gone from the popover options.
-
-Height is natural with `maxLines` and `maxRows` caps; width is pixels or
-`"editor"`; `pixels` scale with zoom; the total is clamped to the text area
-and to the larger free side. The popover goes below, above, or on the roomier
-side, moves with scrolling, wrapping, and folding, is hidden while its anchor
-is out of view or folded away, and relays out on zoom changes.
-
-Validation: natural sizing and placement are pure model functions (layout
-measures, anchor rows, viewport rows, row height, zoom factor → size and
-position, or hidden) with unit tests for below, above, the roomier side,
-horizontal clamping, zoom scaling, out of view, and folded anchors; editor
-tests drive scrolling and zoom headless.
-
-**Implementation context.** Sizing and placement go in
-`crates/knot-model/src/editor/popovers.rs`, taking rows from the wrap map as
-`completion_anchor` and block rows do (`EditorState` row queries); the view
-measures members in `src/app/editor/layout.rs` and paints in
-`src/app/editor/paint.rs`, using gpui's `deferred` so popovers paint above
-the gutter and bars, as `src/app/context_menu.rs` does. The zoom factor and
-`scaled` come from `src/app/zoom.rs`. Editor tests in a new
-`src/app/editor/tests/popovers.rs` beside `blocks.rs`.
+Done and reviewed. A popover is as wide as its `width` (`"editor"` or `{ pixels }`) and as tall as its
+content, with `maxLines` and `maxRows` (default 12) as members' caps and `pixels` scaled by zoom. It
+goes below, above, or on the roomier side of its anchor, follows scrolling, and hides while its anchor
+is out of view or folded away. The model is in `crates/knot-model/src/editor/popovers.rs`, the
+`Sizing::Natural` layout mode in `src/app/view_layout.rs`, and placement in
+`EditorView::popover_frames` (`src/app/editor/popovers.rs`), with tests in
+`src/app/editor/tests/popovers.rs`. A popover's height does not follow an extension editing its
+buffer unless it reopens the popover.
 
 ### 4. Focus, keys, and dismissal
 
