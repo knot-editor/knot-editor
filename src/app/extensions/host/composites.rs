@@ -71,7 +71,11 @@ pub(crate) struct LayoutWire {
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
-#[serde(tag = "type", rename_all = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 enum ContentWire {
     /// An editor on a buffer of `buffers.create` or on a document, by
     /// identity.
@@ -453,5 +457,35 @@ impl ProductExtensionHost {
         for instance in self.owned_composites.remove(&owner).unwrap_or_default() {
             product::operations::close_presentation_unattended(instance.target, cx);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn member_limits_reach_the_spec() {
+        let wire: LayoutWire = serde_json::from_str(
+            r#"{"type":"column","children":[
+                {"type":"editor","buffer":1,"maxLines":5},
+                {"type":"tree","view":"t","maxRows":7},
+                {"type":"text","view":"x"}]}"#,
+        )
+        .unwrap();
+        let ContentSpec::Group(group) = wire
+            .spec(&mut |content| match content {
+                ContentWire::Tree { view, .. } | ContentWire::Text { view, .. } => {
+                    Ok::<_, ()>(ContentSpec::Text(view.clone()))
+                }
+                _ => Ok(ContentSpec::Text(String::new())),
+            })
+            .unwrap()
+            .content
+        else {
+            panic!("a group");
+        };
+        let limits: Vec<_> = group.members.iter().map(|member| member.limit).collect();
+        assert_eq!(limits, [Some(5), Some(7), None]);
     }
 }
