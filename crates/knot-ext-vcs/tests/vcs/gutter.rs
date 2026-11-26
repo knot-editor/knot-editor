@@ -19,13 +19,16 @@ await (await vcs.client()).register("fixed");
 "#;
 
 fn packages() -> &'static [knot_bundled::BundledSource] {
-    let vcs = *knot_ext_vcs::PACKAGES
-        .iter()
-        .find(|package| package.manifest.contains("\"name\": \"@knot/vcs\""))
-        .unwrap();
+    let find = |name: &str| {
+        *knot_ext_vcs::PACKAGES
+            .iter()
+            .find(|package| package.manifest.contains(&format!("\"name\": \"{name}\"")))
+            .unwrap()
+    };
     Box::leak(
         vec![
-            vcs,
+            find("@knot/diff"),
+            find("@knot/vcs"),
             knot_bundled::BundledSource {
                 manifest: BACKEND_MANIFEST,
                 sources: &[("dist/main.js", BACKEND)],
@@ -146,9 +149,9 @@ fn show_changes_opens_the_baseline_against_the_file_and_follows_edits(cx: &mut T
         window.run_command("vcs.showChanges", cx),
         knot::test_support::CommandOutcome::Completed
     );
-    wait_until(cx, |cx| !window.diff_texts(cx).is_empty());
+    wait_until(cx, |cx| !super::texts(&window, cx).is_empty());
     assert_eq!(
-        window.diff_texts(cx),
+        super::texts(&window, cx),
         [("a\nb\nc\nd\n".to_owned(), "a\nB\nc\nd\n".to_owned())]
     );
 }

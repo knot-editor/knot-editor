@@ -877,27 +877,27 @@ fn show_diff(
     wait_until(cx, |cx| !window.gutter_bars(0, cx).is_empty());
     window.focus_document(cx);
     window.run_command("vcs.showChanges", cx);
-    wait_until(cx, |cx| !window.diff_texts(cx).is_empty());
+    wait_until(cx, |cx| !window.composite_titles(cx).is_empty());
     (product, window, directory)
 }
 
-/// Press `keys` one at a time in a side of the diff, and wait for it to show
+/// Press `keys` one at a time in an editor of the diff, and wait for it to show
 /// `expected`, the text with the caret marked.
 fn diff_keys(
     window: &knot::test_support::TestWindow,
-    modified: bool,
+    index: usize,
     keys: &str,
     expected: &str,
     cx: &mut TestAppContext,
 ) {
     window.press_each(keys, cx);
     let shown = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        wait_until(cx, |cx| window.diff_marked(modified, cx) == expected)
+        wait_until(cx, |cx| window.composite_marked(index, cx) == expected)
     }));
     assert!(
         shown.is_ok(),
         "after {keys}: expected {expected:?}, have {:?}",
-        window.diff_marked(modified, cx)
+        window.composite_marked(index, cx)
     );
 }
 
@@ -908,18 +908,18 @@ fn vim_follows_both_sides_of_a_diff_and_keeps_each_sides_marks(cx: &mut TestAppC
     let (_product, window, _directory) = show_diff(ENABLE, cx);
 
     // The snapshot side has no document, and Vim follows it all the same.
-    window.focus_diff_side(false, cx);
-    diff_keys(&window, false, "j l m a", "one\nt‸wo\nthree\n", cx);
-    diff_keys(&window, false, "g g", "‸one\ntwo\nthree\n", cx);
+    window.focus_composite_editor(0, cx);
+    diff_keys(&window, 0, "j l m a", "one\nt‸wo\nthree\n", cx);
+    diff_keys(&window, 0, "g g", "‸one\ntwo\nthree\n", cx);
     // The modified side is a document, and takes the edit.
-    window.focus_diff_side(true, cx);
-    diff_keys(&window, true, "j x", "one\n‸WO\nthree\n", cx);
-    diff_keys(&window, true, "m a j", "one\nWO\n‸three\n", cx);
-    diff_keys(&window, true, "` a", "one\n‸WO\nthree\n", cx);
+    window.focus_composite_editor(1, cx);
+    diff_keys(&window, 1, "j x", "one\n‸WO\nthree\n", cx);
+    diff_keys(&window, 1, "m a j", "one\nWO\n‸three\n", cx);
+    diff_keys(&window, 1, "` a", "one\n‸WO\nthree\n", cx);
 
     // Each side keeps its own mark and its own caret.
-    window.focus_diff_side(false, cx);
-    diff_keys(&window, false, "` a", "one\nt‸wo\nthree\n", cx);
+    window.focus_composite_editor(0, cx);
+    diff_keys(&window, 0, "` a", "one\nt‸wo\nthree\n", cx);
 }
 
 /// Vim refuses every change in a snapshot side with `'modifiable'`'s error
@@ -932,7 +932,7 @@ fn vim_refuses_changes_in_a_read_only_diff_side(cx: &mut TestAppContext) {
                          cx: &mut TestAppContext|
      -> bool { window.status_bar(cx).0.iter().any(|item| item == refused) };
 
-    window.focus_diff_side(false, cx);
+    window.focus_composite_editor(0, cx);
     let unchanged = "one\ntwo\nthree\n";
     for (keys, caret) in [
         ("x", "‸one\ntwo\nthree\n"),
@@ -942,18 +942,22 @@ fn vim_refuses_changes_in_a_read_only_diff_side(cx: &mut TestAppContext) {
         ("c w", "‸one\ntwo\nthree\n"),
         ("y y p", "‸one\ntwo\nthree\n"),
     ] {
-        diff_keys(&window, false, keys, caret, cx);
+        diff_keys(&window, 0, keys, caret, cx);
         wait_until(cx, |cx| shows_refusal(&window, cx));
         window.press_each("l", cx);
         window.press_each("h", cx);
-        assert_eq!(window.diff_texts(cx)[0].0, unchanged, "after {keys}");
+        assert_eq!(
+            window.composite_editors(cx)[0].text,
+            unchanged,
+            "after {keys}"
+        );
     }
     // The side is still in normal mode, so motions work.
-    diff_keys(&window, false, "j", "one\n‸two\nthree\n", cx);
+    diff_keys(&window, 0, "j", "one\n‸two\nthree\n", cx);
 
     // The document side is editable.
-    window.focus_diff_side(true, cx);
-    diff_keys(&window, true, "j x", "one\n‸WO\nthree\n", cx);
+    window.focus_composite_editor(1, cx);
+    diff_keys(&window, 1, "j x", "one\n‸WO\nthree\n", cx);
 }
 
 /// `]c` and `[c` move between the hunks of a composite diff, wrapping.
@@ -994,9 +998,9 @@ await commands.register("try.diff", async () => {{
 fn vim_follows_the_modified_editor_of_an_inline_diff(cx: &mut TestAppContext) {
     let post_init = format!("{ENABLE}await settings.set(\"diff.layout\", \"inline\");\n");
     let (_product, window, _directory) = show_diff(&post_init, cx);
-    window.focus_diff_side(true, cx);
-    diff_keys(&window, true, "j x", "one\n‸WO\nthree\n", cx);
-    diff_keys(&window, true, "u", "one\n‸TWO\nthree\n", cx);
+    window.focus_composite_editor(0, cx);
+    diff_keys(&window, 0, "j x", "one\n‸WO\nthree\n", cx);
+    diff_keys(&window, 0, "u", "one\n‸TWO\nthree\n", cx);
 }
 
 /// A key costs a few draws and the host requests its behavior needs: the

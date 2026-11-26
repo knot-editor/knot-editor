@@ -7,7 +7,8 @@
 // painted on resources (status.ts), and each window shows the current ref
 // (ref.ts).
 import { commands, diff, documents, keymaps, windows, workbench } from "knot";
-import type { Buffer, CommandContext, DiffHandle, Disposable, DocumentId, EditorContribution } from "knot";
+import type { Buffer, CommandContext, Disposable, DocumentId, EditorContribution } from "knot";
+import { diffs } from "@knot/diff";
 import { backendContract, vcs } from "./contract.js";
 import { contributionsOf, SHOW_CHANGES } from "./hunks.js";
 import { targetLine, type Direction } from "./navigation.js";
@@ -28,7 +29,7 @@ type Follow = {
   language: string;
   uri: string | null;
   /** The open diff of the baseline against the document, if any. */
-  diff: DiffHandle | null;
+  diff: string | null;
   repository: Repository | null;
   /** The baseline text, null when the file has none. */
   baseline: string | null;
@@ -169,18 +170,18 @@ export async function start(): Promise<Disposable> {
 
   /** Closes the follow's diff, if open. */
   async function closeDiff(follow: Follow) {
-    const { diff: handle } = follow;
+    const { diff: id } = follow;
     follow.diff = null;
-    await handle?.close().catch(() => {});
+    if (id !== null) await (await diffs.client()).close(id).catch(() => {});
   }
 
   /** Brings an open diff up to the baseline just fetched, or closes it when the file has none. */
   async function syncDiff(follow: Follow) {
-    const { diff: handle, baseline } = follow;
-    if (handle === null) return;
+    const { diff: id, baseline } = follow;
+    if (id === null) return;
     if (baseline === null) return closeDiff(follow);
     try {
-      await handle.setText("original", baseline);
+      await (await diffs.client()).setText({ id, side: "original", text: baseline });
     } catch {
       // The tab was closed.
       follow.diff = null;
@@ -347,7 +348,7 @@ export async function start(): Promise<Disposable> {
     }
     await closeDiff(follow);
     const label = await refLabel(follow);
-    follow.diff = await workbench.openDiff({
+    follow.diff = await (await diffs.client()).open({
       original: { label, text: follow.baseline, language: follow.language },
       modified: { label: "Working Copy", document: follow.id },
       line,

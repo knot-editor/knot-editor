@@ -4,10 +4,10 @@ use gpui::TestAppContext;
 use knot::test_support::{CommandOutcome, TestProduct, TestWindow};
 use serde_json::{Value, json};
 
-fn vcs() -> &'static knot_bundled::BundledSource {
+fn package(name: &str) -> &'static knot_bundled::BundledSource {
     knot_ext_vcs::PACKAGES
         .iter()
-        .find(|package| package.manifest.contains("\"name\": \"@knot/vcs\""))
+        .find(|package| package.manifest.contains(&format!("\"name\": \"{name}\"")))
         .unwrap()
 }
 
@@ -76,7 +76,8 @@ await commands.register("probe.changed", async () => report(await attempt(async 
 /// contract, and of `vcs`, answers.
 fn product() -> &'static [knot_bundled::BundledSource] {
     let packages = vec![
-        *vcs(),
+        *package("@knot/diff"),
+        *package("@knot/vcs"),
         backend("alpha"),
         backend("beta"),
         knot_bundled::BundledSource {

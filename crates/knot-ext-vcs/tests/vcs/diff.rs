@@ -6,6 +6,8 @@ use std::process::Command;
 use gpui::TestAppContext;
 use knot::test_support::{CommandOutcome, TestProduct, resolved_tempdir, wait_until};
 
+use super::texts;
+
 fn git(directory: &Path, args: &[&str]) {
     let output = Command::new("git")
         .args(["-c", "user.name=T", "-c", "user.email=t@example.com"])
@@ -48,14 +50,14 @@ fn the_diff_of_a_file_follows_a_commit(cx: &mut TestAppContext) {
         window.run_command("vcs.showChanges", cx),
         CommandOutcome::Completed
     );
-    wait_until(cx, |cx| !window.diff_texts(cx).is_empty());
+    wait_until(cx, |cx| !texts(&window, cx).is_empty());
     assert_eq!(
-        window.diff_texts(cx),
+        texts(&window, cx),
         [("one\n".to_owned(), "two\n".to_owned())]
     );
 
     git(root, &["commit", "-q", "-am", "two"]);
     wait_until(cx, |cx| {
-        window.diff_texts(cx) == [("two\n".to_owned(), "two\n".to_owned())]
+        texts(&window, cx) == [("two\n".to_owned(), "two\n".to_owned())]
     });
 }

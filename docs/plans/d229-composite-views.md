@@ -342,7 +342,14 @@ lines as block rows; see the
 reference. The setting stays native until 21. Switching to inline fails with
 `DocumentUnsaved` while the original is a document with unsaved changes.
 
-#### 20. Switch `@knot/vcs`
+#### 20. Switch `@knot/vcs` 🚧
+
+`@knot/vcs` requires `@knot/diff` and opens, updates, and closes its diff
+through the `diffs` contract; its types come from `src/diff.d.ts`, as Vim's do
+for `@knot/go-to-file`. Its tests serve the contract with a recording fake, and
+the product tests (`knot-ext-vcs`, Vim's diff tests) read the composite tab's
+editors with `composite_marked`. The native diff and its test helpers stay
+until 21.
 
 Deliverables: `@knot/vcs` opens diffs through the contract; the native diff
 stays for comparison.

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, mock, test } from "node:test";
+import { diffs } from "@knot/diff";
 import { documents } from "knot";
 import type { Buffer, DocumentId } from "knot";
 import * as host from "knot/testing";
@@ -10,10 +11,34 @@ let started: Promise<unknown> | null = null;
 /** Starts the package once per test, before anything that needs `vcs`. */
 const running = () => (started ??= start());
 
+/** A diff opened through the `diff` contract, which these tests serve. */
+type Shown = {
+  options: { original: { label: string; text?: string; language?: string }; modified: { label: string; document?: string }; line?: number };
+  /** The text of the original side now, after any `setText`. */
+  original: string;
+  closed: boolean;
+};
+let shown: Shown[] = [];
+
 // Package tests get Node's own timers, which mock.timers drives.
-beforeEach(() => {
+beforeEach(async () => {
   host.reset();
   started = null;
+  shown = [];
+  await diffs.serve({
+    open: (options) => {
+      shown.push({ options, original: (options.original as { text: string }).text, closed: false });
+      return `diff-${shown.length}`;
+    },
+    setText: ({ id, text }) => {
+      const diff = shown[Number(id.slice(5)) - 1]!;
+      if (diff.closed) throw new Error("closed");
+      diff.original = text;
+    },
+    close: (id) => {
+      shown[Number(id.slice(5)) - 1]!.closed = true;
+    },
+  });
   mock.timers.enable({ apis: ["setTimeout"] });
 });
 afterEach(() => mock.timers.reset());
@@ -333,7 +358,7 @@ test("Show Changes opens the baseline against the document at the caret line", a
   await rest();
   host.setEditorView({ anchor: 2, caret: 2, top: 0, scrollX: 0 });
   assert.equal(await host.run("vcs.showChanges"), "completed");
-  const [diff] = host.diffs();
+  const [diff] = shown;
   assert.deepEqual(diff!.options.original, { label: "main", text: "a\nb\nc\n", language: "plaintext" });
   assert.deepEqual(diff!.options.modified, { label: "Working Copy", document: id });
   assert.equal(diff!.options.line, 1);
@@ -344,7 +369,7 @@ test("Compare with Last Commit says so when nothing changed", async () => {
   await backend("one", { repositories: () => [ROOT], baseline: () => "a\nb\n" });
   await rest();
   assert.equal(await host.run("vcs.showChanges"), "completed");
-  assert.equal(host.diffs().length, 0);
+  assert.equal(shown.length, 0);
   assert.equal(host.notices().length, 1);
 });
 
@@ -353,7 +378,7 @@ test("Show Changes is unavailable for a file without a baseline", async () => {
   await backend("one", { repositories: () => [ROOT], baseline: () => null });
   await rest();
   assert.equal(await host.run("vcs.showChanges"), "unavailable");
-  assert.equal(host.diffs().length, 0);
+  assert.equal(shown.length, 0);
 });
 
 test("clicking a change mark opens the diff at that hunk, replacing an open one", async () => {
@@ -362,7 +387,7 @@ test("clicking a change mark opens the diff at that hunk, replacing an open one"
   await rest();
   await host.clickContribution(id, 0);
   await host.clickContribution(id, 0);
-  const [first, second] = host.diffs();
+  const [first, second] = shown;
   assert.equal(first!.closed, true);
   assert.equal(second!.closed, false);
   assert.equal(second!.options.line, 3);
@@ -374,7 +399,7 @@ test("an open diff follows the baseline and closes when the baseline is gone", a
   await backend("one", { repositories: () => [ROOT], baseline: () => baseline });
   await rest();
   await host.run("vcs.showChanges");
-  const [diff] = host.diffs();
+  const [diff] = shown;
   baseline = "a\nx\n";
   await (await vcs.client()).changed({ backend: "one", repository: ROOT });
   await rest();
@@ -394,5 +419,5 @@ test("an open diff closes with its document", async () => {
   await host.run("vcs.showChanges");
   await host.emit({ type: "documentClosed", document: id } as never);
   await settle();
-  assert.equal(host.diffs()[0]!.closed, true);
+  assert.equal(shown[0]!.closed, true);
 });

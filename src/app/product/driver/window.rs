@@ -762,6 +762,29 @@ impl TestWindow {
         })
     }
 
+    /// The text of editor `index` of the first composite tab, with `‸` at its
+    /// caret, or at both ends of a selection.
+    pub fn composite_marked(&self, index: usize, cx: &mut TestAppContext) -> String {
+        cx.read(|cx| {
+            let view = self.first_composite(cx).expect("a composite tab");
+            let view = view.read(cx);
+            let editor = view
+                .leaves()
+                .iter()
+                .filter_map(|leaf| leaf.editor())
+                .nth(index)
+                .expect("an editor")
+                .read(cx);
+            let (anchor, caret) = editor.editor().read(cx).selection(cx);
+            let mut text = editor.editor().read(cx).model().read(cx).text();
+            text.insert(anchor.max(caret), crate::test_support::cases::CARET);
+            if anchor != caret {
+                text.insert(anchor.min(caret), crate::test_support::cases::CARET);
+            }
+            text
+        })
+    }
+
     /// The key contexts of a side of the first diff tab's editor.
     pub fn diff_contexts(&self, modified: bool, cx: &mut TestAppContext) -> Vec<String> {
         cx.read(|cx| {
