@@ -151,34 +151,11 @@ report `statusChanged`, so an action needs no refresh of its own.
 
 ### 1. Native file commands ✅
 
-Deliverables: the four `file.*` commands with argument and focus resolution;
-the explorer's row menus switched to them and its own commands removed; the
-tab context menu entries.
-
-Validation: product tests for each command from a tree row's `resource`, from
-the focused editor, with an argument, and unavailable without a file; the
-explorer's tests moved to the native commands; `just check`.
-
-Review gate: the commands from the explorer, a tab, and the palette.
-
-Implemented: the tab menu entries live in `@knot/chrome` beside the other tab
-items, with the explorer keeping only Reveal in Explorer View between them.
-The explorer's root row now carries `resource`, so the native commands resolve
-it like any other row.
-
-**Implementation context.** Declare the commands with `#[command(...)]` in
-`src/app/product/commands.rs`, next to `file.open` and `reveal_log_folder`,
-which shows `cx.reveal_path`. The focused tree's selection is
-`ExtensionView::selected_tree_item` in `src/app/workbench.rs`; add an
-equivalent that returns the selected item's `resource` from
-`src/app/tree_view.rs`. The relative path's rule moves from
-`extensions/@knot/explorer/src/clipboard.ts` (`relativePath`, `displayPath` in
-`rows.ts`) into model code with plain tests. Remove `COPY_PATH`,
-`COPY_RELATIVE_PATH`, `COPY_NAME`, and `REVEAL` from
-`extensions/@knot/explorer/src/{rows,clipboard}.ts`, and keep its menu entries
-by command name. Tab menu items go through the `tab` location of
-`src/app/menus.rs` and `src/app/context_menu.rs`. Explorer product tests are
-in `crates/knot-ext-workbench/tests/workbench/explorer.rs`.
+Done: `file.copy-path`, `file.copy-relative-path`, `file.copy-name`, and
+`file.reveal` are native commands (resolution from `{ uri }`, a focused tree's
+selected `resource`, or the focused editor). The explorer's row menus list
+them, and the tab entries live in `@knot/chrome`. Documentation of them is in
+checkpoint 5.
 
 ### 2. Groups and comparison in the contract
 
