@@ -123,6 +123,17 @@ binding: they move focus to the next or previous field across the editor's
 bars, top to bottom, wrapping, and never insert text. Up and Down in a field
 that has history recall its entries natively, before the text input sees them.
 
+### Editor popovers
+
+An editor with open popovers holds the key context `popover:<id>` for each, so
+bindings under it apply while the editor has focus. With focus inside a popover
+view, the keymap resolves against that view's own contexts. Escape closes a
+popover before the keymap sees it, so a modal package's Escape binding cannot
+shadow it: the popover with focus, else the newest, of the command's editor or
+of the editor a focused popover view floats over. It does nothing while a bar
+field has the keys or a key sequence is pending, and reaches the keymap when no
+popover is open.
+
 ### Picker tabs
 
 While a picker with scope tabs has Knot-side focus, the router resolves keys

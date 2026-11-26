@@ -293,6 +293,42 @@ the buffer's native `find` ([core and buffers](core-and-buffers.md#text-search))
 Because the decorations belong to the view, each split of a buffer shows only
 its own bar's matches.
 
+### Editor popovers
+
+An editor can float popovers over its text, anchored to a range of its lines.
+An extension describes one as data, with the content of a
+[composite view](workbench-and-lifecycle.md#composite-views): a toolbar over a
+layout built by `src/app/view_layout.rs`, the builder composites share. A
+popover belongs to its opening lifecycle and an extension-chosen ID per editor;
+opening an ID again updates it in place and keeps the views of keyed members.
+Popovers paint in opening order, newest on top, without avoiding one another.
+State is in `crates/knot-model/src/editor/popovers.rs`, which holds each
+anchor as an anchored range in the buffer, so edits move it. The content is
+`PopoverContent` in `src/app/editor/popovers.rs`, which also places and paints
+popovers; they are presentation state, never recorded, and close with their
+editor or lifecycle.
+
+The layout takes its natural height (`Sizing::Natural`): editor and text
+members as tall as their lines up to `maxLines`, trees up to `maxRows`, rows as
+their tallest member, columns as the sum, plus the toolbar. A width is `editor`
+or `{ pixels }`, clamped to the text area. `pixels` are multiplied by the
+[zoom](workbench-and-lifecycle.md#zoom) factor, where a composite's are window
+pixels. `EditorView::popover_frames` places each below the anchor's last line,
+else above its first, else on the side with more room, clamps the height to
+that room so members scroll themselves, and omits a popover while its anchor is
+out of view or folded away, so it follows scrolling.
+
+A popover's views are children of its editor in the
+[view tree](workbench-and-lifecycle.md#view-tree). Focus stays with the editor
+unless the popover opened with `focus`, and moves back to the text when the
+focused popover closes. Knot closes a popover for Escape, a click in the editor
+or outside every popover, an edit of the buffer, or the deletion of its anchor,
+and tells the owner through `onDidClosePopover`, coalesced like bar edits, with
+the reason. An edit made while focus is inside a popover view does not close
+them, since a popover may hold an editor on the same document; the model tells
+edits apart by buffer revision. A toolbar click dispatches its command with the
+anchoring editor captured. [Commands](commands.md#editor-popovers) covers keys.
+
 ## Syntax highlighting and languages
 
 Highlight layers compose in a fixed order: syntax, then contribution

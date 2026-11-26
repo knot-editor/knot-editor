@@ -35,7 +35,8 @@ The request envelope supplies source identity. Replacement, explicit disposal,
 buffer closure, and extension teardown remove the complete source set.
 Built-ins and extensions use the same application-owned contribution registry.
 Editor contributions include anchored decorations, gutter marks, and
-command-backed actions.
+command-backed actions. Content anchored to lines is an
+[editor popover](editor-and-languages.md#editor-popovers).
 
 Decorations may instead belong to one view. `EditorState` keeps one set per
 extension lifecycle, validated like a contribution set and anchored in the

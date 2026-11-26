@@ -123,7 +123,8 @@ window sets its rem size from it, so chrome styled in rems scales, and surfaces
 that measure in pixels multiply by the same factor: editors and terminals size
 their text as `font.size` times the factor, and pixel chrome such as tabs, the
 picker, and text inputs scales its constants. Tool-window sizes stay window pixels, as
-on a window resize.
+on a window resize, and so do composite members' `pixels`; the `pixels` of an
+[editor popover](editor-and-languages.md#editor-popovers) scale.
 
 ## Status bar
 
@@ -368,6 +369,9 @@ when focus moves between them; both publish `presentationsChanged`. A view's
 identity is its gpui entity, which extensions see as a `ViewNodeTarget`, while
 the tab keeps its `ViewTarget` for tab operations. Moving a tab keeps its views,
 and a view that leaves the tree invalidates its targets.
+An editor is a leaf unless it has popovers, which are its children (kind
+`popover`) holding the views of their layouts, so a popover's editor has the
+popover and the anchoring editor among its parents.
 `Workbench::focused_leaf` is the leaf view focused in a tab, and a window's
 `focusedView` and `statusView` are the leaves of the focused tab and of the
 [status editor](extension-host.md#application-metadata-queries).

@@ -317,6 +317,38 @@ References: [editor bars](../architecture/editor-and-languages.md#editor-bars),
 [key routing](../architecture/commands.md#editor-bars), and
 [text search](../architecture/core-and-buffers.md#text-search).
 
+## Editor popovers
+
+Content anchored to lines of an editor, such as a hunk's baseline or a hover,
+is a floating popover described as data, not a new kind of surface. It takes
+the composite layout (a toolbar over editors, text frames, and trees) rather
+than text and trees only, so one layout builder serves composites and popovers,
+the views are ordinary views of the view tree, and Vim and other editor-driven
+packages work inside them. Inline zones that push lines apart were rejected for
+this: they need layout, fold, and scroll integration that a floating surface
+avoids, and they reuse the same content later.
+
+- **Several popovers per editor** over one, keyed by package and ID, because
+  hover and a hunk popup are independent consumers; there is no collision
+  avoidance, and a package that wants one reuses an ID.
+- **Following scrolling**, hidden while the anchor is out of view, over closing
+  on scroll, so the user can read context and return.
+- **Popovers are children of their editor in the view tree** rather than views
+  outside it, so `workbench.editor`, `focusedView`, and `parents` reach them and
+  say which editor a popover belongs to.
+- **`pixels` scale with zoom**, unlike composites', because a popover sizes to
+  content: zooming in must not squeeze larger text into the same width.
+- **Every external edit closes all of an editor's popovers** rather than an
+  option, so a stale hover never lingers and the hunk popup closes on revert;
+  a consumer that must survive an edit opens it again with the same ID. An edit
+  typed inside a popover is exempt, since it may hold an editor on the same
+  document.
+- **Escape is handled before the keymap**, because a modal package such as Vim
+  binds Escape in its own contexts, which would otherwise outrank it.
+
+Reference: [editor popovers](../architecture/editor-and-languages.md#editor-popovers)
+and [key routing](../architecture/commands.md#editor-popovers).
+
 ## Status bar
 
 The bar is native and its items are extension registrations, so the window owns

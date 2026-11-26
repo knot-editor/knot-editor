@@ -53,7 +53,6 @@ plugins work only because its Lua runs synchronously
 | Key contexts on non-editor views | Terminals, trees, and contributed views resolve by view kind | Modal keys in the explorer or terminal | D147 |
 | Lifecycle hooks and native command overrides | Changes are observed after they commit | Format on save, LSP, customizing a native command | D115 |
 | Virtual text and inlay hints | Decorations and gutter markers only | LSP inlay hints and diagnostics, blame, inline suggestions | D145 |
-| Floating panels anchored to a position | None | Hunk popup, LSP hover | D220 |
 | Interactive generated buffers | Read-only contributed text frames | Magit- or oil-style views, task output | D027 |
 | Previewing a replacement | `:s` and Replace edit without a preview | Vim `inccommand`, Find | D201 |
 

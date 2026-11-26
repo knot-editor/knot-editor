@@ -98,6 +98,10 @@ touches.
 - [Editor bars](decisions/semantic-ui.md#editor-bars): non-modal data-described
   strips rather than the modal input; native matching and replacement, Find in
   a bundled package, Replace as a second bar.
+- [Editor popovers](decisions/semantic-ui.md#editor-popovers): floating
+  data-described content with the composite layout, several per editor,
+  children of their editor in the view tree, zoom-scaled pixels, closed by every
+  external edit; Escape ahead of the keymap.
 - [Status bar](decisions/semantic-ui.md#status-bar): native bar, extension
   items with per-window values.
 - [Generated text surfaces](decisions/semantic-ui.md#generated-text-surfaces):

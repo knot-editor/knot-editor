@@ -428,6 +428,50 @@ and `\U` `\L` ... `\E` changing the case of what follows, and returns
 [`@knot/find`](../../extensions/@knot/find/) package is a complete example; the
 precise contracts are in `knot.d.ts`.
 
+## Show a popover
+
+A popover floats over an editor's text, anchored to a range of its lines, for
+content that belongs to a spot in the text, such as a hunk's baseline. It
+shows what a [composite view](#open-a-composite-view) shows, a toolbar over a
+layout of editors, text frames, and trees, and it does not move the text. Open
+it on an editor handle; opening the same ID again updates it in place and keeps
+the views of keyed members.
+
+```js
+const editor = await workbench.editor(target);
+await editor.openPopover("hunk", {
+  anchor: { start: 10, end: 12 },
+  width: "editor",
+  toolbar: [{ label: "Revert", icon: "vcs.revert", command: "vcs.revert-hunk" }],
+  layout: { type: "column", children: [{ type: "editor", buffer: baseline, maxLines: 8 }] },
+});
+await editor.onDidClosePopover(({ popover, reason }) => forget(popover, reason));
+```
+
+The popover is as wide as `width` (`"editor"`, the default, or `{ pixels }`),
+never wider than the text, and as tall as its content: an editor or text member
+as its lines up to `maxLines`, a tree up to `maxRows` (both default to 12), a
+row as its tallest member, a column the sum of its members. What does not fit
+beside the anchor scrolls. `pixels` in a popover are logical pixels that zoom
+scales, unlike a composite's. The popover sits below the anchor's last line,
+else above the first, else on the side with more room, follows the anchor as the
+editor scrolls, and hides while the anchor is out of view or folded away.
+
+Popovers do not take focus unless `focus: true`, so the editor stays usable.
+While one is open, the editor holds the key context `popover:<id>`; bind keys
+with `keymaps.bind(key, command, { view: "editor", context: "popover:<id>" })`.
+Toolbar buttons run their command with the anchoring editor's tab as target and
+that editor as `editor`, wherever focus is.
+
+Knot closes a popover on Escape (the one with focus, else the newest), on a
+click outside every popover, on any edit of the editor's buffer except one typed
+into a view inside a popover, and when an edit deletes the anchor; the edit
+closes all of the editor's popovers. `onDidClosePopover` on a handle reports the
+ID and reason (`"escape"`, `"click"`, `"edit"`, or `"deleted"`); `closePopover`,
+the editor closing, and unloading the package report nothing. To keep a popover
+across an edit, open it again with the same ID. The precise contracts are in
+`knot.d.ts`.
+
 ## Show status items
 
 Every window shows a status bar below the workbench. A package fills
