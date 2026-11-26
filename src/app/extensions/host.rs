@@ -2544,6 +2544,23 @@ impl ProductExtensionHost {
         self.track_owned_editor(owner, &editor);
     }
 
+    /// Open or update the calling lifecycle's popover on an editor,
+    /// remembering the editor so teardown closes it.
+    pub(super) fn open_editor_popover(
+        &mut self,
+        owner: ExtensionKey,
+        editor: Entity<crate::app::editor::Editor>,
+        id: &str,
+        spec: knot_model::editor::popovers::PopoverSpec,
+        buffer: Entity<crate::app::model::Buffer>,
+        cx: &mut App,
+    ) {
+        editor.update(cx, |editor, cx| {
+            editor.open_popover(owner, id, spec, buffer, cx)
+        });
+        self.track_owned_editor(owner, &editor);
+    }
+
     /// Set or clear the calling lifecycle's caret shape on an editor,
     /// remembering the editor so teardown clears it.
     pub(super) fn set_editor_caret_shape(

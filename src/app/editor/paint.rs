@@ -25,6 +25,7 @@ impl Render for EditorView {
             let anchor = self.completion_anchor(editor, window, cx);
             crate::app::completion::render_completion(surface, anchor, theme(cx))
         });
+        let popovers = self.render_popovers(cx);
         div()
             .id(("editor", self.element_id))
             .size_full()
@@ -78,7 +79,8 @@ impl Render for EditorView {
                     .min_h_0()
                     .relative()
                     .child(EditorElement { entity })
-                    .children(completion),
+                    .children(completion)
+                    .children(popovers),
             )
     }
 }

@@ -203,6 +203,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::reversed_empty_ranges)]
     fn spec_needs_lines_and_a_positive_height() {
         assert_eq!(spec(1..2).problem(), None);
         assert!(spec(2..2).problem().is_some());

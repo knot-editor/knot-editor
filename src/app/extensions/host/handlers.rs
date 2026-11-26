@@ -4277,6 +4277,99 @@ pub(crate) async fn editor_close_bar(
     })?
 }
 
+fn popover_id(reader: &mut dyn ArgumentReader, index: usize) -> Result<String, DecodeError> {
+    let id = reader.text(index, "popover id must be text")?;
+    if id.is_empty() {
+        return Err(DecodeError::Range("popover id must not be empty"));
+    }
+    Ok(id)
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct OpenPopoverArguments {
+    pub authority: EditorAuthority,
+    pub id: String,
+    pub anchor: std::ops::Range<u32>,
+    pub layout: super::composites::LayoutWire,
+}
+impl HostArguments for OpenPopoverArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        let line = |value: u64| {
+            u32::try_from(value).map_err(|_| DecodeError::Range("popover anchor line is too large"))
+        };
+        Ok(Self {
+            authority: EditorAuthority::decode(reader, 2)?,
+            id: popover_id(reader, 3)?,
+            anchor: line(reader.integer(4)?)?..line(reader.integer(5)?)?,
+            layout: decode_composite_layout(&reader.text(6, "popover layout must be text")?)?,
+        })
+    }
+}
+
+/// Failures of an editor popover operation.
+#[derive(Debug, HostError)]
+pub(crate) enum PopoverError {
+    #[error(transparent)]
+    Access(AccessError),
+    #[error(code = "BufferClosed", message = "BufferClosed")]
+    BufferClosed,
+}
+impl From<AccessError> for PopoverError {
+    fn from(error: AccessError) -> Self {
+        Self::Access(error)
+    }
+}
+
+/// Open the caller's popover on the captured editor, anchored to a range of
+/// its lines, or update it in place. The popover lasts until closed, the
+/// anchor is deleted, the view closes, or the caller's lifecycle ends.
+#[host_operation("editorOpenPopover")]
+pub(crate) async fn editor_open_popover(
+    context: HostContext,
+    arguments: OpenPopoverArguments,
+) -> Result<(), PopoverError> {
+    let request = context.request;
+    context.foreground(|host, cx| {
+        let editor = host.contextual_editor(&request, arguments.authority, cx)?;
+        let owner = ExtensionKey::new(request.extension, request.lifecycle);
+        let (buffer, spec) = host.popover_content(owner, arguments.anchor, arguments.layout)?;
+        host.open_editor_popover(owner, editor, &arguments.id, spec, buffer, cx);
+        Ok(())
+    })?
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct PopoverArguments {
+    pub authority: EditorAuthority,
+    pub id: String,
+}
+impl HostArguments for PopoverArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self {
+            authority: EditorAuthority::decode(reader, 2)?,
+            id: popover_id(reader, 3)?,
+        })
+    }
+}
+
+/// Close the caller's popover on the captured editor; closing a popover that
+/// is not open does nothing.
+#[host_operation("editorClosePopover")]
+pub(crate) async fn editor_close_popover(
+    context: HostContext,
+    arguments: PopoverArguments,
+) -> Result<(), AccessError> {
+    let request = context.request;
+    context.foreground(|host, cx| {
+        let editor = host.contextual_editor(&request, arguments.authority, cx)?;
+        let owner = ExtensionKey::new(request.extension, request.lifecycle);
+        editor.update(cx, |editor, cx| {
+            editor.close_popover(owner, &arguments.id, cx)
+        });
+        Ok(())
+    })?
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct FocusBarFieldArguments {
     pub authority: EditorAuthority,

@@ -145,7 +145,7 @@ Each checkpoint ends at a review gate: `cargo test` for the touched crates and
 the product tests named below pass, the extension API typechecks, and the
 behavior is shown in the running app before the next starts.
 
-### 1. A popover on the screen
+### 1. A popover on the screen ✅ implemented, awaiting review
 
 `editor.openPopover(id, { anchor, toolbar, layout })` with a single `editor`
 member on an extension buffer and a fixed height opens a popover below the
@@ -156,6 +156,12 @@ popover. Several IDs coexist, newest on top.
 Validation: model unit tests for spec checks, anchoring, ordering, and owner
 removal; product tests opening, updating, and closing popovers from a fixture
 package, including unload and anchor deletion.
+
+Scope decision: the checkpoint accepts the composite layout format but only
+a root group with one `editor` member on an extension buffer sized
+`{ pixels }`, which is the popover's height (logical pixels, scaled by zoom);
+the popover spans the text area. Toolbar, width, and richer layouts come in
+checkpoints 2 and 3. An anchor whose text an edit empties counts as deleted.
 
 **Implementation context.** Add `crates/knot-model/src/editor/popovers.rs`
 mirroring `editor/bars.rs` (spec type with `problem()`, an ordered set keyed

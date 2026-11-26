@@ -13,6 +13,7 @@ mod input;
 mod layout;
 pub(super) mod native_commands;
 mod paint;
+mod popovers;
 mod view;
 
 pub(crate) use bars::BarFieldEdited;
@@ -118,6 +119,8 @@ pub struct Editor {
     completion_tasks: Vec<(u64, ProviderRegistrationId, Task<()>)>,
     /// The text field behind each field of the open bars.
     bar_inputs: Vec<bars::BarInput>,
+    /// The view behind each open popover.
+    popover_views: Vec<popovers::PopoverView>,
     /// The block rows each extension lifecycle set.
     owned_blocks: Vec<OwnedBlocks>,
     _model_subscription: Subscription,
@@ -197,6 +200,7 @@ impl Editor {
             model,
             completion_tasks: Vec::new(),
             bar_inputs: Vec::new(),
+            popover_views: Vec::new(),
             owned_blocks: Vec::new(),
             _model_subscription: model_subscription,
             _release_subscription: release_subscription,
@@ -219,6 +223,7 @@ impl Editor {
         self.state = state;
         self.completion_tasks.clear();
         self.bar_inputs.clear();
+        self.popover_views.clear();
         cx.notify();
     }
 
@@ -246,6 +251,7 @@ impl Editor {
             result
         });
         self.run_effects(cx);
+        self.sync_popover_views(cx);
         let generation = self.state.completion_generation();
         self.completion_tasks
             .retain(|(task, _, _)| Some(*task) == generation);
@@ -358,6 +364,7 @@ impl Editor {
         let model = self.model.clone();
         model.update(cx, |buffer, _| self.state.remove_owner_state(owner, buffer));
         self.sync_bar_inputs(cx);
+        self.sync_popover_views(cx);
         if self.owned_blocks.iter().any(|blocks| blocks.owner == owner) {
             self.set_block_rows(owner, Vec::new(), cx);
         }

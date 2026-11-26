@@ -274,6 +274,19 @@ function barId(value: unknown) {
   if (typeof value !== "string" || value === "") throw new TypeError("bar id must be a non-empty string");
   return value;
 }
+function popoverId(value: unknown) {
+  if (typeof value !== "string" || value === "") throw new TypeError("popover id must be a non-empty string");
+  return value;
+}
+function popoverAnchor(value: unknown) {
+  expectRecord(value, "popover anchor must be an object");
+  const { start, end } = value;
+  if (typeof start !== "number" || typeof end !== "number" ||
+      !Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || start >= end) {
+    throw new TypeError("a popover anchor needs a non-negative safe integer start below its end");
+  }
+  return [start, end];
+}
 function barCommand(value: unknown) {
   expectRecord(value, "bar command must be an object");
   const name = string(value.name, "bar command name must be a string");
@@ -1001,6 +1014,14 @@ function editorFor(authority: Native) {
     },
     async closeBar(id: unknown) {
       await request("editorCloseBar", authority, barId(id));
+    },
+    async openPopover(id: unknown, popover: unknown) {
+      expectRecord(popover, "popover must be an object");
+      const [start, end] = popoverAnchor(popover.anchor);
+      await request("editorOpenPopover", authority, popoverId(id), start, end, compositeLayoutJson(popover.layout));
+    },
+    async closePopover(id: unknown) {
+      await request("editorClosePopover", authority, popoverId(id));
     },
     async focusBarField(id: unknown, field: unknown, options?: Opts) {
       const text = options?.text ?? null;

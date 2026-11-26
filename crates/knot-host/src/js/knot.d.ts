@@ -1959,6 +1959,16 @@ declare module "knot" {
     readonly buttons?: readonly EditorBarButton[];
     readonly message?: string | null;
   }
+  /** What an editor popover shows and where it floats. */
+  export interface EditorPopover {
+    /** The lines of the editor's buffer the popover is anchored to, `start`
+     * through `end` exclusive. The anchor follows edits; deleting all of it
+     * closes the popover. The popover floats below the last line. */
+    readonly anchor: { readonly start: number; readonly end: number };
+    /** Its content: a column or row of one `editor` member on a buffer of
+     * `buffers.create`, sized `{ pixels }`, which is the popover's height. */
+    readonly layout: CompositeGroup;
+  }
   /** The user edited a field of the bar `bar`; `fields` holds every field's
    * text by ID. */
   export type EditorBarEdit = Readonly<{ bar: string; fields: Readonly<Record<string, string>> }>;
@@ -2138,6 +2148,23 @@ declare module "knot" {
      * nothing. A field of it with focus returns focus to the text.
      * @throws HostError with InvalidTarget or Cancelled. */
     closeBar(id: string): Promise<void>;
+    /**
+     * Open a popover floating over this editor's text, anchored to a range of
+     * its lines, or update the caller's popover `id` in place. Popovers
+     * paint in the order they were opened, newest on top. The popover belongs
+     * to the caller's lifecycle, as bars do: other lifecycles' popovers of
+     * the same ID are independent, and teardown closes it. It is presentation
+     * state, never recorded, and lasts until closed, its anchor is deleted,
+     * or the view closes.
+     * @throws HostError with InvalidTarget, BufferClosed, or Cancelled;
+     * TypeError for an empty ID or a malformed popover; RangeError for an
+     * anchor without lines.
+     */
+    openPopover(id: string, popover: EditorPopover): Promise<void>;
+    /** Close the caller's popover `id`; closing one that is not open does
+     * nothing.
+     * @throws HostError with InvalidTarget or Cancelled. */
+    closePopover(id: string): Promise<void>;
     /**
      * Give a field of the caller's bar `id` the editor's focus in place of its
      * text, first replacing the field's text with `text`, all selected, when

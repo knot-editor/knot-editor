@@ -12,6 +12,7 @@ mod document_watch;
 mod editing;
 mod editor_api;
 mod editor_bars;
+mod editor_popovers;
 mod editor_tabs;
 mod entitlements;
 mod extension_api;

@@ -13,13 +13,14 @@ use serde::Deserialize;
 use std::collections::HashSet;
 
 use super::ProductExtensionHost;
-use super::handlers::{AccessError, OpenError};
+use super::handlers::{AccessError, OpenError, PopoverError};
 use crate::app::composite_view::{
     Arrangement, CONNECTOR_WIDTH, CompositeTab, ConnectorSpec, ContentSpec, GroupSpec, LayoutSize,
     MemberSpec, ScrollLink, ToolbarButton,
 };
 use crate::app::extensions::semantics::SemanticError;
 use crate::app::product;
+use knot_model::editor::popovers::PopoverSpec;
 
 /// What `openComposite` and `updateComposite` set on a tab and its toolbar.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -351,6 +352,41 @@ impl ProductExtensionHost {
                 target: target.clone(),
             });
         Ok(target)
+    }
+
+    /// The buffer and spec of a popover whose content is `layout`: a single
+    /// editor on one of `owner`'s buffers, of a fixed height in pixels.
+    pub(crate) fn popover_content(
+        &self,
+        owner: ExtensionKey,
+        anchor: std::ops::Range<u32>,
+        layout: LayoutWire,
+    ) -> Result<(gpui::Entity<crate::app::model::Buffer>, PopoverSpec), PopoverError> {
+        let unsupported = || PopoverError::from(AccessError::InvalidTarget);
+        let (_, [member]) = layout.children().ok_or_else(unsupported)? else {
+            return Err(unsupported());
+        };
+        let (
+            ContentWire::Editor {
+                buffer: Some(buffer),
+                ..
+            },
+            Some(SizeWire::Pixels(height)),
+        ) = (&member.content, member.size)
+        else {
+            return Err(unsupported());
+        };
+        let buffer = self
+            .extension_buffers
+            .get(&BufferHandle::new(*buffer))
+            .filter(|state| state.owner() == owner)
+            .map(|state| state.model.clone())
+            .ok_or(PopoverError::BufferClosed)?;
+        let spec = PopoverSpec { anchor, height };
+        if spec.problem().is_some() {
+            return Err(unsupported());
+        }
+        Ok((buffer, spec))
     }
 
     /// Whether `owner` registered an embedded view `id` with `content`.
