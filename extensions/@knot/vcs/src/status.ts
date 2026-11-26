@@ -9,8 +9,29 @@ import { contains, directoryOf, isGone, type Repository } from "./repositories.j
 export type Status = "added" | "modified" | "deleted" | "renamed" | "untracked" | "conflicted";
 export type Entry = { readonly file: string; readonly status: Status };
 
-/** A repository and the files its backend reported as changed. */
-export type Snapshot = { readonly repository: Repository; readonly entries: readonly Entry[] };
+/** An action a group offers on its rows; `command` is one of the backend's own. */
+export type GroupAction = {
+  readonly label: string;
+  readonly icon?: string;
+  readonly command: string;
+  readonly on: readonly ("group" | "folder" | "file")[];
+  readonly menuOnly?: boolean;
+  readonly showOnHover?: boolean;
+};
+
+/** A list of changed files the backend shows together, as file URIs. */
+export type Group = {
+  readonly id: string;
+  readonly label: string;
+  readonly files: readonly string[];
+  readonly actions: readonly GroupAction[];
+};
+
+/** What a backend reports of a repository's status. */
+export type Report = { readonly files: readonly Entry[]; readonly groups: readonly Group[] };
+
+/** A repository and what its backend reported as changed. */
+export type Snapshot = { readonly repository: Repository; readonly entries: readonly Entry[]; readonly groups: readonly Group[] };
 
 /** Most important first: the status a folder takes when its changes differ. */
 const PRIORITY: readonly Status[] = ["conflicted", "deleted", "modified", "renamed", "added", "untracked"];
@@ -91,8 +112,8 @@ export function decorate(snapshots: readonly Snapshot[]): Map<string, ResourceDe
 export type StatusDeps = {
   /** Every repository whose status is shown. */
   known(): Promise<Repository[]>;
-  /** The changed files of one repository. */
-  fetch(repository: Repository): Promise<readonly Entry[]>;
+  /** The status of one repository. */
+  fetch(repository: Repository): Promise<Report>;
   /** A backend whose contract no longer binds. */
   gone(backend: string): void;
 };
@@ -152,7 +173,8 @@ export function createStatuses(deps: StatusDeps): Statuses {
   async function fetch(repository: Repository) {
     const key = keyOf(repository);
     try {
-      snapshots.set(key, { repository, entries: await deps.fetch(repository) });
+      const { files, groups } = await deps.fetch(repository);
+      snapshots.set(key, { repository, entries: files, groups });
     } catch (error) {
       // A repository whose status failed keeps what it showed; one that never had any shows none.
       if (!isGone(error)) return;

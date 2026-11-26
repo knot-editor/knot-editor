@@ -25,7 +25,9 @@ const serving = await backendContract("{id}").serve({{
   repositories: (root) => [`${{root}}/{id}`],
   repositoryOf: (file) => `{id}:${{file}}`,
   baseline: ({{ repository, file }}) => `{id}|${{repository}}|${{file}}`,
-  status: () => [],
+  status: () => ({{ files: [], groups: [] }}),
+  compare: () => null,
+  rollback: () => {{}},
   ref: () => null,
 }});
 await (await vcs.client()).register("{id}");

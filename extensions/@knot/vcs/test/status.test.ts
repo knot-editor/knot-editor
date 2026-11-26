@@ -24,6 +24,7 @@ const ROOT = "file:///work";
 type Answers = {
   repositories?: (root: string) => string[];
   status?: (repository: string) => Entry[] | Promise<Entry[]>;
+  groups?: { id: string; label: string; files: string[]; actions: never[] }[];
   ref?: (repository: string) => { label: string; tooltip?: string } | null;
 };
 
@@ -33,7 +34,12 @@ async function backend(id: string, answers: Answers) {
     repositories: (root) => (answers.repositories ?? (() => []))(root),
     repositoryOf: () => null,
     baseline: () => null,
-    status: (repository) => (answers.status ?? (() => []))(repository),
+    status: async (repository) => ({
+      files: await (answers.status ?? (() => []))(repository),
+      groups: answers.groups ?? [],
+    }),
+    compare: () => null,
+    rollback: () => {},
     ref: (repository) => (answers.ref ?? (() => null))(repository),
   });
   await (await vcs.client()).register(id);
@@ -79,6 +85,20 @@ test("each status shows its color, badge, and tooltip", async () => {
     const [badge, tooltip] = expected[status as Status];
     assert.deepEqual(shown(`${ROOT}/${name}.txt`), { color: `vcs.${status}`, badge: { text: badge }, tooltip });
   }
+});
+
+test("groups in the answer leave the decorations to the files", async () => {
+  openRoot();
+  await backend("one", {
+    repositories: () => [ROOT],
+    status: () => [{ file: `${ROOT}/a.txt`, status: "modified" }],
+    groups: [
+      { id: "staged", label: "Staged", files: [`${ROOT}/a.txt`], actions: [] },
+      { id: "unstaged", label: "Unstaged", files: [`${ROOT}/a.txt`], actions: [] },
+    ],
+  });
+  await settle();
+  assert.equal(colorOf(`${ROOT}/a.txt`), "vcs.modified");
 });
 
 test("the status colors are defined for both appearances", async () => {
@@ -217,7 +237,9 @@ test("a document outside every root decorates its own repository", async () => {
     repositories: () => [],
     repositoryOf: (directory) => (directory.startsWith(OUTSIDE) ? OUTSIDE : null),
     baseline: () => null,
-    status: () => [{ file: `${OUTSIDE}/f.txt`, status: "modified" }],
+    status: () => ({ files: [{ file: `${OUTSIDE}/f.txt`, status: "modified" }], groups: [] }),
+    compare: () => null,
+    rollback: () => {},
     ref: () => null,
   });
   await (await vcs.client()).register("one");
@@ -308,7 +330,9 @@ test("statusChanged pulls status and leaves the baselines alone", async () => {
       baselines += 1;
       return null;
     },
-    status: () => entries,
+    status: () => ({ files: entries, groups: [] }),
+    compare: () => null,
+    rollback: () => {},
     ref: () => null,
   });
   await (await vcs.client()).register("one");

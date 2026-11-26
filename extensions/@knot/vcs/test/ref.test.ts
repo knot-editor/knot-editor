@@ -29,7 +29,7 @@ async function backend(refs: Record<string, Ref>) {
     repositories: (root) => Object.keys(refs).filter((repository) => root === repository || repository.startsWith(`${root}/`)),
     repositoryOf: (directory) => Object.keys(refs).find((repository) => directory === repository || directory.startsWith(`${repository}/`)) ?? null,
     baseline: () => null,
-    status: () => [],
+    status: () => ({ files: [], groups: [] }), compare: () => null, rollback: () => {},
     ref: (repository) => refs[repository] ?? null,
   });
   await (await vcs.client()).register("one");

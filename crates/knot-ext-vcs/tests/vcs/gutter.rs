@@ -12,7 +12,9 @@ await backendContract("fixed").serve({
   repositories: (root) => [root],
   repositoryOf: () => null,
   baseline: () => "a\nb\nc\nd\n",
-  status: () => [],
+  status: () => ({ files: [], groups: [] }),
+  compare: () => null,
+  rollback: () => {},
   ref: () => null,
 });
 await (await vcs.client()).register("fixed");

@@ -22,6 +22,23 @@ export const vcs = defineContract("vcs", {
   backends: s.fn(s.void(), s.array(s.string())),
 });
 
+/** One side of a diff: a label and the text shown under it. */
+const side = s.object({ label: s.string(), text: s.string() });
+
+/**
+ * What a group offers on its rows. `command` is one of the backend's own
+ * commands, run with `{ repository, group, path }` where `path` is the file,
+ * the folder, or the repository root for a group header.
+ */
+const action = s.object({
+  label: s.string(),
+  icon: s.optional(s.string()),
+  command: s.string(),
+  on: s.array(s.enum(["group", "folder", "file"])),
+  menuOnly: s.optional(s.boolean()),
+  showOnHover: s.optional(s.boolean()),
+});
+
 const backends = new Map<string, ReturnType<typeof defineBackend>>();
 
 function defineBackend(id: string) {
@@ -33,19 +50,45 @@ function defineBackend(id: string) {
     /** The text of a file URI in a repository's baseline, or null when it has none. */
     baseline: s.fn(s.object({ repository: s.string(), file: s.string() }), s.nullable(s.string())),
     /**
-     * A snapshot of the repository's files that differ from its baseline, as
-     * file URIs: one it does not list is unchanged, and ignored files are never
-     * listed. `renamed` is the new path.
+     * A snapshot of the repository: `files` are those that differ from its
+     * baseline, as file URIs (one it does not list is unchanged, ignored files
+     * are never listed, and `renamed` is the new path); `groups` are the lists
+     * the backend shows them in, in its order. A file can be in several groups.
      */
     status: s.fn(
       s.string(),
-      s.array(
+      s.object({
+        files: s.array(
+          s.object({
+            file: s.string(),
+            status: s.enum(["added", "modified", "deleted", "renamed", "untracked", "conflicted"]),
+          }),
+        ),
+        groups: s.array(
+          s.object({
+            id: s.string(),
+            label: s.string(),
+            files: s.array(s.string()),
+            actions: s.array(action),
+          }),
+        ),
+      }),
+    ),
+    /**
+     * The sides of a file's diff in a group, or null when it has none there.
+     * `modified` is `"document"` for the working file, opened editable.
+     */
+    compare: s.fn(
+      s.object({ repository: s.string(), group: s.string(), file: s.string() }),
+      s.nullable(
         s.object({
-          file: s.string(),
-          status: s.enum(["added", "modified", "deleted", "renamed", "untracked", "conflicted"]),
+          original: side,
+          modified: s.union([s.literal("document"), side]),
         }),
       ),
     ),
+    /** Restores the path, a file or folder URI, to its baseline on disk, after confirming with the user. */
+    rollback: s.fn(s.object({ repository: s.string(), path: s.string() }), s.void()),
     /** What is checked out in the repository, or null when the backend has nothing to show. */
     ref: s.fn(s.string(), s.nullable(s.object({ label: s.string(), tooltip: s.optional(s.string()) }))),
   });

@@ -19,11 +19,34 @@ declare module "@knot/vcs" {
     baseline: FnSchema<{ repository: string; file: string }, string | null>;
     status: FnSchema<
       string,
-      readonly {
-        file: string;
-        status: "added" | "modified" | "deleted" | "renamed" | "untracked" | "conflicted";
-      }[]
+      {
+        readonly files: readonly {
+          file: string;
+          status: "added" | "modified" | "deleted" | "renamed" | "untracked" | "conflicted";
+        }[];
+        readonly groups: readonly {
+          id: string;
+          label: string;
+          files: readonly string[];
+          actions: readonly {
+            label: string;
+            icon?: string;
+            command: string;
+            on: readonly ("group" | "folder" | "file")[];
+            menuOnly?: boolean;
+            showOnHover?: boolean;
+          }[];
+        }[];
+      }
     >;
+    compare: FnSchema<
+      { repository: string; group: string; file: string },
+      {
+        original: { label: string; text: string };
+        modified: "document" | { label: string; text: string };
+      } | null
+    >;
+    rollback: FnSchema<{ repository: string; path: string }, void>;
     ref: FnSchema<string, { label: string; tooltip?: string } | null>;
   }>;
 }

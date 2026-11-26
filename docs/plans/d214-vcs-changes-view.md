@@ -157,7 +157,7 @@ selected `resource`, or the focused editor). The explorer's row menus list
 them, and the tab entries live in `@knot/chrome`. Documentation of them is in
 checkpoint 5.
 
-### 2. Groups and comparison in the contract
+### 2. Groups and comparison in the contract ✅
 
 Deliverables: `status` returns `{ files, groups }`; `compare` and `rollback`
 in the backend contract; Git's four groups with their actions declared (the
@@ -168,6 +168,13 @@ Validation: `@knot/vcs` unit tests over the in-memory host for the new answer;
 Git parsing tests for each group, including a staged file edited again, a
 staged rename, a conflict, and the collapsed untracked folder; product tests of
 `compare` over temporary repositories; `just check`.
+
+Done: `status` returns `{ files, groups }` and the backend contract has
+`compare` and `rollback`; Git serves the four groups with their actions
+declared (commands `git.stage`, `git.unstage`, `git.discard`, `git.rollback`,
+not registered until checkpoint 4) and `compare` for each group, and its
+`rollback` rejects until checkpoint 4. `@knot/vcs` keeps `groups` beside each
+snapshot. A binary file or a folder has no comparison.
 
 Review gate: the contract shape, before the view depends on it.
 
