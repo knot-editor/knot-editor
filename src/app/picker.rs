@@ -427,6 +427,9 @@ impl Picker {
         let count = self.matches.len();
         self.selected = if count == 0 {
             0
+        } else if delta.abs() == 1 {
+            // Single steps wrap around; page jumps stop at the ends.
+            (self.selected as isize + delta).rem_euclid(count as isize) as usize
         } else {
             self.selected
                 .saturating_add_signed(delta)
@@ -1066,6 +1069,28 @@ mod tests {
         let picker = picker(vec![entry("Alpha", None), marked, entry("Gamma", None)], cx);
         picker.read_with(cx, |picker, _| {
             assert_eq!(picker.selected_entry(), Some(1));
+        });
+    }
+
+    #[gpui::test]
+    fn single_steps_wrap_while_page_jumps_stop_at_the_ends(cx: &mut TestAppContext) {
+        let picker = picker(
+            vec![
+                entry("Alpha", None),
+                entry("Beta", None),
+                entry("Gamma", None),
+            ],
+            cx,
+        );
+        picker.update(cx, |picker, cx| {
+            picker.move_selection(-1, cx);
+            assert_eq!(picker.selected, 2);
+            picker.move_selection(1, cx);
+            assert_eq!(picker.selected, 0);
+            picker.move_selection(10, cx);
+            assert_eq!(picker.selected, 2);
+            picker.move_selection(-10, cx);
+            assert_eq!(picker.selected, 0);
         });
     }
 

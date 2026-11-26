@@ -2610,8 +2610,8 @@ impl KnotWindow {
             _ => None,
         };
         let new_session = terminal.map(|id| {
-            let directory = Self::terminal_session_directory(id, cx)
-                .or_else(|| self.default_directory());
+            let directory =
+                Self::terminal_session_directory(id, cx).or_else(|| self.default_directory());
             self.create_terminal_in(directory, cx)
         });
         let split = self

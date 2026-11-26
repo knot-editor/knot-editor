@@ -105,8 +105,13 @@ fn move_selection(
     let index = selected
         .and_then(|selected| snapshot.items.iter().position(|item| item.id == selected))
         .unwrap_or(0);
-    let last = snapshot.items.len().saturating_sub(1) as isize;
-    let next = (index as isize + delta).clamp(0, last) as usize;
+    let count = snapshot.items.len() as isize;
+    let next = if delta.abs() == 1 {
+        // Single steps wrap around; larger jumps stop at the ends.
+        (index as isize + delta).rem_euclid(count) as usize
+    } else {
+        (index as isize + delta).clamp(0, count - 1) as usize
+    };
     *selected = Some(snapshot.items[next].id);
 }
 
@@ -579,5 +584,30 @@ mod tests {
         let reordered = snapshot(&[(3, "three"), (2, "two"), (1, "one")]);
         list.update(reordered);
         assert_eq!(list.selected_item(), Some(CompletionItemId(2)));
+    }
+
+    #[test]
+    fn single_steps_wrap_while_larger_jumps_stop_at_the_ends() {
+        let items = (1..=3)
+            .map(|id| CompletionItem {
+                id: CompletionItemId(id),
+                label: format!("item{id}"),
+                insert_text: format!("item{id}"),
+                provider_label: "fixture".into(),
+            })
+            .collect::<Vec<_>>();
+        let mut list = CompletionSurface::attach(CompletionSnapshot {
+            items: items.into(),
+            pending_provider_count: 0,
+            failures: Arc::from([]),
+        });
+        list.move_selection(-1);
+        assert_eq!(list.selected_item(), Some(CompletionItemId(3)));
+        list.move_selection(1);
+        assert_eq!(list.selected_item(), Some(CompletionItemId(1)));
+        list.move_selection(10);
+        assert_eq!(list.selected_item(), Some(CompletionItemId(3)));
+        list.move_selection(-10);
+        assert_eq!(list.selected_item(), Some(CompletionItemId(1)));
     }
 }
