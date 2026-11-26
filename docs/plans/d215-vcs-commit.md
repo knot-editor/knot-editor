@@ -1,6 +1,6 @@
 # D215 — VCS commit
 
-Status: 🚧 planned. Source: [roadmap D215](../roadmap.md#version-control), milestone 4 of
+Status: 🚧 in progress (checkpoint 1 done). Source: [roadmap D215](../roadmap.md#version-control), milestone 4 of
 the [version control plan](vcs.md).
 
 ## Outcome
@@ -111,28 +111,10 @@ on the hovered line only, so nothing is precomputed.
 
 ## Checkpoints
 
-### 1. Links in editors
+### 1. Links in editors ✅
 
-Status: implemented ✅; awaiting the review gate (`Try: links`).
-
-Deliverables: shared URL detection in `knot-model`, used by the terminal; Cmd
-hover underline and Cmd+click open in editors and text frames.
-
-Validation: model tests for detection (moved from the terminal's, plus line
-offsets); editor tests that Cmd+click on a URL opens it and elsewhere places the
-caret; terminal link tests still pass. `just check`.
-
-Review gate: Cmd+click a URL in a document and in a text frame; a `Try:`
-command opens a frame with links.
-
-**Implementation context:** detection is `LinkGrid::detect` in
-`src/app/terminal/links.rs`; move its text scan (scheme check, word boundary,
-trailing punctuation and unbalanced brackets) and `http_destination` into a
-`knot-model` module returning byte ranges, and keep the cell mapping in the
-terminal. The terminal opens with `cx.open_url` (`src/app/terminal/view.rs`).
-Editor pointer input is `src/app/editor/input.rs` (`on_mouse_down`), painting in
-`src/app/editor/paint.rs`; the opener goes through an injectable callback like
-the terminal's `open_link` so tests observe it. Document the behavior in
+Shared URL detection lives in `knot-model` (`links`), and editors and text
+frames open http(s) URLs with Cmd+click; see
 [editor and languages](../architecture/editor-and-languages.md).
 
 ### 2. Layout tool windows, controls, placeholders
