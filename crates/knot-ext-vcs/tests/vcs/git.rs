@@ -28,10 +28,13 @@ fn git(directory: &Path, args: &[&str]) {
     );
 }
 
-/// A repository in `directory` whose HEAD holds `files`.
+/// A repository in `directory` whose HEAD holds `files`. Line endings are
+/// converted only by `.gitattributes`, whatever the machine's Git config says,
+/// since the tests write working-tree files directly.
 fn repository(directory: &Path, files: &[(&str, &[u8])]) {
     std::fs::create_dir_all(directory).unwrap();
     git(directory, &["init", "-q", "-b", "main"]);
+    git(directory, &["config", "core.autocrlf", "false"]);
     for (name, content) in files {
         std::fs::write(directory.join(name), content).unwrap();
     }
@@ -185,6 +188,7 @@ fn a_nested_repository_and_a_submodule_resolve_to_the_deepest_root(cx: &mut Test
         ],
     );
     git(outer, &["commit", "-q", "-m", "module"]);
+    git(&outer.join("module"), &["config", "core.autocrlf", "false"]);
 
     // The same edit, `z`, appended to each file: only the deepest repository's
     // baseline makes the outcome the one line the file really added.

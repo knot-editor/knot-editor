@@ -32,6 +32,8 @@ fn the_diff_of_a_file_follows_a_commit(cx: &mut TestAppContext) {
     let directory = resolved_tempdir();
     let root = directory.path();
     git(root, &["init", "-q", "-b", "main"]);
+    // The baseline keeps the LF the test writes, whatever the machine's Git config says.
+    git(root, &["config", "core.autocrlf", "false"]);
     std::fs::write(root.join("a.txt"), "one\n").unwrap();
     git(root, &["add", "."]);
     git(root, &["commit", "-q", "-m", "base"]);

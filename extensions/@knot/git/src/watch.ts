@@ -17,9 +17,18 @@ type Watched = { readonly disposables: Disposable[] };
 
 const watched = new Map<string, Promise<Watched | null>>();
 
-/** The URI of an absolute POSIX path. */
+/** The URI of an absolute path as Git prints it: `/a/b`, or `C:/a/b` on Windows. */
 function toUri(path: string): string {
-  return `file://${path.split("/").map((segment) => encodeURIComponent(segment)).join("/")}`;
+  const encoded = path
+    .split("/")
+    .map((segment, index) => (index === 0 && /^[A-Za-z]:$/.test(segment) ? segment : encodeURIComponent(segment)))
+    .join("/");
+  return encoded.startsWith("/") ? `file://${encoded}` : `file:///${encoded}`;
+}
+
+/** Whether Git printed an absolute path. */
+function isAbsolute(path: string | undefined): path is string {
+  return path !== undefined && (path.startsWith("/") || /^[A-Za-z]:\//.test(path));
 }
 
 /** Whether a changed URI is one a baseline depends on: HEAD, the index, packed refs, or a ref. */
@@ -42,7 +51,7 @@ async function start(repository: string): Promise<Watched | null> {
   ]);
   if (result === null || result.exitCode !== 0) return null;
   const [gitDir, commonDir] = result.stdout.split("\n");
-  if (!gitDir?.startsWith("/") || !commonDir?.startsWith("/")) return null;
+  if (!isAbsolute(gitDir) || !isAbsolute(commonDir)) return null;
   const own = toUri(gitDir);
   const common = toUri(commonDir);
   const directories = [...new Set([own, common])];

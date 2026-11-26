@@ -1,7 +1,7 @@
-import { workbench } from "knot";
+import { processes, workbench } from "knot";
 import { backendContract, vcs } from "@knot/vcs";
 import { baseline } from "./baseline.js";
-import { git, isMissingProgram } from "./git.js";
+import { isMissingProgram } from "./git.js";
 import { ref } from "./ref.js";
 import { status } from "./status.js";
 import { repositories, repositoryOf } from "./repositories.js";
@@ -10,7 +10,7 @@ import { watch } from "./watch.js";
 /** Whether Git runs; without it there is nothing to serve, and the user is told once. */
 async function available(): Promise<boolean> {
   try {
-    await git("file:///", ["--version"]);
+    await processes.run({ command: "git", args: ["--version"] });
     return true;
   } catch (error) {
     if (!isMissingProgram(error)) throw error;
