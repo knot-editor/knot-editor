@@ -4,7 +4,7 @@ import type { WindowTarget } from "knot";
 import * as host from "knot/testing";
 import { start } from "../src/extension.js";
 import {
-  COPY, COPY_NAME, COPY_PATH, COPY_RELATIVE_PATH, CUT, DELETE, DROP, NEW_FILE, NEW_FOLDER, PASTE, RENAME, REVEAL, REVEAL_ACTIVE, VIEW_ID, parseRowId, rowId,
+  COPY, CUT, DELETE, DROP, NEW_FILE, NEW_FOLDER, PASTE, RENAME, REVEAL_ACTIVE, VIEW_ID, parseRowId, rowId,
 } from "../src/rows.js";
 import { childUri, copyName, pathSegments, renameSelection } from "../src/names.js";
 
@@ -37,14 +37,19 @@ test("names split into path segments and refuse empty, absolute, and relative on
   assert.deepEqual(renameSelection(".gitignore", false), [0, 10]);
 });
 
+const PATHS = ["file.copy-path", "file.copy-relative-path", "file.copy-name"];
+const REVEAL = "file.reveal";
+
 test("rows offer new items in folders and rename and delete below the roots", async () => {
   const [src, readme] = await rows(rootRow);
   const commands = (item: typeof src) => item?.actions?.map((action) => action.command);
-  assert.deepEqual(commands((await rows())[0]), [NEW_FILE, NEW_FOLDER, PASTE, COPY_PATH, COPY_RELATIVE_PATH, COPY_NAME, REVEAL]);
-  assert.deepEqual(commands(src), [NEW_FILE, NEW_FOLDER, CUT, COPY, PASTE, COPY_PATH, COPY_RELATIVE_PATH, COPY_NAME, RENAME, DELETE, REVEAL]);
-  assert.deepEqual(commands(readme), [CUT, COPY, PASTE, COPY_PATH, COPY_RELATIVE_PATH, COPY_NAME, RENAME, DELETE, REVEAL]);
+  assert.deepEqual(commands((await rows())[0]), [NEW_FILE, NEW_FOLDER, PASTE, ...PATHS, REVEAL]);
+  assert.deepEqual(commands(src), [NEW_FILE, NEW_FOLDER, CUT, COPY, PASTE, ...PATHS, RENAME, DELETE, REVEAL]);
+  assert.deepEqual(commands(readme), [CUT, COPY, PASTE, ...PATHS, RENAME, DELETE, REVEAL]);
   assert.ok(src?.actions?.every((action) => action.menuOnly === true));
   assert.deepEqual(src?.actions?.[0]?.arguments, { id: src?.id });
+  const copyPath = src?.actions?.find((action) => action.command === "file.copy-path");
+  assert.deepEqual(copyPath?.arguments, { uri: `${ROOT}/src` });
 });
 
 test("New File validates names, creates missing folders, opens a tab, and reloads the parent", async () => {
@@ -150,42 +155,10 @@ test("Cut refuses a taken name, and a root can be neither cut nor copied", async
   assert.equal(await host.run(COPY, { arguments: { id: rootRow } }), "unavailable");
 });
 
-test("path commands copy the path, the path below the root, and the name", async () => {
-  const main = (await rows((await rows(rootRow)).find((item) => item.label === "src")!.id))[0]!;
-  await host.run(COPY_PATH, { arguments: { id: main.id } });
-  assert.equal(host.clipboard(), "/work/app/src/main.ts");
-  await host.run(COPY_RELATIVE_PATH, { arguments: { id: main.id } });
-  assert.equal(host.clipboard(), "src/main.ts");
-  await host.run(COPY_RELATIVE_PATH, { arguments: { id: rootRow } });
-  assert.equal(host.clipboard(), ".");
-  await host.run(COPY_NAME, { arguments: { id: main.id } });
-  assert.equal(host.clipboard(), "main.ts");
-  await host.run(REVEAL, { arguments: { id: main.id } });
-  assert.deepEqual(host.revealed(), [`${ROOT}/src/main.ts`]);
-});
-
-test("the tab menu offers the file actions on editor tabs", () => {
+test("the tab menu lists the explorer's reveal beside the native file commands", () => {
   assert.deepEqual(host.menuItems("tab"), [
-    { command: COPY_PATH, group: "3_file", order: 0, view: "editor" },
-    { command: COPY_RELATIVE_PATH, group: "3_file", order: 1, view: "editor" },
     { command: REVEAL_ACTIVE, title: "Reveal in Explorer View", group: "3_file", order: 2, view: "editor" },
-    { command: REVEAL, group: "3_file", order: 3, view: "editor" },
   ]);
-});
-
-test("path commands act on the selected tab without a row, and not on untitled ones", async () => {
-  assert.equal(await host.run(COPY_PATH), "unavailable");
-  const main = host.addDocument({ uri: `${ROOT}/src/main.ts`, text: "main" });
-  host.present(window, main);
-  await host.run(COPY_PATH);
-  assert.equal(host.clipboard(), "/work/app/src/main.ts");
-  await host.run(COPY_RELATIVE_PATH);
-  assert.equal(host.clipboard(), "src/main.ts");
-
-  const untitled = host.addDocument({ text: "unsaved" });
-  host.present(window, untitled);
-  assert.equal(await host.run(COPY_PATH), "unavailable");
-  assert.equal(await host.run(COPY_RELATIVE_PATH), "unavailable");
 });
 
 test("copies are named before the extension, and the clipboard keys are bound in the view", () => {

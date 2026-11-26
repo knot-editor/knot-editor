@@ -85,6 +85,14 @@ impl ExtensionView {
         }
     }
 
+    /// The resource of the selected row of a tree.
+    pub(crate) fn selected_tree_resource(&self, cx: &App) -> Option<String> {
+        match self {
+            Self::Tree(view) => view.read(cx).selected_resource(),
+            Self::Text(_) => None,
+        }
+    }
+
     fn entity_id(&self) -> EntityId {
         match self {
             Self::Tree(view) => view.entity_id(),

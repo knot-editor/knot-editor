@@ -149,7 +149,7 @@ report `statusChanged`, so an action needs no refresh of its own.
 
 ## Checkpoints
 
-### 1. Native file commands
+### 1. Native file commands ✅
 
 Deliverables: the four `file.*` commands with argument and focus resolution;
 the explorer's row menus switched to them and its own commands removed; the
@@ -160,6 +160,11 @@ the focused editor, with an argument, and unavailable without a file; the
 explorer's tests moved to the native commands; `just check`.
 
 Review gate: the commands from the explorer, a tab, and the palette.
+
+Implemented: the tab menu entries live in `@knot/chrome` beside the other tab
+items, with the explorer keeping only Reveal in Explorer View between them.
+The explorer's root row now carries `resource`, so the native commands resolve
+it like any other row.
 
 **Implementation context.** Declare the commands with `#[command(...)]` in
 `src/app/product/commands.rs`, next to `file.open` and `reveal_log_folder`,

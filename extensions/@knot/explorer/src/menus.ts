@@ -1,16 +1,12 @@
-// The explorer's entries in the tab header menu: file actions on the
-// clicked tab's document, which read the captured tab instead of the
-// active file.
+// The explorer's entry in the tab header menu: it acts on the clicked tab's
+// document, which it reads from the captured tab instead of the active file.
 import { menus } from "knot";
 import type { MenuItemOptions } from "knot";
-import { COPY_PATH, COPY_RELATIVE_PATH, REVEAL, REVEAL_ACTIVE } from "./rows.js";
+import { REVEAL_ACTIVE } from "./rows.js";
 
-/** Copying, then revealing, the clicked tab's document. */
+/** Between the copied paths and the file manager entry of the tab menu. */
 const TAB_ITEMS: readonly MenuItemOptions[] = [
-  { command: COPY_PATH, group: "3_file", order: 0 },
-  { command: COPY_RELATIVE_PATH, group: "3_file", order: 1 },
   { command: REVEAL_ACTIVE, title: "Reveal in Explorer View", group: "3_file", order: 2 },
-  { command: REVEAL, group: "3_file", order: 3 },
 ];
 
 export async function registerMenus() {

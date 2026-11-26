@@ -481,15 +481,7 @@ fn the_tab_menu_offers_file_actions_on_editor_tabs(cx: &mut TestAppContext) {
     });
     let menu = explorer.window.tab_menu(0, cx);
     assert_eq!(menu.len(), 1, "the explorer contributes one group");
-    assert_eq!(
-        &menu[0][..3],
-        ["Copy Path", "Copy Relative Path", "Reveal in Explorer View"]
-    );
-    assert!(
-        menu[0][3].starts_with("Reveal in "),
-        "the file manager entry is platform-labelled: {:?}",
-        menu[0][3]
-    );
+    assert_eq!(&menu[0][..1], ["Reveal in Explorer View"]);
 }
 
 #[gpui::test]
@@ -511,7 +503,7 @@ fn tab_menu_items_act_on_the_clicked_tab_not_the_active_file(cx: &mut TestAppCon
         .display()
         .to_string();
     assert_eq!(
-        window.run_tab_command(0, "explorer.copy-path", cx),
+        window.run_tab_command(0, "file.copy-path", cx),
         CommandOutcome::Completed
     );
     assert_eq!(
@@ -519,7 +511,7 @@ fn tab_menu_items_act_on_the_clicked_tab_not_the_active_file(cx: &mut TestAppCon
         Some(main)
     );
     assert_eq!(
-        window.run_tab_command(0, "explorer.copy-relative-path", cx),
+        window.run_tab_command(0, "file.copy-relative-path", cx),
         CommandOutcome::Completed
     );
     assert_eq!(
@@ -547,10 +539,10 @@ fn tab_menu_items_are_unavailable_on_untitled_documents(cx: &mut TestAppContext)
     explorer.window.new_document(cx);
     wait_until(cx, |cx| explorer.window.document_tabs(cx).len() == 1);
     for command in [
-        "explorer.copy-path",
-        "explorer.copy-relative-path",
+        "file.copy-path",
+        "file.copy-relative-path",
         "explorer.reveal-active-file",
-        "explorer.reveal-in-finder",
+        "file.reveal",
     ] {
         assert_eq!(
             explorer.window.run_tab_command(0, command, cx),
@@ -656,4 +648,97 @@ fn a_copy_made_while_a_cut_is_pasted_stays_to_paste_next(cx: &mut TestAppContext
     );
     assert!(directory.path().join("app/docs/assets/logo.svg").is_file());
     assert!(directory.path().join("app/assets/logo.svg").is_file());
+}
+
+fn clipboard(cx: &mut TestAppContext) -> Option<String> {
+    cx.read_from_clipboard().and_then(|item| item.text())
+}
+
+#[gpui::test]
+fn file_commands_act_on_the_selected_row_of_a_focused_tree(cx: &mut TestAppContext) {
+    let directory = fixture();
+    let explorer = Explorer::start(&[&directory.path().join("app")], cx);
+    explorer.wait_for_labels(&["app", "docs", "src", "README.md"], cx);
+    let window = &explorer.window;
+
+    // Nothing is selected yet.
+    explorer.tree.focus(cx);
+    assert_eq!(
+        window.run_command("file.copy-path", cx),
+        CommandOutcome::Unavailable
+    );
+
+    explorer.tree.gesture("src", "click", cx);
+    explorer.tree.focus(cx);
+    let src = directory.path().join("app/src");
+    assert_eq!(
+        window.run_command("file.copy-path", cx),
+        CommandOutcome::Completed
+    );
+    assert_eq!(clipboard(cx), Some(src.display().to_string()));
+    assert_eq!(
+        window.run_command("file.copy-relative-path", cx),
+        CommandOutcome::Completed
+    );
+    assert_eq!(clipboard(cx), Some("src".to_owned()));
+    assert_eq!(
+        window.run_command("file.copy-name", cx),
+        CommandOutcome::Completed
+    );
+    assert_eq!(clipboard(cx), Some("src".to_owned()));
+
+    // The root's relative path is ".".
+    explorer.tree.gesture("app", "click", cx);
+    explorer.tree.focus(cx);
+    window.run_command("file.copy-relative-path", cx);
+    assert_eq!(clipboard(cx), Some(".".to_owned()));
+}
+
+#[gpui::test]
+fn file_commands_take_a_uri_argument_and_row_menu_actions_pass_theirs(cx: &mut TestAppContext) {
+    let directory = fixture();
+    let explorer = Explorer::start(&[&directory.path().join("app")], cx);
+    explorer.wait_for_labels(&["app", "docs", "src", "README.md"], cx);
+    let readme = directory.path().join("app/README.md");
+
+    assert_eq!(
+        explorer
+            .window
+            .run_command_on("file.copy-name", &file_uri(&readme), cx),
+        CommandOutcome::Completed
+    );
+    assert_eq!(clipboard(cx), Some("README.md".to_owned()));
+
+    let docs = explorer.tree.row_id("docs", cx).unwrap();
+    explorer.tree.invoke(&docs, "file.copy-path", cx);
+    wait_until(cx, |cx| {
+        clipboard(cx) == Some(directory.path().join("app/docs").display().to_string())
+    });
+}
+
+#[gpui::test]
+fn file_commands_act_on_the_focused_editors_file(cx: &mut TestAppContext) {
+    let directory = fixture();
+    let explorer = Explorer::start(&[&directory.path().join("app")], cx);
+    explorer.wait_for_labels(&["app", "docs", "src", "README.md"], cx);
+    let window = &explorer.window;
+    window.open_path(&directory.path().join("app/src/main.rs"), cx);
+    wait_until(cx, |cx| window.document_tabs(cx).len() == 1);
+    assert_eq!(
+        window.run_command("file.copy-relative-path", cx),
+        CommandOutcome::Completed
+    );
+    assert_eq!(clipboard(cx), Some("src/main.rs".to_owned()));
+    assert_eq!(
+        window.run_command("file.copy-name", cx),
+        CommandOutcome::Completed
+    );
+    assert_eq!(clipboard(cx), Some("main.rs".to_owned()));
+
+    window.new_document(cx);
+    wait_until(cx, |cx| window.document_tabs(cx).len() == 2);
+    assert_eq!(
+        window.run_command("file.copy-path", cx),
+        CommandOutcome::Unavailable
+    );
 }

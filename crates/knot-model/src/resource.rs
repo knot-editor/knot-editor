@@ -84,6 +84,38 @@ impl ResourceUri {
         Self(url)
     }
 
+    /// The decoded path of the resource, as a person reads it.
+    pub fn display_path(&self) -> String {
+        decode(self.0.path())
+    }
+
+    /// The decoded name of the last path segment, empty at a root.
+    pub fn file_name(&self) -> String {
+        decode(
+            self.0
+                .path()
+                .trim_end_matches('/')
+                .rsplit('/')
+                .next()
+                .unwrap_or(""),
+        )
+    }
+
+    /// The decoded path below the first of `roots` that contains the
+    /// resource, "." for the root itself, or the full path when none does.
+    pub fn relative_path<'a>(&self, roots: impl IntoIterator<Item = &'a Self>) -> String {
+        let Some(root) = roots.into_iter().find(|root| self.is_within(root)) else {
+            return self.display_path();
+        };
+        let base = root.0.path().trim_end_matches('/').len();
+        let rest = self.0.path()[base..].trim_matches('/');
+        if rest.is_empty() {
+            ".".to_owned()
+        } else {
+            decode(rest)
+        }
+    }
+
     fn same_authority(&self, other: &Self) -> bool {
         self.0.scheme() == other.0.scheme()
             && self.0.username() == other.0.username()
@@ -105,6 +137,12 @@ impl FromStr for ResourceUri {
     fn from_str(input: &str) -> Result<Self, Self::Err> {
         Self::parse(input)
     }
+}
+
+fn decode(text: &str) -> String {
+    percent_encoding::percent_decode_str(text)
+        .decode_utf8_lossy()
+        .into_owned()
 }
 
 fn path_segments(uri: &ResourceUri) -> UriPathSegments<'_> {
@@ -142,6 +180,23 @@ mod tests {
             ResourceUri::parse("file:///a.txt").unwrap().parent(),
             Some(ResourceUri::parse("file:///").unwrap())
         );
+    }
+
+    #[test]
+    fn paths_and_names_are_decoded_and_relative_to_the_containing_root() {
+        let uri = |text: &str| ResourceUri::parse(text).unwrap();
+        let file = uri("file:///work/my%20app/src/a%20b.rs");
+        assert_eq!(file.display_path(), "/work/my app/src/a b.rs");
+        assert_eq!(file.file_name(), "a b.rs");
+        let outer = uri("file:///work");
+        let inner = uri("file:///work/my%20app/");
+        assert_eq!(file.relative_path([&inner, &outer]), "src/a b.rs");
+        assert_eq!(inner.relative_path([&inner]), ".");
+        assert_eq!(
+            file.relative_path([&uri("file:///other")]),
+            file.display_path()
+        );
+        assert_eq!(uri("file:///").file_name(), "");
     }
 
     #[test]

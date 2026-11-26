@@ -265,6 +265,17 @@ impl TreeView {
         self.selected.clone()
     }
 
+    /// The `resource` of the selected row, if it has one.
+    pub(crate) fn selected_resource(&self) -> Option<String> {
+        let selected = self.selected.as_deref()?;
+        self.children
+            .values()
+            .flat_map(|children| &children.items)
+            .find(|item| item.id == selected)?
+            .resource
+            .clone()
+    }
+
     #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn selected_label(&self) -> Option<String> {
         let selected = self.selected.as_deref()?;

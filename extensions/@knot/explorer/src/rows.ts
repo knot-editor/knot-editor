@@ -16,10 +16,12 @@ export const CUT = "explorer.cut";
 export const COPY = "explorer.copy";
 export const PASTE = "explorer.paste";
 export const DROP = "explorer.drop";
-export const COPY_PATH = "explorer.copy-path";
-export const COPY_RELATIVE_PATH = "explorer.copy-relative-path";
-export const COPY_NAME = "explorer.copy-file-name";
-export const REVEAL = "explorer.reveal-in-finder";
+
+// The native commands on a file's path and location.
+const FILE_COPY_PATH = "file.copy-path";
+const FILE_COPY_RELATIVE_PATH = "file.copy-relative-path";
+const FILE_COPY_NAME = "file.copy-name";
+const FILE_REVEAL = "file.reveal";
 
 /** The name of the platform's file manager action. */
 export const REVEAL_LABEL =
@@ -27,22 +29,23 @@ export const REVEAL_LABEL =
 
 /** What a row's context menu offers: new items in a folder, clipboard and
  * rename and delete for anything but a root, and copied paths. */
-function menuActions(id: string, folder: boolean, root: boolean): TreeAction[] {
-  const action = (label: string, command: string): TreeAction => ({
+function menuActions(id: string, uri: string, folder: boolean, root: boolean): TreeAction[] {
+  const action = (label: string, command: string, args: Record<string, string> = { id }): TreeAction => ({
     label,
     command,
-    arguments: { id },
+    arguments: args,
     menuOnly: true,
   });
+  const file = (label: string, command: string) => action(label, command, { uri });
   return [
     ...(folder ? [action("New File…", NEW_FILE), action("New Folder…", NEW_FOLDER)] : []),
     ...(root ? [] : [action("Cut", CUT), action("Copy", COPY)]),
     action("Paste", PASTE),
-    action("Copy Path", COPY_PATH),
-    action("Copy Relative Path", COPY_RELATIVE_PATH),
-    action("Copy File Name", COPY_NAME),
+    file("Copy Path", FILE_COPY_PATH),
+    file("Copy Relative Path", FILE_COPY_RELATIVE_PATH),
+    file("Copy File Name", FILE_COPY_NAME),
     ...(root ? [] : [action("Rename…", RENAME), action("Delete…", DELETE)]),
-    action(REVEAL_LABEL, REVEAL),
+    file(REVEAL_LABEL, FILE_REVEAL),
   ];
 }
 
@@ -92,7 +95,7 @@ export function entryItem(root: string, entry: FileEntry): TreeItem {
   const id = rowId(root, entry.uri);
   return {
     id,
-    actions: menuActions(id, directory, false),
+    actions: menuActions(id, entry.uri, directory, false),
     label: entry.name,
     icon: directory ? { folder: entry.name } : { file: entry.name },
     collapsibleState: directory ? "collapsed" : "none",
@@ -110,12 +113,13 @@ export function rootItem(root: WorkspaceRoot): TreeItem {
   const id = rowId(root.id, root.uri);
   return {
     id,
-    actions: menuActions(id, true, true),
+    actions: menuActions(id, root.uri, true, true),
     label: name === "" ? root.uri : name,
     description: displayPath(root.uri),
     icon: { folder: name },
     collapsibleState: "expanded",
     dropTarget: true,
+    resource: root.uri,
   };
 }
 

@@ -2,7 +2,7 @@
 import { menus } from "knot";
 import type { MenuItemOptions } from "knot";
 
-/** The tab header menu: closing, then splitting. */
+/** The tab header menu: closing, splitting, then the document's file. */
 const TAB_ITEMS: readonly MenuItemOptions[] = [
   { command: "workbench.close-tab", group: "1_close", order: 0 },
   { command: "workbench.close-other-tabs", group: "1_close", order: 1 },
@@ -10,6 +10,9 @@ const TAB_ITEMS: readonly MenuItemOptions[] = [
   { command: "workbench.close-pane", title: "Close All", group: "1_close", order: 3 },
   { command: "workbench.split-horizontal", group: "2_split", order: 0 },
   { command: "workbench.split-vertical", group: "2_split", order: 1 },
+  { command: "file.copy-path", view: "editor", group: "3_file", order: 0 },
+  { command: "file.copy-relative-path", view: "editor", group: "3_file", order: 1 },
+  { command: "file.reveal", view: "editor", group: "3_file", order: 3 },
 ];
 
 /** The editor's menu: the clipboard commands. */

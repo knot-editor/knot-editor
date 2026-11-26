@@ -726,6 +726,137 @@ pub(crate) async fn reveal_log_folder(
         .await
 }
 
+/// The file a `file.*` command acts on: the `uri` it is given, else the
+/// selected row of a focused tree, else the focused editor's file.
+pub(crate) struct FileArgument(Option<String>);
+
+impl crate::app::commands::declarations::CommandArguments for FileArgument {
+    fn decode(value: &CommandArgumentValue) -> Result<Self, CommandOutcome> {
+        match value {
+            CommandArgumentValue::Null => Ok(Self(None)),
+            CommandArgumentValue::Object(fields) => match fields.get("uri") {
+                None | Some(CommandArgumentValue::Null) => Ok(Self(None)),
+                Some(CommandArgumentValue::String(uri)) => Ok(Self(Some(uri.clone()))),
+                Some(_) => Err(CommandOutcome::InvalidArgument {
+                    message: "uri must be text".into(),
+                }),
+            },
+            _ => Err(CommandOutcome::InvalidArgument {
+                message: "expected an object with a uri".into(),
+            }),
+        }
+    }
+}
+
+/// Run `act` on the file a command targets and the roots of its window.
+async fn on_file(
+    context: &CommandContext,
+    argument: FileArgument,
+    act: impl FnOnce(&crate::app::resource::ResourceUri, &[crate::app::resource::ResourceUri], &mut App)
+    + 'static,
+) -> Result<(), CommandOutcome> {
+    context
+        .window(move |window, target, cx| {
+            let uri = match argument.0 {
+                Some(uri) => uri,
+                None => match target.command_view(cx) {
+                    Some(crate::app::workbench::CommandView::Extension(view)) => view
+                        .selected_tree_resource(cx)
+                        .ok_or(CommandOutcome::Unavailable)?,
+                    Some(crate::app::workbench::CommandView::Editor(_)) => {
+                        let document = target.document_id(cx)?;
+                        let documents = cx.global::<ApplicationDocuments>().0.read(cx);
+                        documents
+                            .get(document)
+                            .and_then(|document| document.resource_uri())
+                            .ok_or(CommandOutcome::Unavailable)?
+                            .to_string()
+                    }
+                    _ => return Err(CommandOutcome::Unavailable),
+                },
+            };
+            let uri = crate::app::resource::ResourceUri::parse(&uri).map_err(|error| {
+                CommandOutcome::InvalidArgument {
+                    message: error.to_string(),
+                }
+            })?;
+            let roots: Vec<_> = window
+                .workspace
+                .snapshot()
+                .roots()
+                .iter()
+                .map(|root| root.uri.clone())
+                .collect();
+            act(&uri, &roots, cx);
+            Ok(())
+        })
+        .await
+}
+
+fn copy_text(text: String, cx: &mut App) {
+    cx.write_to_clipboard(gpui::ClipboardItem::new_string(text));
+}
+
+#[command("file.copy-path", title = "Copy Path", description = "Copy the path of a file or the selected row.", id = COPY_PATH_COMMAND, participant = Workbench)]
+pub(crate) async fn copy_path(
+    context: CommandContext,
+    file: FileArgument,
+) -> Result<(), CommandOutcome> {
+    on_file(&context, file, |uri, _, cx| {
+        copy_text(uri.display_path(), cx)
+    })
+    .await
+}
+
+#[command("file.copy-relative-path", title = "Copy Relative Path", description = "Copy the path of a file below its workspace root.", id = COPY_RELATIVE_PATH_COMMAND, participant = Workbench)]
+pub(crate) async fn copy_relative_path(
+    context: CommandContext,
+    file: FileArgument,
+) -> Result<(), CommandOutcome> {
+    on_file(&context, file, |uri, roots, cx| {
+        copy_text(uri.relative_path(roots), cx)
+    })
+    .await
+}
+
+#[command("file.copy-name", title = "Copy File Name", description = "Copy the name of a file or the selected row.", id = COPY_NAME_COMMAND, participant = Workbench)]
+pub(crate) async fn copy_name(
+    context: CommandContext,
+    file: FileArgument,
+) -> Result<(), CommandOutcome> {
+    on_file(&context, file, |uri, _, cx| copy_text(uri.file_name(), cx)).await
+}
+
+/// Declares `file.reveal` with the platform's name for its file manager.
+macro_rules! reveal_command {
+    ($title:literal, $platform:meta) => {
+        #[cfg($platform)]
+        #[command("file.reveal", title = $title, description = "Show a file or the selected row in the file manager.", id = REVEAL_COMMAND, participant = Workbench)]
+        pub(crate) async fn reveal(
+            context: CommandContext,
+            file: FileArgument,
+        ) -> Result<(), CommandOutcome> {
+            reveal_file(&context, file).await
+        }
+    };
+}
+
+reveal_command!("Reveal in Finder", target_os = "macos");
+reveal_command!("Reveal in File Explorer", target_os = "windows");
+reveal_command!(
+    "Reveal in File Manager",
+    not(any(target_os = "macos", target_os = "windows"))
+);
+
+async fn reveal_file(context: &CommandContext, file: FileArgument) -> Result<(), CommandOutcome> {
+    on_file(context, file, |uri, _, cx| {
+        if let Ok(path) = uri.as_url().to_file_path() {
+            cx.reveal_path(&path);
+        }
+    })
+    .await
+}
+
 #[command("shell.install-command", title = "Shell Command: Install 'knot' command in PATH", description = "Put the knot command on the shell PATH.", id = INSTALL_SHELL_COMMAND, participant = Workbench)]
 pub(crate) async fn install_shell_command(
     context: CommandContext,

@@ -24,10 +24,17 @@ fn the_items_follow_the_selection_and_the_document_of_the_status_target(cx: &mut
 }
 
 #[gpui::test]
-fn the_tab_menu_closes_and_splits_the_clicked_tab(cx: &mut TestAppContext) {
+fn the_tab_menu_closes_splits_and_lists_file_commands_for_the_clicked_tab(cx: &mut TestAppContext) {
     let product = TestProduct::start(only(&["@knot/chrome"]), cx);
     let editor = product.windowed_editor("one", cx);
     wait_until(cx, |cx| !editor.tab_menu(0, cx).is_empty());
+    let reveal = if cfg!(target_os = "macos") {
+        "Reveal in Finder"
+    } else if cfg!(target_os = "windows") {
+        "Reveal in File Explorer"
+    } else {
+        "Reveal in File Manager"
+    };
     assert_eq!(
         editor.tab_menu(0, cx),
         [
@@ -38,6 +45,7 @@ fn the_tab_menu_closes_and_splits_the_clicked_tab(cx: &mut TestAppContext) {
                 "Close All"
             ],
             vec!["Split Right", "Split Down"],
+            vec!["Copy Path", "Copy Relative Path", reveal],
         ]
     );
 

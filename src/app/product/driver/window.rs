@@ -155,6 +155,28 @@ impl TestWindow {
 
     /// Start the command `name` on the focused surface.
     pub fn start_command(&self, name: &str, cx: &mut TestAppContext) -> TestCommand {
+        self.start_command_with(name, CommandArgumentValue::Null, cx)
+    }
+
+    /// Run the command `name` with a `uri` argument on the focused surface
+    /// until it completes.
+    pub fn run_command_on(&self, name: &str, uri: &str, cx: &mut TestAppContext) -> CommandOutcome {
+        let arguments = CommandArgumentValue::Object(
+            [(
+                "uri".to_owned(),
+                CommandArgumentValue::String(uri.to_owned()),
+            )]
+            .into(),
+        );
+        self.start_command_with(name, arguments, cx).finish(cx)
+    }
+
+    fn start_command_with(
+        &self,
+        name: &str,
+        arguments: CommandArgumentValue,
+        cx: &mut TestAppContext,
+    ) -> TestCommand {
         let target = in_window(self.native_window, cx, |cx| {
             self.window.update(cx, |window, cx| {
                 window.focus_active_surface(cx);
@@ -167,7 +189,7 @@ impl TestWindow {
                 dispatcher.dispatch(
                     Command {
                         name: name.into(),
-                        arguments: CommandArgumentValue::Null,
+                        arguments,
                     },
                     target,
                     cx,

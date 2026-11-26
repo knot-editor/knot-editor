@@ -1,12 +1,10 @@
-// Copy, Cut, and Paste of a file or folder, and the texts and file manager
-// actions of a row: its path, relative path, and name.
-import { commands, files, keymaps, platform, workbench } from "knot";
-import type { CommandContext, WindowTarget, WorkspaceRoot } from "knot";
+// Copy, Cut, and Paste of a file or folder.
+import { commands, files, keymaps, platform } from "knot";
+import type { CommandContext, WindowTarget } from "knot";
 import { describe, object, report, rootsOf, rowFor, showCreated } from "./actions.js";
 import { childUri, copyName } from "./names.js";
 import {
-  COPY, COPY_NAME, COPY_PATH, COPY_RELATIVE_PATH, CUT, DROP, displayPath, nameOf, parentOf, parseRowId, PASTE, REVEAL, REVEAL_LABEL,
-  rowId, rootOf, trimmed, VIEW_ID,
+  COPY, CUT, DROP, nameOf, parentOf, parseRowId, PASTE, rowId, trimmed, VIEW_ID,
 } from "./rows.js";
 import type { ExplorerState } from "./state.js";
 
@@ -115,48 +113,11 @@ async function drop(state: ExplorerState, { arguments: args, target }: CommandCo
   await transfer(state, target.windowTarget, destination.root, source.uri, kind.kind === "directory", directory, value?.copy !== true);
 }
 
-/** The path of `uri` below its root, "." for the root itself. */
-function relativePath(roots: readonly WorkspaceRoot[], rootId: string, uri: string): string {
-  const root = roots.find((candidate) => candidate.id === rootId) ?? rootOf(roots, uri);
-  if (root === undefined || root === null) return displayPath(uri);
-  const base = trimmed(root.uri);
-  const rest = uri === base ? "" : uri.slice(base.length + 1);
-  if (rest === "") return ".";
-  return rest.split("/").map((segment) => {
-    try {
-      return decodeURIComponent(segment);
-    } catch {
-      return segment;
-    }
-  }).join("/");
-}
-
-async function copyText(ctx: CommandContext, selected: boolean, text: (row: { root: string; uri: string }, ctx: CommandContext) => Promise<string>) {
-  const row = await rowOf(ctx, selected);
-  if (row === null) return commands.unavailable();
-  await workbench.writeClipboardText(await text(row, ctx));
-}
-
 export async function registerClipboard(state: ExplorerState) {
   const definitions: [string, string, string, (ctx: CommandContext, selected: boolean) => Promise<void>][] = [
     [CUT, "Cut", "Cut the selected file or folder of the explorer, to move it with Paste.", (ctx, s) => take(state, ctx, s, true)],
     [COPY, "Copy", "Copy the selected file or folder of the explorer, to duplicate it with Paste.", (ctx, s) => take(state, ctx, s, false)],
     [PASTE, "Paste", "Paste the cut or copied file or folder into the selected folder of the explorer.", (ctx, s) => paste(state, ctx, s)],
-    [COPY_PATH, "Copy Path", "Copy the path of the selected file or folder of the explorer.",
-      (ctx, s) => copyText(ctx, s, async (row) => displayPath(row.uri))],
-    [COPY_RELATIVE_PATH, "Copy Relative Path", "Copy the path of the selected file or folder below its root.",
-      (ctx, s) => copyText(ctx, s, async (row, c) => relativePath(await rootsOf(c.target.windowTarget), row.root, row.uri))],
-    [COPY_NAME, "Copy File Name", "Copy the name of the selected file or folder of the explorer.",
-      (ctx, s) => copyText(ctx, s, async (row) => nameOf(row.uri))],
-    [REVEAL, REVEAL_LABEL, "Show the selected file or folder of the explorer in the file manager.", async (ctx, s) => {
-      const row = await rowOf(ctx, s);
-      if (row === null) return commands.unavailable();
-      try {
-        await files.reveal(row.uri);
-      } catch (error) {
-        await report(`Cannot reveal ${nameOf(row.uri)}: ${describe(error)}`);
-      }
-    }],
   ];
   for (const [name, title, description, run] of definitions) {
     await commands.register(name, (ctx) => run(ctx, false), { title, description });

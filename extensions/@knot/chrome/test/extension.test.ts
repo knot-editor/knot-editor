@@ -198,7 +198,7 @@ test("the other actions run their native command and need an editor", async () =
   assert.equal(await host.run(INDENTATION_COMMAND, { window: empty }), "unavailable");
 });
 
-test("the tab menu closes and splits in two groups, in order", async () => {
+test("the tab menu closes, splits, and lists the file commands, in order", async () => {
   await start();
   assert.deepEqual(
     host.menuItems("tab").map((item) => [item.command, item.group]),
@@ -209,6 +209,9 @@ test("the tab menu closes and splits in two groups, in order", async () => {
       ["workbench.close-pane", "1_close"],
       ["workbench.split-horizontal", "2_split"],
       ["workbench.split-vertical", "2_split"],
+      ["file.copy-path", "3_file"],
+      ["file.copy-relative-path", "3_file"],
+      ["file.reveal", "3_file"],
     ],
   );
 });
