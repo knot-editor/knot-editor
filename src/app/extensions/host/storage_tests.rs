@@ -246,7 +246,18 @@ fn personal_config_storage_has_a_separate_stable_owner(cx: &mut TestAppContext) 
                 if ((await storage.read('count')).value !== {}) throw Error('phases do not share storage');
             "#, generation))),
         ])).unwrap();
-        host.update(cx, |host, _| host.load_personal_config(key, graph).unwrap());
+        // The previous lifecycle is still stopping until its unload settles.
+        let mut graph = Some(graph);
+        crate::test_support::wait_until(cx, |cx| {
+            host.update(cx, |host, _| {
+                match host.load_personal_config(key, graph.clone().unwrap()) {
+                    Ok(_) => true,
+                    Err(error) if error.to_string().contains("AlreadyAdmitted") => false,
+                    Err(error) => panic!("{error}"),
+                }
+            })
+        });
+        graph.take();
         for phase in [HostConfigPhase::PreInit, HostConfigPhase::PostInit] {
             let execution = cx.read(|cx| {
                 host.read(cx)
