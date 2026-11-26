@@ -5,6 +5,7 @@
 //! closes when the instance is disposed, its kind is unregistered, or the
 //! lifecycle ends.
 
+use crate::app::editor::PopoverContentSpec;
 use gpui::{App, Context};
 use knot_protocol::{
     BufferHandle, DocumentDestination, ExtensionKey, PresentationTarget, ViewContentKind,
@@ -13,7 +14,7 @@ use serde::Deserialize;
 use std::collections::HashSet;
 
 use super::ProductExtensionHost;
-use super::handlers::{AccessError, OpenError, PopoverError};
+use super::handlers::{AccessError, OpenError};
 use crate::app::composite_view::{CompositeTab, ScrollLink};
 use crate::app::extensions::semantics::SemanticError;
 use crate::app::product;
@@ -234,6 +235,15 @@ impl LayoutWire {
     }
 }
 
+/// What `openPopover` sets besides its layout.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct PopoverOptions {
+    /// The popover's height in logical pixels.
+    pub height: f32,
+    pub toolbar: Vec<ToolbarButton>,
+}
+
 pub(super) struct OwnedComposite {
     kind: String,
     target: PresentationTarget,
@@ -355,39 +365,28 @@ impl ProductExtensionHost {
         Ok(target)
     }
 
-    /// The buffer and spec of a popover whose content is `layout`: a single
-    /// editor on one of `owner`'s buffers, of a fixed height in pixels.
+    /// What a popover anchored to `anchor` shows: the toolbar and layout,
+    /// whose buffers, documents, and views must be `owner`'s.
     pub(crate) fn popover_content(
         &self,
         owner: ExtensionKey,
         anchor: std::ops::Range<u32>,
+        options: PopoverOptions,
         layout: LayoutWire,
-    ) -> Result<(gpui::Entity<crate::app::model::Buffer>, PopoverSpec), PopoverError> {
-        let unsupported = || PopoverError::from(AccessError::InvalidTarget);
-        let (_, [member]) = layout.children().ok_or_else(unsupported)? else {
-            return Err(unsupported());
+        cx: &App,
+    ) -> Result<PopoverContentSpec, OpenError> {
+        let spec = PopoverSpec {
+            anchor,
+            height: options.height,
         };
-        let (
-            ContentWire::Editor {
-                buffer: Some(buffer),
-                ..
-            },
-            Some(SizeWire::Pixels(height)),
-        ) = (&member.content, member.size)
-        else {
-            return Err(unsupported());
-        };
-        let buffer = self
-            .extension_buffers
-            .get(&BufferHandle::new(*buffer))
-            .filter(|state| state.owner() == owner)
-            .map(|state| state.model.clone())
-            .ok_or(PopoverError::BufferClosed)?;
-        let spec = PopoverSpec { anchor, height };
         if spec.problem().is_some() {
-            return Err(unsupported());
+            return Err(AccessError::InvalidTarget.into());
         }
-        Ok((buffer, spec))
+        Ok(PopoverContentSpec {
+            spec,
+            toolbar: options.toolbar,
+            layout: self.composite_spec(owner, layout, cx)?,
+        })
     }
 
     /// Whether `owner` registered an embedded view `id` with `content`.

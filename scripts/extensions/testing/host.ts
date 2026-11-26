@@ -1861,6 +1861,9 @@ function editor(tab: FakeTab): Knot.Editor {
       if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || start >= end) {
         throw new TypeError("a popover anchor needs a non-negative safe integer start below its end");
       }
+      if (typeof popover.height !== "number" || !Number.isFinite(popover.height) || popover.height <= 0) {
+        throw new TypeError("popover height must be a positive number");
+      }
       const next = { id, anchor: { start, end } };
       const index = tab.popovers.findIndex((candidate) => candidate.id === id);
       if (index >= 0) tab.popovers[index] = next;

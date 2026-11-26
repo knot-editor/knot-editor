@@ -524,7 +524,7 @@ fn tab_state(
     })
 }
 
-fn info(window: &Entity<KnotWindow>, cx: &TestAppContext) -> knot_protocol::WindowInfo {
+pub(super) fn info(window: &Entity<KnotWindow>, cx: &TestAppContext) -> knot_protocol::WindowInfo {
     cx.read(|cx| {
         window.read(cx).application_window(
             window.entity_id(),
@@ -1041,7 +1041,7 @@ fn clicking_a_tab_title_shows_its_member_and_focuses_it(cx: &mut TestAppContext)
 }
 
 /// Click the toolbar button of the debug selector `selector`.
-fn click_toolbar_button(
+pub(super) fn click_toolbar_button(
     native_window: gpui::AnyWindowHandle,
     selector: &'static str,
     cx: &mut TestAppContext,

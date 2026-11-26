@@ -4290,6 +4290,7 @@ pub(crate) struct OpenPopoverArguments {
     pub authority: EditorAuthority,
     pub id: String,
     pub anchor: std::ops::Range<u32>,
+    pub options: super::composites::PopoverOptions,
     pub layout: super::composites::LayoutWire,
 }
 impl HostArguments for OpenPopoverArguments {
@@ -4301,22 +4302,10 @@ impl HostArguments for OpenPopoverArguments {
             authority: EditorAuthority::decode(reader, 2)?,
             id: popover_id(reader, 3)?,
             anchor: line(reader.integer(4)?)?..line(reader.integer(5)?)?,
-            layout: decode_composite_layout(&reader.text(6, "popover layout must be text")?)?,
+            options: serde_json::from_str(&reader.text(6, "popover options must be text")?)
+                .map_err(|_| DecodeError::Type("popover options are invalid"))?,
+            layout: decode_composite_layout(&reader.text(7, "popover layout must be text")?)?,
         })
-    }
-}
-
-/// Failures of an editor popover operation.
-#[derive(Debug, HostError)]
-pub(crate) enum PopoverError {
-    #[error(transparent)]
-    Access(AccessError),
-    #[error(code = "BufferClosed", message = "BufferClosed")]
-    BufferClosed,
-}
-impl From<AccessError> for PopoverError {
-    fn from(error: AccessError) -> Self {
-        Self::Access(error)
     }
 }
 
@@ -4327,13 +4316,20 @@ impl From<AccessError> for PopoverError {
 pub(crate) async fn editor_open_popover(
     context: HostContext,
     arguments: OpenPopoverArguments,
-) -> Result<(), PopoverError> {
+) -> Result<(), OpenError> {
     let request = context.request;
     context.foreground(|host, cx| {
-        let editor = host.contextual_editor(&request, arguments.authority, cx)?;
+        let (editor, window) =
+            host.contextual_editor_in_window(&request, arguments.authority, cx)?;
         let owner = ExtensionKey::new(request.extension, request.lifecycle);
-        let (buffer, spec) = host.popover_content(owner, arguments.anchor, arguments.layout)?;
-        host.open_editor_popover(owner, editor, &arguments.id, spec, buffer, cx);
+        let content = host.popover_content(
+            owner,
+            arguments.anchor,
+            arguments.options,
+            arguments.layout,
+            cx,
+        )?;
+        host.open_editor_popover(owner, editor, &window, &arguments.id, content, cx);
         Ok(())
     })?
 }

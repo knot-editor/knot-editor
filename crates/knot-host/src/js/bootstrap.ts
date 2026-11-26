@@ -1018,7 +1018,12 @@ function editorFor(authority: Native) {
     async openPopover(id: unknown, popover: unknown) {
       expectRecord(popover, "popover must be an object");
       const [start, end] = popoverAnchor(popover.anchor);
-      await request("editorOpenPopover", authority, popoverId(id), start, end, compositeLayoutJson(popover.layout));
+      const { height, toolbar } = popover;
+      if (typeof height !== "number" || !Number.isFinite(height) || height <= 0) {
+        throw new TypeError("popover height must be a positive number");
+      }
+      const options = JSON.stringify({ height, toolbar: JSON.parse(toolbar === undefined ? "[]" : compositeToolbar(toolbar)) });
+      await request("editorOpenPopover", authority, popoverId(id), start, end, options, compositeLayoutJson(popover.layout));
     },
     async closePopover(id: unknown) {
       await request("editorClosePopover", authority, popoverId(id));

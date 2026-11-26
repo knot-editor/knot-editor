@@ -17,6 +17,7 @@ mod popovers;
 mod view;
 
 pub(crate) use bars::BarFieldEdited;
+pub(crate) use popovers::PopoverContentSpec;
 pub use view::EditorView;
 
 use std::{

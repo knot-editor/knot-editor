@@ -108,9 +108,11 @@ declare module "knot" {
   /** One view of a tab's view tree. */
   export interface ViewNodeInfo {
     readonly target: ViewNodeTarget;
-    /** `editor`, `terminal`, `tree`, `text`, or `composite`. */
-    readonly kind: "editor" | "terminal" | "tree" | "text" | "composite";
-    /** The views this one contains, in layout order; empty for a leaf. */
+    /** `editor`, `terminal`, `tree`, `text`, `composite`, or `popover`. */
+    readonly kind: "editor" | "terminal" | "tree" | "text" | "composite" | "popover";
+    /** The views this one contains, in layout order; empty for a leaf. An
+     * editor's children are the popovers floating over it, whose own
+     * children are their layouts' members. */
     readonly children: readonly ViewNodeInfo[];
     /** An editor's document; null for a buffer outside document identity and
      * for other views. */
@@ -1965,8 +1967,17 @@ declare module "knot" {
      * through `end` exclusive. The anchor follows edits; deleting all of it
      * closes the popover. The popover floats below the last line. */
     readonly anchor: { readonly start: number; readonly end: number };
-    /** Its content: a column or row of one `editor` member on a buffer of
-     * `buffers.create`, sized `{ pixels }`, which is the popover's height. */
+    /** The popover's height in logical pixels, which zoom scales and the
+     * editor's size limits. */
+    readonly height: number;
+    /** Icon buttons above the layout; each runs its command with the
+     * anchoring editor's tab as its target and the editor as its editor,
+     * wherever focus is. */
+    readonly toolbar?: readonly CompositeButton[];
+    /** Its content, as a composite view's: the members of a row or column,
+     * with `key`s that keep their views when the popover is updated. Each
+     * view is an ordinary view of the view tree, and an editor on a document
+     * counts the popover's tab as one of the document's views. */
     readonly layout: CompositeGroup;
   }
   /** The user edited a field of the bar `bar`; `fields` holds every field's

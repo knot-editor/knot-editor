@@ -426,6 +426,11 @@ pub(crate) struct EditorViewHandle {
 }
 
 impl EditorViewHandle {
+    /// The ID of the window the view is in.
+    pub(crate) fn window_id(&self) -> Option<String> {
+        Some(super::window_id(self.window.upgrade()?.entity_id()))
+    }
+
     /// The view's editor, while the view is live.
     pub(crate) fn editor(&self, cx: &App) -> Option<Entity<crate::app::editor::Editor>> {
         let window = self.window.upgrade()?;

@@ -2112,16 +2112,26 @@ impl ProductExtensionHost {
         authority: handlers::EditorAuthority,
         cx: &App,
     ) -> Result<Entity<crate::app::editor::Editor>, handlers::AccessError> {
+        self.contextual_editor_in_window(request, authority, cx)
+            .map(|(editor, _)| editor)
+    }
+
+    /// The editor an authority names and the ID of the window showing it.
+    pub(super) fn contextual_editor_in_window(
+        &self,
+        request: &knot_protocol::RequestContext,
+        authority: handlers::EditorAuthority,
+        cx: &App,
+    ) -> Result<(Entity<crate::app::editor::Editor>, String), handlers::AccessError> {
         use handlers::{AccessError, EditorAuthority};
         match authority {
             EditorAuthority::Command(authority) => {
-                match self
-                    .context_target(request, Some(authority), cx)?
-                    .command_view(cx)
-                {
-                    Some(crate::app::workbench::CommandView::Editor(view)) => {
-                        Ok(view.read(cx).editor().clone())
-                    }
+                let target = self.context_target(request, Some(authority), cx)?;
+                match (target.command_view(cx), target.window.upgrade()) {
+                    (Some(crate::app::workbench::CommandView::Editor(view)), Some(window)) => Ok((
+                        view.read(cx).editor().clone(),
+                        crate::app::product::window_id(window.entity_id()),
+                    )),
                     _ => Err(AccessError::InvalidTarget),
                 }
             }
@@ -2131,7 +2141,7 @@ impl ProductExtensionHost {
                 .filter(|handle| {
                     handle.owner == ExtensionKey::new(request.extension, request.lifecycle)
                 })
-                .and_then(|handle| handle.view.editor(cx))
+                .and_then(|handle| Some((handle.view.editor(cx)?, handle.view.window_id()?)))
                 .ok_or(AccessError::InvalidTarget),
         }
     }
@@ -2544,20 +2554,24 @@ impl ProductExtensionHost {
         self.track_owned_editor(owner, &editor);
     }
 
-    /// Open or update the calling lifecycle's popover on an editor,
-    /// remembering the editor so teardown closes it.
+    /// Open or update the calling lifecycle's popover on an editor in the
+    /// window `window`, remembering the editor so teardown closes it.
     pub(super) fn open_editor_popover(
         &mut self,
         owner: ExtensionKey,
         editor: Entity<crate::app::editor::Editor>,
+        window: &str,
         id: &str,
-        spec: knot_model::editor::popovers::PopoverSpec,
-        buffer: Entity<crate::app::model::Buffer>,
-        cx: &mut App,
+        content: crate::app::editor::PopoverContentSpec,
+        cx: &mut Context<Self>,
     ) {
-        editor.update(cx, |editor, cx| {
-            editor.open_popover(owner, id, spec, buffer, cx)
+        let attached = editor.update(cx, |editor, cx| {
+            editor.open_popover(owner, id, window, content, cx)
         });
+        for view in attached {
+            let kind = view.kind(cx);
+            self.attach_view(kind, window.to_owned(), view, cx);
+        }
         self.track_owned_editor(owner, &editor);
     }
 

@@ -9,7 +9,8 @@ use std::ops::Range;
 /// A package whose commands, named after `LABEL`, open and close popovers
 /// named "hunk" and "hover" through a long-lived editor handle.
 const SOURCE: &str = r#"
-import { buffers, commands, workbench } from "knot";
+import { buffers, commands, documents, workbench } from "knot";
+const check = (condition, message) => { if (!condition) throw new Error(message); };
 const expectError = async (operation, test, message) => {
   try { await operation(); } catch (error) { if (test(error)) return; throw error; }
   throw new Error(message);
@@ -25,30 +26,83 @@ const editor = async () => {
 };
 const content = async (height) => {
   buffer ??= await buffers.create({ text: "changed\n" });
-  return { type: "column", children: [{ type: "editor", buffer, size: { pixels: height } }] };
+  return { height, layout: { type: "column", children: [{ type: "editor", buffer }] } };
 };
 await commands.register("LABEL.open", async () => {
-  await (await editor()).openPopover("hunk", { anchor: { start: 1, end: 2 }, layout: await content(60) });
+  await (await editor()).openPopover("hunk", { anchor: { start: 1, end: 2 }, ...await content(60) });
 });
 await commands.register("LABEL.update", async () => {
-  await (await editor()).openPopover("hunk", { anchor: { start: 0, end: 3 }, layout: await content(90) });
+  await (await editor()).openPopover("hunk", { anchor: { start: 0, end: 3 }, ...await content(90) });
 });
 await commands.register("LABEL.hover", async () => {
-  await (await editor()).openPopover("hover", { anchor: { start: 2, end: 3 }, layout: await content(40) });
+  await (await editor()).openPopover("hover", { anchor: { start: 2, end: 3 }, ...await content(40) });
+});
+// A popover of every kind of content the test can make: keyed editors on
+// buffers and a document, and a toolbar button.
+let rich = null;
+const richLayout = async (second) => {
+  rich ??= await Promise.all(["a\n", "b\n", "c\n"].map((text) => buffers.create({ text })));
+  const [doc] = await documents.list();
+  return {
+    height: 120,
+    toolbar: [{ label: "Tool", icon: "file", command: "LABEL.tool", arguments: { n: 1 } }],
+    layout: { type: "column", children: [
+      { type: "editor", key: "a", buffer: rich[0] },
+      second
+        ? { type: "editor", buffer: rich[2] }
+        : { type: "row", key: "pair", children: [
+            { type: "editor", key: "b", buffer: rich[1] },
+            { type: "editor", key: "doc", document: doc.id },
+          ] },
+    ] },
+  };
+};
+await commands.register("LABEL.open-rich", async () => {
+  await (await editor()).openPopover("rich", { anchor: { start: 1, end: 2 }, ...await richLayout(false) });
+});
+await commands.register("LABEL.update-rich", async () => {
+  await (await editor()).openPopover("rich", { anchor: { start: 1, end: 2 }, ...await richLayout(true) });
+});
+let tool = null;
+await commands.register("LABEL.tool", async ({ editor: captured, target, arguments: args }) => {
+  tool = { editor: captured !== null, chain: target.viewChain.length, n: args.n };
+  // The captured editor is the anchoring one, so this closes the popover.
+  await captured.closePopover("rich");
+});
+await commands.register("LABEL.expect-tool", async () => {
+  check(tool !== null && tool.editor && tool.n === 1, `the toolbar command ran: ${JSON.stringify(tool)}`);
+});
+await commands.register("LABEL.tree", async () => {
+  const { snapshot } = await workbench.observe(() => {});
+  const pane = snapshot.windows[0].panes[0];
+  const root = pane.tabs.find((tab) => tab.target === pane.selected).root;
+  check(root.kind === "editor" && root.children.length === 1, "the editor has one child");
+  const [popover] = root.children;
+  check(popover.kind === "popover" && popover.children.length === 2, "the popover has its layout's members");
+  const [first, pair] = popover.children;
+  check(first.kind === "editor" && first.document === null, "a buffer editor");
+  check(pair.kind === "composite" && pair.children.length === 2, "the row is a group");
+  check(pair.children[1].document !== null, "the document editor shows its document");
+  const inner = await workbench.editor(first.target);
+  check(inner !== null, "workbench.editor reaches the popover's editor");
 });
 await commands.register("LABEL.close", async () => { await (await editor()).closePopover("hunk"); });
 await commands.register("LABEL.validate", async ({ editor: captured }) => {
-  const layout = await content(50);
+  const given = await content(50);
   const anchor = { start: 0, end: 1 };
-  await expectError(() => captured.openPopover("", { anchor, layout }), (e) => e instanceof TypeError, "empty id");
-  await expectError(() => captured.openPopover("x", { anchor: { start: 1, end: 1 }, layout }),
+  await expectError(() => captured.openPopover("", { anchor, ...given }), (e) => e instanceof TypeError, "empty id");
+  await expectError(() => captured.openPopover("x", { ...given, anchor: { start: 1, end: 1 } }),
     (e) => e instanceof TypeError, "empty anchor");
-  await expectError(() => captured.openPopover("x", { anchor: { start: -1, end: 1 }, layout }),
+  await expectError(() => captured.openPopover("x", { ...given, anchor: { start: -1, end: 1 } }),
     (e) => e instanceof TypeError, "negative anchor");
-  await expectError(() => captured.openPopover("x", { anchor, layout: { type: "tabs", children: [] } }),
+  await expectError(() => captured.openPopover("x", { anchor, ...given, height: 0 }),
+    (e) => e instanceof TypeError, "height must be positive");
+  await expectError(() => captured.openPopover("x", { anchor, height: 50, layout: { type: "tabs", children: [] } }),
     (e) => e instanceof TypeError, "layout must be a row or column");
-  await expectError(() => captured.openPopover("x", { anchor, layout: { type: "column", children: [{ type: "editor", buffer, size: { pixels: -1 } }] } }),
+  await expectError(() => captured.openPopover("x", { anchor, height: 50, layout: { type: "column", children: [{ type: "editor", buffer, size: { pixels: -1 } }] } }),
     (e) => e instanceof TypeError, "size must be positive");
+  await expectError(() => captured.openPopover("x", { anchor, ...given, toolbar: [{ label: "x" }] }),
+    (e) => e instanceof TypeError, "toolbar button needs an icon");
   await captured.closePopover("missing");
 });
 "#;
@@ -211,12 +265,13 @@ fn the_popover_paints_over_the_text_below_its_anchor(cx: &mut TestAppContext) {
             .unwrap()
             .clone()
     });
-    let popovers = cx.read(|cx| fixture.editor.read(cx).popover_view_entities());
-    assert_eq!(popovers.len(), 1);
+    let contents = cx.read(|cx| fixture.editor.read(cx).popover_contents());
+    assert_eq!(contents.len(), 1);
     let (below_anchor, popover, text) = cx.read(|cx| {
+        let leaves = contents[0].read(cx).leaves();
         (
             view.read(cx).line_top(2, cx),
-            popovers[0].read(cx).interaction_bounds(),
+            leaves[0].editor().unwrap().read(cx).interaction_bounds(),
             view.read(cx).text_bounds(),
         )
     });
@@ -228,4 +283,127 @@ fn the_popover_paints_over_the_text_below_its_anchor(cx: &mut TestAppContext) {
     );
     assert!(popover.size.height > px(0.));
     assert!(popover.right() <= text.right() && popover.left() >= text.left());
+}
+
+/// The views of the popover `index` of the fixture's editor, in layout order.
+fn leaves(
+    fixture: &Fixture,
+    index: usize,
+    cx: &TestAppContext,
+) -> Vec<crate::app::view_layout::Leaf> {
+    cx.read(|cx| {
+        fixture.editor.read(cx).popover_contents()[index]
+            .read(cx)
+            .leaves()
+    })
+}
+
+#[gpui::test]
+fn a_popover_holds_a_layout_of_views_and_an_update_keeps_the_keyed_ones(cx: &mut TestAppContext) {
+    let fixture = Fixture::new(cx);
+    load("rich", 905, cx);
+    fixture.run("rich.open-rich", cx);
+    let first = leaves(&fixture, 0, cx);
+    assert_eq!(first.len(), 3);
+
+    // `a` stays, the row with `b` and the document editor goes, and an
+    // unkeyed editor arrives.
+    fixture.run("rich.update-rich", cx);
+    let second = leaves(&fixture, 0, cx);
+    assert_eq!(second.len(), 2);
+    assert_eq!(second[0].entity_id(), first[0].entity_id());
+    assert!(
+        first[1..]
+            .iter()
+            .all(|old| old.entity_id() != second[1].entity_id())
+    );
+    assert_eq!(fixture.popovers(cx).len(), 1);
+}
+
+#[gpui::test]
+fn a_popover_is_a_child_of_its_editor_in_the_view_tree(cx: &mut TestAppContext) {
+    let fixture = Fixture::new(cx);
+    load("tree", 906, cx);
+    fixture.run("tree.open-rich", cx);
+    fixture.run("tree.tree", cx);
+
+    // While no view of the popover has focus, the editor does.
+    let info = super::composite::info(&fixture.window, cx);
+    let root = &info.panes[0].tabs[0].root;
+    assert_eq!(info.focused_view.as_ref(), Some(&root.target));
+
+    // Focus inside the popover makes its view the window's focused one.
+    let first = leaves(&fixture, 0, cx)[0].clone();
+    let content = cx.read(|cx| fixture.editor.read(cx).popover_contents()[0].clone());
+    content.update(cx, |content, cx| content.focus_leaf(0, cx));
+    let info = super::composite::info(&fixture.window, cx);
+    let focused = info.focused_view.unwrap();
+    assert_eq!(focused.view, first.entity_id().as_u64().to_string());
+    assert_ne!(Some(&focused), Some(&info.panes[0].tabs[0].root.target));
+}
+
+#[gpui::test]
+fn a_toolbar_button_runs_its_command_on_the_anchoring_editor(cx: &mut TestAppContext) {
+    let fixture = Fixture::new(cx);
+    load("tool", 907, cx);
+    fixture.run("tool.open-rich", cx);
+    cx.update_window(fixture.native_window, |_, window, _| window.refresh())
+        .unwrap();
+    // Focus is inside the popover, yet the command's editor is the anchoring
+    // one, so its closing the popover through that editor works.
+    let content = cx.read(|cx| fixture.editor.read(cx).popover_contents()[0].clone());
+    content.update(cx, |content, cx| content.focus_leaf(1, cx));
+    super::composite::click_toolbar_button(fixture.native_window, "popover-toolbar-0", cx);
+    cx.run_until_parked();
+    assert!(fixture.popovers(cx).is_empty());
+    fixture.run("tool.expect-tool", cx);
+}
+
+#[gpui::test]
+fn an_editor_on_a_document_in_a_popover_counts_as_a_view_of_it(cx: &mut TestAppContext) {
+    use crate::app::editor::PopoverContentSpec;
+    use crate::app::view_layout::{Arrangement, ContentSpec, GroupSpec, LayoutSize, MemberSpec};
+
+    let fixture = Fixture::new(cx);
+    let documents = cx.read(|cx| {
+        cx.global::<crate::app::documents::ApplicationDocuments>()
+            .0
+            .clone()
+    });
+    let other = cx.update(|cx| create_untitled_document(&documents, cx));
+    let other_model = cx.read(|cx| documents.read(cx).get(other).unwrap().model().clone());
+    let count =
+        |cx: &TestAppContext| cx.read(|cx| cx.global::<ApplicationWindows>().view_count(other, cx));
+    assert_eq!(count(cx), 0);
+
+    let owner = ExtensionKey::new(ExtensionId::new(908), ExtensionLifecycleId::new(1));
+    let window = crate::app::product::window_id(fixture.window.entity_id());
+    let spec = PopoverContentSpec {
+        spec: knot_model::editor::popovers::PopoverSpec {
+            anchor: 0..1,
+            height: 50.,
+        },
+        toolbar: Vec::new(),
+        layout: GroupSpec {
+            arrangement: Arrangement::Column,
+            members: vec![MemberSpec {
+                key: None,
+                size: LayoutSize::default(),
+                focused: false,
+                title: None,
+                content: ContentSpec::Editor {
+                    buffer: other_model,
+                    document: Some(other),
+                },
+            }],
+        },
+    };
+    fixture.editor.update(cx, |editor, cx| {
+        editor.open_popover(owner, "doc", &window, spec, cx)
+    });
+    assert_eq!(count(cx), 1);
+    fixture.editor.update(cx, |editor, cx| {
+        editor.close_popover(owner, "doc", cx);
+    });
+    assert_eq!(count(cx), 0);
 }

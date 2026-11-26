@@ -439,7 +439,10 @@ impl ApplicationWindows {
         windows
             .iter()
             .filter_map(|open| open.workbench.upgrade())
-            .map(|workbench| workbench.read(cx).view_count(document))
+            .map(|workbench| {
+                let workbench = workbench.read(cx);
+                workbench.view_count(document) + workbench.popover_view_count(document, cx)
+            })
             .sum()
     }
 }
@@ -538,6 +541,25 @@ pub(crate) fn run_toolbar_command(
     };
     window.update(cx, |window, cx| {
         window.run_toolbar_command(&composite, command, cx)
+    });
+}
+
+/// Run the command of a clicked toolbar button of the popover whose content
+/// view is `popover`, in the window it was clicked in.
+pub(crate) fn run_popover_command(
+    native_window: AnyWindowHandle,
+    popover: EntityId,
+    command: knot_protocol::Command,
+    cx: &mut App,
+) {
+    let Some(window) = cx
+        .try_global::<ApplicationWindows>()
+        .and_then(|windows| windows.in_native_window(native_window))
+    else {
+        return;
+    };
+    window.update(cx, |window, cx| {
+        window.run_popover_command(popover, command, cx)
     });
 }
 
@@ -1131,6 +1153,18 @@ impl KnotWindow {
                         workbench
                             .command_view(tab)
                             .is_some_and(|view| &view.focus_handle(cx) == handle)
+                            || workbench.view_node(tab, cx).is_some_and(|root| {
+                                root.descendants()
+                                    .iter()
+                                    .filter_map(|node| node.editor.as_ref())
+                                    .any(|view| {
+                                        view.read(cx)
+                                            .editor()
+                                            .read(cx)
+                                            .popover_focus_handles(cx)
+                                            .contains(handle)
+                                    })
+                            })
                     })
                     .map(|tab| {
                         (
@@ -1799,12 +1833,49 @@ impl KnotWindow {
                 .tabs()
                 .iter()
                 .find(|tab| workbench.composite_view(tab) == Some(composite))?;
-            Some((pane.id(), tab))
+            Some((pane.id(), tab, workbench.focused_leaf(tab, cx)))
         });
-        let Some((pane, tab)) = found else {
+        let Some((pane, tab, leaf)) = found else {
             return;
         };
-        let target = ProductCommandTarget {
+        let target = self.tab_command_target(pane, tab, leaf, cx);
+        self.dispatch_command(command, target, cx);
+    }
+
+    /// Run `command` with the tab of the editor `popover` floats over as its
+    /// target and that editor as its editor, wherever focus is.
+    fn run_popover_command(
+        &mut self,
+        popover: EntityId,
+        command: knot_protocol::Command,
+        cx: &mut Context<Self>,
+    ) {
+        let workbench = self.workbench.read(cx);
+        let found = workbench.panes().iter().find_map(|pane| {
+            pane.tabs().iter().find_map(|tab| {
+                let root = workbench.view_node(tab, cx)?;
+                let path = root.path_to(popover)?;
+                let editor = path.len().checked_sub(2).map(|index| path[index].id)?;
+                Some((pane.id(), tab, Some(editor)))
+            })
+        });
+        let Some((pane, tab, leaf)) = found else {
+            return;
+        };
+        let target = self.tab_command_target(pane, tab, leaf, cx);
+        self.dispatch_command(command, target, cx);
+    }
+
+    /// The target of a command run in `tab`, which holds the view `leaf`.
+    fn tab_command_target(
+        &self,
+        pane: PaneId,
+        tab: &knot_model::workbench::WorkbenchTab,
+        leaf: Option<EntityId>,
+        cx: &Context<Self>,
+    ) -> ProductCommandTarget {
+        let workbench = self.workbench.read(cx);
+        ProductCommandTarget {
             window: cx.entity().downgrade(),
             workbench: self.workbench.downgrade(),
             tab: Some(TargetTab {
@@ -1820,9 +1891,8 @@ impl KnotWindow {
                 }
                 _ => None,
             },
-            leaf: workbench.focused_leaf(tab, cx),
-        };
-        self.dispatch_command(command, target, cx);
+            leaf,
+        }
     }
 
     fn dispatch_command(

@@ -257,6 +257,30 @@ impl Workbench {
         }
     }
 
+    /// How many tabs not showing `document` itself have an editor of it in a
+    /// popover, which count as views of it beside the tabs that show it.
+    pub(crate) fn popover_view_count(&self, document: DocumentId, cx: &App) -> usize {
+        let Some(model) = cx
+            .global::<super::documents::ApplicationDocuments>()
+            .0
+            .read(cx)
+            .get(document)
+            .map(|document| document.model().clone())
+        else {
+            return 0;
+        };
+        self.layout
+            .tabs()
+            .filter(|tab| !self.layout.shown_documents(tab).contains(&document))
+            .filter_map(|tab| self.view_node(tab, cx))
+            .filter(|root| {
+                root.popover_editors()
+                    .iter()
+                    .any(|editor| *editor.read(cx).model() == model)
+            })
+            .count()
+    }
+
     /// The view that has focus within a tab's views.
     pub(crate) fn focused_leaf(&self, tab: &WorkbenchTab, cx: &App) -> Option<EntityId> {
         Some(self.view_node(tab, cx)?.focused_leaf().id)

@@ -158,7 +158,7 @@ area, and it neither follows scrolling nor hides out of view. An anchor an edit
 empties counts as deleted, because the anchor store keeps a range deleted
 exactly. The extension testing host fakes the two methods.
 
-### 2. Full content in the view tree
+### 2. Full content in the view tree ✅
 
 Every composite member kind works in a popover: rows, columns, `tabs`, `text`
 and `tree` frames of embedded views, document editors, and keyed members that
@@ -171,18 +171,19 @@ Validation: product tests for keyed updates, toolbar command targets,
 document editors counting as views for closure, the `popover` node and its
 `parents`, and `workbench.editor` on a popover's editor.
 
-**Implementation context.** Extract the group building, keyed reuse
-(`Kept`), and leaf handling of `GroupView::build` and `Group` in
-`src/app/composite_view.rs` into a layout module both composites and
-popovers use, leaving `CompositeTab` as the tab owner; the builder takes the
-scale for `pixels` (1 here until checkpoint 3). Toolbar dispatch follows
-`ToolbarButton` in `composite_view.rs` with the anchoring editor as capture.
-View-tree children of an editor go through the `ViewTree` interface in
-`src/app/view_tree.rs`, with node building after `Group::node`; check
-`Workbench::focused_leaf` in `src/app/workbench.rs` and the snapshot code in
-`src/app/application_observation.rs` for leaf assumptions, and add `popover`
-to `ViewNodeInfo.kind` in `knot.d.ts`. Document view counting follows
-checkpoint 12 of D229 in `src/app/workbench.rs`.
+**Scope decision.** The popover's height is a required `height` option in
+logical pixels, scaled by zoom, until checkpoint 3 replaces it with natural
+sizing; members' `pixels` are window pixels (scale 1). Document editors count
+through `ApplicationWindows::view_count`, which adds the tabs whose popovers
+show the document, so closing the other tabs keeps it open. Tests drive focus
+inside a popover with `PopoverContent::focus_leaf`, as composite tests do,
+because test windows never deliver focus events.
+
+**Implementation context.** The layout module is `src/app/view_layout.rs`
+(`Layout`, `Group`, `toolbar`); `CompositeView` and `PopoverContent`
+(`src/app/editor/popovers.rs`) own one each. A popover's node is a child of its
+editor's node (`EditorView::view_node`), and its toolbar commands run through
+`run_popover_command` in `src/app/product.rs`.
 
 ### 3. Size, zoom, and placement
 
