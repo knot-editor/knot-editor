@@ -59,6 +59,18 @@ operations show only their effect. Extension calls receive the failure as their
 result instead of a prompt. Anything else Knot tells the user without
 interrupting goes through [notifications](#notifications).
 
+### Application subsystems
+
+Each application subsystem is a module declared in `src/app/mod.rs`, which
+keeps `dead_code` allowances only for boundaries the product surface does not
+exercise. Application-wide state is a gpui `Global`, such as
+`ApplicationToolLayout`, `ApplicationDocuments`, or `ApplicationExtensionHost`.
+Every quit goes through `extensions::host::quit_after_storage`, so a subsystem
+that writes durably off the foreground flushes or drains its pending work there
+before `cx.quit()`. Extension-facing operations are annotated in
+`src/app/extensions/host/handlers.rs`, and `host::declarations` validates their
+context types at startup.
+
 ## Windows
 
 A window (`KnotWindow` in `src/app/product.rs`) is what a native window
