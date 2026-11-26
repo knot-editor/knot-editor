@@ -124,11 +124,86 @@ fn a_diff_of_snapshots_shows_bands_wedges_and_a_strip_in_a_composite_tab(cx: &mu
     assert_eq!(window.composite_editors(cx)[1].caret_line, 1);
     assert_eq!(
         window.composite_toolbar(cx),
-        ["diff.previousHunk", "diff.nextHunk"]
+        ["diff.previousHunk", "diff.nextHunk", "diff.toggleLayout"]
     );
     for editor in window.composite_editors(cx) {
         assert!(editor.key_contexts.contains(&key("diff")));
     }
+}
+
+/// The original's lines above each hunk of the snapshots probe's diff, inline.
+fn inline_blocks() -> Vec<(usize, Vec<String>)> {
+    [(1, "b"), (4, "e"), (5, "g")]
+        .map(|(line, text)| (line, vec![text.to_owned()]))
+        .to_vec()
+}
+
+#[gpui::test]
+fn the_layout_command_switches_between_side_by_side_and_inline(cx: &mut TestAppContext) {
+    let product = TestProduct::launch(packages(), cx);
+    let window = product.active_window(cx);
+    run(&window, "probe.snapshots", cx);
+    wait_until(cx, |cx| !window.composite_links(cx).is_empty());
+    assert_eq!(window.composite_editors(cx).len(), 2);
+
+    run(&window, "diff.toggleLayout", cx);
+    wait_until(cx, |cx| window.composite_editors(cx).len() == 1);
+    wait_until(cx, |cx| !window.composite_editors(cx)[0].blocks.is_empty());
+    let editors = window.composite_editors(cx);
+    assert_eq!(editors[0].text, "a\nB\nc\nd\nf\nG\nh\n");
+    assert_eq!(editors[0].blocks, inline_blocks());
+    assert_eq!(window.composite_links(cx), []);
+    wait_until(cx, |cx| !bands(&window, cx)[0].0.is_empty());
+    assert_eq!(
+        bands(&window, cx)[0],
+        (
+            vec![
+                (1, key("diff.modified.background")),
+                (5, key("diff.modified.background")),
+            ],
+            vec![(4, key("diff.removed"))],
+        )
+    );
+
+    run(&window, "diff.toggleLayout", cx);
+    wait_until(cx, |cx| window.composite_editors(cx).len() == 2);
+    assert_eq!(window.composite_editors(cx)[1].blocks, []);
+    wait_until(cx, |cx| window.composite_links(cx).len() == 3);
+    wait_until(cx, |cx| {
+        bands(&window, cx)
+            .iter()
+            .all(|(bands, _)| !bands.is_empty())
+    });
+}
+
+#[gpui::test]
+fn the_diff_layout_setting_opens_a_diff_inline_and_hunk_commands_follow_the_modified_text(
+    cx: &mut TestAppContext,
+) {
+    let product = TestProduct::launch(packages(), cx);
+    let window = product.active_window(cx);
+    product.set_setting("diff.layout", "inline".into(), cx);
+    run(&window, "probe.snapshots", cx);
+    wait_until(cx, |cx| {
+        window
+            .composite_editors(cx)
+            .first()
+            .is_some_and(|editor| !editor.blocks.is_empty())
+    });
+    assert_eq!(window.composite_editors(cx).len(), 1);
+    assert_eq!(window.composite_editors(cx)[0].blocks, inline_blocks());
+    assert_eq!(
+        window.composite_toolbar(cx),
+        ["diff.previousHunk", "diff.nextHunk", "diff.toggleLayout"]
+    );
+
+    window.focus_composite_editor(0, cx);
+    let mut visited = Vec::new();
+    for _ in 0..3 {
+        run(&window, "diff.nextHunk", cx);
+        visited.push(window.composite_editors(cx)[0].caret_line);
+    }
+    assert_eq!(visited, [4, 5, 1]);
 }
 
 #[gpui::test]

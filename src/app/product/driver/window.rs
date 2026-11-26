@@ -102,6 +102,8 @@ pub struct CompositeEditor {
     pub wedges: Vec<(usize, String)>,
     pub scroll_line: f32,
     pub key_contexts: Vec<String>,
+    /// The block rows, as the line they sit above and their texts.
+    pub blocks: Vec<(usize, Vec<String>)>,
 }
 
 /// A tree a package contributes to a window.
@@ -644,6 +646,16 @@ impl TestWindow {
                             .key_contexts()
                             .into_iter()
                             .map(str::to_owned)
+                            .collect(),
+                        blocks: editor
+                            .wrap()
+                            .blocks()
+                            .map(|block| {
+                                (
+                                    block.line,
+                                    block.lines.iter().map(|line| line.text.clone()).collect(),
+                                )
+                            })
                             .collect(),
                     }
                 })

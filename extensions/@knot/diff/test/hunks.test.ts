@@ -3,7 +3,7 @@ import { beforeEach, test } from "node:test";
 import { buffers } from "knot";
 import type { DiffHunk } from "knot";
 import * as host from "knot/testing";
-import { connectorLinks, decorationsOf, scrollLink, targetLine } from "../src/hunks.js";
+import { blocksOf, connectorLinks, decorationsOf, scrollLink, targetLine } from "../src/hunks.js";
 
 beforeEach(() => host.reset());
 
@@ -63,4 +63,15 @@ test("next and previous follow the side's own lines and wrap", () => {
   // The original's hunks start at other lines.
   assert.equal(targetLine(hunks, "original", 4, "next"), 7);
   assert.equal(targetLine([], "modified", 0, "next"), null);
+});
+
+test("the inline rows put each hunk's original lines above the modified line, skipping additions", async () => {
+  const original = await buffers.create({ text: "a\nb\nc\nd\ne\nf\ng\nh\n" });
+  assert.deepEqual(
+    blocksOf(hunks, original).map(({ line, lines, color }) => ({ line, lines, color })),
+    [
+      { line: 1, lines: { start: 1, end: 2 }, color: "diff.removed.background" },
+      { line: 4, lines: { start: 4, end: 5 }, color: "diff.removed.background" },
+    ],
+  );
 });

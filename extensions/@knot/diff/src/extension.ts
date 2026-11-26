@@ -2,8 +2,9 @@
 // (editable) or a read-only snapshot, with a strip joining their changed
 // lines. Both sides are compared natively after each edit, debounced, and the
 // result paints bands and wedges on each editor, redraws the strip, and links
-// the editors' scrolling.
-import { buffers, commands, diff, documents, icons, keymaps, windows, workbench } from "knot";
+// the editors' scrolling. The inline layout keeps only the modified editor and
+// shows each hunk's original lines above it as block rows.
+import { buffers, commands, diff, documents, icons, keymaps, settings, windows, workbench } from "knot";
 import type {
   Buffer,
   CommandContext,
@@ -18,7 +19,7 @@ import type {
   ViewNodeTarget,
 } from "knot";
 import { diffs } from "./contract.js";
-import { connectorLinks, decorationsOf, scrollLink, targetLine, type Side } from "./hunks.js";
+import { blocksOf, connectorLinks, decorationsOf, scrollLink, targetLine, type Side } from "./hunks.js";
 
 /** Milliseconds after the last edit before the sides are compared again. */
 const DELAY = 150;
@@ -28,6 +29,9 @@ export const DIFF_CONTEXT = "diff";
 
 export const NEXT_HUNK = "diff.nextHunk";
 export const PREVIOUS_HUNK = "diff.previousHunk";
+export const TOGGLE_LAYOUT = "diff.toggleLayout";
+
+type Layout = "sideBySide" | "inline";
 
 type SnapshotSpec = { label: string; text: string; language?: string | undefined };
 type DocumentSpec = { label: string; document: string };
@@ -51,6 +55,7 @@ type Open = {
   id: string;
   composite: CompositeInstance;
   parts: [Part, Part];
+  layout: Layout;
   hunks: readonly DiffHunk[];
   timer: ReturnType<typeof setTimeout> | null;
   running: boolean;
@@ -81,29 +86,43 @@ function same(left: readonly DiffHunk[], right: readonly DiffHunk[]) {
 
 /** Serves the diff contract and the hunk commands; resolves with what stops both. */
 export async function start(): Promise<Disposable> {
-    const open = new Map<string, Open>();
+  const open = new Map<string, Open>();
   let counter = 0;
 
   await icons.define("diff.tab", { lucide: "git-compare" });
   await icons.define("diff.previous", { lucide: "arrow-up" });
   await icons.define("diff.next", { lucide: "arrow-down" });
+  await icons.define("diff.layout.sideBySide", { lucide: "rows-2" });
+  await icons.define("diff.layout.inline", { lucide: "columns-2" });
   const registration: CompositeRegistration = await workbench.registerComposite({ id: "diff.view" });
 
-  const layout = ({ parts, hunks }: { parts: [Part, Part]; hunks: readonly DiffHunk[] }): CompositeGroup => {
+  const layout = ({ parts, hunks, layout }: Pick<Open, "parts" | "hunks" | "layout">): CompositeGroup => {
     const source = (part: Part) => (part.owned !== null ? { buffer: part.owned } : { document: part.document! });
+    const modified = { type: "editor", key: "modified", focused: true, ...source(parts[1]) } as const;
+    if (layout === "inline") return { type: "row", children: [modified] };
     return {
       type: "row",
       children: [
         { type: "editor", key: "original", ...source(parts[0]) },
         { type: "connector", first: "original", second: "modified", links: connectorLinks(hunks) },
-        { type: "editor", key: "modified", focused: true, ...source(parts[1]) },
+        modified,
       ],
     };
   };
 
-  const toolbar = [
+  /** The scroll link of a layout: the inline one has a single editor to link. */
+  const link = ({ hunks, layout }: Pick<Open, "hunks" | "layout">) =>
+    layout === "inline" ? null : scrollLink(hunks);
+
+  /** The buttons; the last one shows the layout it switches to. */
+  const toolbar = (layout: Layout) => [
     { label: "Previous Difference", icon: "diff.previous", command: PREVIOUS_HUNK },
     { label: "Next Difference", icon: "diff.next", command: NEXT_HUNK },
+    {
+      label: layout === "inline" ? "Show Side by Side" : "Show Inline",
+      icon: `diff.layout.${layout}`,
+      command: TOGGLE_LAYOUT,
+    },
   ];
 
   async function makePart(spec: SideSpec): Promise<Part> {
@@ -134,13 +153,18 @@ export async function start(): Promise<Disposable> {
     };
   }
 
-  /** Finds the editors of the diff's tab, which are the first two views of its root. */
+  /** Finds the editors of the diff's tab: both sides, or only the modified one inline. */
   async function locate(diffView: Open) {
     for (const window of await windows.list()) {
       const found = windows.findView(window, diffView.composite.target);
       if (found === null) continue;
       const editors = found.view.children.filter((child) => child.kind === "editor");
-      for (const [index, part] of diffView.parts.entries()) {
+      const shownParts = diffView.layout === "inline" ? [diffView.parts[1]] : diffView.parts;
+      if (diffView.layout === "inline") {
+        diffView.parts[0].view = null;
+        diffView.parts[0].editor = null;
+      }
+      for (const [index, part] of shownParts.entries()) {
         const view = editors[index];
         if (view === undefined) continue;
         part.view = view.target;
@@ -173,10 +197,20 @@ export async function start(): Promise<Disposable> {
   /** Paints both editors from the hunks of the revisions compared. */
   async function paint(diffView: Open, revisions: [number, number]) {
     for (const [index, part] of diffView.parts.entries()) {
-      if (part.editor === null) continue;
+      // A layout change during the awaits clears the part's editor, so paint the one it had.
+      const editor = part.editor;
+      if (editor === null) continue;
       const items = await decorationsOf(part.buffer, diffView.hunks, SIDES[index]!);
-      await part.editor.setDecorations(items, { ifRevision: revisions[index]! });
+      await editor.setDecorations(items, { ifRevision: revisions[index]! });
     }
+  }
+
+  /** Shows each hunk's original lines above the modified text inline, and none otherwise. */
+  async function showBlocks(diffView: Open) {
+    const editor = diffView.parts[1].editor;
+    if (editor === null) return;
+    const blocks = diffView.layout === "inline" ? blocksOf(diffView.hunks, diffView.parts[0].buffer) : [];
+    await editor.setBlocks(blocks);
   }
 
   /** Compares the sides and shows the result; an edit that raced it is compared again by its own notification. */
@@ -185,7 +219,10 @@ export async function start(): Promise<Disposable> {
     const result = await diff(original.buffer, modified.buffer);
     const changed = !same(result.hunks, diffView.hunks);
     diffView.hunks = result.hunks;
-    if (changed) await diffView.composite.update({ layout: layout(diffView), scrollLink: scrollLink(result.hunks) });
+    if (changed) {
+      await diffView.composite.update({ layout: layout(diffView), scrollLink: link(diffView) });
+    }
+    await showBlocks(diffView);
     try {
       await paint(diffView, [result.oldRevision!, result.newRevision!]);
     } catch (error) {
@@ -200,15 +237,20 @@ export async function start(): Promise<Disposable> {
     }
     diffView.running = true;
     try {
-      do {
+      while (!diffView.closed) {
         diffView.pending = false;
-        if (diffView.closed) break;
-        await refresh(diffView);
-      } while (diffView.pending);
-    } catch (error) {
-      if (!isGone(error)) throw error;
-      // A side's buffer replaced while comparing; the replacement compares again.
-      if (!(await shown(diffView))) await release(diffView);
+        try {
+          await refresh(diffView);
+        } catch (error) {
+          if (!isGone(error)) throw error;
+          // A side's buffer or editor was replaced while comparing; a request that raced it compares again.
+          if (!(await shown(diffView))) {
+            await release(diffView);
+            break;
+          }
+        }
+        if (!diffView.pending) break;
+      }
     } finally {
       diffView.running = false;
     }
@@ -235,18 +277,22 @@ export async function start(): Promise<Disposable> {
     const parts: [Part, Part] = [await makePart(options.original), await makePart(options.modified)];
     try {
       const { hunks } = await diff(parts[0].buffer, parts[1].buffer);
+      const style: Layout = (await settings.get("diff.layout")) === "inline" ? "inline" : "sideBySide";
+      const shape = { parts, hunks, layout: style };
+      const scroll = link(shape);
       const composite = await registration.open({
         title: titleOf(parts),
         icon: "diff.tab",
-        layout: layout({ parts, hunks }),
-        scrollLink: scrollLink(hunks),
-        toolbar,
+        layout: layout(shape),
+        ...(scroll === null ? {} : { scrollLink: scroll }),
+        toolbar: toolbar(style),
       });
       counter += 1;
       const diffView: Open = {
         id: `diff-${counter}`,
         composite,
         parts,
+        layout: style,
         hunks,
         timer: null,
         running: false,
@@ -312,13 +358,31 @@ export async function start(): Promise<Disposable> {
     if (diffView === undefined) commands.unavailable();
     const index = diffView.parts.findIndex((part) => part.view !== null && part.view === target.focusedView);
     const { caret } = await editor.selection();
-    const line = targetLine(diffView.hunks, SIDES[Math.max(index, 0)]!, await buffer.lineAt(caret), direction);
+    const line = targetLine(diffView.hunks, SIDES[index < 0 ? 1 : index]!, await buffer.lineAt(caret), direction);
     if (line === null) commands.unavailable();
     const { startByteOffset } = await buffer.lineRange(Math.min(line, (await buffer.lineCount()) - 1));
     await editor.setSelection({ anchor: startByteOffset, caret: startByteOffset }, { reveal: "center" });
   };
 
+  /** Switches the focused diff between side by side and inline. */
+  const toggleLayout = async ({ target }: CommandContext) => {
+    const diffView = [...open.values()].find((candidate) => candidate.composite.target === target.viewTarget);
+    if (diffView === undefined) commands.unavailable();
+    const next: Layout = diffView.layout === "inline" ? "sideBySide" : "inline";
+    const shape = { parts: diffView.parts, hunks: diffView.hunks, layout: next };
+    // A failed update changes nothing, so the layout is recorded once it succeeds.
+    await diffView.composite.update({ layout: layout(shape), scrollLink: link(shape), toolbar: toolbar(next) });
+    diffView.layout = next;
+    await locate(diffView);
+    await showBlocks(diffView);
+    kick(diffView);
+  };
+
   const navigation = [
+    await commands.register(TOGGLE_LAYOUT, toggleLayout, {
+      title: "Toggle Diff Layout",
+      description: "Switch the diff between side by side and inline.",
+    }),
     await commands.register(NEXT_HUNK, go("next"), {
       title: "Go to Next Difference",
       description: "Move the cursor to the next changed region of the diff, wrapping at the end.",

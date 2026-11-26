@@ -1,6 +1,13 @@
 // Turning the line hunks of a diff into what the tab shows: bands and gutter
 // wedges on each side, the strip between them, and the scroll map.
-import type { Buffer, CompositeConnectorLink, CompositeScrollLink, DiffHunk, ViewDecoration } from "knot";
+import type {
+  Buffer,
+  CompositeConnectorLink,
+  CompositeScrollLink,
+  DiffHunk,
+  EditorBlockRows,
+  ViewDecoration,
+} from "knot";
 
 export type Side = "original" | "modified";
 
@@ -17,6 +24,13 @@ export function connectorLinks(hunks: readonly DiffHunk[]): CompositeConnectorLi
     second: now,
     color: old.start === old.end ? ADDED_BACKGROUND : now.start === now.end ? REMOVED_BACKGROUND : MODIFIED_BACKGROUND,
   }));
+}
+
+/** The inline layout's rows: each hunk's original lines above the modified line they precede. */
+export function blocksOf(hunks: readonly DiffHunk[], original: Buffer): EditorBlockRows[] {
+  return hunks
+    .filter(({ old }) => old.start !== old.end)
+    .map(({ old, new: now }) => ({ line: now.start, source: original, lines: old, color: REMOVED_BACKGROUND }));
 }
 
 /** The scroll link of the original and modified editors, keyed as the layout is. */
