@@ -306,19 +306,16 @@ Documented in the
 [composite views](../architecture/workbench-and-lifecycle.md#composite-views)
 reference.
 
-#### 17. Connector strip
+#### 17. Connector strip ✅
 
-Implemented; the review gate is pending. A `connector` layout member joins line ranges of two editor members, named by
+A `connector` layout member joins line ranges of two editor members, named by
 `key`, in theme color keys, following both editors' scrolling. It is not a view
-(no node in the view tree), takes no key, focus, or tabs, and is 32 pixels wide
-by default. The links are layout data, so the package sends the layout again
-after each rediff. Documented in the
+and takes no key or focus; its links are layout data, sent again after each
+rediff. Documented in the
 [extension guide](../extension-api/ui.md#open-a-composite-view) and the
 [composite views](../architecture/workbench-and-lifecycle.md#composite-views)
-reference. Geometry is covered by a test of the band's corners and visibility
-only: the tests do not paint, so the strip is checked by hand against the
-editors (review gate: Playground: Open Connector, scroll, then Move Connector
-Band).
+reference. Tests cover the band's corners and visibility only, as they do not
+paint; the strip was checked by hand.
 
 ### Phase F — The diff package
 
