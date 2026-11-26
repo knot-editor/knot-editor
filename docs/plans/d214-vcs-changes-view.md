@@ -159,35 +159,12 @@ checkpoint 5.
 
 ### 2. Groups and comparison in the contract ✅
 
-Deliverables: `status` returns `{ files, groups }`; `compare` and `rollback`
-in the backend contract; Git's four groups with their actions declared (the
-commands may be stubs until checkpoint 4) and `compare` for each group;
-decorations unchanged.
-
-Validation: `@knot/vcs` unit tests over the in-memory host for the new answer;
-Git parsing tests for each group, including a staged file edited again, a
-staged rename, a conflict, and the collapsed untracked folder; product tests of
-`compare` over temporary repositories; `just check`.
-
-Done: `status` returns `{ files, groups }` and the backend contract has
-`compare` and `rollback`; Git serves the four groups with their actions
-declared (commands `git.stage`, `git.unstage`, `git.discard`, `git.rollback`,
-not registered until checkpoint 4) and `compare` for each group, and its
-`rollback` rejects until checkpoint 4. `@knot/vcs` keeps `groups` beside each
-snapshot. A binary file or a folder has no comparison.
-
-Review gate: the contract shape, before the view depends on it.
-
-**Implementation context.** The contract is
-`extensions/@knot/vcs/src/contract.ts` (`defineBackend`), mirrored in
-`extensions/@knot/git/src/vcs.d.ts`. `extensions/@knot/vcs/src/status.ts`
-consumes `status` for decorations; keep it on `files` and store `groups` per
-repository beside the snapshot. Git's parsing is `parse` in
-`extensions/@knot/git/src/status.ts`, which already reads both columns; group
-from them before collapsing. The index read mirrors
-`extensions/@knot/git/src/baseline.ts`. The backend is served in
-`extensions/@knot/git/src/main.ts`. Product tests go in
-`crates/knot-ext-vcs/tests/vcs/status.rs`, or a new `changes.rs`.
+Done: `status` returns `{ files, groups }`, and the backend contract has
+`compare` and `rollback` (`extensions/@knot/vcs/src/contract.ts`). Git serves
+its four groups with their actions declared and `compare` for each group; its
+`rollback` rejects, and the commands `git.stage`, `git.unstage`, `git.discard`,
+and `git.rollback` are not registered until checkpoint 4. A binary file or a
+folder has no comparison. Documentation is in checkpoint 5.
 
 ### 3. The Changes view
 
