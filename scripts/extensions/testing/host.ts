@@ -50,6 +50,8 @@ type FakeTab = {
   selectionListeners: Map<(selection: Knot.EditorSelectionWithLines) => void | Promise<void>, number | null>;
   /** The open bars, top to bottom, and the field with the editor's focus. */
   bars: FakeBar[];
+  /** The open popovers, bottom to top. */
+  popovers: { id: string; anchor: { start: number; end: number } }[];
   barFocus: { bar: string; field: string } | null;
   /** Bar edit listeners of the long-lived handles bound to this tab, run
    * once per `typeInBar`. */
@@ -1000,6 +1002,7 @@ export function present(target: Knot.WindowTarget, id: Knot.DocumentId) {
     closeListeners: new Set(),
     selectionListeners: new Map(),
     bars: [],
+    popovers: [],
     barFocus: null,
     barListeners: new Set(),
     reveal: null,
@@ -1851,6 +1854,22 @@ function editor(tab: FakeTab): Knot.Editor {
       tab.bars = tab.bars.filter((bar) => bar.id !== id);
       if (tab.barFocus?.bar === id) tab.barFocus = null;
     },
+    openPopover: async (id, popover) => {
+      const tab = live();
+      if (typeof id !== "string" || id === "") throw new TypeError("popover id must be a non-empty string");
+      const { start, end } = popover.anchor;
+      if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || start >= end) {
+        throw new TypeError("a popover anchor needs a non-negative safe integer start below its end");
+      }
+      const next = { id, anchor: { start, end } };
+      const index = tab.popovers.findIndex((candidate) => candidate.id === id);
+      if (index >= 0) tab.popovers[index] = next;
+      else tab.popovers.push(next);
+    },
+    closePopover: async (id) => {
+      const tab = live();
+      tab.popovers = tab.popovers.filter((popover) => popover.id !== id);
+    },
     focusBarField: async (id, field, options) => {
       const tab = live();
       const target = tab.bars.find((bar) => bar.id === id)?.fields.find((f) => f.id === field);
@@ -1940,6 +1959,8 @@ function editorHandle(target: Knot.ViewNodeTarget): Knot.EditorHandle {
     record: guard(live.record),
     openBar: guard(live.openBar),
     closeBar: guard(live.closeBar),
+    openPopover: guard(live.openPopover),
+    closePopover: guard(live.closePopover),
     focusBarField: guard(live.focusBarField),
     barFields: guard(live.barFields),
     viewState: guard(live.viewState),
