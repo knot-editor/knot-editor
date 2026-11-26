@@ -109,7 +109,7 @@ navigation moving the popup, and the closing rules.
 **Implementation context.** Commands are registered in `start()` in
 `extensions/@knot/vcs/src/extension.ts`, next to `showChanges` and `go`; reuse
 `go`'s caret move and `showChanges`' hunk lookup, and extend `go` to move an
-open popup. `SHOW_CHANGES` in `hunks.ts` becomes the new click command. The
+open popup. `SHOW_CHANGES` in `gutter.ts` becomes the new click command. The
 popover API is `Editor.openPopover`/`closePopover`/`onDidClosePopover` in
 `crates/knot-host/src/js/knot.d.ts`; the toolbar is `CompositeButton[]`, whose
 commands get the anchoring editor as `editor`. Icons follow

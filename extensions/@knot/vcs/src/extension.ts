@@ -10,7 +10,7 @@ import { commands, diff, documents, keymaps, windows, workbench } from "knot";
 import type { Buffer, CommandContext, Disposable, DocumentId, EditorContribution } from "knot";
 import { diffs } from "@knot/diff";
 import { backendContract, vcs } from "./contract.js";
-import { contributionsOf, SHOW_CHANGES } from "./hunks.js";
+import { contributionsOf, SHOW_CHANGES } from "./gutter.js";
 import { targetLine, type Direction } from "./navigation.js";
 import { createDiscovery, isGone, type Repository } from "./repositories.js";
 import { createRefs } from "./ref.js";
