@@ -727,10 +727,13 @@ fn decode_composite_tab(
 }
 
 /// A composite layout, sent as JSON.
-fn decode_composite_layout(json: &str) -> Result<super::composites::LayoutWire, DecodeError> {
+fn decode_composite_layout(
+    json: &str,
+    popover: bool,
+) -> Result<super::composites::LayoutWire, DecodeError> {
     let layout: super::composites::LayoutWire =
         serde_json::from_str(json).map_err(|_| DecodeError::Type("composite layout is invalid"))?;
-    layout.check().map_err(DecodeError::Range)?;
+    layout.check(popover).map_err(DecodeError::Range)?;
     Ok(layout)
 }
 
@@ -748,7 +751,10 @@ impl HostArguments for OpenCompositeArguments {
             target: reader.destination(2)?,
             kind: reader.text(3, "composite kind must be text")?,
             tab: decode_composite_tab(reader, 4)?,
-            layout: decode_composite_layout(&reader.text(9, "composite layout must be text")?)?,
+            layout: decode_composite_layout(
+                &reader.text(9, "composite layout must be text")?,
+                false,
+            )?,
         })
     }
 }
@@ -792,7 +798,7 @@ impl HostArguments for UpdateCompositeArguments {
             tab: decode_composite_tab(reader, 3)?,
             layout: reader
                 .optional_text(8, "composite layout must be text or null")?
-                .map(|json| decode_composite_layout(&json))
+                .map(|json| decode_composite_layout(&json, false))
                 .transpose()?,
         })
     }
@@ -4304,7 +4310,7 @@ impl HostArguments for OpenPopoverArguments {
             anchor: line(reader.integer(4)?)?..line(reader.integer(5)?)?,
             options: serde_json::from_str(&reader.text(6, "popover options must be text")?)
                 .map_err(|_| DecodeError::Type("popover options are invalid"))?,
-            layout: decode_composite_layout(&reader.text(7, "popover layout must be text")?)?,
+            layout: decode_composite_layout(&reader.text(7, "popover layout must be text")?, true)?,
         })
     }
 }

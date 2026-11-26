@@ -177,7 +177,7 @@ impl ContentSpec {
 }
 
 impl GroupSpec {
-    fn leaf_count(&self) -> usize {
+    pub(crate) fn leaf_count(&self) -> usize {
         self.members
             .iter()
             .map(|member| member.content.leaf_count())

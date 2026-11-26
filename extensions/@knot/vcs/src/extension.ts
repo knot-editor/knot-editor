@@ -37,6 +37,7 @@ const POPUP = "vcs.hunk";
 
 export const SHOW_CHANGES = "vcs.showChanges";
 export const REVERT_CHANGE = "vcs.revertChange";
+export const COPY_CHANGE = "vcs.copyChange";
 
 /** The hunk popup that is open on one of a document's editors. */
 type Popup = {
@@ -407,8 +408,13 @@ export async function start(): Promise<Disposable> {
           { label: "Next Change", icon: "vcs.nextChange", command: NEXT_CHANGE },
           { label: "Revert Change", icon: "vcs.revertChange", command: REVERT_CHANGE, arguments: here },
           { label: "Compare with Last Commit", icon: "vcs.compare", command: SHOW_CHANGES, arguments: here },
+          // An insertion has no baseline lines to copy.
+          ...(text === "" ? [] : [{ label: "Copy Change", icon: "vcs.copyChange", command: COPY_CHANGE, arguments: here }]),
         ],
-        layout: { type: "column", children: [{ type: "editor", buffer: baseline, key: "baseline" }] },
+        layout: {
+          type: "column",
+          children: text === "" ? [] : [{ type: "editor", buffer: baseline, key: "baseline" }],
+        },
       });
     } catch (error) {
       if (follow.popup?.baseline !== baseline) await Promise.resolve(baseline[Symbol.asyncDispose]()).catch(() => {});
@@ -439,6 +445,14 @@ export async function start(): Promise<Disposable> {
   const revertChange = async (context: CommandContext) => {
     const { buffer, hunk, baseline, revision } = await hunkOf(context);
     await buffer.applyEdits([await revertEdit(baseline, hunk, buffer)], { ifRevision: revision });
+  };
+
+  /** Copies the baseline's lines that the change replaced. */
+  const copyChange = async (context: CommandContext) => {
+    const { hunk, baseline } = await hunkOf(context);
+    const text = baselineText(baseline, hunk);
+    if (text === "") commands.unavailable();
+    await workbench.writeClipboardText(text);
   };
 
   /** Moves the caret of the focused editor to the next or previous change, and the open popup with it. */
@@ -495,6 +509,7 @@ export async function start(): Promise<Disposable> {
   await icons.define("vcs.previousChange", { lucide: "arrow-up" });
   await icons.define("vcs.nextChange", { lucide: "arrow-down" });
   await icons.define("vcs.revertChange", { lucide: "undo-2" });
+  await icons.define("vcs.copyChange", { lucide: "copy" });
   await icons.define("vcs.compare", { lucide: "git-compare" });
   const navigation = [
     await commands.register(SHOW_CHANGE, showChange, {
@@ -504,6 +519,10 @@ export async function start(): Promise<Disposable> {
     await commands.register(REVERT_CHANGE, revertChange, {
       title: "Revert Change",
       description: "Replace the change at the cursor with its version control baseline.",
+    }),
+    await commands.register(COPY_CHANGE, copyChange, {
+      title: "Copy Change",
+      description: "Copy the version control baseline's lines for the change at the cursor.",
     }),
     await commands.register(SHOW_CHANGES, showChanges, {
       title: "Compare with Last Commit",

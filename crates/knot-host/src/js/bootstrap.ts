@@ -2299,7 +2299,7 @@ function compositeTab(given: Rec, titleRequired: boolean) {
 function compositeLayoutJson(node: unknown, popover = false): string {
   const seen: CompositeSeen = { keys: new Set(), editors: new Set(), connectors: [], popover };
   const wire = compositeLayout(node, true, false, seen);
-  if (!/"type":"(editor|text|tree)"/.test(JSON.stringify(wire))) throw new TypeError("composite layout needs a view");
+  if (!popover && !/"type":"(editor|text|tree)"/.test(JSON.stringify(wire))) throw new TypeError("composite layout needs a view");
   for (const [first, second] of seen.connectors) {
     if (first === second || !seen.editors.has(first) || !seen.editors.has(second)) {
       throw new TypeError("a composite connector joins two editors of the layout by key");

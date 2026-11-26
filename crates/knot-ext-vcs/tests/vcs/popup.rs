@@ -38,6 +38,7 @@ const BUTTONS: [&str; 4] = [
     "Revert Change",
     "Compare with Last Commit",
 ];
+const COPY: &str = "Copy Change";
 
 #[gpui::test]
 fn a_click_on_a_mark_opens_the_baseline_lines_under_the_hunk(cx: &mut TestAppContext) {
@@ -48,19 +49,31 @@ fn a_click_on_a_mark_opens_the_baseline_lines_under_the_hunk(cx: &mut TestAppCon
     assert_eq!(popovers.len(), 1);
     assert_eq!(popovers[0].id, "vcs.hunk");
     assert_eq!(popovers[0].anchor, 0..1);
-    assert_eq!(popovers[0].buttons, BUTTONS);
+    assert_eq!(popovers[0].buttons, [BUTTONS.as_slice(), &[COPY]].concat());
     assert_eq!(popovers[0].texts, ["a\n"]);
 }
 
 #[gpui::test]
-fn an_insertions_popup_shows_no_baseline_lines(cx: &mut TestAppContext) {
+fn an_insertions_popup_has_only_the_toolbar(cx: &mut TestAppContext) {
     let (_product, window, _directory) = changed(cx);
     window.click_gutter_bar(3, cx);
     wait_until(cx, |cx| !window.popovers(cx).is_empty());
     let popovers = window.popovers(cx);
     assert_eq!(popovers[0].anchor, 3..4);
     assert_eq!(popovers[0].buttons, BUTTONS);
-    assert_eq!(popovers[0].texts, [""]);
+    assert!(popovers[0].texts.is_empty());
+}
+
+#[gpui::test]
+fn copy_change_puts_the_baseline_lines_on_the_clipboard(cx: &mut TestAppContext) {
+    let (_product, window, _directory) = changed(cx);
+    window.click_gutter_bar(0, cx);
+    wait_until(cx, |cx| !window.popovers(cx).is_empty());
+    cx.update(|cx| cx.write_to_clipboard(gpui::ClipboardItem::new_string(String::new())));
+    window.click_popover_button(COPY, cx);
+    wait_until(cx, |cx| {
+        cx.read_from_clipboard().and_then(|item| item.text()) == Some("a\n".to_owned())
+    });
 }
 
 #[gpui::test]

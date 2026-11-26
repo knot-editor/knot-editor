@@ -1990,7 +1990,8 @@ declare module "knot" {
     /** Its content, as a composite view's: the members of a row or column,
      * with `key`s that keep their views when the popover is updated. Each
      * view is an ordinary view of the view tree, and an editor on a document
-     * counts the popover's tab as one of the document's views. */
+     * counts the popover's tab as one of the document's views. Unlike a
+     * composite's, it may hold no view, leaving the toolbar alone. */
     readonly layout: CompositeGroup;
   }
   /** Why Knot closed a popover: `"escape"` was pressed, `"click"` landed outside

@@ -140,7 +140,9 @@ impl LayoutWire {
     /// are positive and finite, a title on exactly the members of tabs, keys
     /// that are not empty and name one member each, and connectors that join
     /// two editors by key and have no key, focus, or tabs of their own.
-    pub(crate) fn check(&self) -> Result<(), &'static str> {
+    ///
+    /// A popover's layout may hold no view, leaving only its toolbar.
+    pub(crate) fn check(&self, popover: bool) -> Result<(), &'static str> {
         #[derive(Default)]
         struct Seen {
             keys: HashSet<String>,
@@ -211,7 +213,7 @@ impl LayoutWire {
             return Err("a composite connector joins two editors of the layout by key");
         }
         match views {
-            0 => Err("composite layout needs a view"),
+            0 if !popover => Err("composite layout needs a view"),
             _ => Ok(()),
         }
     }

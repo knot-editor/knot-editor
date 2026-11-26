@@ -55,7 +55,7 @@ pub(crate) struct ViewNode {
 }
 
 impl ViewNode {
-    fn leaf(id: EntityId, kind: ViewKind) -> Self {
+    pub(crate) fn leaf(id: EntityId, kind: ViewKind) -> Self {
         Self {
             id,
             kind,

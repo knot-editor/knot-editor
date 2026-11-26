@@ -15,16 +15,16 @@ caret, and a hunk can be reverted from the palette without opening the popup.
 
 Everything lives in `@knot/vcs` and is built on
 [editor popovers](../architecture/editor-and-languages.md#editor-popovers),
-with no native changes.
+with one native change: a popover's layout may hold no view.
 
 - **Content.** The popover shows only the baseline's lines for the hunk, in a
   read-only `buffers.create` buffer in the document's language, banded
   `diff.removed.background` through a view decoration. The current lines stay
   where they are in the editor beside the popup. A pure insertion has no
-  baseline lines, so its popup is the toolbar over an empty editor (a popover
-  needs at least one view). Changes inside a line are
-  not highlighted, because `diff` reports none. Width is `"editor"`; the
-  baseline editor uses the popover's default `maxLines`.
+  baseline lines, so its popup is just the toolbar (a popover's layout may hold
+  no view). Changes inside a line are not highlighted, because `diff` reports
+  none. Width is `"editor"`; the baseline editor uses the popover's default
+  `maxLines`.
 - **Anchor.** A hunk with current lines is anchored to them, so the popup sits
   under the changed block (or over it when there's no room below). A removal
   is anchored to the line before it, so the popup sits where the removed lines
@@ -36,10 +36,11 @@ with no native changes.
   `vcs.showChanges`. `vcs.showChange` ("Show Change") opens the popup for the
   clicked mark's hunk, or for the hunk at the caret from the palette. It has no
   default key. A caret on no hunk leaves it unavailable.
-- **Toolbar.** Previous Change, Next Change, Revert Change, and Compare with
-  Last Commit. Previous and Next move the caret to that hunk, as
-  `vcs.previousChange` and `vcs.nextChange` do (wrapping at the ends), and move
-  the popup there. Compare with Last Commit runs `vcs.showChanges` at the
+- **Toolbar.** Previous Change, Next Change, Revert Change, Compare with Last
+  Commit, and Copy Change (not on an insertion). `vcs.copyChange` ("Copy
+  Change") copies the baseline's lines for the change at the caret. Previous
+  and Next move the caret to that hunk, as `vcs.previousChange` and
+  `vcs.nextChange` do (wrapping at the ends), and move the popup there. Compare with Last Commit runs `vcs.showChanges` at the
   hunk's line.
 - **Navigation while open.** `vcs.nextChange` and `vcs.previousChange` (Alt+F5,
   Alt+Shift+F5, `]c` and `[c`) also move the popup when it is open on the
@@ -110,7 +111,8 @@ manual check.
 baseline lines; Next and Previous move the caret and the popup, wrapping;
 Revert restores the baseline text in one undo step and closes the popup;
 `vcs.showChange` and `vcs.revertChange` from the caret; a baseline refetch
-closes the popup; an insertion's popup shows no baseline lines. `just check`.
+closes the popup; an insertion's popup has only the toolbar; Copy Change
+copies the baseline lines. `just check`.
 
 **Review gate.** Manual check in the app through the `Try:` commands.
 

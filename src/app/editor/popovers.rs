@@ -43,7 +43,8 @@ pub(crate) struct PopoverContentSpec {
 /// The views of one open popover: its toolbar over its layout.
 pub(crate) struct PopoverContent {
     toolbar: Vec<ToolbarButton>,
-    layout: Layout,
+    /// None when the popover holds no view, leaving the toolbar alone.
+    layout: Option<Layout>,
     /// Whether one of its views has focus.
     inside: bool,
     /// Watch the views' focus; set up on the first render after the layout
@@ -58,10 +59,13 @@ impl PopoverContent {
         window: &str,
         cx: &mut Context<Self>,
     ) -> Self {
-        let layout = Layout::new(layout, window, Sizing::Natural, cx);
+        let layout =
+            (layout.leaf_count() > 0).then(|| Layout::new(layout, window, Sizing::Natural, cx));
         cx.on_release(|this, cx| {
-            let hosted = this.layout.take_hosted();
-            crate::app::view_layout::detach_views(hosted, cx);
+            if let Some(layout) = &mut this.layout {
+                let hosted = layout.take_hosted();
+                crate::app::view_layout::detach_views(hosted, cx);
+            }
         })
         .detach();
         Self {
@@ -83,15 +87,34 @@ impl PopoverContent {
     ) -> Vec<ExtensionView> {
         self.toolbar = toolbar;
         self.focus_subscriptions.clear();
-        let change = self.layout.update(layout, window, Sizing::Natural, cx);
+        let attached = match (&mut self.layout, layout.leaf_count() > 0) {
+            (Some(current), true) => current.update(layout, window, Sizing::Natural, cx).attached,
+            (None, true) => {
+                let layout = Layout::new(layout, window, Sizing::Natural, cx);
+                let attached = layout.hosted_views();
+                self.layout = Some(layout);
+                attached
+            }
+            (Some(current), false) => {
+                let hosted = current.take_hosted();
+                crate::app::view_layout::detach_views(hosted, cx);
+                self.layout = None;
+                self.inside = false;
+                Vec::new()
+            }
+            (None, false) => Vec::new(),
+        };
         cx.notify();
-        change.attached
+        attached
     }
 
     /// Record whether a view of the popover has focus, telling observers of
     /// the view tree when it changed.
     fn sync_inside(&mut self, window: &Window, cx: &mut Context<Self>) {
-        let inside = self.layout.contains_focus(window, cx);
+        let inside = self
+            .layout
+            .as_ref()
+            .is_some_and(|layout| layout.contains_focus(window, cx));
         if inside != self.inside {
             self.inside = inside;
             crate::app::extensions::host::application_changed(cx);
@@ -102,7 +125,7 @@ impl PopoverContent {
     /// does.
     #[cfg(test)]
     pub(crate) fn focus_leaf(&mut self, index: usize, cx: &mut Context<Self>) {
-        self.layout.set_focused_leaf(index);
+        self.layout.as_ref().unwrap().set_focused_leaf(index);
         self.inside = true;
         crate::app::extensions::host::application_changed(cx);
     }
@@ -122,12 +145,19 @@ impl PopoverContent {
         } else {
             TOOLBAR_HEIGHT * crate::app::zoom::factor(cx)
         };
-        toolbar + self.layout.natural_height(cx) + 2.
+        let layout = self
+            .layout
+            .as_ref()
+            .map_or(0., |layout| layout.natural_height(cx));
+        toolbar + layout + 2.
     }
 
     /// The popover's node of the view tree.
     fn node(&self, id: EntityId, cx: &App) -> ViewNode {
-        self.layout.node(id, ViewKind::Popover, cx)
+        match &self.layout {
+            Some(layout) => layout.node(id, ViewKind::Popover, cx),
+            None => ViewNode::leaf(id, ViewKind::Popover),
+        }
     }
 
     /// The tooltips of the toolbar's buttons.
@@ -139,23 +169,37 @@ impl PopoverContent {
             .collect()
     }
 
+    fn leaves_of_layout(&self) -> Vec<crate::app::view_layout::Leaf> {
+        self.layout
+            .as_ref()
+            .map_or_else(Vec::new, |layout| layout.leaves().to_vec())
+    }
+
     /// The views in layout order.
     #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn leaves(&self) -> Vec<crate::app::view_layout::Leaf> {
-        self.layout.leaves().to_vec()
+        self.layout
+            .as_ref()
+            .map_or_else(Vec::new, |layout| layout.leaves().to_vec())
     }
 }
 
 impl Render for PopoverContent {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        self.layout.watch_focus(
-            window,
-            cx,
-            |this: &Self| &this.layout,
-            |_, cx| crate::app::extensions::host::application_changed(cx),
-        );
+        if let Some(layout) = &mut self.layout {
+            layout.watch_focus(
+                window,
+                cx,
+                |this: &Self| this.layout.as_ref().unwrap(),
+                |_, cx| crate::app::extensions::host::application_changed(cx),
+            );
+        }
         if self.focus_subscriptions.is_empty() {
-            for leaf in self.layout.leaves().iter() {
+            let leaves = self
+                .layout
+                .as_ref()
+                .map_or_else(Vec::new, |layout| layout.leaves().to_vec());
+            for leaf in leaves.iter() {
                 let handle = leaf.focus_handle(cx);
                 self.focus_subscriptions.push(cx.on_focus_in(
                     &handle,
@@ -183,7 +227,7 @@ impl Render for PopoverContent {
                 .flex_1()
                 .min_w_0()
                 .min_h_0()
-                .child(self.layout.render(cx)),
+                .children(self.layout.as_ref().map(|layout| layout.render(cx))),
         )
     }
 }
@@ -231,7 +275,11 @@ impl Editor {
             None => {
                 let created =
                     cx.new(|cx| PopoverContent::new(content.toolbar, content.layout, window, cx));
-                let attached = created.read(cx).layout.hosted_views();
+                let attached = created
+                    .read(cx)
+                    .layout
+                    .as_ref()
+                    .map_or_else(Vec::new, |layout| layout.hosted_views());
                 self.popover_views.push(PopoverView {
                     owner,
                     id: id.to_owned(),
@@ -380,7 +428,7 @@ impl Editor {
     pub(crate) fn popover_focus_handles(&self, cx: &App) -> Vec<FocusHandle> {
         self.popover_views
             .iter()
-            .flat_map(|popover| popover.content.read(cx).layout.leaves().to_vec())
+            .flat_map(|popover| popover.content.read(cx).leaves_of_layout())
             .map(|leaf| leaf.focus_handle(cx))
             .collect()
     }
@@ -422,7 +470,10 @@ impl EditorView {
                     .get(owner, &id)
                     .and_then(|popover| editor.popover_content(popover));
                 match content {
-                    Some(content) => content.read(cx).layout.focused_handle(cx),
+                    Some(content) => match &content.read(cx).layout {
+                        Some(layout) => layout.focused_handle(cx),
+                        None => return,
+                    },
                     None => return,
                 }
             }
