@@ -4018,7 +4018,6 @@ dependencies = [
  "futures",
  "libc",
  "tempfile",
- "tracing",
 ]
 
 [[package]]
