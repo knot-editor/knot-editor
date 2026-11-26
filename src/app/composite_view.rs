@@ -1105,7 +1105,7 @@ impl CompositeView {
 
     /// The links of every connector, in layout order, as the lines of each
     /// side and the color key.
-    #[cfg(feature = "test-support")]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn connector_links(&self, cx: &App) -> Vec<(Range<u32>, Range<u32>, String)> {
         self.root
             .connectors(cx)
