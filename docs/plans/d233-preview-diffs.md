@@ -61,12 +61,8 @@ and `src/app/product/tests/composite.rs`; the docs land with checkpoint 3.
 
 ### 2. Documents without a tab ✅
 
-Done: `documents.load(uri)` (`loadDocument` operation, `OpenOptions.load_only`
-in `src/app/product`) opens through the provider, reuses an open document,
-and presents no tab; it neither bumps nor yields to the window's open
-generation. Covered by `src/app/product/tests/operations.rs`; the test fake
-records calls as `loads()`. Review folded into checkpoint 3; the docs land
-there.
+Done and approved: `documents.load(uri)` opens a file's document without a
+tab, covered by app and extension API tests. Its docs land with checkpoint 3.
 
 ### 3. Preview diffs in the Changes view and gutter
 
