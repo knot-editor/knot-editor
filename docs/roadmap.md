@@ -30,7 +30,6 @@ point.
 
 The [version control plan](plans/vcs.md) comes first, in its milestone order:
 
-- D220 — Anchored popovers.
 - D221 — Hunk popup.
 - D214 — VCS changes view.
 - D215 — VCS commit.
@@ -278,24 +277,14 @@ hold the analyses that support some items.
     diagnostic text, or blame (D217) needs annotations: design them against a
     real language server, as inline virtual text.
 
-- **D220 — Anchored popovers** 🚧
-  - Depends on: none
-  - Description: Extensions cannot anchor a floating popover to a position in
-    an editor. The hunk popup (D221) is the first consumer, and language-server
-    hover (D067) the next: add an anchored floating surface that reuses the
-    semantic tree and text content kinds, with focus, dismissal, and
-    positioning that follows the anchor. Part of the
-    [version control plan](plans/vcs.md); see the
-    [plan](plans/d220-anchored-popovers.md).
-
 - **D231 — Inline zones**
-  - Depends on: D220
+  - Depends on: none
   - Description: Block rows show read-only lines between an editor's lines,
-    and popovers (D220) float over the text, but extensions cannot push
+    and [popovers](architecture/editor-and-languages.md#editor-popovers) float over the text, but extensions cannot push
     lines apart to show live content between them. Do it when a consumer
     needs it, such as a peek-style hunk view, inline review comments, or an
     inline diff hunk with actions: let block rows host a popover's content (a
-    toolbar and a composite layout, with D220's natural sizing), at any pixel
+    toolbar and a composite layout, with a popover's natural sizing), at any pixel
     height, with views inside them that take focus, clicks, and typing, and
     that scroll, fold, and follow edits as block rows do.
 
@@ -326,7 +315,7 @@ hold the analyses that support some items.
     current line's text to the request if reading the buffer costs too much.
 
 - **D067 — Language servers and semantic tokens**
-  - Depends on: D145, D220, D200, D115, D022
+  - Depends on: D145, D200, D115, D022
   - Description: No language client exists. The syntax highlighting work
     prepared for one: LSP language IDs, `Send` text snapshots, a highlight
     vocabulary that semantic token types and modifiers map onto, and a
@@ -336,8 +325,8 @@ hold the analyses that support some items.
     it needs the `process` entitlement), define a whole-range semantic-token contribution that
     scales to file-sized token counts unlike per-item anchored contributions,
     and connect diagnostics to decorations and completion to D022. It needs
-    D220 for hover and D145 for inlay hints and diagnostic text, and format on
-    save builds on D115.
+    D145 for inlay hints and diagnostic text, hover uses editor popovers, and
+    format on save builds on D115.
 
 - **D125 — Tasks and run configurations**
   - Depends on: D089, D124
@@ -407,7 +396,7 @@ The [version control plan](plans/vcs.md) holds the agreed architecture and the
 milestones these items belong to.
 
 - **D221 — Hunk popup** 🚧
-  - Depends on: D220
+  - Depends on: none
   - Description: A gutter marker shows that lines changed, not how. Clicking
     it opens a popup anchored to the hunk that shows the baseline's lines
     against the current ones, with revert, next and previous hunk, and opening
