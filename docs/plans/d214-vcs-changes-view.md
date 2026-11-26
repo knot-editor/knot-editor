@@ -176,27 +176,15 @@ render the backend's actions, Show Diff, Open File, and the native file
 commands; the Git action commands are registered in checkpoint 4. The review
 kept the hover buttons. Documentation is in checkpoint 5.
 
-### 4. Actions and rollback
+### 4. Actions and rollback ✅
 
-Deliverables: Git's Stage, Unstage, Discard, and Rollback commands over file,
-folder, and group pathspecs, with confirmation for Discard and Rollback;
-`rollback` served by Git; `vcs.rollbackFile` for the focused editor's file,
-confirmed, and reloading a document with unsaved edits.
-
-Validation: product tests over temporary repositories for each action on a
-file, a folder, and a group header, checked with `git status`; the view
-refreshing after an action; Discard deleting an untracked file; Rollback of an
-added file; `vcs.rollbackFile` on a clean and a dirty document; `just check`.
-
-Review gate: in the app, through `try.*` commands, staging and discarding from
-the view, and Rollback from the palette.
-
-**Implementation context.** Git commands register in
-`extensions/@knot/git/src/main.ts` and run through `git` in
-`extensions/@knot/git/src/git.ts`. Confirmation mirrors `remove` in
-`extensions/@knot/explorer/src/actions.ts` (`confirmLabel`). `vcs.rollbackFile`
-registers beside `vcs.showChanges` in `extensions/@knot/vcs/src/extension.ts`
-and finds the file's repository and backend as the gutter does.
+Done: `git.stage`, `git.unstage`, `git.discard`, and `git.rollback` act on the
+exact files a group lists below the row's path, so a folder or group header
+never touches another group's files. Discard (restore, or delete for untracked
+files) and Rollback ask for confirmation. Git serves `rollback`, and
+`vcs.rollbackFile` confirms, calls it, and reloads the document. Product tests
+that read `git status` must set `GIT_OPTIONAL_LOCKS=0`, or they race the
+extension's index writes. Documentation is in checkpoint 5.
 
 ### 5. Documentation
 
