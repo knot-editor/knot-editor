@@ -6,11 +6,21 @@
 // document is saved. File status is pulled for every known repository and
 // painted on resources (status.ts), and each window shows the current ref
 // (ref.ts).
-import { commands, diff, documents, keymaps, windows, workbench } from "knot";
-import type { Buffer, CommandContext, Disposable, DocumentId, EditorContribution } from "knot";
+import { buffers, commands, diff, documents, icons, keymaps, windows, workbench } from "knot";
+import type {
+  Buffer,
+  CommandContext,
+  Disposable,
+  DiffHunk,
+  DocumentId,
+  EditorContribution,
+  EditorHandle,
+  ExtensionBuffer,
+} from "knot";
 import { diffs } from "@knot/diff";
 import { backendContract, vcs } from "./contract.js";
-import { contributionsOf, SHOW_CHANGES } from "./gutter.js";
+import { contributionsOf, SHOW_CHANGE } from "./gutter.js";
+import { anchorLines, baselineText, hunkAt, revertEdit } from "./hunk.js";
 import { targetLine, type Direction } from "./navigation.js";
 import { createDiscovery, isGone, type Repository } from "./repositories.js";
 import { createRefs } from "./ref.js";
@@ -21,6 +31,20 @@ const DELAY = 150;
 
 /** How many times a diff that an edit raced is repeated before the edit's own notification takes over. */
 const ATTEMPTS = 5;
+
+/** The popover ID of the hunk popup. */
+const POPUP = "vcs.hunk";
+
+export const SHOW_CHANGES = "vcs.showChanges";
+export const REVERT_CHANGE = "vcs.revertChange";
+
+/** The hunk popup that is open on one of a document's editors. */
+type Popup = {
+  readonly editor: EditorHandle;
+  /** The read-only buffer showing the baseline's lines. */
+  readonly baseline: ExtensionBuffer;
+  readonly listener: Disposable;
+};
 
 /** What the gutter knows about one open document. */
 type Follow = {
@@ -39,6 +63,8 @@ type Follow = {
   fetch: boolean;
   /** Marks may be showing. */
   painted: boolean;
+  /** The hunk popup, if one is open. */
+  popup: Popup | null;
   timer: ReturnType<typeof setTimeout> | null;
   running: boolean;
   /** A request arrived while a run was in flight, joined into one more run. */
@@ -146,6 +172,8 @@ export async function start(): Promise<Disposable> {
     if (follow.fetch) {
       follow.fetch = false;
       follow.baseline = null;
+      // The hunk it shows may have moved.
+      await closePopup(follow);
       const { repository, uri } = follow;
       if (repository !== null && uri !== null) {
         try {
@@ -173,6 +201,26 @@ export async function start(): Promise<Disposable> {
     const { diff: id } = follow;
     follow.diff = null;
     if (id !== null) await (await diffs.client()).close(id).catch(() => {});
+  }
+
+  /** Drops the popup's state once it is closed, whoever closed it. */
+  async function forgetPopup(follow: Follow) {
+    const { popup } = follow;
+    if (popup === null) return;
+    follow.popup = null;
+    await popup.listener[Symbol.asyncDispose]().catch(() => {});
+    await Promise.resolve(popup.baseline[Symbol.asyncDispose]()).catch(() => {});
+    await popup.editor[Symbol.asyncDispose]().catch(() => {});
+  }
+
+  /** Closes the popup, if open. */
+  async function closePopup(follow: Follow) {
+    try {
+      await follow.popup?.editor.closePopover(POPUP);
+    } catch {
+      // The editor is gone, and the popover with it.
+    }
+    await forgetPopup(follow);
   }
 
   /** Brings an open diff up to the baseline just fetched, or closes it when the file has none. */
@@ -226,6 +274,7 @@ export async function start(): Promise<Disposable> {
 
   async function release(follow: Follow) {
     follow.closed = true;
+    await closePopup(follow);
     await closeDiff(follow);
     if (follow.timer !== null) clearTimeout(follow.timer);
     follow.timer = null;
@@ -291,6 +340,7 @@ export async function start(): Promise<Disposable> {
       resolve: true,
       fetch: false,
       painted: false,
+      popup: null,
       timer: null,
       running: false,
       pending: false,
@@ -320,8 +370,80 @@ export async function start(): Promise<Disposable> {
     kick(follow);
   });
 
-  /** Moves the caret of the focused editor to the next or previous change. */
-  const go = (direction: Direction) => async ({ editor, buffer }: CommandContext) => {
+  /** Opens the popup for `hunk` under it, showing the baseline's lines it replaced. */
+  async function openPopup(follow: Follow, { target }: CommandContext, hunk: DiffHunk) {
+    const view = target.focusedView;
+    if (view === null || follow.baseline === null) commands.unavailable();
+    const text = baselineText(follow.baseline, hunk);
+    const baseline = await buffers.create({ text, language: follow.language, readOnly: true });
+    try {
+      if (text !== "") {
+        const { revision } = await baseline.snapshot({ startByteOffset: 0, endByteOffset: 0 });
+        const end = (await baseline.lineRange((await baseline.lineCount()) - 1)).endByteOffset;
+        await baseline.contributions.replace(
+          [{ range: { startByteOffset: 0, endByteOffset: end }, decoration: { color: "diff.removed.background", style: "line" } }],
+          { ifRevision: revision },
+        );
+      }
+      await closePopup(follow);
+      const editor = await workbench.editor(view);
+      const { first, last } = anchorLines(hunk);
+      const current = follow.buffer;
+      const lastLine = (await current.lineCount()) - 1;
+      const at = (await current.lineRange(Math.min(hunk.new.start, lastLine))).startByteOffset;
+      const here = { range: { startByteOffset: at, endByteOffset: at } };
+      const popup: Popup = {
+        editor,
+        baseline,
+        listener: await editor.onDidClosePopover(({ popover }) => {
+          if (popover === POPUP && follow.popup === popup) return forgetPopup(follow);
+        }),
+      };
+      follow.popup = popup;
+      await editor.openPopover(POPUP, {
+        anchor: { start: first, end: last + 1 },
+        toolbar: [
+          { label: "Previous Change", icon: "vcs.previousChange", command: PREVIOUS_CHANGE },
+          { label: "Next Change", icon: "vcs.nextChange", command: NEXT_CHANGE },
+          { label: "Revert Change", icon: "vcs.revertChange", command: REVERT_CHANGE, arguments: here },
+          { label: "Compare with Last Commit", icon: "vcs.compare", command: SHOW_CHANGES, arguments: here },
+        ],
+        layout: { type: "column", children: [{ type: "editor", buffer: baseline, key: "baseline" }] },
+      });
+    } catch (error) {
+      if (follow.popup?.baseline !== baseline) await Promise.resolve(baseline[Symbol.asyncDispose]()).catch(() => {});
+      throw error;
+    }
+  }
+
+  /** The follow, buffer, and hunk of the clicked mark, or of the caret. */
+  async function hunkOf({ editor, buffer, arguments: given }: CommandContext) {
+    if (editor === null || buffer === null) commands.unavailable();
+    const follow = [...follows.values()].find((candidate) => candidate.buffer === buffer);
+    if (follow === undefined || follow.baseline === null) commands.unavailable();
+    const range = (given as { range?: { startByteOffset?: number } } | null)?.range;
+    const offset = typeof range?.startByteOffset === "number" ? range.startByteOffset : (await editor.selection()).caret;
+    const { hunks, newRevision } = await diff(follow.baseline, buffer);
+    const hunk = hunkAt(hunks, await buffer.lineAt(offset), (await buffer.lineCount()) - 1);
+    if (hunk === null) commands.unavailable();
+    return { follow, buffer, hunk, baseline: follow.baseline, revision: newRevision! };
+  }
+
+  /** Opens the popup of the clicked mark's hunk, or of the hunk at the caret. */
+  const showChange = async (context: CommandContext) => {
+    const { follow, hunk } = await hunkOf(context);
+    await openPopup(follow, context, hunk);
+  };
+
+  /** Replaces the hunk's current lines with its baseline lines. */
+  const revertChange = async (context: CommandContext) => {
+    const { buffer, hunk, baseline, revision } = await hunkOf(context);
+    await buffer.applyEdits([await revertEdit(baseline, hunk, buffer)], { ifRevision: revision });
+  };
+
+  /** Moves the caret of the focused editor to the next or previous change, and the open popup with it. */
+  const go = (direction: Direction) => async (context: CommandContext) => {
+    const { editor, buffer } = context;
     if (editor === null || buffer === null) commands.unavailable();
     const follow = [...follows.values()].find((candidate) => candidate.buffer === buffer);
     if (follow === undefined || follow.baseline === null) commands.unavailable();
@@ -331,6 +453,9 @@ export async function start(): Promise<Disposable> {
     if (line === null) commands.unavailable();
     const { startByteOffset } = await buffer.lineRange(Math.min(line, (await buffer.lineCount()) - 1));
     await editor.setSelection({ anchor: startByteOffset, caret: startByteOffset }, { reveal: "center" });
+    if (follow.popup === null) return;
+    const hunk = hunkAt(hunks, line, (await buffer.lineCount()) - 1);
+    if (hunk !== null) await openPopup(follow, context, hunk);
   };
 
   /** Opens the diff of the focused file's baseline against it, at the clicked mark or the caret. */
@@ -367,7 +492,19 @@ export async function start(): Promise<Disposable> {
     }
   }
 
+  await icons.define("vcs.previousChange", { lucide: "arrow-up" });
+  await icons.define("vcs.nextChange", { lucide: "arrow-down" });
+  await icons.define("vcs.revertChange", { lucide: "undo-2" });
+  await icons.define("vcs.compare", { lucide: "git-compare" });
   const navigation = [
+    await commands.register(SHOW_CHANGE, showChange, {
+      title: "Show Change",
+      description: "Show the version control baseline's lines for the change at the cursor.",
+    }),
+    await commands.register(REVERT_CHANGE, revertChange, {
+      title: "Revert Change",
+      description: "Replace the change at the cursor with its version control baseline.",
+    }),
     await commands.register(SHOW_CHANGES, showChanges, {
       title: "Compare with Last Commit",
       description: "Open the file's differences from its version control baseline.",

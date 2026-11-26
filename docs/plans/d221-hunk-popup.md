@@ -21,7 +21,8 @@ with no native changes.
   read-only `buffers.create` buffer in the document's language, banded
   `diff.removed.background` through a view decoration. The current lines stay
   where they are in the editor beside the popup. A pure insertion has no
-  baseline lines, so its popup is just the toolbar. Changes inside a line are
+  baseline lines, so its popup is the toolbar over an empty editor (a popover
+  needs at least one view). Changes inside a line are
   not highlighted, because `diff` reports none. Width is `"editor"`; the
   baseline editor uses the popover's default `maxLines`.
 - **Anchor.** A hunk with current lines is anchored to them, so the popup sits
@@ -78,7 +79,7 @@ popup anchor, baseline text, and revert edit (`hunkAt`, `anchorLines`,
 lines carry their terminators and have no trailing empty line, unlike
 `Buffer` lines; `revertEdit` takes the buffer's `lineCount`/`lineRange`.
 
-### 2. The popup, its commands, and the click
+### 2. The popup, its commands, and the click 🚧
 
 The user-visible feature: `vcs.showChange`, `vcs.revertChange`, the toolbar,
 navigation moving the popup, and the closing rules.
@@ -109,7 +110,7 @@ manual check.
 baseline lines; Next and Previous move the caret and the popup, wrapping;
 Revert restores the baseline text in one undo step and closes the popup;
 `vcs.showChange` and `vcs.revertChange` from the caret; a baseline refetch
-closes the popup; an insertion's popup has only the toolbar. `just check`.
+closes the popup; an insertion's popup shows no baseline lines. `just check`.
 
 **Review gate.** Manual check in the app through the `Try:` commands.
 

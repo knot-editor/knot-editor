@@ -6,6 +6,7 @@ mod decorations;
 mod diff;
 mod git;
 mod gutter;
+mod popup;
 mod r#ref;
 mod status;
 

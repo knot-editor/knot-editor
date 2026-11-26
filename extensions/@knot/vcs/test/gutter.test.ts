@@ -381,18 +381,6 @@ test("Show Changes is unavailable for a file without a baseline", async () => {
   assert.equal(shown.length, 0);
 });
 
-test("clicking a change mark opens the diff at that hunk, replacing an open one", async () => {
-  const id = open("a\nb\nc\nD\n");
-  await backend("one", { repositories: () => [ROOT], baseline: () => "a\nb\nc\nd\n" });
-  await rest();
-  await host.clickContribution(id, 0);
-  await host.clickContribution(id, 0);
-  const [first, second] = shown;
-  assert.equal(first!.closed, true);
-  assert.equal(second!.closed, false);
-  assert.equal(second!.options.line, 3);
-});
-
 test("an open diff follows the baseline and closes when the baseline is gone", async () => {
   const id = open("a\nB\n");
   let baseline: string | null = "a\nb\n";
