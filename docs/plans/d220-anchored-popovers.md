@@ -183,40 +183,21 @@ buffer unless it reopens the popover.
 
 ### 4. Focus, keys, and dismissal ✅
 
-Implemented; awaiting the review gate in the running app.
-
-`focus: true` focuses the popover's focused member; otherwise the editor
-keeps focus. Each open popover adds `popover:<id>` to its editor's key
-context, and bindings with `{ view: "editor", context: "popover:<id>" }` run
-while it is open. Escape, clicks outside, and edits close popovers by the
-rules above, and `onDidClosePopover` reports the ID and reason.
-
-Validation: product tests for Escape order, clicks inside and outside, an
-edit from the editor closing every popover while one typed into a popover
-view does not, a toolbar command's edit closing it, key bindings under the
-popover context, and the reported reasons.
-
-**As built.** Escape is handled natively in the window's key routing, ahead of the
-keymap so modal packages such as Vim cannot shadow it: it closes a popover of
-the command's editor, or of the editor a focused popover view floats over, and
-leaves the key alone when none is open or a bar field has it. An edit counts as typed inside a popover when focus
-is inside one while the buffer changes; a toolbar command's edit made with
-focus there keeps the popovers. The close reasons are `escape`, `click`,
-`edit`, and `deleted`, reported through `onDidClosePopover` on editor handles
-(`EditorEvent::PopoversClosed`). `focus: true` and the return of focus to the
-text after a focused popover closes are applied when the editor next renders.
-While focus is inside a popover, key contexts are the popover view's own, so
-`popover:<id>` bindings apply while the editor has focus.
-
-**Implementation context.** Key contexts follow `editor_completion` in
-`src/app/editor/paint.rs` and
-[editor bar key routing](../architecture/commands.md#editor-bars); Escape is
-an editor action like `completion_dismiss` in `src/app/editor/completion.rs`
-that falls through when no popover is open. Click-outside hooks
-`EditorView::on_mouse_down` and the window's mouse-down routing; edit closure
-observes the buffer's commits in `src/app/editor.rs`, comparing the edit's
-origin view with the popover's views. The close event is a coalesced editor
-notification like `onDidEditBar` (`bootstrap.ts`, `handlers.rs`).
+Done and reviewed. Escape is handled natively in the window's key routing
+(`dismiss_popover` in `src/app/product/key_routing.rs`) ahead of the keymap, so
+modal packages such as Vim cannot shadow it: it closes the popover with focus,
+else the newest, of the command's editor or of the editor a focused popover view
+floats over, and leaves the key alone when none is open or a bar field has it.
+A click outside every popover and any edit of the buffer close all of an
+editor's popovers, except an edit made while focus is inside a popover view.
+`onDidClosePopover` on an editor handle reports `escape`, `click`, `edit`, or
+`deleted` (`EditorEvent::PopoversClosed`); the model is in
+`crates/knot-model/src/editor/popovers.rs`, the views in
+`src/app/editor/popovers.rs`, and the product tests in
+`src/app/product/tests/editor_popovers.rs`. Each open popover adds
+`popover:<id>` to its editor's key contexts; while focus is inside a popover the
+contexts are the popover view's own. `focus: true` and returning focus to the
+text after a focused popover closes apply when the editor next renders.
 
 ### 5. Documentation and decision
 
