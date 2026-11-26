@@ -98,7 +98,7 @@ struct EffectiveKey {
     views: HashMap<String, BindingResolution>,
     /// The latest context-scoped write for each view and context, with its
     /// order, so a view holding several contexts picks the latest of them.
-    contexts: HashMap<(String, String), (u64, BindingResolution)>,
+    contexts: HashMap<(String, String), ((bool, u64), BindingResolution)>,
 }
 
 /// The view kinds native surfaces own.
@@ -650,24 +650,25 @@ impl BindingRegistry {
                 (Some(&resolution) != global.as_ref()).then(|| (kind.clone(), resolution))
             })
             .collect();
-        // Every context slot is an extension's and requires two facts, so the
-        // latest one for a view and context wins there.
+        // Every context slot requires two facts, so an extension's beats the
+        // preset's there, and then the latest one for a view and context wins.
         let contexts = self
             .slots
             .iter()
             .filter(|(slot_key, _)| slot_key.key == key)
             .filter_map(|(slot_key, slot)| {
                 let context = slot_key.context.clone()?;
-                Some(((slot_key.view.clone()?, context), slot.order, slot_key))
+                let rank = (!slot_key.owner.is_default(), slot.order);
+                Some(((slot_key.view.clone()?, context), rank, slot_key))
             })
             .fold(
-                HashMap::<(String, String), (u64, BindingResolution)>::new(),
-                |mut contexts, (scope, order, slot_key)| {
+                HashMap::<(String, String), ((bool, u64), BindingResolution)>::new(),
+                |mut contexts, (scope, rank, slot_key)| {
                     if contexts
                         .get(&scope)
-                        .is_none_or(|(latest, _)| *latest < order)
+                        .is_none_or(|(latest, _)| *latest < rank)
                     {
-                        contexts.insert(scope, (order, resolution(slot_key)));
+                        contexts.insert(scope, (rank, resolution(slot_key)));
                     }
                     contexts
                 },

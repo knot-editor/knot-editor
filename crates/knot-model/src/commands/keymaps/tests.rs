@@ -779,6 +779,35 @@ fn resolved_in(
 }
 
 #[test]
+fn an_extensions_context_slot_beats_the_presets_of_the_same_scope() {
+    let mut registry = BindingRegistry::new();
+    let owner = BindingOwner::Extension(ExtensionId::new(1), ExtensionLifecycleId::new(1));
+    registry
+        .set_in_context(
+            owner,
+            "f",
+            Some("editor"),
+            Some("diff"),
+            Some(command("extension")),
+        )
+        .unwrap();
+    // The preset is written later, as it is when startup completes.
+    registry
+        .set_in_context(
+            BindingOwner::Preset,
+            "f",
+            Some("editor"),
+            Some("diff"),
+            Some(command("preset")),
+        )
+        .unwrap();
+    assert_eq!(
+        resolved_in(&registry, "f", Some("editor"), &["diff"]).as_deref(),
+        Some("extension")
+    );
+}
+
+#[test]
 fn context_slots_win_by_fact_count_then_latest_write() {
     let mut registry = BindingRegistry::new();
     let modal = BindingOwner::Extension(ExtensionId::new(1), ExtensionLifecycleId::new(1));
