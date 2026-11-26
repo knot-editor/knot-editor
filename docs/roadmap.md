@@ -400,7 +400,7 @@ milestones these items belong to.
   - Description: Committing needs a terminal. Add the commit UI, a message
     editor with options the provider supplies (for Git: amend, sign-off), and
     commit through the provider; build the UI primitives it needs as extension
-    API.
+    API. See the [plan](plans/d215-vcs-commit.md).
 
 - **D216 — Git operations** 🚧
   - Depends on: D215

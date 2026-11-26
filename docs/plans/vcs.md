@@ -88,8 +88,8 @@ gutter and change navigation. See [version control](../architecture/version-cont
 - ✅ **D214 — VCS changes view.** Provider-defined groups of changed files with
   their actions, and the native file commands. See
   [the changes view](../architecture/version-control.md#changes-view).
-- **D215 — VCS commit.** The commit UI and committing through the provider,
-  with provider-supplied options. Depends on D214.
+- 🚧 **D215 — VCS commit.** The commit UI and committing through the provider,
+  with provider-supplied options. See [its plan](d215-vcs-commit.md).
 
 ### 5. Git operations
 
