@@ -80,41 +80,16 @@ popup anchor, baseline text, and revert edit (`hunkAt`, `anchorLines`,
 lines carry their terminators and have no trailing empty line, unlike
 `Buffer` lines; `revertEdit` takes the buffer's `lineCount`/`lineRange`.
 
-### 2. The popup, its commands, and the click 🚧
+### 2. The popup, its commands, and the click ✅
 
-The user-visible feature: `vcs.showHunk`, `vcs.revertHunk`, the toolbar,
-navigation moving the popup, and the closing rules.
-
-- Gutter marks run `vcs.showHunk` with the mark's range as arguments, as
-  they now pass it to `vcs.showChanges`.
-- The popup state per editor (hunk, baseline buffer) is dropped on
-  `onDidClosePopover`, on baseline refetch, and on document close, and its
-  buffer is disposed.
-- Icons for the toolbar buttons, defined with `icons.define`.
-
-**Implementation context.** Commands are registered in `start()` in
-`extensions/@knot/vcs/src/extension.ts`, next to `showChanges` and `go`; reuse
-`go`'s caret move and `showChanges`' hunk lookup, and extend `go` to move an
-open popup. `SHOW_CHANGES` in `gutter.ts` becomes the new click command. The
-popover API is `Editor.openPopover`/`closePopover`/`onDidClosePopover` in
-`crates/knot-host/src/js/knot.d.ts`; the toolbar is `CompositeButton[]`, whose
-commands get the anchoring editor as `editor`. Icons follow
-`extensions/@knot/diff/src/extension.ts` (`icons.define("diff.previous", …)`).
-The baseline refetch hook is `syncDiff` in `update()`, and document close is
-`release`. Product tests go in `crates/knot-ext-vcs/tests/vcs/` (a new
-`popup.rs`, registered in `main.rs`), over the fixed-baseline backend that
-`gutter.rs` uses; `test/gutter.test.ts` covers the in-memory paths it can't
-drive. Write a personal-config `post-init.js` with `Try:` commands for the
-manual check.
-
-**Validation.** Product tests: a click on a mark opens the popup with the
-baseline lines; Next and Previous move the caret and the popup, wrapping;
-Revert restores the baseline text in one undo step and closes the popup;
-`vcs.showHunk` and `vcs.revertHunk` from the caret; a baseline refetch
-closes the popup; an insertion's popup has only the toolbar; Copy Hunk
-copies the baseline lines. `just check`.
-
-**Review gate.** Manual check in the app through the `Try:` commands.
+Done and reviewed in the app: `extensions/@knot/vcs/src/extension.ts` holds
+the popup, `vcs.showHunk`, `vcs.revertHunk`, `vcs.copyHunk`, and navigation
+that moves an open popup, and `gutter.ts` makes a click on a mark run
+`vcs.showHunk`. Product tests are in `crates/knot-ext-vcs/tests/vcs/popup.rs`.
+The popup state is kept per document, not per editor, so opening it in a
+second editor of the same document replaces the first. A popover's layout may
+now hold no view, which an insertion's popup relies on (native change in
+`src/app/editor/popovers.rs`).
 
 ### 3. Documentation
 
