@@ -1018,7 +1018,8 @@ function editorFor(authority: Native) {
     async openPopover(id: unknown, popover: unknown) {
       expectRecord(popover, "popover must be an object");
       const [start, end] = popoverAnchor(popover.anchor);
-      const { width, toolbar } = popover;
+      const { width, toolbar, focus } = popover;
+      if (focus !== undefined && typeof focus !== "boolean") throw new TypeError("popover focus must be a boolean");
       if (width !== undefined && width !== "editor") {
         const given = isObject(width) ? width : {};
         const pixels = (given as Rec).pixels;
@@ -1028,6 +1029,7 @@ function editorFor(authority: Native) {
       }
       const options = JSON.stringify({
         ...(width === undefined ? {} : { width }),
+        ...(focus === undefined ? {} : { focus }),
         toolbar: JSON.parse(toolbar === undefined ? "[]" : compositeToolbar(toolbar)),
       });
       await request("editorOpenPopover", authority, popoverId(id), start, end, options, compositeLayoutJson(popover.layout, true));
@@ -1091,8 +1093,11 @@ type EditorEntry = {
   watching: Promise<unknown> | null;
   barListeners: Set<Fn>;
   watchingBars: Promise<unknown> | null;
+  popoverListeners: Set<Fn>;
+  watchingPopovers: Promise<unknown> | null;
   selectionTurn?: Promise<unknown>;
   barsTurn?: Promise<unknown>;
+  popoversTurn?: Promise<unknown>;
 };
 const editorHandles = new Map<Native, EditorEntry>();
 
@@ -1103,6 +1108,7 @@ export async function openEditor(target: unknown) {
   const entry: EditorEntry = {
     closed: false, listeners: new Set(), selectionListeners: new Map(), watching: null,
     barListeners: new Set(), watchingBars: null,
+    popoverListeners: new Set(), watchingPopovers: null,
   };
   editorHandles.set(authority, entry);
   const owned = ownership(() => {
@@ -1110,6 +1116,7 @@ export async function openEditor(target: unknown) {
     entry.listeners.clear();
     entry.selectionListeners.clear();
     entry.barListeners.clear();
+    entry.popoverListeners.clear();
   }, () => request("releaseEditor", authority));
   return Object.freeze({
     ...editorFor(authority),
@@ -1141,6 +1148,15 @@ export async function openEditor(target: unknown) {
       });
       return disposableHandle({ dispose: async () => { entry.barListeners.delete(listener); } });
     },
+    async onDidClosePopover(listener: unknown) {
+      expectFunction(listener, "onDidClosePopover requires a listener");
+      owned.assertActive();
+      await registerCallable(() => entry.popoverListeners.add(listener), async () => {
+        entry.watchingPopovers ??= request("watchEditorPopovers", authority);
+        try { await entry.watchingPopovers; } catch (error) { entry.watchingPopovers = null; throw error; }
+      });
+      return disposableHandle({ dispose: async () => { entry.popoverListeners.delete(listener); } });
+    },
     [Symbol.asyncDispose]: () => owned.dispose(),
   });
 }
@@ -1158,6 +1174,12 @@ globalThis.__knotDispatchEditorEvent = async (authority, kind) => {
     return inTurn(entry, "barsTurn", async () => {
       await whenRegistered(() => entry.barListeners.size > 0);
       return dispatchBars(authority, entry);
+    });
+  }
+  if (kind === "popovers") {
+    return inTurn(entry, "popoversTurn", async () => {
+      await whenRegistered(() => entry.popoverListeners.size > 0);
+      return dispatchPopovers(authority, entry);
     });
   }
   if (kind === "closed") {
@@ -1192,6 +1214,19 @@ async function dispatchBars(authority: Native, entry: EditorEntry) {
   for (const { id, fields } of edited as Native[]) {
     const event = Object.freeze({ bar: id, fields: Object.freeze(fields) });
     for (const listener of [...entry.barListeners]) calls.push(Promise.resolve().then(() => listener(event)));
+  }
+  const results = await Promise.allSettled(calls);
+  const failure = results.find((result) => result.status === "rejected");
+  if (failure) throw failure.reason;
+}
+
+async function dispatchPopovers(authority: Native, entry: EditorEntry) {
+  // Acknowledge first, so closes during the listeners queue one more turn.
+  const closed = await request("acknowledgeEditorPopovers", authority);
+  const calls: Promise<unknown>[] = [];
+  for (const { id, reason } of closed as Native[]) {
+    const event = Object.freeze({ popover: id, reason });
+    for (const listener of [...entry.popoverListeners]) calls.push(Promise.resolve().then(() => listener(event)));
   }
   const results = await Promise.allSettled(calls);
   const failure = results.find((result) => result.status === "rejected");

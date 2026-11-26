@@ -1978,6 +1978,11 @@ declare module "knot" {
      * member, a column the sum of its members, plus the toolbar. A member's
      * `size.pixels` in the popover are logical pixels as well. */
     readonly width?: "editor" | { readonly pixels: number };
+    /** Whether the popover's focused member (the first, or the one marked
+     * `focused`) takes focus when the popover opens, instead of the editor
+     * keeping it. Default false. While the popover is open the editor holds
+     * the key context `popover:<id>`. */
+    readonly focus?: boolean;
     /** Icon buttons above the layout; each runs its command with the
      * anchoring editor's tab as its target and the editor as its editor,
      * wherever focus is. */
@@ -1988,6 +1993,13 @@ declare module "knot" {
      * counts the popover's tab as one of the document's views. */
     readonly layout: CompositeGroup;
   }
+  /** Why Knot closed a popover: `"escape"` was pressed, `"click"` landed outside
+   * every popover, `"edit"` changed the anchoring editor's buffer (any edit
+   * but one typed into a view inside a popover closes all of the editor's
+   * popovers), or `"deleted"` removed its anchor. */
+  export type EditorPopoverCloseReason = "escape" | "click" | "edit" | "deleted";
+  /** Knot closed the caller's popover `popover`. */
+  export type EditorPopoverClose = Readonly<{ popover: string; reason: EditorPopoverCloseReason }>;
   /** The user edited a field of the bar `bar`; `fields` holds every field's
    * text by ID. */
   export type EditorBarEdit = Readonly<{ bar: string; fields: Readonly<Record<string, string>> }>;
@@ -2174,7 +2186,10 @@ declare module "knot" {
      * to the caller's lifecycle, as bars do: other lifecycles' popovers of
      * the same ID are independent, and teardown closes it. It is presentation
      * state, never recorded, and lasts until closed, its anchor is deleted,
-     * or the view closes.
+     * or the view closes. Escape closes the focused popover, else the newest;
+     * a click outside every popover closes all; any edit of the buffer except
+     * one typed into a view inside a popover closes all of the editor's. Use
+     * `onDidClosePopover` on a handle to learn of these.
      * @throws HostError with InvalidTarget, BufferClosed, or Cancelled;
      * TypeError for an empty ID or a malformed popover; RangeError for an
      * anchor without lines.
@@ -3398,6 +3413,14 @@ declare module "knot" {
      * @throws HostError with InvalidTarget or Cancelled.
      */
     onDidEditBar(listener: (edit: EditorBarEdit) => void | Promise<void>): Promise<Disposable>;
+    /**
+     * Runs after Knot closes one of the caller's popovers on this editor, with
+     * the popover's ID and the reason. Closing it with `closePopover`, the
+     * editor closing, and the package unloading report nothing. Closes while
+     * a notification is queued join it, one call per popover.
+     * @throws HostError with InvalidTarget or Cancelled.
+     */
+    onDidClosePopover(listener: (close: EditorPopoverClose) => void | Promise<void>): Promise<Disposable>;
   }
   /** Contributed view registration, captured selection, and clipboard access. */
   export const workbench: Readonly<{

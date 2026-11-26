@@ -5,7 +5,7 @@
 //! A popover's content is a layout of views like a composite tab's, and its
 //! views join the view tree as children of the editor's.
 
-use knot_model::editor::popovers::{EditorPopover, PopoverSpec, place};
+use knot_model::editor::popovers::{EditorPopover, PopoverCloseReason, PopoverSpec, place};
 use knot_protocol::ExtensionKey;
 
 use super::*;
@@ -13,6 +13,24 @@ use crate::app::convert::ThemePaint as _;
 use crate::app::view_layout::{GroupSpec, Layout, Sizing, TOOLBAR_HEIGHT, ToolbarButton, toolbar};
 use crate::app::view_tree::{ViewKind, ViewNode};
 use crate::app::workbench::ExtensionView;
+
+/// Knot closed a popover `owner` opened; see [`PopoverCloseReason`].
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct PopoverClosed {
+    pub owner: ExtensionKey,
+    pub id: String,
+    pub reason: PopoverCloseReason,
+}
+
+impl EventEmitter<PopoverClosed> for Editor {}
+
+/// Where the window moves focus when the editor next renders.
+pub(super) enum PopoverFocus {
+    /// To the focused member of the popover `id` of `owner`.
+    Popover(ExtensionKey, String),
+    /// Back to the editor's text, as a focused popover closed.
+    Text,
+}
 
 /// What `open_popover` sets: where the popover is anchored and how wide it
 /// is, and what it shows.
@@ -86,6 +104,13 @@ impl PopoverContent {
     pub(crate) fn focus_leaf(&mut self, index: usize, cx: &mut Context<Self>) {
         self.layout.set_focused_leaf(index);
         self.inside = true;
+        crate::app::extensions::host::application_changed(cx);
+    }
+
+    /// Treat no view as having focus, as losing focus does.
+    #[cfg(test)]
+    pub(crate) fn unfocus(&mut self, cx: &mut Context<Self>) {
+        self.inside = false;
         crate::app::extensions::host::application_changed(cx);
     }
 
@@ -177,6 +202,9 @@ impl Editor {
         cx: &mut Context<Self>,
     ) -> Vec<ExtensionView> {
         let model = self.model.clone();
+        if content.spec.focus {
+            self.popover_focus = Some(PopoverFocus::Popover(owner, id.to_owned()));
+        }
         model.update(cx, |model, _| {
             self.state
                 .popovers_mut()
@@ -224,10 +252,70 @@ impl Editor {
         closed
     }
 
-    /// Drop the content of popovers the state closed, and order the rest as
-    /// it does.
+    /// Close the popover with focus, else the newest, for Escape; false when
+    /// none is open.
+    pub(crate) fn dismiss_popover(&mut self, cx: &mut Context<Self>) -> bool {
+        let index = self
+            .popover_nodes(cx)
+            .1
+            .or_else(|| self.popover_views.len().checked_sub(1));
+        let Some(index) = index else {
+            return false;
+        };
+        let model = self.model.clone();
+        let closed = model.update(cx, |model, _| {
+            self.state
+                .popovers_mut()
+                .close_at(index, PopoverCloseReason::Escape, model)
+        });
+        self.sync_popover_views(cx);
+        closed
+    }
+
+    /// Close every popover, as a click outside them does.
+    pub(crate) fn close_popovers_for_click(&mut self, cx: &mut Context<Self>) {
+        if self.popover_views.is_empty() {
+            return;
+        }
+        let model = self.model.clone();
+        model.update(cx, |model, _| {
+            self.state
+                .popovers_mut()
+                .close_all(PopoverCloseReason::Click, model)
+        });
+        self.sync_popover_views(cx);
+    }
+
+    /// Whether a view inside a popover has focus, which makes an edit of the
+    /// buffer one made there.
+    pub(super) fn typing_in_popover(&self, cx: &App) -> bool {
+        self.popover_views
+            .iter()
+            .any(|popover| popover.content.read(cx).inside)
+    }
+
+    /// Report the popovers the state closed, move focus back to the text if
+    /// one with focus went, drop the content of the closed, and order the
+    /// rest as the state does.
     pub(super) fn sync_popover_views(&mut self, cx: &mut Context<Self>) {
+        for closed in self.state.popovers_mut().take_closed() {
+            cx.emit(PopoverClosed {
+                owner: closed.owner,
+                id: closed.id,
+                reason: closed.reason,
+            });
+        }
         let open = self.state.popovers().popovers();
+        let lost_focus = self.popover_views.iter().any(|view| {
+            view.content.read(cx).inside
+                && !open
+                    .iter()
+                    .any(|popover| popover.owner == view.owner && popover.id == view.id)
+        });
+        if lost_focus {
+            self.popover_focus = Some(PopoverFocus::Text);
+            cx.notify();
+        }
         if self.popover_views.len() == open.len()
             && self
                 .popover_views
@@ -306,6 +394,33 @@ pub(super) struct PopoverFrame {
 }
 
 impl EditorView {
+    /// Move focus into a popover that asked for it when it opened, or back to
+    /// the text after the popover with focus closed.
+    pub(super) fn follow_popover_focus(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(target) = self
+            .editor
+            .update(cx, |editor, _| editor.popover_focus.take())
+        else {
+            return;
+        };
+        let handle = match target {
+            PopoverFocus::Text => self.focus.clone(),
+            PopoverFocus::Popover(owner, id) => {
+                let editor = self.editor.read(cx);
+                let content = editor
+                    .state
+                    .popovers()
+                    .get(owner, &id)
+                    .and_then(|popover| editor.popover_content(popover));
+                match content {
+                    Some(content) => content.read(cx).layout.focused_handle(cx),
+                    None => return,
+                }
+            }
+        };
+        window.defer(cx, move |window, cx| window.focus(&handle, cx));
+    }
+
     /// The popovers to show, bottom to top, each below or above its anchor
     /// and sized to its content. A popover is hidden while its anchor is out
     /// of view or folded away.

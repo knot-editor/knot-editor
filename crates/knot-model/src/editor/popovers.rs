@@ -30,6 +30,8 @@ pub struct PopoverSpec {
     /// `end` exclusive.
     pub anchor: Range<u32>,
     pub width: PopoverWidth,
+    /// Whether the popover's focused member takes focus when it opens.
+    pub focus: bool,
 }
 
 impl PopoverSpec {
@@ -109,12 +111,47 @@ pub fn place(anchor: Range<f32>, viewport: f32, natural: f32, margin: f32) -> Op
     (height > 0.).then_some(Placement { top, height })
 }
 
+/// Why Knot closed a popover.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PopoverCloseReason {
+    /// Escape was pressed.
+    Escape,
+    /// The user clicked outside every popover.
+    Click,
+    /// The anchoring editor's buffer was edited.
+    Edit,
+    /// An edit deleted the anchor.
+    Deleted,
+}
+
+impl PopoverCloseReason {
+    /// The name the extension API reports.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Escape => "escape",
+            Self::Click => "click",
+            Self::Edit => "edit",
+            Self::Deleted => "deleted",
+        }
+    }
+}
+
+/// A popover Knot closed, not yet reported to the lifecycle that opened it.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ClosedPopover {
+    pub owner: ExtensionKey,
+    pub id: String,
+    pub reason: PopoverCloseReason,
+}
+
 /// One open popover.
 #[derive(Clone, Debug)]
 pub struct EditorPopover {
     pub owner: ExtensionKey,
     pub id: String,
     pub spec: PopoverSpec,
+    /// The key context the editor holds while the popover is open.
+    context: String,
     anchor: AnchoredRangeId,
     /// Whether the anchored text was empty to begin with, so that an empty
     /// anchor is not a deletion.
@@ -125,6 +162,9 @@ pub struct EditorPopover {
 #[derive(Debug, Default)]
 pub struct EditorPopovers {
     popovers: Vec<EditorPopover>,
+    /// The buffer revision the popovers last saw, to tell edits.
+    revision: u64,
+    closed: Vec<ClosedPopover>,
 }
 
 impl EditorPopovers {
@@ -151,6 +191,9 @@ impl EditorPopovers {
     ) {
         let bytes = line_bytes(buffer, &spec.anchor);
         let empty = bytes.is_empty();
+        if self.popovers.is_empty() {
+            self.revision = buffer.revision();
+        }
         let anchor = buffer.add_view_range(bytes);
         match self
             .popovers
@@ -166,6 +209,7 @@ impl EditorPopovers {
             None => self.popovers.push(EditorPopover {
                 owner,
                 id: id.to_owned(),
+                context: format!("popover:{id}"),
                 spec,
                 anchor,
                 empty,
@@ -207,7 +251,76 @@ impl EditorPopovers {
                 .iter()
                 .any(|(owner, id)| *owner == popover.owner && *id == popover.id)
         });
+        self.closed
+            .extend(deleted.iter().map(|(owner, id)| ClosedPopover {
+                owner: *owner,
+                id: id.clone(),
+                reason: PopoverCloseReason::Deleted,
+            }));
         deleted
+    }
+
+    /// Close every popover when `buffer` was edited since the popovers last
+    /// looked, unless `typed_inside` says the edit came from a view inside a
+    /// popover.
+    pub fn close_on_edit(&mut self, buffer: &mut BufferModel, typed_inside: bool) {
+        let edited = self.revision != buffer.revision();
+        self.revision = buffer.revision();
+        if edited && !typed_inside {
+            self.close_all(PopoverCloseReason::Edit, buffer);
+        }
+    }
+
+    /// Close every popover for `reason`.
+    pub fn close_all(&mut self, reason: PopoverCloseReason, buffer: &mut BufferModel) {
+        self.close_where(reason, buffer, |_, _| true);
+    }
+
+    /// Close the popover at `index` (in `popovers`) for `reason`; false when
+    /// there is none.
+    pub fn close_at(
+        &mut self,
+        index: usize,
+        reason: PopoverCloseReason,
+        buffer: &mut BufferModel,
+    ) -> bool {
+        let count = self.popovers.len();
+        self.close_where(reason, buffer, |at, _| at == index);
+        self.popovers.len() != count
+    }
+
+    /// The popovers Knot closed since this was last called.
+    pub fn take_closed(&mut self) -> Vec<ClosedPopover> {
+        std::mem::take(&mut self.closed)
+    }
+
+    /// The key contexts of the open popovers.
+    pub fn contexts(&self) -> impl Iterator<Item = &str> {
+        self.popovers.iter().map(|popover| popover.context.as_str())
+    }
+
+    fn close_where(
+        &mut self,
+        reason: PopoverCloseReason,
+        buffer: &mut BufferModel,
+        close: impl Fn(usize, &EditorPopover) -> bool,
+    ) {
+        let mut at = 0;
+        let closed = &mut self.closed;
+        self.popovers.retain(|popover| {
+            let index = at;
+            at += 1;
+            if !close(index, popover) {
+                return true;
+            }
+            buffer.remove_view_position(Some(popover.anchor));
+            closed.push(ClosedPopover {
+                owner: popover.owner,
+                id: popover.id.clone(),
+                reason,
+            });
+            false
+        });
     }
 
     /// The buffer lines `popover` is anchored to now, as `start..end`.
@@ -260,6 +373,7 @@ mod tests {
         PopoverSpec {
             anchor,
             width: PopoverWidth::Editor,
+            focus: false,
         }
     }
 
@@ -433,5 +547,81 @@ mod tests {
         assert_eq!(popovers.anchor_lines(far, &buffer), Some(1..2));
         popovers.release(&mut buffer);
         assert_eq!(buffer.anchored_range_count(), 0);
+    }
+
+    #[test]
+    fn knot_closes_popovers_and_reports_why() {
+        let mut buffer = buffer("a\nb\nc\n");
+        let mut popovers = EditorPopovers::default();
+        popovers.open(owner(1), "one", spec(0..1), &mut buffer);
+        popovers.open(owner(2), "two", spec(1..2), &mut buffer);
+        popovers.open(owner(1), "three", spec(2..3), &mut buffer);
+        assert_eq!(
+            popovers.contexts().collect::<Vec<_>>(),
+            ["popover:one", "popover:two", "popover:three"]
+        );
+
+        assert!(popovers.close_at(1, PopoverCloseReason::Escape, &mut buffer));
+        assert!(!popovers.close_at(2, PopoverCloseReason::Escape, &mut buffer));
+        assert_eq!(
+            popovers.take_closed(),
+            [ClosedPopover {
+                owner: owner(2),
+                id: "two".into(),
+                reason: PopoverCloseReason::Escape
+            }]
+        );
+        assert!(popovers.take_closed().is_empty());
+
+        popovers.close_all(PopoverCloseReason::Click, &mut buffer);
+        assert!(popovers.popovers().is_empty());
+        assert_eq!(buffer.anchored_range_count(), 0);
+        assert_eq!(popovers.take_closed().len(), 2);
+
+        // Explicit closes and unload report nothing.
+        popovers.open(owner(1), "one", spec(0..1), &mut buffer);
+        popovers.close(owner(1), "one", &mut buffer);
+        popovers.open(owner(1), "one", spec(0..1), &mut buffer);
+        popovers.remove_owner(owner(1), &mut buffer);
+        assert!(popovers.take_closed().is_empty());
+    }
+
+    #[test]
+    fn an_edit_closes_every_popover_unless_typed_inside_one() {
+        let mut buffer = buffer("a\nb\nc\n");
+        let mut popovers = EditorPopovers::default();
+        popovers.open(owner(1), "one", spec(0..1), &mut buffer);
+        popovers.open(owner(1), "two", spec(2..3), &mut buffer);
+
+        popovers.close_on_edit(&mut buffer, false);
+        assert_eq!(popovers.popovers().len(), 2, "no edit yet");
+
+        buffer.replace(0..0, "x").unwrap();
+        popovers.close_on_edit(&mut buffer, true);
+        assert_eq!(popovers.popovers().len(), 2, "typed inside a popover");
+        popovers.close_on_edit(&mut buffer, false);
+        assert_eq!(popovers.popovers().len(), 2, "that edit is seen");
+
+        buffer.replace(0..0, "y").unwrap();
+        popovers.close_on_edit(&mut buffer, false);
+        assert!(popovers.popovers().is_empty());
+        assert_eq!(
+            popovers
+                .take_closed()
+                .iter()
+                .map(|closed| closed.reason)
+                .collect::<Vec<_>>(),
+            [PopoverCloseReason::Edit; 2]
+        );
+    }
+
+    #[test]
+    fn a_popover_opened_after_an_edit_survives_it() {
+        let mut buffer = buffer("a\nb\n");
+        let mut popovers = EditorPopovers::default();
+        buffer.replace(0..0, "x").unwrap();
+        popovers.open(owner(1), "one", spec(0..1), &mut buffer);
+        popovers.close_on_edit(&mut buffer, false);
+        assert_eq!(popovers.popovers().len(), 1);
     }
 }

@@ -333,7 +333,7 @@ impl EditorView {
     }
 
     /// Have the window focus what has the editor's focus, a bar field or the
-    /// text, while focus is in this view. A field the window focused stays in
+    /// text, while focus is in this view and not in one of its popovers. A field the window focused stays in
     /// this view after its bar closes, so focus returns to the text.
     pub(super) fn follow_bar_focus(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let closed_field = self
@@ -341,6 +341,17 @@ impl EditorView {
             .take()
             .is_some_and(|field| field.is_focused(window));
         if !closed_field && !self.focus.contains_focused(window, cx) {
+            return;
+        }
+        // A view inside a popover floating over the text keeps its focus.
+        if !closed_field
+            && self
+                .editor
+                .read(cx)
+                .popover_focus_handles(cx)
+                .iter()
+                .any(|handle| handle.contains_focused(window, cx))
+        {
             return;
         }
         let desired = self

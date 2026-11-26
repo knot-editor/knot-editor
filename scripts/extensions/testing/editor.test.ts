@@ -441,3 +441,21 @@ test("clicking a contribution runs its command with its range", async () => {
   ]);
   await assert.rejects(host.clickContribution(document, 2), /no command/);
 });
+
+test("an editor handle opens popovers and hears why Knot closed them", async () => {
+  const document = host.addDocument({ text: "a\nb\nc" });
+  const window = host.openWindow({ documents: [document] });
+  const editor = await workbench.editor(host.viewTarget(window, 0));
+  const closes: unknown[] = [];
+  await editor.onDidClosePopover((close) => {
+    closes.push(close);
+  });
+  const popover = { anchor: { start: 0, end: 1 }, focus: true, layout: { type: "column", children: [] } } as never;
+  await editor.openPopover("hunk", popover);
+  await editor.openPopover("hover", popover);
+  await editor.closePopover("hover");
+  assert.deepEqual(closes, []);
+  await host.dismissPopover("hunk", "escape");
+  await host.dismissPopover("hunk", "escape");
+  assert.deepEqual(closes, [{ popover: "hunk", reason: "escape" }]);
+});

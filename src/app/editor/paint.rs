@@ -13,6 +13,7 @@ impl Render for EditorView {
         }
         self.update_caret_blink(focused, cx);
         self.follow_bar_focus(window, cx);
+        self.follow_popover_focus(window, cx);
         let bars = self.render_bars(cx);
         let entity = cx.entity();
         let editor = self.editor.read(cx);
@@ -41,6 +42,10 @@ impl Render for EditorView {
             .on_action(cx.listener(Self::completion_next))
             .on_action(cx.listener(Self::completion_accept))
             .on_action(cx.listener(Self::completion_dismiss))
+            .on_mouse_down_out(cx.listener(|this, _, _, cx| {
+                this.editor
+                    .update(cx, |editor, cx| editor.close_popovers_for_click(cx));
+            }))
             .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
             .on_mouse_down(MouseButton::Right, cx.listener(Self::on_right_mouse_down))
             // Mouse-move extends the selection while the left button is held

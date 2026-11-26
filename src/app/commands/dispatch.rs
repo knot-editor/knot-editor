@@ -220,6 +220,23 @@ impl ProductCommandTarget {
         }
     }
 
+    /// The editor a popover floats over when the captured leaf is a view
+    /// inside that popover.
+    pub(crate) fn popover_anchor(
+        &self,
+        cx: &App,
+    ) -> Option<gpui::Entity<crate::app::editor::EditorView>> {
+        let leaf = self.leaf?;
+        let tab = self.validate_tab(cx).ok()?;
+        let workbench = self.workbench.upgrade()?;
+        let workbench = workbench.read(cx);
+        let root = workbench.view_node(workbench.tab(tab.pane, tab.tab)?, cx)?;
+        let path = root.path_to(leaf)?;
+        path.windows(2)
+            .find(|pair| pair[1].kind == crate::app::view_tree::ViewKind::Popover)
+            .and_then(|pair| pair[0].editor.clone())
+    }
+
     /// The views from the captured leaf up to the tab's root view, the leaf
     /// first.
     pub(crate) fn view_chain(&self, cx: &App) -> Vec<gpui::EntityId> {

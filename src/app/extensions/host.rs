@@ -730,6 +730,7 @@ struct EditorHandle {
     view: crate::app::product::operations::EditorViewHandle,
     selection: Option<SelectionWatch>,
     bars: Option<BarWatch>,
+    popovers: Option<PopoverWatch>,
 }
 
 /// An undo group a lifecycle holds open on one buffer. `handle` is the
@@ -765,6 +766,15 @@ struct SelectionWatch {
 /// is outstanding.
 struct BarWatch {
     edited: Vec<String>,
+    pending: bool,
+    _subscription: Subscription,
+}
+
+/// Follows the popovers Knot closes in the handle's owner's name on its
+/// editor, as `BarWatch` follows bar edits: `closed` collects what closed
+/// since the listener turn last acknowledged.
+struct PopoverWatch {
+    closed: Vec<handlers::ClosedPopover>,
     pending: bool,
     _subscription: Subscription,
 }
@@ -2165,6 +2175,7 @@ impl ProductExtensionHost {
                 view,
                 selection: None,
                 bars: None,
+                popovers: None,
             },
         );
         Ok(handlers::EditorAuthority::handle_wire(id))
@@ -2336,6 +2347,82 @@ impl ProductExtensionHost {
                 })
             })
             .collect()
+    }
+
+    /// Start notifying the handle's owner when Knot closes one of its
+    /// popovers on the handle's editor. Idempotent.
+    pub(super) fn watch_editor_popovers(
+        &mut self,
+        request: &knot_protocol::RequestContext,
+        authority: handlers::EditorAuthority,
+        cx: &mut Context<Self>,
+    ) -> Result<(), handlers::AccessError> {
+        let editor = self.contextual_editor(request, authority, cx)?;
+        let handlers::EditorAuthority::Handle(id) = authority else {
+            return Err(handlers::AccessError::InvalidTarget);
+        };
+        let handle = self.editor_handles.get_mut(&id).expect("resolved handle");
+        if handle.popovers.is_none() {
+            let subscription = cx.subscribe(
+                &editor,
+                move |host, _, event: &crate::app::editor::PopoverClosed, _| {
+                    host.editor_popover_closed(id, event)
+                },
+            );
+            handle.popovers = Some(PopoverWatch {
+                closed: Vec::new(),
+                pending: false,
+                _subscription: subscription,
+            });
+        }
+        Ok(())
+    }
+
+    fn editor_popover_closed(&mut self, id: u64, event: &crate::app::editor::PopoverClosed) {
+        let Some(handle) = self.editor_handles.get_mut(&id) else {
+            return;
+        };
+        let Some(watch) = handle.popovers.as_mut() else {
+            return;
+        };
+        if event.owner != handle.owner {
+            return;
+        }
+        watch.closed.push(handlers::ClosedPopover {
+            id: event.id.clone(),
+            reason: event.reason.name(),
+        });
+        if !watch.pending {
+            watch.pending = true;
+            let _ = self.pool.dispatch_editor_event(
+                handle.owner,
+                handlers::EditorAuthority::handle_wire(id),
+                knot_protocol::EditorEvent::PopoversClosed,
+            );
+        }
+    }
+
+    /// A popover notification's listener turn has started: returns the
+    /// popovers closed since the last one, and later closes queue the next
+    /// notification.
+    pub(super) fn acknowledge_editor_popovers(
+        &mut self,
+        owner: ExtensionKey,
+        authority: handlers::EditorAuthority,
+    ) -> Vec<handlers::ClosedPopover> {
+        let handlers::EditorAuthority::Handle(id) = authority else {
+            return Vec::new();
+        };
+        let Some(watch) = self
+            .editor_handles
+            .get_mut(&id)
+            .filter(|handle| handle.owner == owner)
+            .and_then(|handle| handle.popovers.as_mut())
+        else {
+            return Vec::new();
+        };
+        watch.pending = false;
+        std::mem::take(&mut watch.closed)
     }
 
     pub(super) fn release_editor(&mut self, owner: ExtensionKey, id: u64, cx: &mut App) {

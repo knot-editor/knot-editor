@@ -17,7 +17,7 @@ mod popovers;
 mod view;
 
 pub(crate) use bars::BarFieldEdited;
-pub(crate) use popovers::PopoverContentSpec;
+pub(crate) use popovers::{PopoverClosed, PopoverContentSpec};
 pub use view::EditorView;
 
 use std::{
@@ -122,6 +122,8 @@ pub struct Editor {
     bar_inputs: Vec<bars::BarInput>,
     /// The view behind each open popover.
     popover_views: Vec<popovers::PopoverView>,
+    /// Where the window should move focus the next time the editor renders.
+    popover_focus: Option<popovers::PopoverFocus>,
     /// The block rows each extension lifecycle set.
     owned_blocks: Vec<OwnedBlocks>,
     _model_subscription: Subscription,
@@ -190,7 +192,11 @@ impl Editor {
         let settings = editor_settings(&kind, model.read(cx), cx);
         let state = model.update(cx, |buffer, _| EditorState::new(kind, settings, buffer));
         let model_subscription = cx.observe(&model, |this, _, cx| {
-            this.update_state(cx, |state, buffer| state.buffer_changed(buffer));
+            let typed_inside = this.typing_in_popover(cx);
+            this.update_state(cx, |state, buffer| {
+                state.buffer_changed(buffer);
+                state.popovers_mut().close_on_edit(buffer, typed_inside);
+            });
         });
         let release_subscription = cx.on_release(|this, cx| {
             this.model
@@ -202,6 +208,7 @@ impl Editor {
             completion_tasks: Vec::new(),
             bar_inputs: Vec::new(),
             popover_views: Vec::new(),
+            popover_focus: None,
             owned_blocks: Vec::new(),
             _model_subscription: model_subscription,
             _release_subscription: release_subscription,
@@ -225,6 +232,7 @@ impl Editor {
         self.completion_tasks.clear();
         self.bar_inputs.clear();
         self.popover_views.clear();
+        self.popover_focus = None;
         cx.notify();
     }
 

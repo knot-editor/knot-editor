@@ -56,6 +56,9 @@ type FakeTab = {
   /** Bar edit listeners of the long-lived handles bound to this tab, run
    * once per `typeInBar`. */
   barListeners: Set<(edit: Knot.EditorBarEdit) => void | Promise<void>>;
+  /** Popover close listeners of the long-lived handles bound to this tab,
+   * run once per `dismissPopover`. */
+  popoverListeners: Set<(close: Knot.EditorPopoverClose) => void | Promise<void>>;
 };
 
 /** An open bar as the fake keeps it, with each field's text. */
@@ -1005,6 +1008,7 @@ export function present(target: Knot.WindowTarget, id: Knot.DocumentId) {
     popovers: [],
     barFocus: null,
     barListeners: new Set(),
+    popoverListeners: new Set(),
     reveal: null,
   });
   window.selected = window.tabs.length - 1;
@@ -1585,6 +1589,21 @@ export async function typeInBar(
   for (const listener of [...tab.barListeners]) await listener(edit);
 }
 
+/** Closes the caller's popover `id` on the window's selected editor as Knot
+ * would for `reason` and runs the close listeners; a popover that is not open
+ * does nothing. */
+export async function dismissPopover(
+  id: string,
+  reason: Knot.EditorPopoverCloseReason,
+  window: Knot.WindowTarget = state.windows[0]!.target,
+) {
+  const tab = selectedTab(window);
+  if (!tab.popovers.some((popover) => popover.id === id)) return;
+  tab.popovers = tab.popovers.filter((popover) => popover.id !== id);
+  const close = { popover: id, reason };
+  for (const listener of [...tab.popoverListeners]) await listener(close);
+}
+
 /** Clicks a toggle or button of a bar of the window's selected editor as the
  * user would: runs its command in that editor, as `run` does. */
 export async function clickBarControl(
@@ -1933,6 +1952,7 @@ function editorHandle(target: Knot.ViewNodeTarget): Knot.EditorHandle {
   const listeners = new Set<() => void | Promise<void>>();
   const selectionListeners = new Set<(selection: Knot.EditorSelectionWithLines) => void | Promise<void>>();
   const barListeners = new Set<(edit: Knot.EditorBarEdit) => void | Promise<void>>();
+  const popoverListeners = new Set<(close: Knot.EditorPopoverClose) => void | Promise<void>>();
   let disposed = false;
   const live = editor(tab);
   const guard =
@@ -2004,11 +2024,24 @@ function editorHandle(target: Knot.ViewNodeTarget): Knot.EditorHandle {
         }),
       };
     },
+    async onDidClosePopover(listener) {
+      if (disposed) throw hostError("InvalidTarget");
+      tab.popoverListeners.add(listener);
+      popoverListeners.add(listener);
+      return {
+        ...disposers(async () => {
+          tab.popoverListeners.delete(listener);
+          popoverListeners.delete(listener);
+        }),
+      };
+    },
     ...disposers(async () => {
       disposed = true;
       for (const listener of listeners) tab.closeListeners.delete(listener);
       for (const listener of selectionListeners) tab.selectionListeners.delete(listener);
       for (const listener of barListeners) tab.barListeners.delete(listener);
+      for (const listener of popoverListeners) tab.popoverListeners.delete(listener);
+      popoverListeners.clear();
       listeners.clear();
       selectionListeners.clear();
       barListeners.clear();

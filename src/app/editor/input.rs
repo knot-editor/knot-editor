@@ -18,7 +18,10 @@ impl EditorView {
         self.drag_anchor = None;
         self.model
             .update(cx, |model, _| model.break_history_group());
-        self.editor.update(cx, |editor, cx| editor.focus_text(cx));
+        self.editor.update(cx, |editor, cx| {
+            editor.close_popovers_for_click(cx);
+            editor.focus_text(cx)
+        });
         let editor = self.editor.read(cx);
         if let Some(&(_, line)) = self
             .fold_placeholders
@@ -127,6 +130,8 @@ impl EditorView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.editor
+            .update(cx, |editor, cx| editor.close_popovers_for_click(cx));
         if self.gutter_lane_at(ev.position).is_some() {
             cx.stop_propagation();
             return;

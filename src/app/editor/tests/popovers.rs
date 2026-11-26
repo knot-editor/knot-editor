@@ -49,7 +49,11 @@ fn open(
             "p",
             "window",
             PopoverContentSpec {
-                spec: PopoverSpec { anchor, width },
+                spec: PopoverSpec {
+                    anchor,
+                    width,
+                    focus: false,
+                },
                 toolbar: Vec::new(),
                 layout: GroupSpec {
                     arrangement: Arrangement::Column,
@@ -203,6 +207,7 @@ fn a_toolbar_adds_its_height(cx: &mut TestAppContext) {
                 spec: PopoverSpec {
                     anchor: 1..2,
                     width: PopoverWidth::Editor,
+                    focus: false,
                 },
                 toolbar: vec![button],
                 layout: GroupSpec {

@@ -1036,6 +1036,9 @@ pub enum EditorEvent {
     /// The user edited a field of one of the owner's bars since the last
     /// acknowledged notification.
     BarsEdited,
+    /// Knot closed one of the owner's popovers since the last acknowledged
+    /// notification.
+    PopoversClosed,
 }
 impl EditorEvent {
     pub fn name(self) -> &'static str {
@@ -1043,6 +1046,7 @@ impl EditorEvent {
             Self::Closed => "closed",
             Self::SelectionChanged => "selection",
             Self::BarsEdited => "bars",
+            Self::PopoversClosed => "popovers",
         }
     }
 }

@@ -632,12 +632,14 @@ impl EditorState {
         (state.anchor, state.caret)
     }
 
-    /// The key contexts some live lifecycle has set on this editor.
+    /// The key contexts some live lifecycle has set on this editor, and
+    /// `popover:<id>` for each open popover.
     pub fn key_contexts(&self) -> Vec<&str> {
         let mut contexts = self
             .key_contexts
             .iter()
             .map(|(_, name)| name.as_ref())
+            .chain(self.popovers.contexts())
             .collect::<Vec<_>>();
         contexts.sort_unstable();
         contexts.dedup();

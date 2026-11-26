@@ -261,6 +261,8 @@ impl LayoutWire {
 pub(crate) struct PopoverOptions {
     #[serde(default)]
     pub width: PopoverWidth,
+    #[serde(default)]
+    pub focus: bool,
     pub toolbar: Vec<ToolbarButton>,
 }
 
@@ -398,6 +400,7 @@ impl ProductExtensionHost {
         let spec = PopoverSpec {
             anchor,
             width: options.width,
+            focus: options.focus,
         };
         if spec.problem().is_some() {
             return Err(AccessError::InvalidTarget.into());

@@ -4469,6 +4469,43 @@ pub(crate) async fn acknowledge_editor_bars(
     })
 }
 
+/// Start close notifications for a handle's popovers.
+#[host_operation("watchEditorPopovers")]
+pub(crate) async fn watch_editor_popovers(
+    context: HostContext,
+    arguments: EditorArguments,
+) -> Result<(), AccessError> {
+    let request = context.request;
+    context.foreground(|host, cx| host.watch_editor_popovers(&request, arguments.authority, cx))?
+}
+
+/// A popover Knot closed, and why.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub(crate) struct ClosedPopover {
+    pub id: String,
+    pub reason: &'static str,
+}
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub(crate) struct ClosedPopovers(pub Vec<ClosedPopover>);
+impl HostSuccess for ClosedPopovers {
+    fn encode(self) -> Result<EncodedValue, DecodeError> {
+        encode_json(self)
+    }
+}
+
+/// A popover notification's listener turn began: returns the popovers closed
+/// since the last one; see `PopoverWatch`.
+#[host_operation("acknowledgeEditorPopovers")]
+pub(crate) async fn acknowledge_editor_popovers(
+    context: HostContext,
+    arguments: EditorArguments,
+) -> Result<ClosedPopovers, AccessError> {
+    let owner = ExtensionKey::new(context.request.extension, context.request.lifecycle);
+    context.foreground(|host, _| {
+        ClosedPopovers(host.acknowledge_editor_popovers(owner, arguments.authority))
+    })
+}
+
 /// The first row wholly inside an editor's viewport and the rows that are.
 #[derive(Clone, Copy, Debug, PartialEq, serde::Serialize)]
 pub(crate) struct Viewport {

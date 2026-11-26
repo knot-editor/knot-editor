@@ -50,6 +50,7 @@ pub const SELECT_DOCUMENT_END_COMMAND: &str = "editor.select-document-end";
 pub const INSERT_NEWLINE_COMMAND: &str = "editor.insert-newline";
 /// Types its `text` argument as the keyboard does, first deleting the
 /// `replace` characters before the caret when given.
+pub const CLOSE_POPOVER_COMMAND: &str = "editor.close-popover";
 pub const TYPE_COMMAND: &str = "editor.type";
 pub const INSERT_TAB_COMMAND: &str = "editor.insert-tab";
 pub const INDENT_LINES_COMMAND: &str = "editor.indent-lines";

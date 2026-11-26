@@ -149,6 +149,43 @@ pub(crate) async fn editing(context: CommandContext, (): ()) -> Result<(), Comma
         .await
 }
 
+/// Whether the captured editor has a popover to close, so Escape reaches the
+/// view otherwise.
+fn claim_popover(_: &Command, target: &ProductCommandTarget, cx: &App) -> bool {
+    popover_editor(target, cx)
+        .is_some_and(|editor| !editor.read(cx).popovers().popovers().is_empty())
+}
+
+/// The editor whose popovers Escape closes: the one a popover with the
+/// captured focus floats over, else the command's editor.
+fn popover_editor(target: &ProductCommandTarget, cx: &App) -> Option<Entity<Editor>> {
+    let view = match target.popover_anchor(cx) {
+        Some(anchor) => anchor,
+        None => match target.command_view(cx)? {
+            crate::app::workbench::CommandView::Editor(view) => view,
+            _ => return None,
+        },
+    };
+    Some(view.read(cx).editor().clone())
+}
+
+/// Close the popover with focus over the captured editor, else its newest.
+#[command(knot_model::editor::commands::CLOSE_POPOVER_COMMAND, title = "Close Popover", palette = false, participant = Editor, claim = claim_popover)]
+pub(crate) async fn close_popover(context: CommandContext, (): ()) -> Result<(), CommandOutcome> {
+    context
+        .foreground(|target, cx| {
+            let Some(editor) = popover_editor(target, cx) else {
+                return Err(CommandOutcome::InvalidTarget);
+            };
+            if editor.update(cx, |editor, cx| editor.dismiss_popover(cx)) {
+                Ok(())
+            } else {
+                Err(CommandOutcome::Unavailable)
+            }
+        })
+        .await
+}
+
 /// The arguments of [`TYPE_COMMAND`].
 pub(crate) struct TypeArguments {
     text: String,

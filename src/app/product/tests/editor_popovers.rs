@@ -10,7 +10,7 @@ use std::ops::Range;
 /// A package whose commands, named after `LABEL`, open and close popovers
 /// named "hunk" and "hover" through a long-lived editor handle.
 const SOURCE: &str = r#"
-import { buffers, commands, documents, workbench } from "knot";
+import { buffers, commands, documents, editor as editors, keymaps, workbench } from "knot";
 const check = (condition, message) => { if (!condition) throw new Error(message); };
 const expectError = async (operation, test, message) => {
   try { await operation(); } catch (error) { if (test(error)) return; throw error; }
@@ -25,6 +25,13 @@ const editor = async () => {
   }
   return handle;
 };
+let closes = 0;
+const watch = async () => {
+  await (await editor()).onDidClosePopover(async ({ popover, reason }) => {
+    closes += 1;
+    await workbench.writeClipboardText(`LABEL:${popover}:${reason}:${closes}`);
+  });
+};
 const content = async (width) => {
   buffer ??= await buffers.create({ text: "changed\n" });
   return { width: { pixels: width }, layout: { type: "column", children: [{ type: "editor", buffer }] } };
@@ -32,6 +39,24 @@ const content = async (width) => {
 await commands.register("LABEL.open", async () => {
   await (await editor()).openPopover("hunk", { anchor: { start: 1, end: 2 }, ...await content(60) });
 });
+await commands.register("LABEL.watch", watch);
+await commands.register("LABEL.open-focus", async () => {
+  await (await editor()).openPopover("hunk", { anchor: { start: 1, end: 2 }, focus: true, ...await content(60) });
+});
+await commands.register("LABEL.open-revert", async () => {
+  const given = await content(60);
+  await (await editor()).openPopover("hunk", {
+    anchor: { start: 1, end: 2 }, ...given,
+    toolbar: [{ label: "Revert", icon: "file", command: "LABEL.revert" }],
+  });
+});
+await commands.register("LABEL.revert", async ({ target }) => {
+  const active = await editors.activeBuffer(target);
+  const { revision } = await active.snapshot();
+  await active.applyEdits([{ range: { startByteOffset: 0, endByteOffset: 0 }, text: "x" }], { ifRevision: revision });
+});
+keymaps.bind("n", "LABEL.next", { view: "editor", context: "popover:hunk" });
+await commands.register("LABEL.next", async () => { await workbench.writeClipboardText("LABEL:next"); });
 await commands.register("LABEL.update", async () => {
   await (await editor()).openPopover("hunk", { anchor: { start: 0, end: 3 }, ...await content(90) });
 });
@@ -194,6 +219,21 @@ impl Fixture {
         })
     }
 
+    fn text_focused(&self, cx: &mut TestAppContext) -> bool {
+        let view = cx.read(|cx| {
+            self.window
+                .read(cx)
+                .workbench
+                .read(cx)
+                .focused_editor()
+                .unwrap()
+                .clone()
+        });
+        let handle = cx.read(|cx| view.read(cx).focus_handle(cx));
+        cx.update_window(self.native_window, |_, window, _| handle.is_focused(window))
+            .unwrap()
+    }
+
     fn edit(&self, range: Range<usize>, text: &str, cx: &mut TestAppContext) {
         self.model.update(cx, |model, cx| {
             model.replace(range, text).unwrap();
@@ -242,19 +282,225 @@ fn popovers_from_two_lifecycles_stack_update_and_end_with_their_lifecycle(cx: &m
 }
 
 #[gpui::test]
-fn the_anchor_follows_edits_and_deleting_it_closes_the_popover(cx: &mut TestAppContext) {
+fn an_edit_closes_the_popovers_and_deleting_the_anchor_says_so(cx: &mut TestAppContext) {
     let fixture = Fixture::new(cx);
-    let owner = load("anchor", 903, cx);
+    load("anchor", 903, cx);
+    fixture.run("anchor.watch", cx);
     fixture.run("anchor.open", cx);
+    fixture.run("anchor.hover", cx);
     fixture.edit(0..0, "zero\n", cx);
+    assert!(fixture.popovers(cx).is_empty());
+    wait_for_api_condition(cx, |cx| {
+        cx.read_from_clipboard().and_then(|item| item.text())
+            == Some("anchor:hover:edit:2".to_owned())
+    });
+
+    // Deleting the anchored line, "one", is reported as the anchor's deletion.
+    fixture.run("anchor.open", cx);
+    fixture.model.update(cx, |model, cx| {
+        model.replace(5..9, "").unwrap();
+        cx.notify();
+    });
+    cx.run_until_parked();
+    assert!(fixture.popovers(cx).is_empty());
+    wait_for_api_condition(cx, |cx| {
+        cx.read_from_clipboard().and_then(|item| item.text())
+            == Some("anchor:hunk:deleted:3".to_owned())
+    });
+}
+
+#[gpui::test]
+fn an_edit_typed_into_a_popover_view_keeps_the_popovers(cx: &mut TestAppContext) {
+    let fixture = Fixture::new(cx);
+    load("typed", 909, cx);
+    fixture.run("typed.open-rich", cx);
+    cx.update_window(fixture.native_window, |_, window, _| window.refresh())
+        .unwrap();
+    let content = cx.read(|cx| fixture.editor.read(cx).popover_contents()[0].clone());
+    content.update(cx, |content, cx| content.focus_leaf(2, cx));
+    fixture.edit(0..0, "zero\n", cx);
+    assert_eq!(fixture.popovers(cx).len(), 1);
+    // The next edit, made with focus elsewhere, closes it.
+    content.update(cx, |content, cx| content.unfocus(cx));
+    fixture.edit(0..0, "more\n", cx);
+    assert!(fixture.popovers(cx).is_empty());
+}
+
+#[gpui::test]
+fn a_toolbar_command_that_edits_closes_the_popover(cx: &mut TestAppContext) {
+    let fixture = Fixture::new(cx);
+    load("revert", 910, cx);
+    fixture.run("revert.watch", cx);
+    fixture.run("revert.open-revert", cx);
+    cx.update_window(fixture.native_window, |_, window, _| window.refresh())
+        .unwrap();
+    super::composite::click_toolbar_button(fixture.native_window, "popover-toolbar-0", cx);
+    wait_for_api_condition(cx, |cx| {
+        cx.read_from_clipboard().and_then(|item| item.text())
+            == Some("revert:hunk:edit:1".to_owned())
+    });
+    assert!(fixture.popovers(cx).is_empty());
+    assert!(cx.read(|cx| fixture.model.read(cx).text()).starts_with('x'));
+}
+
+#[gpui::test]
+fn bindings_under_the_popover_context_run_while_it_is_open(cx: &mut TestAppContext) {
+    let fixture = Fixture::new(cx);
+    load("keys", 911, cx);
+    fixture.run("keys.open", cx);
+    assert!(cx.read(|cx| {
+        fixture
+            .editor
+            .read(cx)
+            .key_contexts()
+            .contains(&"popover:hunk")
+    }));
+    cx.simulate_keystrokes(fixture.native_window, "n");
+    wait_for_api_condition(cx, |cx| {
+        cx.read_from_clipboard().and_then(|item| item.text()) == Some("keys:next".to_owned())
+    });
     assert_eq!(
-        fixture.popovers(cx),
-        [(owner, "hunk".to_owned(), 2..3, PopoverWidth::Pixels(60.))]
+        cx.read(|cx| fixture.model.read(cx).text()),
+        "one\ntwo\nthree\nfour\n"
     );
 
-    // Deleting the anchored line, "two", closes the popover.
-    fixture.edit(9..13, "", cx);
+    // The editor keeps focus, and without the popover the key types.
+    assert!(fixture.text_focused(cx));
+    fixture.run("keys.close", cx);
+    assert!(cx.read(|cx| fixture.editor.read(cx).key_contexts().is_empty()));
+    cx.simulate_input(fixture.native_window, "n");
+    assert!(cx.read(|cx| fixture.model.read(cx).text()).contains('n'));
+}
+
+#[gpui::test]
+fn escape_closes_the_focused_popover_else_the_newest(cx: &mut TestAppContext) {
+    let fixture = Fixture::new(cx);
+    load("esc", 912, cx);
+    fixture.run("esc.watch", cx);
+    fixture.run("esc.open", cx);
+    fixture.run("esc.hover", cx);
+    cx.update_window(fixture.native_window, |_, window, _| window.refresh())
+        .unwrap();
+
+    cx.simulate_keystrokes(fixture.native_window, "escape");
+    cx.run_until_parked();
+    assert_eq!(fixture.popovers(cx).len(), 1);
+    wait_for_api_condition(cx, |cx| {
+        cx.read_from_clipboard().and_then(|item| item.text())
+            == Some("esc:hover:escape:1".to_owned())
+    });
+
+    fixture.run("esc.hover", cx);
+    cx.update_window(fixture.native_window, |_, window, _| window.refresh())
+        .unwrap();
+    // With focus in the older popover, Escape closes that one.
+    let content = cx.read(|cx| fixture.editor.read(cx).popover_contents()[0].clone());
+    content.update(cx, |content, cx| content.focus_leaf(0, cx));
+    cx.simulate_keystrokes(fixture.native_window, "escape");
+    cx.run_until_parked();
+    assert_eq!(
+        fixture
+            .popovers(cx)
+            .iter()
+            .map(|popover| popover.1.as_str())
+            .collect::<Vec<_>>(),
+        ["hover"]
+    );
+    wait_for_api_condition(cx, |cx| {
+        cx.read_from_clipboard().and_then(|item| item.text())
+            == Some("esc:hunk:escape:2".to_owned())
+    });
+
+    // The last one closes, and Escape with none open is left to the editor.
+    cx.simulate_keystrokes(fixture.native_window, "escape");
+    cx.run_until_parked();
     assert!(fixture.popovers(cx).is_empty());
+    cx.simulate_keystrokes(fixture.native_window, "escape");
+    cx.run_until_parked();
+    assert_eq!(
+        cx.read(|cx| fixture.model.read(cx).text()),
+        "one\ntwo\nthree\nfour\n"
+    );
+}
+
+#[gpui::test]
+fn a_click_outside_every_popover_closes_them_and_one_inside_none(cx: &mut TestAppContext) {
+    let fixture = Fixture::new(cx);
+    load("click", 913, cx);
+    fixture.run("click.watch", cx);
+    fixture.run("click.open", cx);
+    fixture.run("click.hover", cx);
+    cx.update_window(fixture.native_window, |_, window, _| window.refresh())
+        .unwrap();
+    cx.run_until_parked();
+    let view = cx.read(|cx| {
+        fixture
+            .window
+            .read(cx)
+            .workbench
+            .read(cx)
+            .focused_editor()
+            .unwrap()
+            .clone()
+    });
+    let contents = cx.read(|cx| fixture.editor.read(cx).popover_contents());
+    let inside = cx.read(|cx| {
+        contents[0].read(cx).leaves()[0]
+            .editor()
+            .unwrap()
+            .read(cx)
+            .interaction_bounds()
+    });
+    let mut visual = VisualTestContext::from_window(fixture.native_window, cx);
+    visual.simulate_click(inside.center(), Modifiers::default());
+    visual.run_until_parked();
+    assert_eq!(fixture.popovers(cx).len(), 2);
+
+    let text = cx.read(|cx| view.read(cx).text_bounds());
+    let mut visual = VisualTestContext::from_window(fixture.native_window, cx);
+    visual.simulate_click(text.origin + point(px(4.), px(4.)), Modifiers::default());
+    visual.run_until_parked();
+    assert!(fixture.popovers(cx).is_empty());
+    wait_for_api_condition(cx, |cx| {
+        cx.read_from_clipboard().and_then(|item| item.text())
+            == Some("click:hover:click:2".to_owned())
+    });
+}
+
+#[gpui::test]
+fn a_popover_takes_focus_only_when_it_asks(cx: &mut TestAppContext) {
+    let fixture = Fixture::new(cx);
+    load("focus", 914, cx);
+    let focused = |cx: &mut TestAppContext| {
+        let leaf = leaves(&fixture, 0, cx)[0].clone();
+        let handle = cx.read(|cx| leaf.focus_handle(cx));
+        cx.update_window(fixture.native_window, |_, window, _| {
+            handle.is_focused(window)
+        })
+        .unwrap()
+    };
+    let refresh = |cx: &mut TestAppContext| {
+        for _ in 0..2 {
+            cx.update_window(fixture.native_window, |_, window, _| window.refresh())
+                .unwrap();
+            cx.run_until_parked();
+        }
+    };
+    fixture.run("focus.open", cx);
+    refresh(cx);
+    assert!(fixture.text_focused(cx));
+    assert!(!focused(cx));
+
+    fixture.run("focus.open-focus", cx);
+    refresh(cx);
+    assert!(focused(cx));
+    assert!(!fixture.text_focused(cx));
+
+    // Closing the popover with focus gives it back to the text.
+    cx.simulate_keystrokes(fixture.native_window, "escape");
+    refresh(cx);
+    assert!(fixture.popovers(cx).is_empty());
+    assert!(fixture.text_focused(cx));
 }
 
 #[gpui::test]
@@ -392,6 +638,7 @@ fn an_editor_on_a_document_in_a_popover_counts_as_a_view_of_it(cx: &mut TestAppC
         spec: knot_model::editor::popovers::PopoverSpec {
             anchor: 0..1,
             width: PopoverWidth::Editor,
+            focus: false,
         },
         toolbar: Vec::new(),
         layout: GroupSpec {
