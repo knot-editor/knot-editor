@@ -85,7 +85,7 @@ gutter and change navigation. See [version control](../architecture/version-cont
 
 ### 4. Changes and commit
 
-- **D214 — VCS changes view.** Provider-defined groups of changed files with
+- 🚧 **D214 — VCS changes view.** [Plan](d214-vcs-changes-view.md). Provider-defined groups of changed files with
   their actions. Depends on D213, D197.
 - **D215 — VCS commit.** The commit UI and committing through the provider,
   with provider-supplied options. Depends on D214.

@@ -401,7 +401,7 @@ milestones these items belong to.
   - Description: There is no list of changed files. Add a changes view that
     shows the provider's groups of changed files (for Git: staged, unstaged,
     untracked) with the actions the provider defines, and opens a file's
-    changes in the diff view.
+    changes in the diff view. See [the plan](plans/d214-vcs-changes-view.md).
 
 - **D215 — VCS commit** 🚧
   - Depends on: D214
