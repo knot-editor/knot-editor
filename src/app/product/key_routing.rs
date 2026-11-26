@@ -106,6 +106,9 @@ impl KnotWindow {
             return false;
         }
         let escape = keystroke.key == "escape" && !keystroke.modifiers.modified();
+        if escape && !self.keys.router.is_pending() && self.dismiss_popover(cx) {
+            return true;
+        }
         let in_tool = escape && self.focus == Focus::Workbench && self.focused_tool_view(cx);
         let terminal = matches!(
             self.focused_command_view(cx),
@@ -116,6 +119,28 @@ impl KnotWindow {
             return self.focus_editor_from_tool(cx);
         }
         delivered
+    }
+
+    /// Close the popover with focus, else the newest, over the editor Escape
+    /// is for, ahead of the keymap so that modal packages cannot shadow it;
+    /// false when none is open or a bar field has the keys.
+    fn dismiss_popover(&mut self, cx: &mut Context<Self>) -> bool {
+        if self.focus != Focus::Workbench {
+            return false;
+        }
+        let target = self.capture_command_target(cx);
+        let view = match target.popover_anchor(cx) {
+            Some(anchor) => anchor,
+            None => match Self::target_editor(&target, cx) {
+                Some(view) => view,
+                None => return false,
+            },
+        };
+        let editor = view.read(cx).editor().clone();
+        if editor.read(cx).bars().focused_bar().is_some() {
+            return false;
+        }
+        editor.update(cx, |editor, cx| editor.dismiss_popover(cx))
     }
 
     /// Whether the focused pane belongs to a tool window.

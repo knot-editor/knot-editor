@@ -196,9 +196,10 @@ edit from the editor closing every popover while one typed into a popover
 view does not, a toolbar command's edit closing it, key bindings under the
 popover context, and the reported reasons.
 
-**As built.** Escape is the preset binding `editor.close-popover`, which claims
-the key only while the command's editor, or the editor a focused popover view
-floats over, has a popover. An edit counts as typed inside a popover when focus
+**As built.** Escape is handled natively in the window's key routing, ahead of the
+keymap so modal packages such as Vim cannot shadow it: it closes a popover of
+the command's editor, or of the editor a focused popover view floats over, and
+leaves the key alone when none is open or a bar field has it. An edit counts as typed inside a popover when focus
 is inside one while the buffer changes; a toolbar command's edit made with
 focus there keeps the popovers. The close reasons are `escape`, `click`,
 `edit`, and `deleted`, reported through `onDidClosePopover` on editor handles

@@ -188,7 +188,6 @@ const SHARED_BINDINGS: &[PresetEntry] = &[
     ("shift-pageup", SELECT_PAGE_UP_COMMAND, Some("editor")),
     ("pagedown", MOVE_PAGE_DOWN_COMMAND, Some("editor")),
     ("shift-pagedown", SELECT_PAGE_DOWN_COMMAND, Some("editor")),
-    ("escape", CLOSE_POPOVER_COMMAND, Some("editor")),
     ("enter", INSERT_NEWLINE_COMMAND, Some("editor")),
     ("tab", INSERT_TAB_COMMAND, Some("editor")),
     ("shift-tab", OUTDENT_LINES_COMMAND, Some("editor")),
