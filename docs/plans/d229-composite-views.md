@@ -321,6 +321,16 @@ paint; the strip was checked by hand.
 
 #### 18. `@knot/diff` side by side
 
+🔎 Built, awaiting the review gate. The package lives beside `@knot/vcs` in
+`crates/knot-ext-vcs`; its contract (`diffs`: `open`, `setText`, `close`) and
+the architecture and guide text are in place. Decisions taken: a diff's sides
+carry no label header (the tab title holds both labels); `setText` on a
+snapshot shows a new buffer, as a read-only buffer takes no edits; view
+decorations take a gutter mark so wedges stay in their view; a keymap context
+slot of an extension now beats the preset's. The package's keys and `diff`
+context sit beside the native ones until 21. Try it with the playground's
+`Playground: Open Diff …` commands.
+
 Deliverables: the package opens a diff as a composite through a typed
 contract: either side a document or snapshot, bands, gutter wedges, rediff
 after edits, linked scrolling, the strip, hunk commands, and a toolbar. Vim's

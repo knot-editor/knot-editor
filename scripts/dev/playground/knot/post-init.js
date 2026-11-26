@@ -2,6 +2,7 @@
 // composite views so their behavior can be checked by hand. Run it with
 // scripts/dev/playground.sh, which points Knot at this directory as its
 // personal config. Removed with the plan.
+import { diffs } from "@knot/diff";
 import { buffers, commands, documents, icons, workbench } from "knot";
 
 let kind;
@@ -189,5 +190,40 @@ await commands.register("playground.composite-connector-move", async () => {
     { first: { start: 50, end: 52 }, second: { start: 58, end: 58 }, color: "diff.removed.background" },
   ]) });
 }, { title: "Playground: Move Connector Band" });
+
+// The diff package: two read-only snapshots (a hundred lines against the same
+// with ten inserted, one changed, one removed), then the focused document
+// against a snapshot of its text now. Scroll either side and type in the
+// document side: bands, wedges, the strip, and the scroll link follow. Alt+F5
+// and Alt+Shift+F5 (and ]c and [c in Vim) move between hunks, and the toolbar
+// arrows do the same.
+let playgroundDiff;
+await commands.register("playground.diff-snapshots", async () => {
+  const lines = numbered(0, 100).split("\n");
+  const changed = [...lines.slice(0, 10), ...numbered(200, 210).split("\n").slice(0, 10), ...lines.slice(10)];
+  changed[40] = "line changed";
+  changed.splice(60, 1);
+  playgroundDiff = await (await diffs.client()).open({
+    original: { label: "HEAD", text: numbered(0, 100) },
+    modified: { label: "Working Copy", text: changed.join("\n") },
+  });
+}, { title: "Playground: Open Diff of Snapshots" });
+await commands.register("playground.diff-document", async () => {
+  const [document] = await documents.list();
+  if (document === undefined) return;
+  const { buffer } = document;
+  const { text } = await buffer.snapshot();
+  playgroundDiff = await (await diffs.client()).open({
+    original: { label: "Opened", text },
+    modified: { label: document.title, document: document.id },
+  });
+}, { title: "Playground: Open Diff of Document Against Its Text Now" });
+await commands.register("playground.diff-set-original", async () => {
+  if (playgroundDiff === undefined) return;
+  await (await diffs.client()).setText({ id: playgroundDiff, side: "original", text: "replaced\nbaseline\n" });
+}, { title: "Playground: Replace Diff Original" });
+await commands.register("playground.diff-close", async () => {
+  if (playgroundDiff !== undefined) await (await diffs.client()).close(playgroundDiff);
+}, { title: "Playground: Close Diff" });
 
 console.info("playground loaded");
