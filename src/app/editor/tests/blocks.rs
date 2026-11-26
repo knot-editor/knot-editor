@@ -52,7 +52,7 @@ fn block_rows_paint_apart_from_text_and_take_no_clicks(cx: &mut TestAppContext) 
     });
 }
 
-fn owner() -> ExtensionKey {
+pub(super) fn owner() -> ExtensionKey {
     ExtensionKey::new(ExtensionId::new(1), ExtensionLifecycleId::new(1))
 }
 

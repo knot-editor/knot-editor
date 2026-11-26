@@ -101,7 +101,6 @@ impl TextView {
         CommandClaim::Declined
     }
 
-    #[cfg(test)]
     pub(crate) fn editor(&self) -> &Entity<EditorView> {
         &self.editor
     }

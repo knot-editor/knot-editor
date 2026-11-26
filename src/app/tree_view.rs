@@ -932,6 +932,11 @@ impl TreeView {
         cx.notify();
     }
 
+    /// The rows the tree shows, before scrolling.
+    pub(crate) fn row_count(&self) -> usize {
+        self.visible_rows().len()
+    }
+
     #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn visible_labels(&self) -> Vec<String> {
         self.visible_rows()

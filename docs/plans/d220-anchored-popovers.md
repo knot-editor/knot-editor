@@ -170,7 +170,13 @@ a required `height` option in logical pixels, and members' `pixels` are window
 pixels (scale 1). Tests drive focus inside a popover with
 `PopoverContent::focus_leaf`, because test windows deliver no focus events.
 
-### 3. Size, zoom, and placement
+### 3. Size, zoom, and placement ✅
+
+Built, pending the review gate. Sizing and placement are `Extent`, `PopoverSpec::resolve_width`, and
+`place` in `crates/knot-model/src/editor/popovers.rs`; the layout builder's `Sizing::Natural` mode
+(`src/app/view_layout.rs`) sizes a popover's columns to their members and scales `pixels` with zoom;
+`EditorView::popover_frames` places each popover. `maxLines` and `maxRows` are members' options, default 12;
+`height` is gone from the popover options.
 
 Height is natural with `maxLines` and `maxRows` caps; width is pixels or
 `"editor"`; `pixels` scale with zoom; the total is clamped to the text area

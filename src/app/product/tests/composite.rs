@@ -1338,6 +1338,7 @@ mod documents {
             size: LayoutSize::default(),
             focused: false,
             title: None,
+            limit: None,
             content: ContentSpec::Editor {
                 buffer: buffer.clone(),
                 document: Some(document),
@@ -1514,6 +1515,7 @@ mod documents {
                         size: LayoutSize::default(),
                         focused: false,
                         title: None,
+                        limit: None,
                         content: ContentSpec::Editor {
                             buffer,
                             document: Some(document),

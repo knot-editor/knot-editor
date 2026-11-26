@@ -27,6 +27,11 @@ impl EditorMetrics {
 }
 
 impl EditorView {
+    /// The height of a row in window pixels.
+    pub(crate) fn line_height(&self) -> f32 {
+        self.metrics.line_height
+    }
+
     #[cfg(test)]
     pub(crate) fn metrics(&self) -> EditorMetrics {
         self.metrics

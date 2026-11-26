@@ -3,6 +3,7 @@
 //! closes.
 use super::*;
 use crate::app::editor::Editor;
+use knot_model::editor::popovers::PopoverWidth;
 use knot_protocol::ExtensionKey;
 use std::ops::Range;
 
@@ -24,9 +25,9 @@ const editor = async () => {
   }
   return handle;
 };
-const content = async (height) => {
+const content = async (width) => {
   buffer ??= await buffers.create({ text: "changed\n" });
-  return { height, layout: { type: "column", children: [{ type: "editor", buffer }] } };
+  return { width: { pixels: width }, layout: { type: "column", children: [{ type: "editor", buffer }] } };
 };
 await commands.register("LABEL.open", async () => {
   await (await editor()).openPopover("hunk", { anchor: { start: 1, end: 2 }, ...await content(60) });
@@ -44,7 +45,7 @@ const richLayout = async (second) => {
   rich ??= await Promise.all(["a\n", "b\n", "c\n"].map((text) => buffers.create({ text })));
   const [doc] = await documents.list();
   return {
-    height: 120,
+    width: "editor",
     toolbar: [{ label: "Tool", icon: "file", command: "LABEL.tool", arguments: { n: 1 } }],
     layout: { type: "column", children: [
       { type: "editor", key: "a", buffer: rich[0] },
@@ -95,11 +96,17 @@ await commands.register("LABEL.validate", async ({ editor: captured }) => {
     (e) => e instanceof TypeError, "empty anchor");
   await expectError(() => captured.openPopover("x", { ...given, anchor: { start: -1, end: 1 } }),
     (e) => e instanceof TypeError, "negative anchor");
-  await expectError(() => captured.openPopover("x", { anchor, ...given, height: 0 }),
-    (e) => e instanceof TypeError, "height must be positive");
-  await expectError(() => captured.openPopover("x", { anchor, height: 50, layout: { type: "tabs", children: [] } }),
+  await expectError(() => captured.openPopover("x", { anchor, ...given, width: { pixels: 0 } }),
+    (e) => e instanceof TypeError, "width must be positive");
+  await expectError(() => captured.openPopover("x", { anchor, ...given, width: "wide" }),
+    (e) => e instanceof TypeError, "width is a number of pixels or the editor");
+  await expectError(() => captured.openPopover("x", { anchor, ...given, layout: { type: "column", children: [{ type: "editor", buffer, maxRows: 3 }] } }),
+    (e) => e instanceof TypeError, "an editor has maxLines");
+  await expectError(() => captured.openPopover("x", { anchor, ...given, layout: { type: "column", children: [{ type: "editor", buffer, maxLines: 0 }] } }),
+    (e) => e instanceof TypeError, "maxLines is positive");
+  await expectError(() => captured.openPopover("x", { anchor, layout: { type: "tabs", children: [] } }),
     (e) => e instanceof TypeError, "layout must be a row or column");
-  await expectError(() => captured.openPopover("x", { anchor, height: 50, layout: { type: "column", children: [{ type: "editor", buffer, size: { pixels: -1 } }] } }),
+  await expectError(() => captured.openPopover("x", { anchor, layout: { type: "column", children: [{ type: "editor", buffer, size: { pixels: -1 } }] } }),
     (e) => e instanceof TypeError, "size must be positive");
   await expectError(() => captured.openPopover("x", { anchor, ...given, toolbar: [{ label: "x" }] }),
     (e) => e instanceof TypeError, "toolbar button needs an icon");
@@ -163,8 +170,11 @@ impl Fixture {
         cx.run_until_parked();
     }
 
-    /// Each popover's owner, ID, anchored lines, and height, bottom to top.
-    fn popovers(&self, cx: &TestAppContext) -> Vec<(ExtensionKey, String, Range<u32>, f32)> {
+    /// Each popover's owner, ID, anchored lines, and width, bottom to top.
+    fn popovers(
+        &self,
+        cx: &TestAppContext,
+    ) -> Vec<(ExtensionKey, String, Range<u32>, PopoverWidth)> {
         cx.read(|cx| {
             let editor = self.editor.read(cx);
             let model = self.model.read(cx);
@@ -177,7 +187,7 @@ impl Fixture {
                         popover.owner,
                         popover.id.clone(),
                         editor.popovers().anchor_lines(popover, model).unwrap(),
-                        popover.spec.height,
+                        popover.spec.width,
                     )
                 })
                 .collect()
@@ -205,9 +215,9 @@ fn popovers_from_two_lifecycles_stack_update_and_end_with_their_lifecycle(cx: &m
     assert_eq!(
         fixture.popovers(cx),
         [
-            (first, "hunk".to_owned(), 0..3, 90.),
-            (second, "hunk".to_owned(), 1..2, 60.),
-            (first, "hover".to_owned(), 2..3, 40.),
+            (first, "hunk".to_owned(), 0..3, PopoverWidth::Pixels(90.)),
+            (second, "hunk".to_owned(), 1..2, PopoverWidth::Pixels(60.)),
+            (first, "hover".to_owned(), 2..3, PopoverWidth::Pixels(40.)),
         ]
     );
 
@@ -227,7 +237,7 @@ fn popovers_from_two_lifecycles_stack_update_and_end_with_their_lifecycle(cx: &m
     host.update(cx, |host, cx| host.unload(first, cx).unwrap());
     assert_eq!(
         fixture.popovers(cx),
-        [(second, "hunk".to_owned(), 1..2, 60.)]
+        [(second, "hunk".to_owned(), 1..2, PopoverWidth::Pixels(60.))]
     );
 }
 
@@ -239,7 +249,7 @@ fn the_anchor_follows_edits_and_deleting_it_closes_the_popover(cx: &mut TestAppC
     fixture.edit(0..0, "zero\n", cx);
     assert_eq!(
         fixture.popovers(cx),
-        [(owner, "hunk".to_owned(), 2..3, 60.)]
+        [(owner, "hunk".to_owned(), 2..3, PopoverWidth::Pixels(60.))]
     );
 
     // Deleting the anchored line, "two", closes the popover.
@@ -381,7 +391,7 @@ fn an_editor_on_a_document_in_a_popover_counts_as_a_view_of_it(cx: &mut TestAppC
     let spec = PopoverContentSpec {
         spec: knot_model::editor::popovers::PopoverSpec {
             anchor: 0..1,
-            height: 50.,
+            width: PopoverWidth::Editor,
         },
         toolbar: Vec::new(),
         layout: GroupSpec {
@@ -391,6 +401,7 @@ fn an_editor_on_a_document_in_a_popover_counts_as_a_view_of_it(cx: &mut TestAppC
                 size: LayoutSize::default(),
                 focused: false,
                 title: None,
+                limit: None,
                 content: ContentSpec::Editor {
                     buffer: other_model,
                     document: Some(other),

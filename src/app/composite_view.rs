@@ -16,7 +16,7 @@ use knot_protocol::IconRef;
 
 use super::editor::{Editor, Scrolled};
 use super::resource::ResourceUri;
-use super::view_layout::{GroupSpec, Layout, LayoutChange, Shared, ToolbarButton, toolbar};
+use super::view_layout::{GroupSpec, Layout, LayoutChange, Shared, Sizing, ToolbarButton, toolbar};
 use super::view_tree::{ViewFocusChanged, ViewKind, ViewNode, ViewTree, ViewTreeChanged};
 use super::workbench::{CommandView, ExtensionView};
 
@@ -118,7 +118,7 @@ impl CompositeView {
         window: &str,
         cx: &mut Context<Self>,
     ) -> Self {
-        let layout = Layout::new(layout, window, 1., cx);
+        let layout = Layout::new(layout, window, Sizing::Fill, cx);
         cx.on_release(|this, cx| {
             let hosted = this.layout.take_hosted();
             crate::app::view_layout::detach_views(hosted, cx);
@@ -140,7 +140,7 @@ impl CompositeView {
         window: &str,
         cx: &mut Context<Self>,
     ) -> LayoutChange {
-        let change = self.layout.update(layout, window, 1., cx);
+        let change = self.layout.update(layout, window, Sizing::Fill, cx);
         self.relink(cx);
         cx.emit(ViewTreeChanged);
         if change.focus_moved {

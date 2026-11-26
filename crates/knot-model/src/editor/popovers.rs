@@ -12,28 +12,101 @@ use knot_protocol::ExtensionKey;
 
 use crate::buffer::BufferModel;
 
+/// How wide a popover is.
+#[derive(Clone, Copy, Debug, Default, PartialEq, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PopoverWidth {
+    /// The editor's text-area width.
+    #[default]
+    Editor,
+    /// Logical pixels, which zoom scales.
+    Pixels(f32),
+}
+
 /// What a popover shows where.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PopoverSpec {
     /// The buffer lines the popover is anchored to, as `start..end` with
     /// `end` exclusive.
     pub anchor: Range<u32>,
-    /// The content's height in logical pixels.
-    pub height: f32,
+    pub width: PopoverWidth,
 }
 
 impl PopoverSpec {
-    /// Why the spec is invalid: the anchor has no lines, or the height is
+    /// Why the spec is invalid: the anchor has no lines, or a pixel width is
     /// not a positive, finite number.
     pub fn problem(&self) -> Option<&'static str> {
         if self.anchor.start >= self.anchor.end {
             return Some("popover anchor must span at least one line");
         }
-        if !self.height.is_finite() || self.height <= 0. {
-            return Some("popover height must be a positive number");
+        if let PopoverWidth::Pixels(pixels) = self.width
+            && (!pixels.is_finite() || pixels <= 0.)
+        {
+            return Some("popover width must be a positive number");
         }
         None
     }
+
+    /// The width in window pixels in a text area `text_width` wide, with
+    /// logical pixels multiplied by `zoom`. It never exceeds the text area.
+    pub fn resolve_width(&self, text_width: f32, zoom: f32) -> f32 {
+        match self.width {
+            PopoverWidth::Editor => text_width,
+            PopoverWidth::Pixels(pixels) => (pixels * zoom).min(text_width),
+        }
+        .max(0.)
+    }
+}
+
+/// The natural height of content: the sum of a column's members, the tallest
+/// of a row's or tabs' members, or a view's own height.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Extent {
+    Leaf(f32),
+    /// Members side by side, or one shown at a time.
+    Max(Vec<Extent>),
+    /// Members stacked.
+    Sum(Vec<Extent>),
+}
+
+impl Extent {
+    pub fn height(&self) -> f32 {
+        match self {
+            Self::Leaf(height) => *height,
+            Self::Max(members) => members.iter().map(Self::height).fold(0., f32::max),
+            Self::Sum(members) => members.iter().map(Self::height).sum(),
+        }
+    }
+}
+
+/// Where a popover goes in the editor's viewport, vertically.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Placement {
+    pub top: f32,
+    pub height: f32,
+}
+
+/// Place content `natural` tall against an anchor spanning `anchor` (top to
+/// bottom, from the viewport's top) in a viewport `viewport` tall, leaving
+/// `margin` at the viewport's edges. The popover sits below the anchor if it
+/// fits, otherwise above, otherwise on the side with more room, clamped to
+/// it. `None` while the anchor is wholly out of view or no room is left.
+pub fn place(anchor: Range<f32>, viewport: f32, natural: f32, margin: f32) -> Option<Placement> {
+    if anchor.end <= 0. || anchor.start >= viewport {
+        return None;
+    }
+    let below = (viewport - anchor.end - margin).max(0.);
+    let above = (anchor.start - margin).max(0.);
+    let (top, height) = if natural <= below {
+        (anchor.end, natural)
+    } else if natural <= above {
+        (anchor.start - natural, natural)
+    } else if below >= above {
+        (anchor.end, below)
+    } else {
+        (anchor.start - above, above)
+    };
+    (height > 0.).then_some(Placement { top, height })
 }
 
 /// One open popover.
@@ -186,7 +259,7 @@ mod tests {
     fn spec(anchor: Range<u32>) -> PopoverSpec {
         PopoverSpec {
             anchor,
-            height: 100.,
+            width: PopoverWidth::Editor,
         }
     }
 
@@ -204,17 +277,100 @@ mod tests {
 
     #[test]
     #[allow(clippy::reversed_empty_ranges)]
-    fn spec_needs_lines_and_a_positive_height() {
+    fn spec_needs_lines_and_a_positive_width() {
         assert_eq!(spec(1..2).problem(), None);
         assert!(spec(2..2).problem().is_some());
         assert!(spec(3..2).problem().is_some());
-        for height in [0., -1., f32::NAN, f32::INFINITY] {
+        for pixels in [0., -1., f32::NAN, f32::INFINITY] {
             let bad = PopoverSpec {
-                height,
+                width: PopoverWidth::Pixels(pixels),
                 ..spec(0..1)
             };
-            assert!(bad.problem().is_some(), "{height}");
+            assert!(bad.problem().is_some(), "{pixels}");
         }
+    }
+
+    #[test]
+    fn width_scales_with_zoom_and_clamps_to_the_text_area() {
+        let pixels = |pixels| PopoverSpec {
+            width: PopoverWidth::Pixels(pixels),
+            ..spec(0..1)
+        };
+        assert_eq!(spec(0..1).resolve_width(500., 2.), 500.);
+        assert_eq!(pixels(300.).resolve_width(500., 1.), 300.);
+        assert_eq!(pixels(300.).resolve_width(500., 1.5), 450.);
+        assert_eq!(pixels(300.).resolve_width(500., 2.), 500.);
+        assert_eq!(pixels(300.).resolve_width(120., 1.), 120.);
+        assert_eq!(pixels(300.).resolve_width(0., 1.), 0.);
+    }
+
+    #[test]
+    fn extents_sum_columns_and_take_the_tallest_of_rows() {
+        use Extent::*;
+        assert_eq!(Leaf(30.).height(), 30.);
+        assert_eq!(Sum(vec![Leaf(30.), Leaf(20.)]).height(), 50.);
+        assert_eq!(Max(vec![Leaf(30.), Leaf(20.)]).height(), 30.);
+        let nested = Sum(vec![
+            Leaf(10.),
+            Max(vec![Leaf(30.), Sum(vec![Leaf(20.), Leaf(25.)])]),
+        ]);
+        assert_eq!(nested.height(), 55.);
+        assert_eq!(Max(vec![]).height(), 0.);
+    }
+
+    #[test]
+    fn a_popover_goes_below_above_or_on_the_roomier_side() {
+        let place = |anchor: Range<f32>, natural| place(anchor, 400., natural, 10.);
+        // Below the anchor's bottom when it fits.
+        assert_eq!(
+            place(100.0..120., 100.),
+            Some(Placement {
+                top: 120.,
+                height: 100.
+            })
+        );
+        // Above when it does not fit below but does above.
+        assert_eq!(
+            place(300.0..320., 150.),
+            Some(Placement {
+                top: 150.,
+                height: 150.
+            })
+        );
+        // Neither: the side with more room, clamped to it.
+        assert_eq!(
+            place(100.0..120., 500.),
+            Some(Placement {
+                top: 120.,
+                height: 270.
+            })
+        );
+        assert_eq!(
+            place(280.0..300., 500.),
+            Some(Placement {
+                top: 10.,
+                height: 270.
+            })
+        );
+    }
+
+    #[test]
+    fn a_popover_hides_while_its_anchor_is_out_of_view() {
+        assert_eq!(place(-40.0..-20., 400., 50., 10.), None);
+        assert_eq!(place(400.0..420., 400., 50., 10.), None);
+        // A partly visible anchor still shows it.
+        assert!(place(-10.0..10., 400., 50., 10.).is_some());
+        // An anchor at the bottom leaves no room below, and none above is
+        // needed when the content fits there.
+        assert_eq!(
+            place(380.0..400., 400., 50., 10.),
+            Some(Placement {
+                top: 330.,
+                height: 50.
+            })
+        );
+        // No room on either side.
+        assert_eq!(place(0.0..400., 400., 50., 10.), None);
     }
 
     #[test]

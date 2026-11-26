@@ -415,8 +415,14 @@ impl Element for EditorElement {
         // Record the painted bounds for pointer hit testing. No notify: this
         // must not trigger a re-render.
         let full_bounds = bounds;
-        let bounds = self.entity.update(cx, |view, _cx| {
+        let bounds = self.entity.update(cx, |view, cx| {
+            // Popovers place themselves against the bounds, so they follow
+            // a change of size.
+            let resized = view.bounds.size != full_bounds.size;
             view.bounds = full_bounds;
+            if resized && !view.editor.read(cx).popovers().popovers().is_empty() {
+                cx.notify();
+            }
             #[cfg(test)]
             {
                 view.paint_count += 1;

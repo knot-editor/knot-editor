@@ -1126,6 +1126,7 @@ type Position = (usize, usize);
 mod blocks;
 mod gutter;
 mod indentation;
+mod popovers;
 mod wrap;
 
 fn press(

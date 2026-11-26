@@ -1018,12 +1018,19 @@ function editorFor(authority: Native) {
     async openPopover(id: unknown, popover: unknown) {
       expectRecord(popover, "popover must be an object");
       const [start, end] = popoverAnchor(popover.anchor);
-      const { height, toolbar } = popover;
-      if (typeof height !== "number" || !Number.isFinite(height) || height <= 0) {
-        throw new TypeError("popover height must be a positive number");
+      const { width, toolbar } = popover;
+      if (width !== undefined && width !== "editor") {
+        const given = isObject(width) ? width : {};
+        const pixels = (given as Rec).pixels;
+        if (Object.keys(given).length !== 1 || typeof pixels !== "number" || !Number.isFinite(pixels) || pixels <= 0) {
+          throw new TypeError('popover width must be "editor" or { pixels } with a positive number');
+        }
       }
-      const options = JSON.stringify({ height, toolbar: JSON.parse(toolbar === undefined ? "[]" : compositeToolbar(toolbar)) });
-      await request("editorOpenPopover", authority, popoverId(id), start, end, options, compositeLayoutJson(popover.layout));
+      const options = JSON.stringify({
+        ...(width === undefined ? {} : { width }),
+        toolbar: JSON.parse(toolbar === undefined ? "[]" : compositeToolbar(toolbar)),
+      });
+      await request("editorOpenPopover", authority, popoverId(id), start, end, options, compositeLayoutJson(popover.layout, true));
     },
     async closePopover(id: unknown) {
       await request("editorClosePopover", authority, popoverId(id));
@@ -2254,8 +2261,8 @@ function compositeTab(given: Rec, titleRequired: boolean) {
   };
 }
 /** The layout JSON of a composite's row or column, or of one member of it. */
-function compositeLayoutJson(node: unknown): string {
-  const seen: CompositeSeen = { keys: new Set(), editors: new Set(), connectors: [] };
+function compositeLayoutJson(node: unknown, popover = false): string {
+  const seen: CompositeSeen = { keys: new Set(), editors: new Set(), connectors: [], popover };
   const wire = compositeLayout(node, true, false, seen);
   if (!/"type":"(editor|text|tree)"/.test(JSON.stringify(wire))) throw new TypeError("composite layout needs a view");
   for (const [first, second] of seen.connectors) {
@@ -2265,7 +2272,7 @@ function compositeLayoutJson(node: unknown): string {
   }
   return JSON.stringify(wire);
 }
-type CompositeSeen = { keys: Set<string>; editors: Set<string>; connectors: [string, string][] };
+type CompositeSeen = { keys: Set<string>; editors: Set<string>; connectors: [string, string][]; popover: boolean };
 function compositeConnector(given: Rec, seen: CompositeSeen): Rec {
   const first = string(given.first, "composite connector first must be a member key");
   const second = string(given.second, "composite connector second must be a member key");
@@ -2310,8 +2317,20 @@ function compositeLayout(node: unknown, root: boolean, inTabs: boolean, seen: Co
       throw new TypeError("composite size must be a positive weight or pixels");
     }
   }
+  const limit = type === "tree" ? "maxRows" : "maxLines";
+  for (const name of ["maxLines", "maxRows"]) {
+    if (given[name] === undefined) continue;
+    if (!seen.popover || name !== limit || (type !== "editor" && type !== "text" && type !== "tree")) {
+      throw new TypeError(`${name} limits ${name === "maxRows" ? "a tree" : "an editor or text frame"} of a popover`);
+    }
+    const value = given[name];
+    if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) {
+      throw new TypeError(`${name} must be a positive integer`);
+    }
+  }
   const wire: Rec = {
     type,
+    ...(given[limit] === undefined ? {} : { [limit]: given[limit] }),
     ...(key === undefined ? {} : { key }),
     ...(size === undefined ? {} : { size }),
     ...(focused === undefined ? {} : { focused }),

@@ -21,10 +21,12 @@ use super::icons::{AppIcon, ref_definition};
 use super::model::Buffer;
 use super::text_view::TextView;
 use super::theme::{color, theme};
+use super::tokens;
 use super::tree_view::TreeView;
 use super::view_tree::{ViewKind, ViewNode, ViewTree as _};
 use super::workbench::{CommandView, ExtensionView};
 use super::zoom;
+use knot_model::editor::popovers::Extent;
 
 /// An icon button of a composite's toolbar, which runs a command with the
 /// composite as its target.
@@ -94,6 +96,25 @@ pub(crate) struct ConnectorLink {
     pub color: String,
 }
 
+/// How a layout takes its space.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum Sizing {
+    /// The layout fills the space it is given, and `pixels` are window
+    /// pixels.
+    Fill,
+    /// The layout is as tall as its content, up to the space it is given,
+    /// and `pixels` are logical pixels the zoom scales.
+    Natural,
+}
+
+/// The lines an editor or text frame and the rows a tree show before
+/// scrolling, unless a member sets its own limit.
+const DEFAULT_LIMIT: u32 = 12;
+
+/// Heights of the chrome a layout draws itself, in logical pixels.
+pub(crate) const TOOLBAR_HEIGHT: f32 = 37.;
+const TAB_STRIP_HEIGHT: f32 = 34.;
+
 /// How wide a connector is unless its member sets a size.
 pub(crate) const CONNECTOR_WIDTH: f32 = 32.;
 
@@ -113,6 +134,9 @@ pub(crate) struct MemberSpec {
     pub focused: bool,
     /// The label of the member's tab, for a member of tabs.
     pub title: Option<String>,
+    /// The most lines an editor or text frame, or rows a tree, shows before
+    /// it scrolls, when the layout is sized to its content.
+    pub limit: Option<u32>,
     pub content: ContentSpec,
 }
 
@@ -251,6 +275,24 @@ impl Leaf {
         }
     }
 
+    /// The height of the view's content, showing at most `limit` lines or
+    /// rows.
+    fn natural_height(&self, limit: u32, cx: &App) -> f32 {
+        let lines = |view: &Entity<EditorView>| {
+            let view = view.read(cx);
+            let count = view.model().read(cx).line_count().min(limit as usize);
+            count as f32 * view.line_height()
+        };
+        match self {
+            Self::Editor(view) => lines(view),
+            Self::Text(view) => lines(view.read(cx).editor()),
+            Self::Tree(view) => {
+                let rows = view.read(cx).row_count().min(limit as usize);
+                rows as f32 * tokens::list::ROW_HEIGHT * zoom::factor(cx)
+            }
+        }
+    }
+
     fn element(&self) -> AnyElement {
         match self {
             Self::Editor(view) => view.clone().into_any_element(),
@@ -307,7 +349,19 @@ struct Member {
     source: Source,
     size: LayoutSize,
     title: Option<String>,
+    limit: u32,
     content: Content,
+}
+
+impl Member {
+    /// The natural height of the member's content.
+    fn extent(&self, cx: &App) -> Extent {
+        match &self.content {
+            Content::Leaf(leaf) => Extent::Leaf(leaf.natural_height(self.limit, cx)),
+            Content::Group(group) => group.read(cx).0.extent(cx),
+            Content::Connector(_) => Extent::Leaf(0.),
+        }
+    }
 }
 
 /// The keyed views of the layout being replaced, which the new one takes
@@ -347,8 +401,7 @@ impl Content {
 /// A built group. A nested one is a view of its own, so it has an identity
 /// in the view tree.
 struct Group {
-    /// What a member's `pixels` are multiplied by.
-    scale: f32,
+    sizing: Sizing,
     arrangement: Arrangement,
     members: Vec<Member>,
     /// The member tabs show.
@@ -358,15 +411,14 @@ struct Group {
 struct GroupView(Group);
 
 impl Group {
-    /// Build `spec` for the window `window`, with `scale` times the pixels
-    /// of its sized members. A keyed member takes the view
+    /// Build `spec` for the window `window`. A keyed member takes the view
     /// of the same key from `kept` when it shows the same thing. `shown` is
     /// the key of the member tabs showed before, which stays shown if it is
     /// still there.
     fn build(
         spec: GroupSpec,
         window: &str,
-        scale: f32,
+        sizing: Sizing,
         kept: &mut Kept,
         shown: Option<&str>,
         cx: &mut App,
@@ -396,7 +448,8 @@ impl Group {
                     (ContentSpec::Group(group), Some(Content::Group(entity))) => {
                         let before = entity.read(cx).0.shown_key();
                         entity.update(cx, |view, cx| {
-                            view.0 = Self::build(group, window, scale, kept, before.as_deref(), cx);
+                            view.0 =
+                                Self::build(group, window, sizing, kept, before.as_deref(), cx);
                             cx.notify();
                         });
                         Content::Group(entity)
@@ -418,7 +471,7 @@ impl Group {
                         }))
                     }
                     (ContentSpec::Group(group), None) => {
-                        let group = Self::build(group, window, scale, kept, None, cx);
+                        let group = Self::build(group, window, sizing, kept, None, cx);
                         Content::Group(cx.new(|_| GroupView(group)))
                     }
                 };
@@ -427,12 +480,13 @@ impl Group {
                     source,
                     size: member.size,
                     title: member.title,
+                    limit: member.limit.unwrap_or(DEFAULT_LIMIT),
                     content,
                 }
             })
             .collect();
         Self {
-            scale,
+            sizing,
             arrangement: spec.arrangement,
             members,
             active: named.or(active).unwrap_or(0),
@@ -589,8 +643,39 @@ impl Group {
         }
     }
 
+    /// The natural height of the group.
+    fn extent(&self, cx: &App) -> Extent {
+        let scale = self.scale(cx);
+        let members = |sized: bool| {
+            self.members
+                .iter()
+                .map(|member| match member.size {
+                    LayoutSize::Pixels(pixels) if sized => Extent::Leaf(pixels * scale),
+                    _ => member.extent(cx),
+                })
+                .collect()
+        };
+        match self.arrangement {
+            Arrangement::Column => Extent::Sum(members(true)),
+            Arrangement::Row => Extent::Max(members(false)),
+            Arrangement::Tabs => Extent::Sum(vec![
+                Extent::Leaf(TAB_STRIP_HEIGHT * zoom::factor(cx)),
+                Extent::Max(members(false)),
+            ]),
+        }
+    }
+
+    /// What a member's `pixels` are multiplied by.
+    fn scale(&self, cx: &App) -> f32 {
+        match self.sizing {
+            Sizing::Fill => 1.,
+            Sizing::Natural => zoom::factor(cx),
+        }
+    }
+
     /// A row or column of its members.
     fn render(&self, cx: &App) -> Div {
+        let scale = self.scale(cx);
         let border = theme(cx).paint_color(color::BORDER);
         let row = self.arrangement == Arrangement::Row;
         let group = div().flex().size_full().min_w_0().min_h_0();
@@ -602,6 +687,9 @@ impl Group {
         for (index, member) in self.members.iter().enumerate() {
             let mut slot = div().min_w_0().min_h_0().flex_shrink(1.);
             match member.size {
+                LayoutSize::Weight(_) if !row && self.sizing == Sizing::Natural => {
+                    slot = slot.flex_basis(px(member.extent(cx).height()));
+                }
                 LayoutSize::Weight(weight) => {
                     slot = slot.flex_basis(px(0.));
                     slot.style().flex_grow = Some(weight);
@@ -609,9 +697,9 @@ impl Group {
                 LayoutSize::Pixels(pixels) => {
                     slot = slot.flex_none();
                     slot = if row {
-                        slot.w(px(pixels * self.scale))
+                        slot.w(px(pixels * scale))
                     } else {
-                        slot.h(px(pixels * self.scale))
+                        slot.h(px(pixels * scale))
                     };
                 }
             }
@@ -745,6 +833,7 @@ impl GroupView {
             .flex()
             .flex_row()
             .flex_none()
+            .h(zoom::rems(TAB_STRIP_HEIGHT))
             .items_end()
             .bg(theme.paint_color(color::TAB_BAR_BACKGROUND))
             .border_b_1()
@@ -846,13 +935,12 @@ pub(crate) struct Layout {
 }
 
 impl Layout {
-    /// A layout of `spec` in the window `window`, with `scale` times the
-    /// pixels of its sized members; the spec is a row or column that holds at
+    /// A layout of `spec` in the window `window`; the spec is a row or column that holds at
     /// least one view.
-    pub(crate) fn new(spec: GroupSpec, window: &str, scale: f32, cx: &mut App) -> Self {
+    pub(crate) fn new(spec: GroupSpec, window: &str, sizing: Sizing, cx: &mut App) -> Self {
         debug_assert!(spec.leaf_count() > 0 && spec.arrangement != Arrangement::Tabs);
         let focused = spec.focused_leaf().unwrap_or(0);
-        let mut root = Group::build(spec, window, scale, &mut Kept::new(), None, cx);
+        let mut root = Group::build(spec, window, sizing, &mut Kept::new(), None, cx);
         root.connect(cx);
         let leaves: Rc<[Leaf]> = root.leaves(cx).into();
         root.reveal(leaves[focused].entity_id(), cx);
@@ -877,7 +965,7 @@ impl Layout {
         &mut self,
         spec: GroupSpec,
         window: &str,
-        scale: f32,
+        sizing: Sizing,
         cx: &mut App,
     ) -> LayoutChange {
         debug_assert!(spec.leaf_count() > 0 && spec.arrangement != Arrangement::Tabs);
@@ -886,7 +974,7 @@ impl Layout {
         let initial = spec.focused_leaf().unwrap_or(0);
         let mut kept = Kept::new();
         self.root.keep(&mut kept, cx);
-        self.root = Group::build(spec, window, scale, &mut kept, None, cx);
+        self.root = Group::build(spec, window, sizing, &mut kept, None, cx);
         self.root.connect(cx);
         let leaves: Rc<[Leaf]> = self.root.leaves(cx).into();
         let kept_focus = leaves.iter().position(|leaf| leaf.entity_id() == focused);
@@ -1002,6 +1090,11 @@ impl Layout {
     pub(crate) fn node(&self, id: EntityId, kind: ViewKind, cx: &App) -> ViewNode {
         self.root
             .node(id, kind, self.shared.focused_leaf().entity_id(), cx)
+    }
+
+    /// The height of the layout's content, in window pixels.
+    pub(crate) fn natural_height(&self, cx: &App) -> f32 {
+        self.root.extent(cx).height()
     }
 
     /// The root group as an element.
@@ -1129,6 +1222,7 @@ pub(crate) fn toolbar(
             .flex()
             .flex_row()
             .flex_none()
+            .h(zoom::rems(TOOLBAR_HEIGHT))
             .items_center()
             .gap(zoom::rems(4.))
             .px(zoom::rems(8.))

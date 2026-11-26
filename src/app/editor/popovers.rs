@@ -5,16 +5,16 @@
 //! A popover's content is a layout of views like a composite tab's, and its
 //! views join the view tree as children of the editor's.
 
-use knot_model::editor::popovers::{EditorPopover, PopoverSpec};
+use knot_model::editor::popovers::{EditorPopover, PopoverSpec, place};
 use knot_protocol::ExtensionKey;
 
 use super::*;
 use crate::app::convert::ThemePaint as _;
-use crate::app::view_layout::{GroupSpec, Layout, ToolbarButton, toolbar};
+use crate::app::view_layout::{GroupSpec, Layout, Sizing, TOOLBAR_HEIGHT, ToolbarButton, toolbar};
 use crate::app::view_tree::{ViewKind, ViewNode};
 use crate::app::workbench::ExtensionView;
 
-/// What `open_popover` sets: where the popover is anchored and how tall it
+/// What `open_popover` sets: where the popover is anchored and how wide it
 /// is, and what it shows.
 pub(crate) struct PopoverContentSpec {
     pub spec: PopoverSpec,
@@ -40,7 +40,7 @@ impl PopoverContent {
         window: &str,
         cx: &mut Context<Self>,
     ) -> Self {
-        let layout = Layout::new(layout, window, 1., cx);
+        let layout = Layout::new(layout, window, Sizing::Natural, cx);
         cx.on_release(|this, cx| {
             let hosted = this.layout.take_hosted();
             crate::app::view_layout::detach_views(hosted, cx);
@@ -65,7 +65,7 @@ impl PopoverContent {
     ) -> Vec<ExtensionView> {
         self.toolbar = toolbar;
         self.focus_subscriptions.clear();
-        let change = self.layout.update(layout, window, 1., cx);
+        let change = self.layout.update(layout, window, Sizing::Natural, cx);
         cx.notify();
         change.attached
     }
@@ -87,6 +87,17 @@ impl PopoverContent {
         self.layout.set_focused_leaf(index);
         self.inside = true;
         crate::app::extensions::host::application_changed(cx);
+    }
+
+    /// The height the content takes in window pixels, with its toolbar and
+    /// border.
+    fn natural_height(&self, cx: &App) -> f32 {
+        let toolbar = if self.toolbar.is_empty() {
+            0.
+        } else {
+            TOOLBAR_HEIGHT * crate::app::zoom::factor(cx)
+        };
+        toolbar + self.layout.natural_height(cx) + 2.
     }
 
     /// The popover's node of the view tree.
@@ -194,6 +205,7 @@ impl Editor {
         };
         self.sync_popover_views(cx);
         crate::app::extensions::host::application_changed(cx);
+        cx.notify();
         attached
     }
 
@@ -284,14 +296,27 @@ impl Editor {
     }
 }
 
+/// Where one popover floats, relative to the editor's top left.
+pub(super) struct PopoverFrame {
+    content: Entity<PopoverContent>,
+    pub(super) left: f32,
+    pub(super) top: f32,
+    pub(super) width: f32,
+    pub(super) height: f32,
+}
+
 impl EditorView {
-    /// The popovers over the text, bottom to top, each below its anchor's
-    /// last line. Positions are relative to the text area's top left.
-    pub(super) fn render_popovers(&self, cx: &App) -> Vec<AnyElement> {
+    /// The popovers to show, bottom to top, each below or above its anchor
+    /// and sized to its content. A popover is hidden while its anchor is out
+    /// of view or folded away.
+    pub(super) fn popover_frames(&self, cx: &App) -> Vec<PopoverFrame> {
         let editor = self.editor.read(cx);
         let model = self.model.read(cx);
-        let theme = theme(cx);
-        let margin = crate::app::zoom::scaled(MARGIN, cx);
+        let zoom = crate::app::zoom::factor(cx);
+        let margin = MARGIN * zoom;
+        let line_height = self.metrics.line_height;
+        let viewport = f32::from(self.bounds.size.height);
+        let text_width = f32::from(self.text_bounds().size.width) - 2. * margin;
         editor
             .popovers()
             .popovers()
@@ -299,28 +324,49 @@ impl EditorView {
             .filter_map(|popover| {
                 let lines = editor.popovers().anchor_lines(popover, model)?;
                 let content = editor.popover_content(popover)?.clone();
-                let row = editor.wrap().first_row(lines.end as usize) as f32;
-                let top = px((row - editor.scroll_top()) * self.metrics.line_height);
-                let height = crate::app::zoom::scaled(popover.spec.height, cx);
-                Some(
-                    deferred(
-                        div()
-                            .absolute()
-                            .top(top)
-                            .left(px(self.gutter.width) + margin)
-                            .right(margin)
-                            .h(height)
-                            .occlude()
-                            .overflow_hidden()
-                            .rounded(crate::app::zoom::rems(crate::app::tokens::radius::SM))
-                            .border_1()
-                            .border_color(theme.paint_color(color::POPOVER_BORDER))
-                            .bg(theme.paint_color(color::POPOVER_BACKGROUND))
-                            .child(content),
-                    )
-                    .with_priority(1)
-                    .into_any_element(),
+                let wrap = editor.wrap();
+                let first = wrap.first_row(lines.start as usize);
+                let last = wrap.rows(lines.end as usize - 1).end;
+                if last <= first {
+                    return None;
+                }
+                let rows = |row: usize| (row as f32 - editor.scroll_top()) * line_height;
+                let natural = content.read(cx).natural_height(cx);
+                let placement = place(rows(first)..rows(last), viewport, natural, margin)?;
+                Some(PopoverFrame {
+                    content,
+                    left: self.gutter.width + margin,
+                    top: placement.top,
+                    width: popover.spec.resolve_width(text_width, zoom),
+                    height: placement.height,
+                })
+            })
+            .collect()
+    }
+
+    /// The popovers over the text, bottom to top.
+    pub(super) fn render_popovers(&self, cx: &App) -> Vec<AnyElement> {
+        let theme = theme(cx);
+        self.popover_frames(cx)
+            .into_iter()
+            .map(|frame| {
+                deferred(
+                    div()
+                        .absolute()
+                        .top(px(frame.top))
+                        .left(px(frame.left))
+                        .w(px(frame.width))
+                        .h(px(frame.height))
+                        .occlude()
+                        .overflow_hidden()
+                        .rounded(crate::app::zoom::rems(crate::app::tokens::radius::SM))
+                        .border_1()
+                        .border_color(theme.paint_color(color::POPOVER_BORDER))
+                        .bg(theme.paint_color(color::POPOVER_BACKGROUND))
+                        .child(frame.content),
                 )
+                .with_priority(1)
+                .into_any_element()
             })
             .collect()
     }

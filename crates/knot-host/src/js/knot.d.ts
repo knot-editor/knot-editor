@@ -1965,11 +1965,19 @@ declare module "knot" {
   export interface EditorPopover {
     /** The lines of the editor's buffer the popover is anchored to, `start`
      * through `end` exclusive. The anchor follows edits; deleting all of it
-     * closes the popover. The popover floats below the last line. */
+     * closes the popover. The popover floats below the last line, or above
+     * the first when it does not fit below and does fit above, or on the
+     * side with more room. It follows the anchor as the editor scrolls and
+     * hides while the anchor is out of view or folded away. */
     readonly anchor: { readonly start: number; readonly end: number };
-    /** The popover's height in logical pixels, which zoom scales and the
-     * editor's size limits. */
-    readonly height: number;
+    /** How wide the popover is: logical pixels, which zoom scales, or
+     * `"editor"` for the editor's text-area width (the default). It never
+     * exceeds the text area. The height is the content's, up to the room
+     * beside the anchor: an editor or text member is as tall as its lines up
+     * to `maxLines`, a tree as its rows up to `maxRows`, a row as its tallest
+     * member, a column the sum of its members, plus the toolbar. A member's
+     * `size.pixels` in the popover are logical pixels as well. */
+    readonly width?: "editor" | { readonly pixels: number };
     /** Icon buttons above the layout; each runs its command with the
      * anchoring editor's tab as its target and the editor as its editor,
      * wherever focus is. */
@@ -3055,6 +3063,12 @@ declare module "knot" {
     | { readonly weight: number }
     | { readonly pixels: number };
   interface CompositeLayoutMember {
+    /** In a popover, the most lines an `editor` or `text` member shows
+     * before it scrolls (default 12). Not for composite views. */
+    readonly maxLines?: number;
+    /** In a popover, the most rows a `tree` member shows before it scrolls
+     * (default 12). Not for composite views. */
+    readonly maxRows?: number;
     /** Names the member across `update`. A member of the new layout with the
      * key of one in the old and the same content keeps its view, with its
      * handle, state, and focus. Unique in the layout and not empty; a member

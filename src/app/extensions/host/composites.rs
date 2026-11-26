@@ -22,7 +22,7 @@ use crate::app::view_layout::{
     Arrangement, CONNECTOR_WIDTH, ConnectorSpec, ContentSpec, GroupSpec, LayoutSize, MemberSpec,
     ToolbarButton,
 };
-use knot_model::editor::popovers::PopoverSpec;
+use knot_model::editor::popovers::{PopoverSpec, PopoverWidth};
 
 /// What `openComposite` and `updateComposite` set on a tab and its toolbar.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -80,14 +80,20 @@ enum ContentWire {
         buffer: Option<u64>,
         #[serde(default)]
         document: Option<String>,
+        #[serde(default)]
+        max_lines: Option<u32>,
     },
     /// A text frame of the embedded view of this ID.
     Text {
         view: String,
+        #[serde(default)]
+        max_lines: Option<u32>,
     },
     /// A tree of the embedded view of this ID.
     Tree {
         view: String,
+        #[serde(default)]
+        max_rows: Option<u32>,
     },
     /// A strip that joins lines of two editors of the layout.
     Connector(ConnectorSpec),
@@ -157,7 +163,10 @@ impl LayoutWire {
                 (false, Some(_)) => return Err("only a member of tabs has a title"),
                 _ => {}
             }
-            if let ContentWire::Editor { buffer, document } = &node.content {
+            if let ContentWire::Editor {
+                buffer, document, ..
+            } = &node.content
+            {
                 if buffer.is_some() == document.is_some() {
                     return Err("a composite editor shows a buffer or a document");
                 }
@@ -230,6 +239,13 @@ impl LayoutWire {
             },
             focused: self.focused,
             title: self.title.clone(),
+            limit: match self.content {
+                ContentWire::Editor { max_lines, .. } | ContentWire::Text { max_lines, .. } => {
+                    max_lines
+                }
+                ContentWire::Tree { max_rows, .. } => max_rows,
+                _ => None,
+            },
             content,
         })
     }
@@ -239,8 +255,8 @@ impl LayoutWire {
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct PopoverOptions {
-    /// The popover's height in logical pixels.
-    pub height: f32,
+    #[serde(default)]
+    pub width: PopoverWidth,
     pub toolbar: Vec<ToolbarButton>,
 }
 
@@ -317,10 +333,10 @@ impl ProductExtensionHost {
                 }
             }),
             ContentWire::Editor { .. } => Err(AccessError::InvalidTarget.into()),
-            ContentWire::Text { view } => self
+            ContentWire::Text { view, .. } => self
                 .embedded_view(view, owner, ViewContentKind::Text)
                 .map(|_| ContentSpec::Text(view.clone())),
-            ContentWire::Tree { view } => self
+            ContentWire::Tree { view, .. } => self
                 .embedded_view(view, owner, ViewContentKind::Tree)
                 .map(|_| ContentSpec::Tree(view.clone())),
             ContentWire::Connector(connector) => Ok(ContentSpec::Connector(connector.clone())),
@@ -377,7 +393,7 @@ impl ProductExtensionHost {
     ) -> Result<PopoverContentSpec, OpenError> {
         let spec = PopoverSpec {
             anchor,
-            height: options.height,
+            width: options.width,
         };
         if spec.problem().is_some() {
             return Err(AccessError::InvalidTarget.into());
