@@ -72,27 +72,11 @@ None.
 
 ### 1. Hunk model: popup anchor and revert edit ✅
 
-Pure functions in `@knot/vcs` for what a hunk means, tested without a host.
-
-- The hunk containing (or, for a removal, at) a line, used by click, caret,
-  and revert.
-- The popover anchor of a hunk, per the rules above.
-- The baseline text of a hunk, and the edit that reverts it: the byte range of
-  the current lines and its replacement text, including the end-of-file cases
-  (removal at the end, missing final newline on either side).
-
-**Implementation context.** Add the functions to a new
-`extensions/@knot/vcs/src/hunk.ts`, next to `gutter.ts` (gutter contributions)
-and `navigation.ts` (`targetLine`), whose style it mirrors. Tests go in
-`extensions/@knot/vcs/test/hunk.test.ts`, written like `navigation.test.ts`.
-Byte ranges come from `Buffer.lineRange`/`lineCount`; keep the pure part on
-line indices and baseline text so the tests need no buffer, as `targetLine`
-does.
-
-**Validation.** Unit tests for insertions, modifications, removals (top,
-middle, end of file), and files with and without a final newline.
-
-**Review gate.** The hunk rules and revert edits read right.
+Done and reviewed: `extensions/@knot/vcs/src/hunk.ts` holds the hunk lookup,
+popup anchor, baseline text, and revert edit (`hunkAt`, `anchorLines`,
+`baselineText`, `revertEdit`), with unit tests in `test/hunk.test.ts`. Hunk
+lines carry their terminators and have no trailing empty line, unlike
+`Buffer` lines; `revertEdit` takes the buffer's `lineCount`/`lineRange`.
 
 ### 2. The popup, its commands, and the click
 
