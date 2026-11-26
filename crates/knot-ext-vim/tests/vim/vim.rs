@@ -956,6 +956,39 @@ fn vim_refuses_changes_in_a_read_only_diff_side(cx: &mut TestAppContext) {
     diff_keys(&window, true, "j x", "one\n‸WO\nthree\n", cx);
 }
 
+/// `]c` and `[c` move between the hunks of a composite diff, wrapping.
+#[gpui::test]
+fn vim_moves_between_the_hunks_of_a_package_diff(cx: &mut TestAppContext) {
+    let post_init = format!(
+        r#"{ENABLE}
+import {{ diffs }} from "@knot/diff";
+import {{ commands }} from "knot";
+await commands.register("try.diff", async () => {{
+  await (await diffs.client()).open({{
+    original: {{ label: "HEAD", text: "a\nb\nc\nd\ne\nf\n" }},
+    modified: {{ label: "Now", text: "a\nB\nc\nd\nE\nf\n" }},
+  }});
+}});
+"#
+    );
+    let mut packages = vim_and_go_to_file();
+    packages.extend(knot_ext_vcs::PACKAGES);
+    let packages: &'static [knot_bundled::BundledSource] = Box::leak(packages.into_boxed_slice());
+    let product = TestProduct::launch_with_post_init(packages, &post_init, cx);
+    let window = product.active_window(cx);
+    assert_eq!(
+        window.run_command("try.diff", cx),
+        knot::test_support::CommandOutcome::Completed
+    );
+    wait_until(cx, |cx| !window.composite_links(cx).is_empty());
+    window.focus_composite_editor(1, cx);
+    let caret = |cx: &mut TestAppContext| window.composite_editors(cx)[1].caret_line;
+    for (keys, line) in [("] c", 1), ("] c", 4), ("] c", 1), ("[ c", 4), ("2 [ c", 4)] {
+        window.press_each(keys, cx);
+        wait_until(cx, |cx| caret(cx) == line);
+    }
+}
+
 /// The inline layout shows the modified editor alone, and Vim follows it.
 #[gpui::test]
 fn vim_follows_the_modified_editor_of_an_inline_diff(cx: &mut TestAppContext) {

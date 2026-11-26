@@ -86,7 +86,7 @@ export type Command =
   | { readonly kind: "join"; readonly count: number; readonly spaces?: false }
   /** `ga`: shows the character under the caret's code. */
   | { readonly kind: "show-character" }
-  /** `]c` and `[c`: the version control commands that move to the next or previous change. */
+  /** `]c` and `[c`: the commands that move to the next or previous change of a diff, or of a file against version control. */
   | { readonly kind: "change"; readonly forward: boolean; readonly count: number }
   /** An insert command; the typed text repeats `count` times. */
   | { readonly kind: "insert"; readonly at: InsertAt; readonly count: number }

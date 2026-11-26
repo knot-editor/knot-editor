@@ -340,9 +340,13 @@ export async function run(state: State, command: Command, repeating = false) {
       await showCharacter(state);
       break;
     case "change":
-      // Provided by @knot/vcs; without it the command is unavailable and nothing moves.
+      // A diff has its own hunks, from @knot/diff; elsewhere the changes are
+      // @knot/vcs's. Without either the command is unavailable and nothing moves.
       for (let step = 0; step < command.count; step += 1) {
-        const outcome = await commands.invoke(command.forward ? "vcs.nextChange" : "vcs.previousChange");
+        let outcome = await commands.invoke(command.forward ? "diff.nextHunk" : "diff.previousHunk");
+        if (outcome.kind === "unavailable") {
+          outcome = await commands.invoke(command.forward ? "vcs.nextChange" : "vcs.previousChange");
+        }
         if (outcome.kind !== "completed") break;
       }
       break;
