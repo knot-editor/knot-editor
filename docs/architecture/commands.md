@@ -259,6 +259,17 @@ Shift, keeps it from opening. While a menu is open the window's focus is
 `Focus::Popup`: only global bindings match, and other keys reach the menu's own
 actions.
 
+### File commands
+
+`file.copy-path`, `file.copy-relative-path`, `file.copy-name`, and `file.reveal`
+are native commands in `src/app/product/commands.rs`. Each takes an optional
+`{ uri }` argument; without one it resolves its target from focus: the
+`resource` of the selected row of a focused tree, else the focused editor's file.
+A target with no file leaves the command unavailable. The relative path is below
+the window root that contains the file, falling back to the full path, and Reveal
+has the platform's label (Reveal in Finder on macOS). Packages list them in their
+own menus (the explorer, the changes view, and tabs), so none depends on another.
+
 ## Extension execution
 
 The foreground bridge owns admitted invocation trees, presentation authority,

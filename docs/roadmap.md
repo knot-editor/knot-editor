@@ -30,7 +30,6 @@ point.
 
 The [version control plan](plans/vcs.md) comes first, in its milestone order:
 
-- D214 — VCS changes view.
 - D215 — VCS commit.
 - D216 — Git operations.
 
@@ -396,15 +395,8 @@ hold the analyses that support some items.
 The [version control plan](plans/vcs.md) holds the agreed architecture and the
 milestones these items belong to.
 
-- **D214 — VCS changes view** 🚧
-  - Depends on: none
-  - Description: There is no list of changed files. Add a changes view that
-    shows the provider's groups of changed files (for Git: staged, unstaged,
-    untracked) with the actions the provider defines, and opens a file's
-    changes in the diff view. See [the plan](plans/d214-vcs-changes-view.md).
-
 - **D215 — VCS commit** 🚧
-  - Depends on: D214
+  - Depends on: none
   - Description: Committing needs a terminal. Add the commit UI, a message
     editor with options the provider supplies (for Git: amend, sign-off), and
     commit through the provider; build the UI primitives it needs as extension
@@ -412,7 +404,7 @@ milestones these items belong to.
 
 - **D216 — Git operations** 🚧
   - Depends on: D215
-  - Description: Staging, branches, push and pull, stash, and other
+  - Description: Staging hunks, branches, push and pull, stash, and other
     Git-specific workflows stay outside the shared provider contract. Build
     them in `@knot/git` as the plan's last milestone. Let backends add their
     own actions to the hunk popup through the contract, starting with

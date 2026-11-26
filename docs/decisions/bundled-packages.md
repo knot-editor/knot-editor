@@ -218,8 +218,8 @@ References: [version control](../architecture/version-control.md) and
 ## Version control status
 
 File status is measured against the baseline, HEAD for Git, rather than the
-index, so it agrees with the gutter; the index and worktree split belongs to
-the changes view groups of D214 and to staging in D216. It reflects files on
+index, so it agrees with the gutter; the index and worktree split lives in the
+[changes view](#version-control-changes-view) groups. It reflects files on
 disk only, as in VS Code, since unsaved edits already show in the gutter.
 
 A backend serves `status` as a snapshot of the changed files and `@knot/vcs`
@@ -238,6 +238,33 @@ on clones of two repositories of about 15,000 files, and about 0.4 s with
 60,000 unignored untracked files.
 
 References: [version control](../architecture/version-control.md#file-status).
+
+## Version control changes view
+
+Groups travel in the `status` answer beside the HEAD-relative `files`, rather
+than through a second method: one `git` call per refresh and one coalesced pull
+keep the groups and the decorations from disagreeing, and the existing `changed`
+and `statusChanged` triggers apply unchanged.
+
+A backend declares its actions as references to its own commands, run with
+`{ repository, group, path }`, rather than as callbacks or a fixed set of Stage
+and Unstage verbs: no callbacks cross a contract, and the backend decides what an
+action means and asks for its own confirmation. Actions take a file, folder, or
+group pathspec, not a selection of several rows, since multi-select is a
+roadmap item. Git's actions act on the files the group lists below the path, so
+a folder in Unstaged never stages or discards files of another group.
+
+Copy Path, Copy Relative Path, Copy File Name, and Reveal are native commands
+that resolve a target from `{ uri }`, a focused tree's selected row, or the
+focused editor, rather than commands the explorer exports: the changes view and
+tabs would otherwise depend on the explorer package, or each repeat the four
+commands.
+
+Stage and Unstage are hover buttons, as in VS Code; Zed-style row checkboxes
+would need a tree row checkbox and may replace them after use.
+
+References: [version control](../architecture/version-control.md#changes-view)
+and [file commands](../architecture/commands.md#file-commands).
 
 ## Hunk popup
 
@@ -261,7 +288,7 @@ References: [version control](../architecture/version-control.md#hunk-popup).
 Git's baseline is HEAD, as in IntelliJ, read with `git cat-file --filters` so
 the text compares cleanly with the buffer after line-ending and other smudge
 filters. The index is not the baseline: it would make a staged edit disappear
-from the gutter, and staging belongs to the Git-specific work of D216. A
+from the gutter, and the index shows in the changes view's groups instead. A
 repository's root is derived from URIs, not Git's absolute path, because a
 symlinked directory would then no longer match document URIs and window roots.
 

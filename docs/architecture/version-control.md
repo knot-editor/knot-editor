@@ -7,8 +7,8 @@ records rationale ([backends](../decisions/bundled-packages.md#version-control-b
 are described in [packages](../extension-api/packages.md#contracts-knot-defines).
 
 Version control is two bundled packages in the `knot-ext-vcs` crate. `@knot/vcs`
-is backend-agnostic and owns the change gutter, navigation, file status, and the
-current ref; a backend such as `@knot/git` only answers questions about
+is backend-agnostic and owns the change gutter, navigation, file status, the
+current ref, and the changes view; a backend such as `@knot/git` only answers questions about
 repositories. Several backends can be
 active at once.
 
@@ -70,8 +70,8 @@ the document closes, rather than following a hunk that may have moved.
 `@knot/vcs` keeps the set of *known repositories*: every backend's repositories
 covering every window's root, plus those found for followed documents outside
 any root. The set is rebuilt when repositories are found again. For each, it
-pulls the backend's `status`, a snapshot of the files that differ from the
-baseline; a file not listed is unchanged and ignored files are never listed. A
+pulls the backend's `status`, whose `files` are a snapshot of the files that
+differ from the baseline (its `groups` feed the [changes view](#changes-view)); a file not listed is unchanged and ignored files are never listed. A
 repository that leaves the set loses its decorations. Where repositories nest, a
 file belongs to the deepest one, so an outer repository's entries inside a
 nested one are dropped.
@@ -90,6 +90,49 @@ Status reflects files on disk only; unsaved edits show in the gutter. Pulls are
 coalesced per repository: one in flight and at most one more queued. A backend
 reports `changed` when baselines and status may differ, and `statusChanged`
 when only the working tree did, which pulls status alone.
+
+## Changes view
+
+The `vcs.changes` tree view, titled Changes, sits at `leftTop` after the
+Explorer. It covers the known repositories that cover the window's roots. One
+repository shows its groups at the top level; several show each repository as an
+expanded row named after its root. A window with none shows a "No repository"
+row. Each new status snapshot invalidates the view, and row IDs (repository,
+group, path) are stable, so selection and expansion survive.
+
+The backend's `status` answer is `{ files, groups }`. `groups` are ordered
+`{ id, label, files, actions }`, with `files` as file URIs; a file can be in
+several groups, and order and membership are the backend's. The view lists only
+non-empty groups, with the file count as status text. In tree layout, files sit
+in folder rows shaped like the explorer's, expanded by default; in list layout, a
+file's directory below the repository is its detail text. The header button
+toggles `vcs.changes.layout` (`tree` or `list`). File rows carry `resource`, so
+they drag into the editor and take the [status decorations](#file-status); the
+view sets no status of its own. An untracked folder that Git lists as one entry is
+a row with no children.
+
+An action is `{ label, icon?, command, on, menuOnly?, showOnHover? }`: `command`
+is one of the backend's own commands and `on` lists the rows it appears on
+(`group`, `folder`, `file`). The view runs it with `{ repository, group, path }`,
+where `path` is the file, the folder, or the repository root for a header. The
+backend decides what it means and asks for any confirmation itself. A row's menu
+lists the backend's actions, then Show Diff (files) and Open File, then the
+[native file commands](commands.md#file-commands).
+
+Double-click or Enter on a file runs `vcs.showFileChanges`, which asks the
+backend's `compare({ repository, group, file })` for the sides of that file's diff
+in that group, an `original` snapshot and a `modified` side that is either
+`"document"` (the working file, editable) or a snapshot, and opens them through
+the `diff` contract; `null` means the file has no diff there. Each file and group
+keeps at most one diff, and a second request closes the open one and opens a new
+tab. When the repository's status is pulled again, snapshot sides are replaced
+and the tab closes once `compare` returns null. A single click only selects.
+
+`vcs.rollbackFile` (Rollback File) works from the palette on the focused editor's
+file. It confirms, saying that unsaved edits will be lost when the document is
+dirty, calls the backend's `rollback({ repository, path })`, which restores the
+path to its baseline on disk, and reloads the document from disk with no Reload or
+Keep prompt after it.
 
 ## Current ref
 
@@ -180,6 +223,25 @@ not register.
   index and then removed from disk is not listed. Untracked files are listed one
   by one until 2,000 are seen; past that the listing is cut short and each
   untracked folder is one entry.
+- **Groups** come from the same `porcelain=v2` output, one `git` call per
+  refresh: Staged (index column set), Unstaged (worktree column set), Conflicts
+  (`u` entries, listed only when there are any), and Untracked (`?` entries). A
+  staged file edited again is in Staged and in Unstaged. `compare` reads sides with
+  `git cat-file --filters`: HEAD and the index for Staged, the index and the
+  working file for Unstaged, HEAD and the working file for Conflicts, and empty
+  and the working file for Untracked. A staged rename's original is the old path
+  in HEAD, a deleted file's modified side is empty, and a binary file or a folder
+  has no comparison.
+- **Actions** are commands `@knot/git` registers outside the palette, each one
+  `git` call over literal pathspecs: Stage (`git add`) on Unstaged, Conflicts, and
+  Untracked; Unstage (`git restore --staged`) on Staged; Discard (`git restore`,
+  or deleting untracked files) on Unstaged and Untracked, after a confirmation;
+  and Rollback (`git restore --source=HEAD --staged --worktree`) on Staged and
+  Unstaged, menu only and after a confirmation. Each acts only on the files its
+  group lists at or below the row's path, so a folder or header never touches
+  another group's files. A file that is added but not in HEAD is unstaged and left
+  on disk as untracked. The index and working tree watches report the change, so
+  an action needs no refresh of its own.
 - **Ref** is the branch name, or the short commit ID when HEAD is detached; an
   unborn branch keeps its name.
 
@@ -188,5 +250,7 @@ not register.
 `extensions/@knot/vcs/test` runs `@knot/vcs` over an in-memory host, including
 moves and saves, which the product harness cannot drive. `crates/knot-ext-vcs/tests`
 runs the packages in the launched product: `gutter.rs` over a fixed-baseline
-backend, and `git.rs`, `diff.rs`, `status.rs`, `decorations.rs`, and `ref.rs` over
-temporary repositories. A missing `git` is untested.
+backend, and `git.rs`, `diff.rs`, `status.rs`, `decorations.rs`, `ref.rs`, and
+`changes.rs` over temporary repositories. A test that reads `git status` must set
+`GIT_OPTIONAL_LOCKS=0`, or it takes the index lock and races the extension's
+writes. A missing `git` is untested.

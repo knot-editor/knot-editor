@@ -184,6 +184,9 @@ touches.
   against the baseline, not the index; disk only; a snapshot painted by
   `@knot/vcs`, which sets folder colors itself; untracked files listed one by
   one up to a limit.
+- [Version control changes view](decisions/bundled-packages.md#version-control-changes-view):
+  groups in the status answer, backend actions as command references run on a
+  file, folder, or group, native file commands rather than explorer-owned ones.
 - [Hunk popup](decisions/bundled-packages.md#hunk-popup): the baseline's lines
   only, toolbar-only for an insertion, anchored to the hunk; "hunk" names
   everywhere.

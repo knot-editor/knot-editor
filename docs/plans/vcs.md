@@ -1,6 +1,6 @@
 # Version control
 
-Status: 🚧 in progress; milestone 1, D213, D220, and D229 are done. Replaces D126 from the [roadmap](../roadmap.md)
+Status: 🚧 in progress; milestone 1, D213, D214, D220, and D229 are done. Replaces D126 from the [roadmap](../roadmap.md)
 with D209–D216, D220, D221, and D229, and sequences D087, D199, and D197 into it.
 
 ## Goal
@@ -85,14 +85,15 @@ gutter and change navigation. See [version control](../architecture/version-cont
 
 ### 4. Changes and commit
 
-- 🚧 **D214 — VCS changes view.** [Plan](d214-vcs-changes-view.md). Provider-defined groups of changed files with
-  their actions. Depends on D213, D197.
+- ✅ **D214 — VCS changes view.** Provider-defined groups of changed files with
+  their actions, and the native file commands. See
+  [the changes view](../architecture/version-control.md#changes-view).
 - **D215 — VCS commit.** The commit UI and committing through the provider,
   with provider-supplied options. Depends on D214.
 
 ### 5. Git operations
 
-- **D216 — Git operations.** Staging, branches, push and pull, stash, and
+- **D216 — Git operations.** Staging hunks, branches, push and pull, stash, and
   other Git-specific workflows outside the shared contract, and backend
   actions in the hunk popup, such as staging a hunk. Depends on D215.
 
