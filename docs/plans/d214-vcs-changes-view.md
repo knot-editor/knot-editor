@@ -166,34 +166,15 @@ its four groups with their actions declared and `compare` for each group; its
 and `git.rollback` are not registered until checkpoint 4. A binary file or a
 folder has no comparison. Documentation is in checkpoint 5.
 
-### 3. The Changes view
+### 3. The Changes view ✅
 
-Deliverables: the `vcs.changes` tree with groups, the tree and list layouts and
-their toggle, repository rows when there are several, the "No repository" row,
-refresh on each snapshot, `vcs.showFileChanges` with double-click, Enter, and
-Show Diff, Open File, and the native file commands in the row menus. Backend
-actions render on their rows but may do nothing yet.
-
-Validation: `@knot/vcs` unit tests for building rows from groups in both
-layouts, row IDs, and the arguments sent to actions; product tests over a
-temporary repository for the view's rows, a refresh after a file changes on
-disk, opening a staged and an unstaged diff, and the one-diff rule; `just
-check`.
-
-Review gate: in the app, through `try.*` commands, the layout, the row
-presentation, and whether hover buttons read well enough or checkboxes are
-needed.
-
-**Implementation context.** Register the view like
-`extensions/@knot/explorer/src/tree.ts` (`workbench.registerView`, a `tree`
-provider, `placement`, frame `actions`), and reuse its row shape from
-`entryItem` in `extensions/@knot/explorer/src/rows.ts`. The repositories per
-window come from `extensions/@knot/vcs/src/repositories.ts`. Opening a diff
-mirrors `showChanges` in `extensions/@knot/vcs/src/extension.ts` and the
-contract in `extensions/@knot/vcs/src/diff.d.ts`. The setting is declared like
-the explorer's in `extensions/@knot/explorer/src/settings.ts`. Tree item fields
-(`statusText`, `detail`, `resource`, and actions' `menuOnly` and `showOnHover`) are described in
-[extension trees](../architecture/semantic-ui.md#extension-trees).
+Done: `vcs.changes` lists each repository's non-empty groups in tree or list
+layout (`vcs.changes.layout`, toggled from the header), refreshes on each
+snapshot, and opens a file's diff through `vcs.showFileChanges` (double-click,
+Enter, or Show Diff), at most one per file and group, followed on refresh. Rows
+render the backend's actions, Show Diff, Open File, and the native file
+commands; the Git action commands are registered in checkpoint 4. The review
+kept the hover buttons. Documentation is in checkpoint 5.
 
 ### 4. Actions and rollback
 
