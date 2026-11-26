@@ -35,6 +35,13 @@ the selection (`EditorState::place_for_context_menu`), and the window then
 opens the `content` menu ([context menus](commands.md#context-menus)); the
 gutter has none.
 
+Holding the link modifier (Command on macOS, Control elsewhere) over the text
+underlines the http(s) URL under the pointer, and a click with it opens the URL
+in the platform browser instead of placing the caret. `knot-model`'s `links`
+finds URLs in one line of text, computed for the hovered line only, and the
+terminal uses the same scan over its frame; the view's opener is replaceable so
+tests observe it.
+
 A view keeps no copy of the text. It reads the lines it paints, measures, or
 edits from the model, and converts positions, including the platform's
 document-wide UTF-16 offsets, through the buffer's line lookups, so editing cost

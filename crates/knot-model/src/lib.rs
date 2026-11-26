@@ -32,6 +32,7 @@ pub mod languages;
 #[cfg(any(test, feature = "test-support"))]
 pub mod large_documents;
 pub mod launch;
+pub mod links;
 pub mod matching;
 pub mod menus;
 pub mod notifications;

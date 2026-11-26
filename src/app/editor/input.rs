@@ -1,7 +1,9 @@
 //! Pointer gestures and platform text input, including IME composition.
 
 use super::gutter::GutterLane;
+use super::view::LinkHover;
 use super::*;
+use crate::app::link_open::link_modifier;
 
 impl EditorView {
     /// Mouse-down hit-tests the click onto a (line, byte_col) caret and moves
@@ -15,6 +17,15 @@ impl EditorView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if link_modifier(ev.modifiers)
+            && let Some(link) = self.link_at(ev.position, window, cx)
+        {
+            self.drag_anchor = None;
+            self.suppress_drag_selection = true;
+            (self.open_link)(&link.uri, cx);
+            cx.stop_propagation();
+            return;
+        }
         self.drag_anchor = None;
         self.model
             .update(cx, |model, _| model.break_history_group());
@@ -121,6 +132,47 @@ impl EditorView {
             .update(cx, |editor, cx| editor.select_from(anchor, (line, col), cx));
     }
 
+    /// The URL written under `position`, if it is over the text.
+    fn link_at(&self, position: Point<Pixels>, window: &Window, cx: &App) -> Option<LinkHover> {
+        if !self.text_bounds().contains(&position) {
+            return None;
+        }
+        let editor = self.editor.read(cx);
+        let row = (f32::from(position.y - self.text_bounds().origin.y) / self.metrics.line_height
+            + editor.scroll_top())
+        .floor()
+        .max(0.) as usize;
+        if editor.wrap().block_row(row).is_some() {
+            return None;
+        }
+        let (line, col) = self.hit_test(editor, position, window, cx);
+        let link = knot_model::links::link_at(&line_text(self.model.read(cx), line), col)?;
+        Some(LinkHover {
+            line,
+            range: link.range,
+            uri: link.uri,
+        })
+    }
+
+    /// Underlines the URL under the pointer while the link modifier is held.
+    pub(super) fn update_link_hover(
+        &mut self,
+        position: Point<Pixels>,
+        modifiers: Modifiers,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) {
+        let hover = if link_modifier(modifiers) {
+            self.link_at(position, window, cx)
+        } else {
+            None
+        };
+        if hover != self.link_hover {
+            self.link_hover = hover;
+            cx.notify();
+        }
+    }
+
     /// A right-click prepares the editor's context menu, which the window
     /// opens: the caret moves to the click unless it is inside the
     /// selection. The gutter has no menu.
@@ -163,6 +215,7 @@ impl EditorView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.update_link_hover(ev.position, ev.modifiers, window, cx);
         let hovered = self.bounds.contains(&ev.position)
             && f32::from(ev.position.x - self.bounds.origin.x) < self.gutter.width;
         if hovered != self.gutter_hovered {

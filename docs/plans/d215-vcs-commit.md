@@ -113,6 +113,8 @@ on the hovered line only, so nothing is precomputed.
 
 ### 1. Links in editors
 
+Status: implemented ✅; awaiting the review gate (`Try: links`).
+
 Deliverables: shared URL detection in `knot-model`, used by the terminal; Cmd
 hover underline and Cmd+click open in editors and text frames.
 

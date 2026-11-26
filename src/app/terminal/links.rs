@@ -2,6 +2,7 @@
 
 use std::sync::Mutex;
 
+use knot_model::links::{find_links, http_destination};
 use knot_terminal::{Cell, CellWidth, Point, RenderState, Terminal};
 
 use super::session::lock;
@@ -82,17 +83,6 @@ pub(crate) struct LinkGrid {
     cells: Vec<LinkCell>,
     wrapped: Vec<bool>,
     links: Vec<LinkTarget>,
-}
-
-pub(crate) fn http_destination(uri: &str) -> Option<String> {
-    if uri.chars().any(char::is_control) {
-        return None;
-    }
-    let url = url::Url::parse(uri).ok()?;
-    if !matches!(url.scheme(), "http" | "https") || url.host_str().is_none() {
-        return None;
-    }
-    Some(url.to_string())
 }
 
 impl LinkGrid {
@@ -178,65 +168,14 @@ impl LinkGrid {
         coordinates: &[(std::ops::Range<usize>, (usize, usize))],
         clipped: bool,
     ) {
-        let bytes = text.as_bytes();
-        for (start, _) in text.char_indices() {
-            let tail = &text[start..];
-            if !(tail
-                .get(..7)
-                .is_some_and(|s| s.eq_ignore_ascii_case("http://"))
-                || tail
-                    .get(..8)
-                    .is_some_and(|s| s.eq_ignore_ascii_case("https://")))
-            {
-                continue;
-            }
-            if start > 0
-                && text[..start]
-                    .chars()
-                    .next_back()
-                    .is_some_and(|c| c.is_alphanumeric() || c == '_')
-            {
-                continue;
-            }
-            let length = tail
-                .find(|c: char| {
-                    c.is_whitespace() || c.is_control() || matches!(c, '<' | '>' | '"' | '\'' | '`')
-                })
-                .unwrap_or(tail.len());
-            let mut end = start + length;
-            if clipped && end == text.len() {
-                continue;
-            }
-            loop {
-                if end <= start {
-                    break;
-                }
-                let last = bytes[end - 1] as char;
-                let unmatched = match last {
-                    ')' => Some(('(', ')')),
-                    ']' => Some(('[', ']')),
-                    '}' => Some(('{', '}')),
-                    _ => None,
-                }
-                .is_some_and(|(open, close)| {
-                    text[start..end].matches(close).count() > text[start..end].matches(open).count()
-                });
-                if ".,;:!?".contains(last) || unmatched {
-                    end -= 1;
-                } else {
-                    break;
-                }
-            }
-            let Some(uri) = http_destination(&text[start..end]) else {
-                continue;
-            };
+        for link in find_links(text, clipped) {
             let cells = coordinates
                 .iter()
-                .filter(|(range, _)| range.start < end && range.end > start)
+                .filter(|(range, _)| range.start < link.range.end && range.end > link.range.start)
                 .map(|(_, point)| *point)
                 .collect();
             self.links.push(LinkTarget {
-                uri,
+                uri: link.uri,
                 explicit: false,
                 cells,
             });
@@ -283,21 +222,13 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_explicit_scheme_blocks_detection_and_controls_are_rejected() {
+    fn unsupported_explicit_scheme_blocks_detection() {
         let grid = grid(
             80,
             3,
             b"\x1b]8;;file:///tmp/a\x1b\\https://label.test\x1b]8;;\x1b\\",
         );
         assert!(grid.links.is_empty());
-        for uri in [
-            "file:///tmp/a",
-            "javascript:alert(1)",
-            "https://test/\nfoo",
-            "https://",
-        ] {
-            assert!(http_destination(uri).is_none(), "{uri:?}");
-        }
     }
 
     #[test]
@@ -317,22 +248,6 @@ mod tests {
         assert!(link.contains(0, 1));
         assert!(link.contains(1, 1));
         assert!(grid.at(0, 0).is_none());
-    }
-
-    #[test]
-    fn trims_sentence_punctuation_and_unbalanced_delimiters() {
-        let grid = grid(
-            100,
-            3,
-            b"(https://test/a(b)). https://[::1]/x], HTTPS://test/end! wordhttps://ignored.test",
-        );
-        assert_eq!(
-            grid.links
-                .iter()
-                .map(|link| link.uri.as_str())
-                .collect::<Vec<_>>(),
-            ["https://test/a(b)", "https://[::1]/x", "https://test/end"]
-        );
     }
 
     #[test]

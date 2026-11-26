@@ -7,12 +7,12 @@ use knot_terminal::{
     Pointer as TerminalPointer, RenderState, Rgb, Scroll, TerminalSize, Underline,
 };
 use std::ops::Range;
-use std::rc::Rc;
 
 use crate::app::keys::Keystroke;
 
 use crate::app::{
     TERMINAL_KEY_CONTEXT,
+    link_open::{LinkOpener, browser_opener, link_modifier},
     settings::{self, ApplicationSettings, SettingsScope},
     terminal::colors::{TerminalPalette, dim},
     terminal::input::{InputModes, MouseTracking, terminal_key_bytes},
@@ -44,8 +44,6 @@ fn font_size(cx: &App) -> f32 {
 fn font_settings(cx: &App) -> knot_model::typography::FontSettings {
     settings::font_settings(&terminal_scope(), cx)
 }
-
-type LinkOpener = Rc<dyn Fn(&str, &mut App)>;
 
 /// Native terminal presentation attached to one stable session.
 pub(crate) struct TerminalView {
@@ -84,17 +82,6 @@ struct ArmedLink {
     bounds: Bounds<Pixels>,
     layout: TerminalLayout,
     position: Point<Pixels>,
-}
-
-/// Command-click on macOS and Control-click elsewhere open links; Shift
-/// selects instead.
-fn link_modifier(modifiers: Modifiers) -> bool {
-    !modifiers.shift
-        && if cfg!(target_os = "macos") {
-            modifiers.platform
-        } else {
-            modifiers.control
-        }
 }
 
 /// The armed link moves at most this far before the gesture is a drag.
@@ -202,7 +189,7 @@ impl TerminalView {
             links: None,
             hovered_link: None,
             armed_link: None,
-            open_link: Rc::new(|uri, cx| cx.open_url(uri)),
+            open_link: browser_opener(),
         }
     }
 

@@ -3,6 +3,14 @@
 
 use super::*;
 
+/// A URL in a document line, as the byte range of the line that spells it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct LinkHover {
+    pub(super) line: usize,
+    pub(super) range: Range<usize>,
+    pub(super) uri: String,
+}
+
 pub struct EditorView {
     pub(super) element_id: usize,
     pub(super) rendering: EditorRenderingOptions,
@@ -41,6 +49,10 @@ pub struct EditorView {
     /// An action-region press owns the gesture through mouse-up; pointer
     /// jitter must not turn it into a text drag from the old caret.
     pub(super) suppress_drag_selection: bool,
+    /// The URL under the pointer while the link modifier is held.
+    pub(super) link_hover: Option<LinkHover>,
+    /// What opens a URL; tests replace it.
+    pub(super) open_link: crate::app::link_open::LinkOpener,
     pub(super) caret_blink: CaretBlink,
     pub(super) scroll_fade: crate::app::scrollbar::ScrollFade,
     pub(super) focus: FocusHandle,
@@ -142,6 +154,8 @@ impl EditorView {
             bounds: Bounds::default(),
             drag_anchor: None,
             suppress_drag_selection: false,
+            link_hover: None,
+            open_link: crate::app::link_open::browser_opener(),
             caret_blink: CaretBlink::default(),
             scroll_fade: Default::default(),
             focus: cx.focus_handle(),

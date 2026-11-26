@@ -1301,3 +1301,83 @@ fn reset_state_starts_over_on_the_same_buffer(cx: &mut TestAppContext) {
 fn test_font() -> gpui::Font {
     crate::app::typography::font(&Default::default())
 }
+
+fn link_modifiers() -> Modifiers {
+    Modifiers {
+        platform: cfg!(target_os = "macos"),
+        control: !cfg!(target_os = "macos"),
+        ..Modifiers::default()
+    }
+}
+
+#[gpui::test]
+fn link_modifier_click_opens_a_url_and_a_plain_click_places_the_caret(cx: &mut TestAppContext) {
+    let model = cx.new(|_| Buffer::new(BufferModel::from_text("see https://example.test/a now")));
+    let (editor, cx) = cx.add_window_view(|_, cx| EditorView::new(model, cx));
+    cx.refresh().unwrap();
+    let opened = std::rc::Rc::new(std::cell::RefCell::new(Vec::<String>::new()));
+    cx.update(|window, cx| {
+        editor.update(cx, |view, cx| {
+            let sink = opened.clone();
+            view.open_link = std::rc::Rc::new(move |uri, _| sink.borrow_mut().push(uri.to_owned()));
+            let position = |view: &mut EditorView, col, cx: &mut gpui::Context<EditorView>| {
+                point(
+                    view.text_bounds().origin.x + view.caret_x_at(col, window, cx),
+                    view.bounds.origin.y + px(5.),
+                )
+            };
+            let on_url = position(view, 10, cx);
+            let off_url = position(view, 1, cx);
+            let click = |view: &mut EditorView,
+                         position,
+                         modifiers,
+                         window: &mut gpui::Window,
+                         cx: &mut gpui::Context<EditorView>| {
+                view.on_mouse_down(
+                    &MouseDownEvent {
+                        position,
+                        modifiers,
+                        button: MouseButton::Left,
+                        click_count: 1,
+                        first_mouse: false,
+                    },
+                    window,
+                    cx,
+                );
+            };
+            view.on_mouse_move(
+                &MouseMoveEvent {
+                    position: on_url,
+                    modifiers: link_modifiers(),
+                    pressed_button: None,
+                },
+                window,
+                cx,
+            );
+            assert_eq!(
+                view.link_hover.as_ref().map(|hover| hover.range.clone()),
+                Some(4..26)
+            );
+            view.on_mouse_move(
+                &MouseMoveEvent {
+                    position: on_url,
+                    modifiers: Modifiers::default(),
+                    pressed_button: None,
+                },
+                window,
+                cx,
+            );
+            assert!(view.link_hover.is_none());
+
+            click(view, on_url, Modifiers::default(), window, cx);
+            assert!(opened.borrow().is_empty());
+            assert_eq!(view.editor.read(cx).caret(), (0, 10));
+            click(view, off_url, link_modifiers(), window, cx);
+            assert!(opened.borrow().is_empty());
+            assert_eq!(view.editor.read(cx).caret(), (0, 1));
+            click(view, on_url, link_modifiers(), window, cx);
+            assert_eq!(*opened.borrow(), ["https://example.test/a"]);
+            assert_eq!(view.editor.read(cx).caret(), (0, 1));
+        });
+    });
+}

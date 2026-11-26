@@ -46,6 +46,9 @@ impl Render for EditorView {
                 this.editor
                     .update(cx, |editor, cx| editor.close_popovers_for_click(cx));
             }))
+            .on_modifiers_changed(cx.listener(|this, ev: &ModifiersChangedEvent, window, cx| {
+                this.update_link_hover(window.mouse_position(), ev.modifiers, window, cx)
+            }))
             .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
             .on_mouse_down(MouseButton::Right, cx.listener(Self::on_right_mouse_down))
             // Mouse-move extends the selection while the left button is held
@@ -262,6 +265,7 @@ impl Element for EditorElement {
             caret,
             selection,
             marked,
+            link,
             brackets,
             fills,
             gutter,
@@ -398,6 +402,12 @@ impl Element for EditorElement {
                 caret,
                 editor.selection_range(),
                 marked,
+                view.link_hover.as_ref().map(|hover| {
+                    (
+                        (hover.line, hover.range.start),
+                        (hover.line, hover.range.end),
+                    )
+                }),
                 brackets,
                 fills,
                 gutter,
@@ -674,6 +684,23 @@ impl Element for EditorElement {
                 }
             }
 
+            // The URL under the pointer while the link modifier is held.
+            if let Some((start, end)) = link {
+                let underline_h = px(1.);
+                for entry in &shaped {
+                    if let Some((lo, hi)) = span(entry, start, end) {
+                        let rect = Bounds {
+                            origin: point(
+                                bounds.origin.x + lo,
+                                top(entry.0.row.index) + line_height - underline_h,
+                            ),
+                            size: size(hi - lo, underline_h),
+                        };
+                        window.paint_quad(fill(rect, colors.caret));
+                    }
+                }
+            }
+
             // Caret, painted only when the editor holds window focus AND
             // there is no active selection (macOS hides the caret while a
             // selection is drag-held). `caret` is `None` during the hidden
@@ -857,6 +884,7 @@ pub(super) type EditorPaintState = (
     Vec<PaintRow>,
     usize,
     Option<(usize, usize, CaretShape)>,
+    Option<((usize, usize), (usize, usize))>,
     Option<((usize, usize), (usize, usize))>,
     Option<((usize, usize), (usize, usize))>,
     Vec<(usize, usize, usize)>,

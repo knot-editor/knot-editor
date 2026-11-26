@@ -156,6 +156,10 @@ unless the registration passes `gutter: true`; its line numbers then follow
 numbers, and `editor.folding` set to `false` the fold lane; with both off, only
 the marker lane remains.
 
+In any editor, text frames included, holding Command (Control off macOS)
+underlines the http(s) URL under the pointer and clicking opens it in the
+browser; without the modifier a click places the caret.
+
 ## Open a composite view
 
 A composite view is a center tab whose layout of child views you describe and

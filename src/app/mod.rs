@@ -36,6 +36,7 @@ mod product;
 mod shell_command;
 #[cfg(any(test, feature = "test-support"))]
 pub(crate) use product::driver;
+mod link_open;
 mod menus;
 mod notifications;
 mod record_store;
