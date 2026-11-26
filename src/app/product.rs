@@ -544,6 +544,25 @@ pub(crate) fn run_toolbar_command(
     });
 }
 
+/// Run the command of a clicked control or toolbar button of the layout tool
+/// window `layout`, in the window it was clicked in.
+pub(crate) fn run_layout_command(
+    native_window: AnyWindowHandle,
+    layout: Entity<super::layout_view::LayoutView>,
+    command: knot_protocol::Command,
+    cx: &mut App,
+) {
+    let Some(window) = cx
+        .try_global::<ApplicationWindows>()
+        .and_then(|windows| windows.in_native_window(native_window))
+    else {
+        return;
+    };
+    window.update(cx, |window, cx| {
+        window.run_layout_command(&layout, command, cx)
+    });
+}
+
 /// Run the command of a clicked toolbar button of the popover whose content
 /// view is `popover`, in the window it was clicked in.
 pub(crate) fn run_popover_command(
@@ -788,11 +807,20 @@ impl ContributedView {
         self.content.instance_id(cx)
     }
 
+    #[cfg(test)]
+    fn layout(&self) -> &Entity<super::layout_view::LayoutView> {
+        match &self.content {
+            super::workbench::ExtensionView::Layout(view, _) => view,
+            _ => panic!("contributed view is not a layout"),
+        }
+    }
+
     #[cfg(any(test, feature = "test-support"))]
     fn tree(&self) -> &Entity<super::tree_view::TreeView> {
         match &self.content {
             super::workbench::ExtensionView::Tree(view) => view,
-            super::workbench::ExtensionView::Text(_) => {
+            super::workbench::ExtensionView::Text(_)
+            | super::workbench::ExtensionView::Layout(..) => {
                 panic!("contributed view is not a tree")
             }
         }
@@ -1837,6 +1865,29 @@ impl KnotWindow {
                 .find(|tab| workbench.composite_view(tab) == Some(composite))?;
             Some((pane.id(), tab, workbench.focused_leaf(tab, cx)))
         });
+        let Some((pane, tab, leaf)) = found else {
+            return;
+        };
+        let target = self.tab_command_target(pane, tab, leaf, cx);
+        self.dispatch_command(command, target, cx);
+    }
+
+    /// Run `command` with the layout tool window `layout` as its target and
+    /// the view focused there as its focus, wherever focus is.
+    fn run_layout_command(
+        &mut self,
+        layout: &Entity<super::layout_view::LayoutView>,
+        command: knot_protocol::Command,
+        cx: &mut Context<Self>,
+    ) {
+        let workbench = self.workbench.read(cx);
+        let found = workbench
+            .tool_presenting(layout.entity_id())
+            .and_then(|tool| workbench.tool_tab(tool))
+            .and_then(|(pane, tab)| {
+                let tab = workbench.tab(pane, tab)?;
+                Some((pane, tab, workbench.focused_leaf(tab, cx)))
+            });
         let Some((pane, tab, leaf)) = found else {
             return;
         };

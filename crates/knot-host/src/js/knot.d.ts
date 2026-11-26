@@ -2468,11 +2468,13 @@ declare module "knot" {
   }
   /**
    * Native content for one contributed view. A tree is populated through its
-   * provider; a text frame starts empty and is replaced with setText.
+   * provider; a text frame starts empty and is replaced with setText; a
+   * layout tool window starts empty and is replaced with update.
    */
   export type ViewContent =
     | Readonly<{ kind: "tree"; provider: TreeDataProvider }>
-    | Readonly<{ kind: "text" }>;
+    | Readonly<{ kind: "text" }>
+    | Readonly<{ kind: "layout" }>;
   /** One lifecycle-owned native view definition. */
   export interface ViewContribution {
     /** Stable, unique, namespaced identity; `knot.` is reserved. */
@@ -2594,6 +2596,34 @@ declare module "knot" {
      * without a live instance), OwnershipDisposed, or Cancelled on teardown.
      */
     setText(text: string, window?: WindowTarget): Promise<void>;
+    /**
+     * Replace what a layout tool window shows: its `layout`, a row or column
+     * as in a composite view's, and the `toolbar` of buttons above it, each
+     * when given. A keyed member that shows the same thing keeps its view,
+     * with its handle, state, and focus; the same rules as a composite's
+     * `update`. Embedded views of this package that the layout names are
+     * hosted by this window's tool window, and a click on a control or
+     * toolbar button runs its command with the tool window as the target and
+     * the view focused there as its focus. The tool window is empty until
+     * the first update.
+     *
+     * Without `window`, every live window changes and the last such
+     * `layout` and `toolbar` are retained for windows created later;
+     * an update to one window is not retained. Other content kinds reject
+     * with ContentKindMismatch.
+     * @throws TypeError for invalid fields or layout; HostError with
+     * ContentKindMismatch, ViewNotFound (explicit window without a live
+     * instance), BufferClosed, InvalidUri, DocumentNotFound, InvalidTarget for
+     * a view whose registration ended, OwnershipDisposed, or Cancelled. A
+     * failed update changes nothing.
+     */
+    update(
+      changes: {
+        readonly layout?: CompositeGroup;
+        readonly toolbar?: readonly CompositeButton[];
+      },
+      options?: { readonly window?: WindowTarget },
+    ): Promise<void>;
   }
   /** One selectable row offered to a picker; fuzzy-matched locally by label,
    * then description. */

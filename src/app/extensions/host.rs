@@ -520,6 +520,85 @@ pub(crate) fn attach_view_instance(
 }
 
 impl ProductExtensionHost {
+    /// Replace the layout and toolbar of a layout view in the window the
+    /// arguments name, or in every window, and remember them for windows
+    /// created later when they name none.
+    pub(crate) fn update_layout_view(
+        &mut self,
+        request: &knot_protocol::RequestContext,
+        arguments: handlers::UpdateViewArguments,
+        cx: &mut Context<Self>,
+    ) -> Result<(), handlers::LayoutViewError> {
+        let handlers::UpdateViewArguments {
+            registration,
+            layout,
+            toolbar,
+            window,
+        } = arguments;
+        let kind = self.semantics.owned_layout_kind(registration, request)?;
+        let owner = ExtensionKey::new(request.extension, request.lifecycle);
+        let views = self.semantics.live_layout_views(&kind, window.as_deref());
+        if window.is_some() && views.is_empty() {
+            return Err(crate::app::extensions::semantics::SemanticError::ViewNotFound.into());
+        }
+        // A layout that cannot be built changes nothing, whatever windows
+        // are open.
+        if let Some(layout) = &layout {
+            self.composite_spec(owner, layout.clone(), &*cx)?;
+        }
+        for (window, view) in views {
+            self.push_layout(owner, &window, &view, layout.as_ref(), toolbar.clone(), cx)?;
+        }
+        if window.is_none() {
+            self.semantics.retain_layout(registration, layout, toolbar);
+        }
+        Ok(())
+    }
+
+    /// Show a layout view in `window` what the package last set in every
+    /// window.
+    fn apply_retained_layout(&mut self, kind: &str, window: &str, cx: &mut Context<Self>) {
+        let Some((owner, retained)) = self.semantics.retained_layout(kind) else {
+            return;
+        };
+        if retained.layout.is_none() && retained.toolbar.is_none() {
+            return;
+        }
+        for (window, view) in self.semantics.live_layout_views(kind, Some(window)) {
+            let _ = self.push_layout(
+                owner,
+                &window,
+                &view,
+                retained.layout.as_ref(),
+                retained.toolbar.clone(),
+                cx,
+            );
+        }
+    }
+
+    /// Replace what one layout view shows, and bind the contributed views its
+    /// new layout added.
+    fn push_layout(
+        &mut self,
+        owner: ExtensionKey,
+        window: &str,
+        view: &Entity<crate::app::layout_view::LayoutView>,
+        layout: Option<&composites::LayoutWire>,
+        toolbar: Option<Vec<crate::app::view_layout::ToolbarButton>>,
+        cx: &mut Context<Self>,
+    ) -> Result<(), handlers::LayoutViewError> {
+        let spec = layout
+            .map(|layout| self.composite_spec(owner, layout.clone(), &*cx))
+            .transpose()?;
+        let attached =
+            crate::app::product::operations::update_layout_view(window, view, spec, toolbar, cx);
+        for hosted in attached {
+            let hosted_kind = hosted.kind(cx);
+            self.attach_view(hosted_kind, window.to_owned(), hosted, cx);
+        }
+        Ok(())
+    }
+
     /// Attach a native view instance to the definition `stable_id` names.
     pub(crate) fn attach_view(
         &mut self,
@@ -551,6 +630,11 @@ impl ProductExtensionHost {
                     .add_text_view(stable_id, window_id, text.clone(), cx);
                 true
             }
+            ExtensionView::Layout(layout, _) => {
+                self.semantics
+                    .add_layout_view(stable_id, window_id, layout.clone());
+                true
+            }
         };
         if !attached {
             self.commands.catalog().borrow_mut().remove_view(view_id);
@@ -558,6 +642,15 @@ impl ProductExtensionHost {
         }
         true
     }
+}
+
+/// Give a layout view attached to a window what the package last set in every
+/// window.
+pub(crate) fn apply_retained_layout(kind: String, window: String, cx: &mut App) {
+    let Some(host) = entity(cx) else { return };
+    host.update(cx, |host, cx| {
+        host.apply_retained_layout(&kind, &window, cx)
+    });
 }
 
 pub(crate) fn detach_view_instance(view: ViewId, cx: &mut App) {
@@ -2730,7 +2823,9 @@ impl ProductExtensionHost {
         let view = self.contextual_extension_view(request, explicit, cx)?;
         match view {
             ExtensionView::Text(_) => Ok(view.selected_text(cx)),
-            ExtensionView::Tree(_) => Err(handlers::ContextError::UnsupportedOperation),
+            ExtensionView::Tree(_) | ExtensionView::Layout(..) => {
+                Err(handlers::ContextError::UnsupportedOperation)
+            }
         }
     }
 
@@ -2744,7 +2839,9 @@ impl ProductExtensionHost {
         let view = self.contextual_extension_view(request, explicit, cx)?;
         match view {
             ExtensionView::Tree(_) => Ok(view.selected_tree_item(cx)),
-            ExtensionView::Text(_) => Err(handlers::ContextError::UnsupportedOperation),
+            ExtensionView::Text(_) | ExtensionView::Layout(..) => {
+                Err(handlers::ContextError::UnsupportedOperation)
+            }
         }
     }
 

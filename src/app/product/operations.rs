@@ -421,6 +421,24 @@ pub(crate) fn update_composite(
     Ok((id, hosted))
 }
 
+/// Replace the layout and toolbar of the layout tool window `view` of the
+/// window `window`, each when given. Returns the contributed views the new
+/// layout added.
+pub(crate) fn update_layout_view(
+    window: &str,
+    view: &Entity<crate::app::layout_view::LayoutView>,
+    layout: Option<crate::app::view_layout::GroupSpec>,
+    toolbar: Option<Vec<crate::app::view_layout::ToolbarButton>>,
+    cx: &mut App,
+) -> Vec<crate::app::workbench::ExtensionView> {
+    let Some(window) = super::find_window(window, cx) else {
+        return Vec::new();
+    };
+    window.update(cx, |window, cx| {
+        window.update_layout_view(view, layout, toolbar, cx)
+    })
+}
+
 /// Close the tab `presentation` names with the usual prompts, for an owner
 /// that is gone.
 pub(crate) fn close_presentation_unattended(presentation: PresentationTarget, cx: &mut App) {

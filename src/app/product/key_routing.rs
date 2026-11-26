@@ -260,7 +260,10 @@ impl KnotWindow {
                     }
                     input.update(cx, |input, cx| input.key_down(keystroke, cx))
                 }
-                Some(CommandView::Extension(ExtensionView::Text(_))) | None => false,
+                Some(CommandView::Extension(
+                    ExtensionView::Text(_) | ExtensionView::Layout(..),
+                ))
+                | None => false,
             },
             Focus::Palette => {
                 let Some(picker) = self

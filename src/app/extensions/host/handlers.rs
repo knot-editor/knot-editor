@@ -1566,6 +1566,7 @@ impl HostArguments for TreeArguments {
         let content = match reader.text(7, "view content kind must be text")?.as_str() {
             "tree" => ViewContentKind::Tree,
             "text" => ViewContentKind::Text,
+            "layout" => ViewContentKind::Layout,
             "container" => ViewContentKind::Container,
             _ => return Err(DecodeError::Type("invalid view content kind")),
         };
@@ -2942,6 +2943,70 @@ pub(crate) async fn replace_view_text(
 ) -> Result<(), SemanticError> {
     let request = context.request;
     context.foreground(|host, cx| host.semantics.replace_view_text(&request, arguments, cx))?
+}
+
+/// What `updateView` replaces in a layout view.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct UpdateViewArguments {
+    pub registration: TreeProviderRegistrationId,
+    pub layout: Option<super::composites::LayoutWire>,
+    pub toolbar: Option<Vec<crate::app::view_layout::ToolbarButton>>,
+    pub window: Option<String>,
+}
+impl HostArguments for UpdateViewArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self {
+            registration: TreeProviderRegistrationId::new(reader.integer(2)?),
+            layout: reader
+                .optional_text(3, "view layout must be text or null")?
+                .map(|json| decode_composite_layout(&json, false))
+                .transpose()?,
+            toolbar: reader
+                .optional_text(4, "view toolbar must be text or null")?
+                .map(|json| {
+                    serde_json::from_str(&json)
+                        .map_err(|_| DecodeError::Type("view toolbar is invalid"))
+                })
+                .transpose()?,
+            window: reader.optional_text(5, "window target must be text")?,
+        })
+    }
+    fn provider_mutation(&self) -> Option<ProviderIdentity> {
+        Some(ProviderIdentity::Tree(self.registration))
+    }
+}
+
+#[derive(Debug, HostError)]
+pub(crate) enum LayoutViewError {
+    #[error(transparent)]
+    Semantic(SemanticError),
+    #[error(transparent)]
+    Open(OpenError),
+}
+impl From<AccessError> for LayoutViewError {
+    fn from(error: AccessError) -> Self {
+        Self::Semantic(error.into())
+    }
+}
+impl From<SemanticError> for LayoutViewError {
+    fn from(error: SemanticError) -> Self {
+        Self::Semantic(error)
+    }
+}
+impl From<OpenError> for LayoutViewError {
+    fn from(error: OpenError) -> Self {
+        Self::Open(error)
+    }
+}
+
+/// Replace the layout and toolbar of a layout view in every window, or in one.
+#[host_operation("updateView")]
+pub(crate) async fn update_view(
+    context: HostContext,
+    arguments: UpdateViewArguments,
+) -> Result<(), LayoutViewError> {
+    let request = context.request;
+    context.foreground(|host, cx| host.update_layout_view(&request, arguments, cx))?
 }
 
 #[host_operation("invalidateView")]

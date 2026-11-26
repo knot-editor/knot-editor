@@ -214,7 +214,9 @@ await commands.register("frame.click", async ({ editor, buffer, arguments: args 
         cx.read(
             |cx| match &clicks.window.read(cx).contributed_views["frame.marks"].content {
                 ExtensionView::Text(view) => view.clone(),
-                ExtensionView::Tree(_) => panic!("frame.marks is a text frame"),
+                ExtensionView::Tree(_) | ExtensionView::Layout(..) => {
+                    panic!("frame.marks is a text frame")
+                }
             },
         );
     let (model, editor) = cx.read(|cx| {

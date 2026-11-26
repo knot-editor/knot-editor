@@ -352,6 +352,9 @@ impl KnotWindow {
                 ToolContent::Extension(crate::app::workbench::ExtensionView::Text(view)) => {
                     view.clone().into_any_element()
                 }
+                ToolContent::Extension(crate::app::workbench::ExtensionView::Layout(view, _)) => {
+                    view.clone().into_any_element()
+                }
             })
         });
         let active_tool_view = match pane.active_tab().surface_id() {

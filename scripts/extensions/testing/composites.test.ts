@@ -151,3 +151,32 @@ test("a layout holds embedded trees and text frames, and tabs of members", async
     TypeError,
   );
 });
+
+test("a layout view keeps what updates without a window set and rejects bad layouts", async () => {
+  const files = await workbench.registerView({
+    id: "example.files", title: "Files", embedded: true,
+    content: { kind: "tree", provider: { getChildren: () => [] } },
+  });
+  const tool = await workbench.registerView({ id: "example.tool", title: "Tool", content: { kind: "layout" } });
+  const plain = await workbench.registerView({ id: "example.plain", title: "Plain", content: { kind: "text" } });
+  const window = host.openWindow();
+  const buffer = await buffers.create();
+  const controls: Knot.CompositeControls = {
+    type: "controls",
+    items: [
+      { type: "checkbox", label: "Amend", checked: false, command: "example.amend" },
+      { type: "button", label: "Commit", primary: true, command: "example.commit" },
+    ],
+  };
+  const layout: Knot.CompositeGroup = {
+    type: "column",
+    children: [{ type: "tree", key: "files", view: files }, { type: "editor", buffer, placeholder: "Message" }, controls],
+  };
+  await tool.update({ layout });
+  assert.deepEqual(host.view("example.tool").layout, layout);
+  await tool.update({ toolbar: [] }, { window });
+  assert.equal(host.view("example.tool").updates.length, 2);
+  assert.deepEqual(host.view("example.tool").layout, layout);
+  await assert.rejects(() => tool.update({ layout: { type: "row", children: [controls] } }), TypeError);
+  await assert.rejects(() => plain.update({ layout }), { code: "ContentKindMismatch" });
+});

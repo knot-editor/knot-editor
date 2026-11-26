@@ -98,6 +98,12 @@ type FakeView = {
   invalidated: { parent: string | null; window: Knot.WindowTarget | undefined }[];
   /** The ID paths passed to `reveal`, oldest first. */
   reveals: (readonly string[])[];
+  /** What a layout view shows, from its `update`s without a window: the layout
+   * and toolbar last given. */
+  layout: Knot.CompositeGroup | null;
+  toolbar: readonly Knot.CompositeButton[];
+  /** Every `update` of a layout view, oldest first. */
+  updates: { layout?: Knot.CompositeGroup; toolbar?: readonly Knot.CompositeButton[]; window: Knot.WindowTarget | undefined }[];
 };
 
 type Answers = {
@@ -274,7 +280,7 @@ export function contractClient(key: string): Promise<any> {
 }
 
 function hasView(layout: Knot.CompositeLayout): boolean {
-  if (layout.type === "connector") return false;
+  if (layout.type === "connector" || layout.type === "controls") return false;
   return "children" in layout ? layout.children.some(hasView) : true;
 }
 
@@ -307,6 +313,10 @@ function checkConnectors(layout: Knot.CompositeLayout) {
 function checkEmbedded(layout: Knot.CompositeLayout, views: Map<string, FakeView>) {
   if ("children" in layout) {
     for (const child of layout.children) checkEmbedded(child, views);
+  } else if (layout.type === "controls") {
+    for (const name of ["key", "size", "focused"]) {
+      if (name in layout) throw new TypeError("composite controls have no key, size, or focus");
+    }
   } else if (layout.type !== "editor" && layout.type !== "connector" && views.get(layout.view.id)?.contribution.embedded !== true) {
     throw new TypeError(`composite ${layout.type} must be a ${layout.type} view registered with embedded`);
   }
@@ -3149,6 +3159,9 @@ export const api: KnotApi = {
         invalidations: 0,
         invalidated: [],
         reveals: [],
+        layout: null,
+        toolbar: [],
+        updates: [],
       };
       state.views.set(contribution.id, registered);
       return {
@@ -3179,6 +3192,19 @@ export const api: KnotApi = {
         editNewItem: (parentId, options) => editTree("editNewItem", parentId, options),
         setText: async (text) => {
           registered.text = text;
+        },
+        update: async (changes, options) => {
+          if (contribution.content?.kind !== "layout") throw hostError("ContentKindMismatch");
+          if (changes.layout !== undefined) {
+            if (!hasView(changes.layout)) throw new TypeError("composite layout needs a view");
+            checkEmbedded(changes.layout, state.views);
+            checkConnectors(changes.layout);
+          }
+          registered.updates.push({ ...changes, window: options?.window });
+          if (options?.window === undefined) {
+            registered.layout = changes.layout ?? registered.layout;
+            registered.toolbar = changes.toolbar ?? registered.toolbar;
+          }
         },
         ...disposers(async () => {
           state.views.delete(contribution.id);

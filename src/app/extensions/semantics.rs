@@ -25,6 +25,7 @@ use crate::app::workbench::Slot;
 use knot_protocol::declarations::HostError;
 
 use crate::app::{
+    layout_view::LayoutView,
     text_view::TextView,
     tree_view::{TreeProviderIdentity, TreeView, TreeViewRegistrationError},
 };
@@ -99,6 +100,16 @@ struct TreeRegistration {
     gutter: bool,
     /// A tree's command that runs when a row is dropped onto another.
     drop: Option<String>,
+    /// What the last update to every window set on a layout, which windows
+    /// created later start with.
+    layout: RetainedLayout,
+}
+
+/// The layout and toolbar of a layout view that windows created later show.
+#[derive(Clone, Default)]
+pub(crate) struct RetainedLayout {
+    pub(crate) layout: Option<crate::app::extensions::host::composites::LayoutWire>,
+    pub(crate) toolbar: Option<Vec<crate::app::view_layout::ToolbarButton>>,
 }
 
 /// Foreground registries and native view surfaces exposed to extension requests.
@@ -106,6 +117,7 @@ pub(crate) struct ExtensionSemanticBridge {
     lifecycles: HashSet<Lifecycle>,
     tree_views: HashMap<String, Vec<(String, WeakEntity<TreeView>)>>,
     text_views: HashMap<String, Vec<(String, WeakEntity<TextView>)>>,
+    layout_views: HashMap<String, Vec<(String, WeakEntity<LayoutView>)>>,
     tree_registrations: HashMap<TreeProviderRegistrationId, TreeRegistration>,
     next_tree_registration: u64,
     next_default_order: usize,
@@ -118,6 +130,7 @@ impl ExtensionSemanticBridge {
             lifecycles: HashSet::new(),
             tree_views: HashMap::new(),
             text_views: HashMap::new(),
+            layout_views: HashMap::new(),
             tree_registrations: HashMap::new(),
             next_tree_registration: 1,
             next_default_order: 1_000,
@@ -194,7 +207,27 @@ impl ExtensionSemanticBridge {
             .push((window.into(), view.downgrade()));
     }
 
+    /// Attach a native layout instance of the definition `kind`.
+    pub(crate) fn add_layout_view(
+        &mut self,
+        kind: impl Into<String>,
+        window: impl Into<String>,
+        view: Entity<LayoutView>,
+    ) {
+        self.layout_views
+            .entry(kind.into())
+            .or_default()
+            .push((window.into(), view.downgrade()));
+    }
+
     pub(crate) fn remove_tree_view(&mut self, view: ViewId, cx: &App) {
+        for views in self.layout_views.values_mut() {
+            views.retain(|(_, candidate)| {
+                candidate
+                    .upgrade()
+                    .is_some_and(|entity| entity.read(cx).instance_id() != view)
+            });
+        }
         for views in self.tree_views.values_mut() {
             views.retain(|(_, candidate)| {
                 candidate
@@ -303,6 +336,7 @@ impl ExtensionSemanticBridge {
                 language,
                 gutter,
                 drop,
+                layout: RetainedLayout::default(),
             },
         );
         Ok(registration)
@@ -337,6 +371,68 @@ impl ExtensionSemanticBridge {
             view.update(cx, |view, cx| view.replace_text(&text, cx));
         }
         Ok(())
+    }
+
+    /// The ID of the layout view `registration` that the requester owns.
+    pub(crate) fn owned_layout_kind(
+        &self,
+        registration: TreeProviderRegistrationId,
+        request: &RequestContext,
+    ) -> Result<String, SemanticError> {
+        self.validate(request)?;
+        let kind = self.owned_tree_kind(registration, request)?;
+        match self.tree_registrations.get(&registration) {
+            Some(entry) if entry.definition.content == ViewContentKind::Layout => Ok(kind),
+            _ => Err(SemanticError::ContentKindMismatch),
+        }
+    }
+
+    /// The layout views of `kind` in the window `window`, or in every window,
+    /// each with its window.
+    pub(crate) fn live_layout_views(
+        &self,
+        kind: &str,
+        window: Option<&str>,
+    ) -> Vec<(String, Entity<LayoutView>)> {
+        self.layout_views
+            .get(kind)
+            .into_iter()
+            .flatten()
+            .filter(|(candidate, _)| window.is_none_or(|window| candidate == window))
+            .filter_map(|(window, view)| Some((window.clone(), view.upgrade()?)))
+            .collect()
+    }
+
+    /// Remember what an update to every window set, for windows created
+    /// later.
+    pub(crate) fn retain_layout(
+        &mut self,
+        registration: TreeProviderRegistrationId,
+        layout: Option<crate::app::extensions::host::composites::LayoutWire>,
+        toolbar: Option<Vec<crate::app::view_layout::ToolbarButton>>,
+    ) {
+        if let Some(entry) = self.tree_registrations.get_mut(&registration) {
+            if layout.is_some() {
+                entry.layout.layout = layout;
+            }
+            if toolbar.is_some() {
+                entry.layout.toolbar = toolbar;
+            }
+        }
+    }
+
+    /// The owner of the layout view `kind` and what windows created later
+    /// start with.
+    pub(crate) fn retained_layout(&self, kind: &str) -> Option<(ExtensionKey, RetainedLayout)> {
+        let entry = self
+            .tree_registrations
+            .values()
+            .find(|entry| entry.definition.id == kind)
+            .filter(|entry| entry.definition.content == ViewContentKind::Layout)?;
+        Some((
+            ExtensionKey::new(entry.identity.extension, entry.identity.lifecycle),
+            entry.layout.clone(),
+        ))
     }
 
     /// Set the dot on a view's stripe button in every window.
@@ -434,6 +530,9 @@ impl ExtensionSemanticBridge {
         for view in self.live_tree_views(&kind, None) {
             view.update(cx, |tree, cx| tree.unregister_provider(*registration, cx))
                 .map_err(map_tree_error)?;
+        }
+        for (_, view) in self.live_layout_views(&kind, None) {
+            view.update(cx, |view, cx| view.clear(cx));
         }
         self.tree_registrations.remove(registration);
         Ok(())
@@ -604,6 +703,9 @@ impl ExtensionSemanticBridge {
             }
             for view in self.live_text_views(&kind, None) {
                 view.update(cx, |view, cx| view.replace_text("", cx));
+            }
+            for (_, view) in self.live_layout_views(&kind, None) {
+                view.update(cx, |view, cx| view.clear(cx));
             }
             self.tree_registrations.remove(&registration);
             ids.push(kind);

@@ -1,6 +1,7 @@
 //! Contributed views, the native explorer, workspace roots, and tool-layout memory.
 
 use super::*;
+use crate::app::view_tree::{ViewFocusChanged, ViewTreeChanged};
 use crate::app::workbench::TabMoveDestination;
 #[cfg(any(test, feature = "test-support"))]
 use crate::app::workbench::{Slot, ToolFrameId};
@@ -59,6 +60,30 @@ impl KnotWindow {
         cx.notify();
     }
 
+    /// Replace what a layout tool window shows and return the contributed
+    /// views its new layout added.
+    pub(crate) fn update_layout_view(
+        &mut self,
+        view: &Entity<crate::app::layout_view::LayoutView>,
+        layout: Option<crate::app::view_layout::GroupSpec>,
+        toolbar: Option<Vec<crate::app::view_layout::ToolbarButton>>,
+        cx: &mut Context<Self>,
+    ) -> Vec<crate::app::workbench::ExtensionView> {
+        let change = view.update(cx, |view, cx| view.update(layout, toolbar, cx));
+        let Some(change) = change else {
+            cx.notify();
+            return Vec::new();
+        };
+        for hosted in &change.attached {
+            self.observe_hosted_view(hosted, cx);
+        }
+        if change.focus_moved && self.focus == Focus::Workbench {
+            self.focus_active_surface(cx);
+        }
+        cx.notify();
+        change.attached
+    }
+
     /// Route the events of a contributed view a composite holds, for as long
     /// as the view lives.
     pub(super) fn observe_hosted_view(
@@ -74,6 +99,7 @@ impl KnotWindow {
                 cx.observe(tree, |_, _, cx| cx.notify()).detach();
             }
             ExtensionView::Text(text) => cx.observe(text, |_, _, cx| cx.notify()).detach(),
+            ExtensionView::Layout(layout, _) => cx.observe(layout, |_, _, cx| cx.notify()).detach(),
         }
     }
 
@@ -118,6 +144,28 @@ impl KnotWindow {
                     observer,
                 )
             }
+            knot_protocol::ViewContentKind::Layout => {
+                let view = cx.new(|cx| {
+                    crate::app::layout_view::LayoutView::new(
+                        definition.id.clone(),
+                        window.clone(),
+                        cx,
+                    )
+                });
+                let target = view.read(cx).target();
+                let tree_changed = cx.subscribe(&view, |_, _, _: &ViewTreeChanged, cx| {
+                    crate::app::extensions::host::application_changed(cx);
+                });
+                let focus_changed = cx.subscribe(&view, |_, _, _: &ViewFocusChanged, cx| {
+                    crate::app::extensions::host::application_changed(cx);
+                });
+                let observer = cx.observe(&view, |_, _, cx| cx.notify());
+                (
+                    crate::app::workbench::ExtensionView::Layout(view, target),
+                    Some(Subscription::join(tree_changed, focus_changed)),
+                    observer,
+                )
+            }
             knot_protocol::ViewContentKind::Text => {
                 let view = cx.new(|cx| {
                     crate::app::text_view::TextView::new(definition.id.clone(), window.clone(), cx)
@@ -155,6 +203,8 @@ impl KnotWindow {
                 workbench.focus_pane(pane);
             }
         });
+        let layout_kind = matches!(content, crate::app::workbench::ExtensionView::Layout(..))
+            .then(|| definition.id.clone());
         self.contributed_views.insert(
             definition.id,
             ContributedView {
@@ -163,6 +213,13 @@ impl KnotWindow {
                 _observer: observer,
             },
         );
+        // The host binds the layout once the window is free.
+        if let Some(kind) = layout_kind {
+            let window = window_id(cx.entity_id());
+            cx.defer(move |cx| {
+                crate::app::extensions::host::apply_retained_layout(kind, window, cx)
+            });
+        }
     }
 
     pub(super) fn detach_contributed_view(&mut self, stable_id: &str, cx: &mut Context<Self>) {
@@ -273,7 +330,8 @@ impl KnotWindow {
             crate::app::workbench::ExtensionView::Tree(tree) => {
                 Some((tree.clone(), self.native_window?))
             }
-            crate::app::workbench::ExtensionView::Text(_) => None,
+            crate::app::workbench::ExtensionView::Text(_)
+            | crate::app::workbench::ExtensionView::Layout(..) => None,
         }
     }
 

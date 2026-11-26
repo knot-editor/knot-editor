@@ -226,7 +226,7 @@ fn registered_languages_detect_on_open_and_save_as_and_follow_teardown(cx: &mut 
     let log = cx.read(
         |cx| match &window.read(cx).contributed_views["lang.log"].content {
             ExtensionView::Text(view) => view.read(cx).model().clone(),
-            ExtensionView::Tree(_) => panic!("log is a text frame"),
+            ExtensionView::Tree(_) | ExtensionView::Layout(..) => panic!("log is a text frame"),
         },
     );
     assert_eq!(language(&log, cx), (Some("rust".into()), true));

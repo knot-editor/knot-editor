@@ -1166,6 +1166,7 @@ fn command_view_kind(window: &Entity<KnotWindow>, cx: &TestAppContext) -> &'stat
             CommandView::Editor(_) => "editor",
             CommandView::Extension(ExtensionView::Tree(_)) => "tree",
             CommandView::Extension(ExtensionView::Text(_)) => "text",
+            CommandView::Extension(ExtensionView::Layout(..)) => "layout",
             CommandView::Terminal(_) => "terminal",
         }
     })

@@ -146,6 +146,7 @@ impl ViewTree for ExtensionView {
         match self {
             Self::Tree(view) => view.view_node(cx),
             Self::Text(view) => view.view_node(cx),
+            Self::Layout(view, _) => view.view_node(cx),
         }
     }
 }

@@ -1797,7 +1797,7 @@ export async function registerView(contribution: unknown) {
     : record(value.content, "view content must be an object");
   let provider: { getChildren: Fn } | null = null;
   if (content.kind === "container" && value.content !== undefined) {
-    throw new TypeError("view content kind must be \"tree\" or \"text\"");
+    throw new TypeError("view content kind must be \"tree\", \"text\", or \"layout\"");
   }
   if (content.kind === "tree") {
     const candidate = record(content.provider, "tree content requires a provider object");
@@ -1805,8 +1805,8 @@ export async function registerView(contribution: unknown) {
       throw new TypeError("tree provider requires a getChildren method");
     }
     provider = candidate as { getChildren: Fn };
-  } else if (content.kind !== "text" && content.kind !== "container") {
-    throw new TypeError("view content kind must be \"tree\" or \"text\"");
+  } else if (content.kind !== "text" && content.kind !== "layout" && content.kind !== "container") {
+    throw new TypeError("view content kind must be \"tree\", \"text\", or \"layout\"");
   }
   const newTab = optionalText(value.newTab);
   if (newTab !== null && content.kind !== "container") {
@@ -1834,7 +1834,9 @@ export async function registerView(contribution: unknown) {
   let embedded = false;
   if (value.embedded !== undefined) {
     if (typeof value.embedded !== "boolean") throw new TypeError("view embedded must be a boolean");
-    if (content.kind === "container") throw new TypeError("view embedded applies only to tree or text content");
+    if (content.kind === "container" || content.kind === "layout") {
+      throw new TypeError("view embedded applies only to tree or text content");
+    }
     embedded = value.embedded;
   }
   let location = "leftTop";
@@ -1935,6 +1937,18 @@ export async function registerView(contribution: unknown) {
         "replaceViewText",
         registration,
         string(text, "view text must be text"),
+        optionalWindowAuthority(window),
+      ));
+    },
+    async update(changes: unknown, options: unknown) {
+      owned.assertActive();
+      const given = record(changes, "view update must be an object");
+      const window = options == null ? undefined : record(options, "view update options must be an object").window;
+      await owned.track(request(
+        "updateView",
+        registration,
+        given.layout === undefined ? null : compositeLayoutJson(given.layout),
+        given.toolbar === undefined ? null : compositeToolbar(given.toolbar),
         optionalWindowAuthority(window),
       ));
     },

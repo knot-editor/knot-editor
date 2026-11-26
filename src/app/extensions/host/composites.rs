@@ -347,7 +347,7 @@ impl ProductExtensionHost {
 
     /// The spec of `layout`, whose buffers, documents, and views must be
     /// `owner`'s.
-    fn composite_spec(
+    pub(super) fn composite_spec(
         &self,
         owner: ExtensionKey,
         layout: LayoutWire,

@@ -24,6 +24,7 @@ mod interleaving;
 mod key_hold;
 mod keybindings;
 mod languages;
+mod layout_tool;
 mod menu_bar;
 mod navigation;
 mod notifications;

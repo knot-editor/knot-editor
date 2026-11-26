@@ -22,6 +22,7 @@ pub(crate) use knot_model::workbench::{
 use super::{
     composite_view::{CompositeCommandTarget, CompositeTab, CompositeView},
     editor::{EditorView, EditorViewState},
+    layout_view::{LayoutTarget, LayoutView},
     model::Buffer,
     terminal::view::TerminalView,
     text_view::TextView,
@@ -35,6 +36,8 @@ use super::{
 pub(crate) enum ExtensionView {
     Tree(Entity<TreeView>),
     Text(Entity<TextView>),
+    /// A layout of views, and what commands act on in it.
+    Layout(Entity<LayoutView>, LayoutTarget),
 }
 
 impl ExtensionView {
@@ -42,6 +45,7 @@ impl ExtensionView {
         match self {
             Self::Tree(view) => view.read(cx).focus_handle(cx),
             Self::Text(view) => view.read(cx).focus_handle(cx),
+            Self::Layout(view, _) => view.read(cx).focus_handle(cx),
         }
     }
 
@@ -49,6 +53,7 @@ impl ExtensionView {
         match self {
             Self::Tree(view) => view.read(cx).kind().to_owned(),
             Self::Text(view) => view.read(cx).kind().to_owned(),
+            Self::Layout(view, _) => view.read(cx).kind().to_owned(),
         }
     }
 
@@ -56,6 +61,7 @@ impl ExtensionView {
         match self {
             Self::Tree(view) => view.read(cx).instance_id(),
             Self::Text(view) => view.read(cx).instance_id(),
+            Self::Layout(view, _) => view.read(cx).instance_id(),
         }
     }
 
@@ -67,12 +73,13 @@ impl ExtensionView {
         match self {
             Self::Tree(view) => view.update(cx, |view, cx| view.handle_command(command, cx)),
             Self::Text(view) => view.update(cx, |view, cx| view.handle_command(command, cx)),
+            Self::Layout(..) => super::commands::dispatch::CommandClaim::Declined,
         }
     }
 
     pub(crate) fn selected_text(&self, cx: &App) -> Option<String> {
         match self {
-            Self::Tree(_) => None,
+            Self::Tree(_) | Self::Layout(..) => None,
             Self::Text(view) => view.read(cx).selected_text(cx),
         }
     }
@@ -81,7 +88,7 @@ impl ExtensionView {
     pub(crate) fn selected_tree_item(&self, cx: &App) -> Option<String> {
         match self {
             Self::Tree(view) => view.read(cx).selected_item_id(),
-            Self::Text(_) => None,
+            Self::Text(_) | Self::Layout(..) => None,
         }
     }
 
@@ -89,7 +96,7 @@ impl ExtensionView {
     pub(crate) fn selected_tree_resource(&self, cx: &App) -> Option<String> {
         match self {
             Self::Tree(view) => view.read(cx).selected_resource(),
-            Self::Text(_) => None,
+            Self::Text(_) | Self::Layout(..) => None,
         }
     }
 
@@ -97,6 +104,7 @@ impl ExtensionView {
         match self {
             Self::Tree(view) => view.entity_id(),
             Self::Text(view) => view.entity_id(),
+            Self::Layout(view, _) => view.entity_id(),
         }
     }
 }
@@ -114,9 +122,12 @@ impl ToolContent {
         }
     }
 
-    pub(crate) fn command_view(&self) -> CommandView {
+    /// The view commands act on, which a layout tool window without views
+    /// has none of.
+    pub(crate) fn command_view(&self) -> Option<CommandView> {
         match self {
-            Self::Extension(view) => CommandView::Extension(view.clone()),
+            Self::Extension(ExtensionView::Layout(_, target)) => target.command_view(),
+            Self::Extension(view) => Some(CommandView::Extension(view.clone())),
         }
     }
 }
@@ -351,7 +362,7 @@ impl Workbench {
             PresentationView::Editor(editor) => CommandView::Editor(editor.clone()),
             PresentationView::Terminal(view) => CommandView::Terminal(view.clone()),
             PresentationView::Composite(_, target, _) => target.command_view(),
-            PresentationView::Tool(content) => content.command_view(),
+            PresentationView::Tool(content) => return content.command_view(),
         })
     }
 

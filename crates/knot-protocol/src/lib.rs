@@ -517,6 +517,9 @@ pub struct TreeItem {
 pub enum ViewContentKind {
     Tree,
     Text,
+    /// A layout of views and controls the package describes and replaces
+    /// per window.
+    Layout,
     /// No content of its own: a tool window that holds the tabs opened into it.
     Container,
 }

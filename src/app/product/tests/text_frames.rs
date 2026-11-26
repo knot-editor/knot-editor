@@ -61,14 +61,16 @@ fn text_frames_show_the_gutter_only_when_registered_with_one(cx: &mut TestAppCon
                 assert!(bounds.size.width > px(0.), "{id} was painted");
                 editor.text_bounds().origin.x - bounds.origin.x
             }
-            ExtensionView::Tree(_) => panic!("{id} is a text frame"),
+            ExtensionView::Tree(_) | ExtensionView::Layout(..) => panic!("{id} is a text frame"),
         })
     };
     // Pushed text is what the frame's editor shows.
     cx.read(
         |cx| match &window.read(cx).contributed_views["frame.plain"].content {
             ExtensionView::Text(view) => assert_eq!(view.read(cx).text(cx), "one\ntwo\n"),
-            ExtensionView::Tree(_) => panic!("frame.plain is a text frame"),
+            ExtensionView::Tree(_) | ExtensionView::Layout(..) => {
+                panic!("frame.plain is a text frame")
+            }
         },
     );
     // A frame without a gutter keeps only the small text inset.
