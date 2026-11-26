@@ -10,6 +10,7 @@ use std::sync::atomic::Ordering;
 
 use gpui::{prelude::*, *};
 
+use knot_model::editor::Reveal;
 use knot_protocol::ViewId;
 
 use super::editor::EditorView;
@@ -22,6 +23,8 @@ pub(crate) struct TextView {
     instance_id: ViewId,
     model: Entity<Buffer>,
     editor: Entity<EditorView>,
+    /// Whether the view shows the end of the text after each replacement.
+    follow: bool,
 }
 
 impl TextView {
@@ -40,6 +43,7 @@ impl TextView {
             instance_id: ViewId::new(NEXT_VIEW_ID.fetch_add(1, Ordering::Relaxed)),
             model,
             editor,
+            follow: false,
         }
     }
 
@@ -63,7 +67,19 @@ impl TextView {
                 cx.notify();
             }
         });
+        if self.follow {
+            let end = self.model.read(cx).len();
+            let editor = self.editor.read(cx).editor().clone();
+            editor.update(cx, |editor, cx| {
+                editor.set_selection_checked(end as u64, end as u64, Reveal::Bottom, cx)
+            });
+        }
         cx.notify();
+    }
+
+    /// Show the end of the text after each replacement.
+    pub(crate) fn set_follow(&mut self, follow: bool) {
+        self.follow = follow;
     }
 
     /// Show or hide the editor gutter of markers and line numbers.

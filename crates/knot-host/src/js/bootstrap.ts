@@ -1831,6 +1831,12 @@ export async function registerView(contribution: unknown) {
     }
     gutter = value.gutter;
   }
+  let follow = false;
+  if (value.follow !== undefined) {
+    if (typeof value.follow !== "boolean") throw new TypeError("view follow must be a boolean");
+    if (content.kind !== "text") throw new TypeError("view follow applies only to text content");
+    follow = value.follow;
+  }
   let embedded = false;
   if (value.embedded !== undefined) {
     if (typeof value.embedded !== "boolean") throw new TypeError("view embedded must be a boolean");
@@ -1880,6 +1886,7 @@ export async function registerView(contribution: unknown) {
     newTab,
     drop,
     embedded ? 1 : 0,
+    follow ? 1 : 0,
   ));
   const owned = ownership(() => treeProviders.delete(registration),
     () => request("unregisterView", registration));

@@ -98,6 +98,8 @@ struct TreeRegistration {
     language: Option<String>,
     /// Whether a text frame shows the editor gutter.
     gutter: bool,
+    /// Whether a text frame shows its end after each replacement.
+    follow: bool,
     /// A tree's command that runs when a row is dropped onto another.
     drop: Option<String>,
     /// What the last update to every window set on a layout, which windows
@@ -191,8 +193,11 @@ impl ExtensionSemanticBridge {
             .values()
             .find(|entry| entry.definition.id == kind)
         {
-            let gutter = registration.gutter;
-            view.update(cx, |view, cx| view.set_show_gutter(gutter, cx));
+            let (gutter, follow) = (registration.gutter, registration.follow);
+            view.update(cx, |view, cx| {
+                view.set_show_gutter(gutter, cx);
+                view.set_follow(follow);
+            });
             if let Some(text) = registration.text.clone() {
                 view.update(cx, |view, cx| view.replace_text(&text, cx));
             }
@@ -275,6 +280,7 @@ impl ExtensionSemanticBridge {
             new_tab,
             drop,
             embedded,
+            follow,
         } = arguments;
 
         if id.is_empty() || id.starts_with("knot.") {
@@ -335,6 +341,7 @@ impl ExtensionSemanticBridge {
                 text: None,
                 language,
                 gutter,
+                follow,
                 drop,
                 layout: RetainedLayout::default(),
             },
@@ -759,6 +766,7 @@ mod tests {
             new_tab: None,
             drop: None,
             embedded: false,
+            follow: false,
         }
     }
 
@@ -776,6 +784,7 @@ mod tests {
             new_tab: None,
             drop: None,
             embedded: false,
+            follow: false,
         }
     }
 

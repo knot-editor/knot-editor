@@ -2505,6 +2505,9 @@ declare module "knot" {
      * shows one instance, so they share its content. Tree and text frames
      * only; defaults to false. */
     readonly embedded?: boolean;
+    /** Whether a text frame scrolls to show the end of its text after each
+     * `setText`. Text frames only; defaults to false. */
+    readonly follow?: boolean;
   }
   export interface TreeEditOptions {
     /** The initial text; defaults to empty. */

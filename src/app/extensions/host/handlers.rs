@@ -1551,6 +1551,8 @@ pub(crate) struct TreeArguments {
     pub drop: Option<String>,
     /// Whether composites host the view instead of a tool window.
     pub embedded: bool,
+    /// Whether a text frame shows its end after each replacement.
+    pub follow: bool,
 }
 impl HostArguments for TreeArguments {
     fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
@@ -1587,6 +1589,7 @@ impl HostArguments for TreeArguments {
             new_tab: reader.optional_text(11, "view new tab command must be text or null")?,
             drop: reader.optional_text(12, "view drop command must be text or null")?,
             embedded: reader.integer(13)? != 0,
+            follow: reader.integer(14)? != 0,
         })
     }
 }

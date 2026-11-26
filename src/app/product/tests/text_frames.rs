@@ -1,4 +1,4 @@
-//! Contributed text frames: the editor gutter they opt into.
+//! Contributed text frames: the editor gutter and the end they follow when they opt in.
 
 use super::*;
 use crate::app::workbench::ExtensionView;
@@ -30,6 +30,60 @@ for (const [contribution, message] of [
   }
 }
 "#;
+
+const FOLLOW: &str = r#"
+import { workbench } from "knot";
+const log = await workbench.registerView({
+  id: "frame.log", title: "Log", content: { kind: "text" }, follow: true,
+  placement: { location: "bottomLeft" },
+});
+await log.setText(Array.from({ length: 300 }, (_, line) => `line ${line}\n`).join(""));
+try {
+  await workbench.registerView({ id: "frame.bad", title: "Bad", content: { kind: "text" }, follow: 1 });
+  throw new Error("accepted follow: 1");
+} catch (error) {
+  if (!(error instanceof TypeError) || error.message !== "view follow must be a boolean") throw error;
+}
+"#;
+
+#[gpui::test]
+fn text_frames_that_follow_show_the_end_of_new_text(cx: &mut TestAppContext) {
+    let documents = install_globals(cx);
+    let host = cx.update(super::super::super::extensions::host::install);
+    let document = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
+    let (window, _) = product_window(document, model, cx);
+    let key = ExtensionKey::new(ExtensionId::new(971), ExtensionLifecycleId::new(1));
+    let loaded = Arc::new(Mutex::new(None));
+    let result = loaded.clone();
+    host.update(cx, |host, cx| {
+        let execution = host.load_test_source(key, FOLLOW).unwrap();
+        cx.spawn(async move |_, _| {
+            *result.lock().unwrap() = Some(execution.await.map(|_| ()));
+        })
+        .detach();
+    });
+    wait_for_api_condition(cx, |_| loaded.lock().unwrap().is_some());
+    loaded.lock().unwrap().take().unwrap().unwrap();
+    cx.refresh().unwrap();
+    cx.run_until_parked();
+
+    cx.read(
+        |cx| match &window.read(cx).contributed_views["frame.log"].content {
+            ExtensionView::Text(view) => {
+                let editor = view.read(cx).editor().read(cx).editor().read(cx);
+                assert!(
+                    editor.scroll_top() > 200.,
+                    "scrolled to {}",
+                    editor.scroll_top()
+                );
+            }
+            ExtensionView::Tree(_) | ExtensionView::Layout(..) => {
+                panic!("frame.log is a text frame")
+            }
+        },
+    );
+}
 
 #[gpui::test]
 fn text_frames_show_the_gutter_only_when_registered_with_one(cx: &mut TestAppContext) {
