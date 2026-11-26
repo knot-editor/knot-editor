@@ -1,6 +1,6 @@
 # D215 — VCS commit
 
-Status: 🚧 in progress (checkpoint 1 done). Source: [roadmap D215](../roadmap.md#version-control), milestone 4 of
+Status: 🚧 in progress (checkpoints 1 and 2 done). Source: [roadmap D215](../roadmap.md#version-control), milestone 4 of
 the [version control plan](vcs.md).
 
 ## Outcome
@@ -117,31 +117,13 @@ Shared URL detection lives in `knot-model` (`links`), and editors and text
 frames open http(s) URLs with Cmd+click; see
 [editor and languages](../architecture/editor-and-languages.md).
 
-### 2. Layout tool windows, controls, placeholders
+### 2. Layout tool windows, controls, placeholders ✅
 
-Deliverables: `kind: "layout"` tool windows with per-window `update`; the
-`controls` member; editor `placeholder`; typings and the
-[ui guide](../extension-api/ui.md).
-
-Validation: host engine tests for registration, update, and rejection of bad
-members; app tests that keyed members survive an update, a checkbox and a button
-dispatch their command with the tool window as target, a disabled button does
-not, and the placeholder shows only while empty. `just check`.
-
-Review gate: a `Try:` command registers a layout tool window with a tree, an
-editor with a placeholder, and controls that toggle.
-
-**Implementation context:** `ViewContentKind` in `crates/knot-protocol/src/lib.rs`
-gains `Layout`; `attach_contributed_view` in `src/app/product/tools.rs` builds
-it like `Tree` and `Text`, with an `ExtensionView` variant in
-`src/app/workbench.rs`. Reuse `Layout` from `src/app/view_layout.rs` and the
-embedding and keyed-rebuild path of `src/app/extensions/host/composites.rs`
-(`embedded_view`); the per-view registration lives in
-`src/app/extensions/semantics.rs`. Controls render beside `ToolbarButton` in
-`view_layout.rs` with gpui-component checkbox and button widgets and the
-toolbar's dispatch. Typings in `crates/knot-host/src/js/knot.d.ts`; describe
-layout tool windows in [workbench and lifecycle](../architecture/workbench-and-lifecycle.md)
-next to composite views.
+`kind: "layout"` tool windows, the `controls` member, and editor placeholders
+are documented in the [ui guide](../extension-api/ui.md#layout-tool-windows)
+and [workbench and lifecycle](../architecture/workbench-and-lifecycle.md#layout-tool-windows).
+The controls' look uses plain gpui-component checkbox and button styling and
+may deserve polish when the commit panel lands.
 
 ### 3. Version Control output
 
