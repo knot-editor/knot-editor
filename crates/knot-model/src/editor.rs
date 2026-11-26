@@ -22,6 +22,7 @@ mod indentation;
 mod input;
 mod lines;
 mod paste;
+pub mod popovers;
 mod recording;
 mod rows;
 mod save_hygiene;
@@ -306,6 +307,7 @@ pub struct EditorState {
     /// Bars lifecycles have opened above the text, and the field among them
     /// that has the editor's focus. Presentation state, never recorded.
     bars: bars::EditorBars,
+    popovers: popovers::EditorPopovers,
     /// The input recordings in progress. Never part of the buffer.
     recordings: recording::Recordings,
 }
@@ -362,6 +364,7 @@ impl EditorState {
             key_contexts: Vec::new(),
             caret_shapes: Vec::new(),
             bars: bars::EditorBars::default(),
+            popovers: popovers::EditorPopovers::default(),
             recordings: recording::Recordings::default(),
         }
     }
@@ -383,6 +386,7 @@ impl EditorState {
             self.preferred_column = None;
         }
         self.refresh(buffer, buffer.resolve_view_position(self.position_range));
+        self.popovers.close_deleted(buffer);
         if let Some(restore) = buffer.history_view_restore() {
             self.apply_history_view_restore(buffer, restore.generation, &restore.state);
         }
@@ -394,6 +398,7 @@ impl EditorState {
     /// Release the anchors this editor holds in `buffer`, as it goes away.
     pub fn release(&mut self, buffer: &mut BufferModel) {
         buffer.remove_view_position(self.position_range);
+        self.popovers.release(buffer);
         let pairs = std::mem::take(&mut self.auto_closed);
         self.release_auto_closed(pairs, buffer);
         self.release_folds(buffer);
@@ -702,6 +707,7 @@ impl EditorState {
         self.key_contexts.retain(|(key, _)| *key != owner);
         self.caret_shapes.retain(|(key, _)| *key != owner);
         self.bars.remove_owner(owner);
+        self.popovers.remove_owner(owner, buffer);
         self.remove_decorations(owner, buffer);
         self.project_contributions(buffer);
     }
@@ -713,6 +719,15 @@ impl EditorState {
 
     pub fn bars_mut(&mut self) -> &mut bars::EditorBars {
         &mut self.bars
+    }
+
+    /// The popovers floating over the text, bottom to top.
+    pub fn popovers(&self) -> &popovers::EditorPopovers {
+        &self.popovers
+    }
+
+    pub fn popovers_mut(&mut self) -> &mut popovers::EditorPopovers {
+        &mut self.popovers
     }
 
     /// Move the selection to offsets an extension named, or return `false`
