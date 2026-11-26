@@ -24,6 +24,7 @@ import { anchorLines, baselineText, hunkAt, revertEdit } from "./hunk.js";
 import { targetLine, type Direction } from "./navigation.js";
 import { createDiscovery, isGone, type Repository } from "./repositories.js";
 import { createRefs } from "./ref.js";
+import { registerChanges } from "./changes.js";
 import { createStatuses, defineColors, keyOf } from "./status.js";
 
 /** Milliseconds after the last edit before the marks are diffed again. */
@@ -117,6 +118,7 @@ export async function start(): Promise<Disposable> {
     },
     fetch: async (repository) => (await backendContract(repository.backend).client()).status(repository.root),
     gone: drop,
+    changed: (repository) => void changes.refresh(repository).catch(() => {}),
   });
   await defineColors();
   const refs = await createRefs({
@@ -127,6 +129,12 @@ export async function start(): Promise<Disposable> {
     },
     find: (file, roots) => discovery.find(file, roots),
     fetch: async (repository) => (await backendContract(repository.backend).client()).ref(repository.root),
+    gone: drop,
+  });
+
+  const changes = await registerChanges({
+    covering: (rootUris) => discovery.covering(rootUris),
+    snapshot: (repository) => statuses.snapshot(repository),
     gone: drop,
   });
 
@@ -551,6 +559,7 @@ export async function start(): Promise<Disposable> {
       for (const command of navigation) await command[Symbol.asyncDispose]();
       await tracker[Symbol.asyncDispose]();
       await statuses[Symbol.asyncDispose]();
+      await changes[Symbol.asyncDispose]();
       await refs[Symbol.asyncDispose]();
       await served[Symbol.asyncDispose]();
     },

@@ -116,6 +116,8 @@ export type StatusDeps = {
   fetch(repository: Repository): Promise<Report>;
   /** A backend whose contract no longer binds. */
   gone(backend: string): void;
+  /** A repository's snapshot was replaced, or null when the shown repositories changed. */
+  changed(repository: Repository | null): void;
 };
 
 export type Statuses = {
@@ -125,6 +127,8 @@ export type Statuses = {
    * found again and those not shown yet are pulled.
    */
   request(key?: string): void;
+  /** What the backend last reported of a repository, if it has been pulled. */
+  snapshot(repository: Repository): Snapshot | undefined;
   [Symbol.asyncDispose](): Promise<void>;
 };
 
@@ -198,6 +202,7 @@ export function createStatuses(deps: StatusDeps): Statuses {
         if (closed) break;
         await fetch(repository);
         rebuild();
+        deps.changed(repository);
       } while (slot.pending);
     } finally {
       slot.running = false;
@@ -219,6 +224,7 @@ export function createStatuses(deps: StatusDeps): Statuses {
         for (const key of [...snapshots.keys()]) if (!keys.has(key)) snapshots.delete(key);
         for (const key of [...slots.keys()]) if (!keys.has(key) && !slots.get(key)?.running) slots.delete(key);
         rebuild();
+        deps.changed(null);
         await Promise.all(current.filter((repository) => !snapshots.has(keyOf(repository))).map(pull));
       } while (rediscover);
     } finally {
@@ -227,6 +233,7 @@ export function createStatuses(deps: StatusDeps): Statuses {
   }
 
   return {
+    snapshot: (repository) => snapshots.get(keyOf(repository)),
     request(key) {
       const known = key === undefined ? undefined : current.find((repository) => keyOf(repository) === key);
       void (known === undefined ? discover() : pull(known)).catch(() => {});
