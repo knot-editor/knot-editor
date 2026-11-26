@@ -145,38 +145,18 @@ Each checkpoint ends at a review gate: `cargo test` for the touched crates and
 the product tests named below pass, the extension API typechecks, and the
 behavior is shown in the running app before the next starts.
 
-### 1. A popover on the screen ✅ implemented, awaiting review
+### 1. A popover on the screen ✅
 
-`editor.openPopover(id, { anchor, toolbar, layout })` with a single `editor`
-member on an extension buffer and a fixed height opens a popover below the
-anchor's last line; `editor.closePopover(id)` closes it. The anchor follows
-edits, and its deletion, the editor closing, and package unload close the
-popover. Several IDs coexist, newest on top.
-
-Validation: model unit tests for spec checks, anchoring, ordering, and owner
-removal; product tests opening, updating, and closing popovers from a fixture
-package, including unload and anchor deletion.
-
-Scope decision: the checkpoint accepts the composite layout format but only
-a root group with one `editor` member on an extension buffer sized
-`{ pixels }`, which is the popover's height (logical pixels, scaled by zoom);
-the popover spans the text area. Toolbar, width, and richer layouts come in
-checkpoints 2 and 3. An anchor whose text an edit empties counts as deleted.
-
-**Implementation context.** Add `crates/knot-model/src/editor/popovers.rs`
-mirroring `editor/bars.rs` (spec type with `problem()`, an ordered set keyed
-by `ExtensionKey` and ID, `remove_owner`), held on `EditorState` next to
-`bars` in `crates/knot-model/src/editor.rs` and cleared in
-`remove_owner_state`; anchor the line range in the buffer's
-`AnchoredRangeStore` as view decorations are. Host side: `editorOpenPopover`
-and `editorClosePopover` in `src/app/extensions/host/handlers.rs` beside
-`editor_open_bar`, decoding the layout with `decode_composite_layout` and the
-toolbar like `decode_composite_tab`; the handle methods in
-`crates/knot-host/src/js/bootstrap.ts` and types in
-`crates/knot-host/src/js/knot.d.ts` beside `openBar`. Render in
-`src/app/editor/paint.rs` where the completion list is added, positioned like
-`completion_anchor`, with the `popover.*` color keys. Product tests in a new
-`src/app/product/tests/editor_popovers.rs`, following `editor_bars.rs`.
+Done and reviewed. `editor.openPopover` and `closePopover` open a popover
+below the anchor's last line, with the model in
+`crates/knot-model/src/editor/popovers.rs`, the views and painting in
+`src/app/editor/popovers.rs`, and the product tests in
+`src/app/product/tests/editor_popovers.rs`. Limits that later checkpoints lift:
+the layout is one `editor` member on an extension buffer sized `{ pixels }`,
+which is the popover's height (scaled by zoom), the popover spans the text
+area, and it neither follows scrolling nor hides out of view. An anchor an edit
+empties counts as deleted, because the anchor store keeps a range deleted
+exactly. The extension testing host fakes the two methods.
 
 ### 2. Full content in the view tree
 
