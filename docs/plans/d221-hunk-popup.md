@@ -82,7 +82,7 @@ Pure functions in `@knot/vcs` for what a hunk means, tested without a host.
   (removal at the end, missing final newline on either side).
 
 **Implementation context.** Add the functions to a new
-`extensions/@knot/vcs/src/hunk.ts`, next to `hunks.ts` (gutter contributions)
+`extensions/@knot/vcs/src/hunk.ts`, next to `gutter.ts` (gutter contributions)
 and `navigation.ts` (`targetLine`), whose style it mirrors. Tests go in
 `extensions/@knot/vcs/test/hunk.test.ts`, written like `navigation.test.ts`.
 Byte ranges come from `Buffer.lineRange`/`lineCount`; keep the pure part on
