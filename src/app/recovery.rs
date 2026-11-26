@@ -1,7 +1,7 @@
 //! Durable unsaved-document recovery: application-owned protection for dirty documents.
 //!
-//! The store is one application-owned `recovery.sqlite3` beside the tool-layout
-//! database. It holds a versioned `snapshots` table with two retention roles:
+//! The store is one application-owned `recovery.sqlite3` beside the application
+//! state database. It holds a versioned `snapshots` table with two retention roles:
 //! `automatic` rows are the replaceable protection for a live dirty document
 //! (one row per document UUID), and `retained` rows are immutable checkpoints
 //! owned by a suspended window or another extension owner.

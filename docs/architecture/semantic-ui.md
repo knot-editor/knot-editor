@@ -10,6 +10,11 @@ drawing callbacks, layout protocols, V8 values, and Rust objects do not cross
 the public boundary. Native surfaces own layout and interaction; painting and
 input never call JavaScript synchronously.
 
+Native views use gpui-component (`src/app/components.rs`) for presentational
+leaf widgets, such as tooltips and popup menus, painted from Knot's theme.
+Knot keeps its own workbench, editor, terminal, pickers, text input, and key
+routing.
+
 ## Semantic extension UI
 
 Editor contributions follow one foreground-owned path:

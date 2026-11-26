@@ -9,45 +9,48 @@ flows; implementation details and API contracts live in code.
 ## System map
 
 Knot is a Cargo workspace. The root `knot` package is the gpui application;
-leaf crates under `crates/` cannot see gpui:
+leaf crates under `crates/` cannot see gpui. Each crate depends on the ones
+nested under it:
 
 ```text
-gpui application and native views
-             |            ^
-             v            | foreground requests / results
-       core models     typed host boundary
-                              |
-                     extension runtimes
+knot-app            the binary
+├── knot-ext-*      bundled packages, one crate per domain
+└── knot            gpui application and native views
+    ├── knot-model  editor state and policy
+    │   ├── knot-core
+    │   └── knot-protocol
+    ├── knot-host   extension runtimes
+    │   └── knot-protocol
+    ├── knot-terminal
+    └── knot-process
 ```
+
+`knot-protocol` uses `knot-handler-macros`, and the bundled-package crates
+build with `knot-bundled`.
 
 - `knot-core` owns UI-, platform-, and scripting-independent text and edit primitives.
 - The root `knot` package (`src/app`) owns the gpui application, foreground
-  editor state as gpui entities and globals, native views, command dispatch,
-  startup,
-  extension storage, and the language registry. Native views use
-  gpui-component (`src/app/components.rs`) for presentational leaf widgets,
-  such as tooltips and popup menus; Knot keeps its own workbench, editor,
-  terminal, pickers, text input, and key routing, and paints the components
-  from its theme.
+  editor state as gpui entities and globals, native views (using
+  gpui-component for presentational leaf widgets), command dispatch, startup,
+  extension storage, and language registrations and document language
+  detection over the model's registry.
 - `knot-protocol` owns the Knot-owned serde transport types and the typed
   operation declarations, and depends on neither V8 nor gpui.
 - `knot-model` owns editor state and policy that need no gpui, V8, or host:
-  the buffer model, editor state and the native editing commands, completion sessions, the extension
-  provider registry, the candidate matcher, the document collection, the workspace file index, the settings store, the language and
-  theme registries, syntax and the compiled-in grammars, edit history, indentation and language
-  editing configuration, key notation, the command catalog, keymap registries
-  and matching, theme values, resource URIs and providers, package
-  discovery, launch batches and where they open, open requests, where a new terminal starts, the status
-  bar item registry, the
-  workbench layout over tab identities, extension-API
-  semantics such as checked ranges and atomic setting writes, and the
-  protected-closure decisions. Its functions take plain data and the models
+  buffers, editing, history, and syntax with the compiled-in grammars;
+  documents, resource URIs and providers, file watching, and the workspace
+  file index; the language, theme, and settings registries; the command
+  catalog, menus, and keymaps; the workbench layout over tab identities,
+  launches, and protected-closure decisions; extension-API semantics such as
+  providers, completion sessions, checked ranges, and atomic setting writes;
+  and the state database. Its policy functions take plain data and the models
   they change and return results or effects as data; application globals and
-  entities wrap its state.
+  entities wrap its state. The native I/O it owns (providers, watching, the
+  state database) runs off the foreground.
 - `knot-bundled` owns the `BundledSource` type and the build-script helper
   that compiles bundled TypeScript packages. The `knot-ext-*` group crates
-  (languages, vim, workbench) compile and expose the packages of one domain,
-  and the `knot` library never depends on them.
+  (languages, vcs, vim, workbench) compile and expose the packages of one
+  domain, and the `knot` library never depends on them.
 - `knot-host` owns V8, bounded scheduling, and immutable module-graph
   validation. Its public control surface and protocol expose no V8 or gpui
   objects.
@@ -80,22 +83,20 @@ its language and syntax state. Extensions contribute language definitions and
 themes; native code owns grammars, parsing, and the defaults of the color keys
 it paints with, and the application theme maps color keys and highlight names
 to styles.
-Each window owns a workbench of areas, a center of document and terminal tabs
-surrounded by six slots of tool windows, each a split tree of tabbed panes, along with
-Knot-side focus and key routing; tabs hold identities, and the window's
-workbench entity owns the view behind each one; the application keeps the
-registry of open windows, and a native window renders one window and forwards
-raw input to it.
-The workbench retains native tool definitions independently of visible tab
-attachments, including slot placement and hide/reopen state. The application
-owns one SQLite state database of UI-state records: a versioned tool-only
-layout snapshot, which fresh windows inherit while already-open windows stay
-independent; one record of every window's roots and layout that
-startup restores before extensions see `launched`; and the zoom level. It also owns a separate recovery database that protects dirty
-document text independently of extension health. Views own presentation and interaction; terminal sessions own
-PTYs, processes, and emulator state independently of their sole attached view.
-The workbench owns layout transitions; windows coordinate tab transfers,
-application-wide protected closure, and session replacement.
+
+Each window owns a workbench: a center of document and terminal tabs
+surrounded by tool-window slots, each area a split tree of tabbed panes, along
+with Knot-side focus and key routing. Tabs hold identities, and the window's
+workbench entity owns the view behind each one. The workbench owns layout
+transitions; windows coordinate tab transfers, application-wide protected
+closure, and session replacement. The application keeps the registry of open windows, and
+a native window renders one window and forwards raw input to it. Views own
+presentation and interaction; terminal sessions own PTYs, processes, and
+emulator state independently of their sole attached view.
+
+The application owns one SQLite state database of UI-state records (tool
+layout, open windows, zoom) and a separate recovery database that protects
+dirty document text independently of extension health.
 
 Extension runtimes retain JavaScript state in persistent isolates. Host workers
 enter one turn at a time and yield while awaiting native work. The application
@@ -105,10 +106,9 @@ cleanup so registrations and contributions cannot outlive their host.
 Extension-spawned child processes are owned per lifecycle the same way:
 teardown kills their process groups, so no child outlives its package.
 
-Application queries derive metadata from existing document and window owners.
-Observation retains a comparison baseline and lifecycle-scoped subscriptions,
-not a second ownership catalog. Each window owns its native semantic surfaces;
-extensions supply asynchronous content rather than rendering callbacks.
+Queries and observation derive from the existing document and window owners
+rather than keeping a second catalog. Each window owns its native semantic
+surfaces; extensions supply asynchronous content, never rendering callbacks.
 
 ## Invariants
 
@@ -120,27 +120,25 @@ extensions supply asynchronous content rather than rendering callbacks.
   is model code with plain tests. Awaiting, revalidating after an await, and
   scheduling stay in the application; views, painting, and platform input stay
   in views.
-
 - Text and history are shared buffer state. Cursor, selection, folding,
   scroll, and wrapping are per-editor state that runs without a window, and
   the view that renders an editor owns focus, painting, and pointer and
-  platform input; zoom is one application level that every view scales by. A
-  view need not have a text buffer.
+  platform input. A view need not have a text buffer.
 - `BufferModel` owns editable text, never resource identity or persistence.
 - Stable positions and edit events form one contract. `AnchoredRangeStore` owns
   geometry; feature and presentation policy belong above `core`.
 - V8 objects stay inside `host`; extension requests carry Knot-owned semantic
   data and opaque identities.
-- Commands retain admitted presentation authority across awaits. Explicit buffer
-  access is independent of presentation lifetime.
+- A command keeps the tab and view it was invoked on as its target across
+  awaits, and operations on that target reject once it is gone; access
+  through an explicit buffer handle does not depend on the view staying open.
 - Asynchronous results revalidate captured targets, revisions or generations,
   and lifecycle before changing foreground state.
 - Generic resource state uses normalized URIs. Platform paths and native I/O
   errors stay in providers or explicit diagnostic code.
 - Native painting and raw input never synchronously call JavaScript.
-- Syntax trees follow every commit synchronously; parsing that exceeds a small
-  foreground budget continues off the foreground from an immutable text
-  snapshot, and its result is rebased or rejected against the current state.
+- Syntax trees follow every commit; parsing that doesn't fit the foreground
+  budget continues in the background against a text snapshot.
 
 ## Subsystem references
 
