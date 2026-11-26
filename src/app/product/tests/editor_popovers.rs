@@ -57,6 +57,10 @@ await commands.register("LABEL.revert", async ({ target }) => {
 });
 keymaps.bind("n", "LABEL.next", { view: "editor", context: "popover:hunk" });
 await commands.register("LABEL.next", async () => { await workbench.writeClipboardText("LABEL:next"); });
+// A modal package's Escape binding, as Vim's, which popovers outrank.
+keymaps.bind("escape", "LABEL.shadow", { view: "editor", context: "modal" });
+await commands.register("LABEL.shadow", async () => { await workbench.writeClipboardText("LABEL:shadow"); });
+await commands.register("LABEL.modal", async ({ editor: captured }) => { await captured.setKeyContext("modal", true); });
 await commands.register("LABEL.update", async () => {
   await (await editor()).openPopover("hunk", { anchor: { start: 0, end: 3 }, ...await content(90) });
 });
@@ -138,6 +142,10 @@ await commands.register("LABEL.validate", async ({ editor: captured }) => {
   await captured.closePopover("missing");
 });
 "#;
+
+fn clipboard_text(cx: &TestAppContext) -> Option<String> {
+    cx.read(|cx| cx.read_from_clipboard().and_then(|item| item.text()))
+}
 
 fn load(label: &str, id: u64, cx: &mut TestAppContext) -> ExtensionKey {
     let host = cx.read(|cx| crate::app::extensions::host::entity(cx).unwrap());
@@ -377,6 +385,7 @@ fn escape_closes_the_focused_popover_else_the_newest(cx: &mut TestAppContext) {
     let fixture = Fixture::new(cx);
     load("esc", 912, cx);
     fixture.run("esc.watch", cx);
+    fixture.run("esc.modal", cx);
     fixture.run("esc.open", cx);
     fixture.run("esc.hover", cx);
     cx.update_window(fixture.native_window, |_, window, _| window.refresh())
@@ -411,12 +420,17 @@ fn escape_closes_the_focused_popover_else_the_newest(cx: &mut TestAppContext) {
             == Some("esc:hunk:escape:2".to_owned())
     });
 
-    // The last one closes, and Escape with none open is left to the editor.
+    // The last one closes, and Escape with none open reaches the modal
+    // package's binding.
     cx.simulate_keystrokes(fixture.native_window, "escape");
     cx.run_until_parked();
     assert!(fixture.popovers(cx).is_empty());
+    assert_ne!(clipboard_text(cx).as_deref(), Some("esc:shadow"));
     cx.simulate_keystrokes(fixture.native_window, "escape");
     cx.run_until_parked();
+    wait_for_api_condition(cx, |cx| {
+        cx.read_from_clipboard().and_then(|item| item.text()) == Some("esc:shadow".to_owned())
+    });
     assert_eq!(
         cx.read(|cx| fixture.model.read(cx).text()),
         "one\ntwo\nthree\nfour\n"

@@ -96,6 +96,13 @@ impl KnotWindow {
         if self.hold_key(&keystroke, cx) {
             return true;
         }
+        if keystroke.key == "escape"
+            && !keystroke.modifiers.modified()
+            && !self.keys.router.is_pending()
+            && self.dismiss_popover(cx)
+        {
+            return true;
+        }
         if !std::mem::take(&mut self.keys.native)
             && self.route_key(keystroke.clone(), native_window, cx)
         {
@@ -106,9 +113,6 @@ impl KnotWindow {
             return false;
         }
         let escape = keystroke.key == "escape" && !keystroke.modifiers.modified();
-        if escape && !self.keys.router.is_pending() && self.dismiss_popover(cx) {
-            return true;
-        }
         let in_tool = escape && self.focus == Focus::Workbench && self.focused_tool_view(cx);
         let terminal = matches!(
             self.focused_command_view(cx),
