@@ -294,7 +294,7 @@ pub(crate) fn open_terminal(
 pub(crate) fn open_composite(
     destination: DocumentDestination,
     tab: crate::app::composite_view::CompositeTab,
-    layout: crate::app::composite_view::GroupSpec,
+    layout: crate::app::view_layout::GroupSpec,
     cx: &mut App,
 ) -> Result<
     (
@@ -325,7 +325,7 @@ pub(crate) fn open_composite(
 pub(crate) fn update_composite(
     target: &PresentationTarget,
     tab: crate::app::composite_view::CompositeTab,
-    layout: Option<crate::app::composite_view::GroupSpec>,
+    layout: Option<crate::app::view_layout::GroupSpec>,
     cx: &mut App,
 ) -> Result<(String, Vec<crate::app::workbench::ExtensionView>), OpenError> {
     let (window, open) = capture_destination(&DocumentDestination::View(target.clone()), cx)?;

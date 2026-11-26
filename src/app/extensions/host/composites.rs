@@ -14,12 +14,13 @@ use std::collections::HashSet;
 
 use super::ProductExtensionHost;
 use super::handlers::{AccessError, OpenError, PopoverError};
-use crate::app::composite_view::{
-    Arrangement, CONNECTOR_WIDTH, CompositeTab, ConnectorSpec, ContentSpec, GroupSpec, LayoutSize,
-    MemberSpec, ScrollLink, ToolbarButton,
-};
+use crate::app::composite_view::{CompositeTab, ScrollLink};
 use crate::app::extensions::semantics::SemanticError;
 use crate::app::product;
+use crate::app::view_layout::{
+    Arrangement, CONNECTOR_WIDTH, ConnectorSpec, ContentSpec, GroupSpec, LayoutSize, MemberSpec,
+    ToolbarButton,
+};
 use knot_model::editor::popovers::PopoverSpec;
 
 /// What `openComposite` and `updateComposite` set on a tab and its toolbar.

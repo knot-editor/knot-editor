@@ -876,7 +876,7 @@ fn leaf_of(
     window: &Entity<KnotWindow>,
     index: usize,
     cx: &TestAppContext,
-) -> crate::app::composite_view::Leaf {
+) -> crate::app::view_layout::Leaf {
     cx.read(|cx| {
         let workbench = window.read(cx).workbench.read(cx);
         let tab = workbench.focused_pane().unwrap().active_tab();
@@ -967,14 +967,14 @@ fn trees_and_text_frames_are_views_beside_tabs_of_views(cx: &mut TestAppContext)
     assert_eq!(command_view_kind(&window, cx), "tree");
 
     // The provider filled the tree, and the text frame has its text.
-    let crate::app::composite_view::Leaf::Tree(tree) = leaf_of(&window, 0, cx) else {
+    let crate::app::view_layout::Leaf::Tree(tree) = leaf_of(&window, 0, cx) else {
         panic!("the first view is a tree");
     };
     assert_eq!(
         cx.read(|cx| tree.read(cx).visible_labels()),
         ["Alpha", "Beta"]
     );
-    let crate::app::composite_view::Leaf::Text(text) = leaf_of(&window, 2, cx) else {
+    let crate::app::view_layout::Leaf::Text(text) = leaf_of(&window, 2, cx) else {
         panic!("the third view is a text frame");
     };
     assert_eq!(cx.read(|cx| text.read(cx).text(cx)), "log text\n");
@@ -1119,7 +1119,7 @@ fn leaf_ids(window: &Entity<KnotWindow>, cx: &TestAppContext) -> Vec<gpui::Entit
             .read(cx)
             .leaves()
             .iter()
-            .map(crate::app::composite_view::Leaf::entity_id)
+            .map(crate::app::view_layout::Leaf::entity_id)
             .collect()
     })
 }
@@ -1146,7 +1146,7 @@ fn an_update_keeps_the_views_of_kept_children_and_replaces_the_rest(cx: &mut Tes
     let [a, b, c] = leaf_ids(&window, cx)[..] else {
         panic!("three views");
     };
-    let crate::app::composite_view::Leaf::Editor(view) = leaf_of(&window, 1, cx) else {
+    let crate::app::view_layout::Leaf::Editor(view) = leaf_of(&window, 1, cx) else {
         panic!("the second view is an editor");
     };
     let weak_b = view.downgrade();
@@ -1175,7 +1175,7 @@ fn an_update_keeps_the_views_of_kept_children_and_replaces_the_rest(cx: &mut Tes
     );
     assert_eq!(root.children[1].children.len(), 2);
     // The buffers are the kept ones.
-    let crate::app::composite_view::Leaf::Editor(new) = leaf_of(&window, 2, cx) else {
+    let crate::app::view_layout::Leaf::Editor(new) = leaf_of(&window, 2, cx) else {
         panic!("the third view is an editor");
     };
     assert_eq!(cx.read(|cx| new.read(cx).model().read(cx).text()), "d\n");
@@ -1280,7 +1280,7 @@ fn contributed_views_are_kept_dropped_and_unbound_by_an_update(cx: &mut TestAppC
     let (window, native_window, _, _) = window_with_extension(cx);
     run(&window, native_window, "composite.open-keyed-views", cx);
     let tree = leaf_of(&window, 0, cx);
-    let crate::app::composite_view::Leaf::Text(log) = leaf_of(&window, 1, cx) else {
+    let crate::app::view_layout::Leaf::Text(log) = leaf_of(&window, 1, cx) else {
         panic!("the second view is a text frame");
     };
     let weak_log = log.downgrade();
@@ -1296,10 +1296,9 @@ mod documents {
     //! Editors on documents make the composite a view of them.
     use super::*;
     use crate::app::commands::dispatch::CLOSE_TAB_COMMAND;
-    use crate::app::composite_view::{
-        Arrangement, CompositeTab, ContentSpec, GroupSpec, LayoutSize, MemberSpec,
-    };
+    use crate::app::composite_view::CompositeTab;
     use crate::app::documents::DocumentId;
+    use crate::app::view_layout::{Arrangement, ContentSpec, GroupSpec, LayoutSize, MemberSpec};
 
     fn dirty(document: DocumentId, cx: &mut TestAppContext) {
         let model = cx.read(|cx| {
@@ -1579,7 +1578,7 @@ mod documents {
 /// The linked editors' scroll lines.
 fn linked_scrolls(window: &Entity<KnotWindow>, cx: &TestAppContext) -> [f32; 2] {
     [0, 1].map(|index| {
-        let crate::app::composite_view::Leaf::Editor(view) = leaf_of(window, index, cx) else {
+        let crate::app::view_layout::Leaf::Editor(view) = leaf_of(window, index, cx) else {
             panic!("an editor");
         };
         cx.read(|cx| view.read(cx).editor().read(cx).scroll_line())
@@ -1587,7 +1586,7 @@ fn linked_scrolls(window: &Entity<KnotWindow>, cx: &TestAppContext) -> [f32; 2] 
 }
 
 fn scroll_linked(window: &Entity<KnotWindow>, index: usize, line: f32, cx: &mut TestAppContext) {
-    let crate::app::composite_view::Leaf::Editor(view) = leaf_of(window, index, cx) else {
+    let crate::app::view_layout::Leaf::Editor(view) = leaf_of(window, index, cx) else {
         panic!("an editor");
     };
     let editor = cx.read(|cx| view.read(cx).editor().clone());
@@ -1698,7 +1697,7 @@ fn a_connector_that_does_not_join_two_editors_by_key_is_refused(cx: &mut TestApp
 
 #[test]
 fn a_band_spans_both_editors_and_is_skipped_when_both_ends_are_off_screen() {
-    use super::super::super::composite_view::band;
+    use super::super::super::view_layout::band;
     let (above, below) = ((px(-60.), px(-40.)), (px(500.), px(520.)));
     let (a, b) = ((px(10.), px(30.)), (px(20.), px(80.)));
     let x = (px(100.), px(132.));

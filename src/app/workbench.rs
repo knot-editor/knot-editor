@@ -20,12 +20,13 @@ pub(crate) use knot_model::workbench::{
 };
 
 use super::{
-    composite_view::{CompositeCommandTarget, CompositeTab, CompositeView, GroupSpec},
+    composite_view::{CompositeCommandTarget, CompositeTab, CompositeView},
     editor::{EditorView, EditorViewState},
     model::Buffer,
     terminal::view::TerminalView,
     text_view::TextView,
     tree_view::TreeView,
+    view_layout::GroupSpec,
     view_tree::{ViewFocusChanged, ViewNode, ViewTree, ViewTreeChanged},
 };
 
@@ -553,7 +554,7 @@ impl Workbench {
         layout: GroupSpec,
         window: &str,
         cx: &mut Context<Self>,
-    ) -> Option<super::composite_view::LayoutChange> {
+    ) -> Option<super::view_layout::LayoutChange> {
         let tab = self.tab(pane, tab)?;
         let TabSurfaceId::Composite(id) = tab.surface_id() else {
             return None;

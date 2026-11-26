@@ -2533,7 +2533,7 @@ impl KnotWindow {
     fn open_composite(
         &mut self,
         tab: crate::app::composite_view::CompositeTab,
-        layout: crate::app::composite_view::GroupSpec,
+        layout: crate::app::view_layout::GroupSpec,
         cx: &mut Context<Self>,
     ) -> (OpenTarget, Vec<super::workbench::ExtensionView>) {
         let window = window_id(cx.entity_id());
@@ -2565,7 +2565,7 @@ impl KnotWindow {
         &mut self,
         pane: PaneId,
         tab: TabId,
-        layout: crate::app::composite_view::GroupSpec,
+        layout: crate::app::view_layout::GroupSpec,
         cx: &mut Context<Self>,
     ) -> Vec<super::workbench::ExtensionView> {
         let window = window_id(cx.entity_id());
