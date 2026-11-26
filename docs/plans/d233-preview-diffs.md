@@ -54,44 +54,10 @@ file it edits.
 
 ### 1. Composite preview tabs ✅
 
-Status: implemented; the `Try:` commands wait on the review gate.
-
-Deliverables: the generalized preview slot in the layout model; replacement
-across document and composite previews with the right cleanup; promotion of
-composite previews by edit, pin, double-click, move, and Keep Tab Open;
-`preview` on `registerComposite(...).open` and `keep()` on the instance;
-updated setting description and `knot.d.ts` docs.
-
-Validation: model tests for replacement in both directions, promotion, and
-pinned-section invariants; app tests that a replaced composite preview closes
-its instance and releases its owner, that a document only it showed closes,
-that an edit through a composite editor promotes it, and that the setting off
-opens regular tabs; an extension API test for `preview` and `keep()`.
-
-Review gate: user tries composite previews through `Try:` commands.
-
-Implementation context:
-- `crates/knot-model/src/workbench.rs`: `Tab.preview`,
-  `open_preview_for_document`, `promote_edited_previews` (extend to
-  `composite_documents`), `open_composite_in_center`, `replace_tab_document`.
-  Generalize the preview open over `TabSurfaceId` returning the replaced
-  surface; mirror `a_preview_is_replaced_in_place_until_pinning_promotion_or_a_move`.
-  `relocate.rs` already clears `preview` on moves.
-- `src/app/workbench.rs`: `open_preview_for_document`,
-  `open_preview_in_center`, `drop_ended_views`.
-- `src/app/product/open.rs` `present_open_document`: the replaced-document
-  cleanup; add the replaced-composite cleanup beside it, through the same
-  path that closes a composite tab.
-- `src/app/product/operations.rs` `open_composite`, the window's
-  `open_composite`, and `src/app/extensions/host/composites.rs`
-  `open_composite` / `owned_composites` (forget a replaced instance).
-- `crates/knot-host/src/js/bootstrap.ts` `registerComposite` (`preview`
-  argument, `keep()` request) and `knot.d.ts` `OpenCompositeOptions`,
-  `CompositeInstance`, `workbench.previewTabs`;
-  `crates/knot-model/src/settings.rs` `WORKBENCH_PREVIEW_TABS` doc.
-- Promotion triggers already in place: `render.rs` tab double-click,
-  `commands.rs` `workbench.keep-tab-open`, `toggle_pin`.
-- Tests: `src/app/product/tests/previews.rs`, `tests/composite.rs`.
+Done and reviewed: the shared preview slot in the layout model, `preview` on
+`registerComposite(...).open`, `keep()` on the instance, and editors inside
+composites observed for edit promotion. Behavior is covered by the model tests
+and `src/app/product/tests/composite.rs`; the docs land with checkpoint 3.
 
 ### 2. Documents without a tab
 
