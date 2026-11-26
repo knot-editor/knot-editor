@@ -51,9 +51,37 @@ fn show(
     knot::test_support::TestWindow,
     tempfile::TempDir,
 ) {
+    open(text, false, cx)
+}
+
+/// As `show`, in a native window, which clicks need.
+pub(crate) fn show_windowed(
+    text: &str,
+    cx: &mut TestAppContext,
+) -> (
+    TestProduct,
+    knot::test_support::TestWindow,
+    tempfile::TempDir,
+) {
+    open(text, true, cx)
+}
+
+fn open(
+    text: &str,
+    windowed: bool,
+    cx: &mut TestAppContext,
+) -> (
+    TestProduct,
+    knot::test_support::TestWindow,
+    tempfile::TempDir,
+) {
     let directory = tempfile::tempdir().unwrap();
     std::fs::write(directory.path().join("file.txt"), text).unwrap();
-    let product = TestProduct::launch(packages(), cx);
+    let product = if windowed {
+        TestProduct::launch_windowed(packages(), cx)
+    } else {
+        TestProduct::launch(packages(), cx)
+    };
     let window = product.active_window(cx);
     window.set_roots(&[&uri(directory.path())], cx);
     window.open_path(&directory.path().join("file.txt"), cx);

@@ -223,7 +223,7 @@ impl EditorView {
 
     /// Where a click lands on `line` in the marker lane, the bar lane, or the
     /// start of the text.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn click_point_for_test(&self, lane: Option<bool>, line: usize) -> Point<Pixels> {
         let x = match lane {
             Some(false) => 4.,

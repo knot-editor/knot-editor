@@ -130,8 +130,17 @@ impl PopoverContent {
         self.layout.node(id, ViewKind::Popover, cx)
     }
 
+    /// The tooltips of the toolbar's buttons.
+    #[cfg(any(test, feature = "test-support"))]
+    pub(crate) fn toolbar_labels(&self) -> Vec<String> {
+        self.toolbar
+            .iter()
+            .map(|button| button.label.clone())
+            .collect()
+    }
+
     /// The views in layout order.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn leaves(&self) -> Vec<crate::app::view_layout::Leaf> {
         self.layout.leaves().to_vec()
     }
@@ -340,7 +349,7 @@ impl Editor {
     }
 
     /// The content of the open popovers, bottom to top.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn popover_contents(&self) -> Vec<Entity<PopoverContent>> {
         self.popover_views
             .iter()

@@ -63,6 +63,18 @@ fn in_window<R>(
     }
 }
 
+/// An open editor popover, as the driver reads it.
+#[derive(Debug, PartialEq)]
+pub struct TestPopover {
+    pub id: String,
+    /// The lines of the editor it is anchored to.
+    pub anchor: std::ops::Range<u32>,
+    /// The tooltips of its toolbar buttons.
+    pub buttons: Vec<String>,
+    /// The text of each editor it holds.
+    pub texts: Vec<String>,
+}
+
 /// A command started in a window and not yet waited for.
 pub struct TestCommand(CommandExecution);
 
@@ -749,6 +761,74 @@ impl TestWindow {
                 })
                 .collect()
         })
+    }
+
+    /// The first editor tab's open popovers: the lines each is anchored to,
+    /// its toolbar tooltips, and the text of each editor it holds.
+    pub fn popovers(&self, cx: &mut TestAppContext) -> Vec<TestPopover> {
+        cx.read(|cx| {
+            let workbench = self.window.read(cx).workbench.read(cx);
+            let view = workbench
+                .tabs()
+                .find_map(|tab| workbench.editor(tab))
+                .expect("an editor tab");
+            let view = view.read(cx);
+            let editor = view.editor().read(cx);
+            let model = view.model().read(cx);
+            let popovers = editor.popovers().popovers();
+            editor
+                .popover_contents()
+                .into_iter()
+                .zip(popovers)
+                .map(|(content, popover)| {
+                    let content = content.read(cx);
+                    TestPopover {
+                        id: popover.id.clone(),
+                        anchor: editor.popovers().anchor_lines(popover, model).unwrap(),
+                        buttons: content.toolbar_labels(),
+                        texts: content
+                            .leaves()
+                            .iter()
+                            .filter_map(|leaf| leaf.editor())
+                            .map(|view| view.read(cx).model().read(cx).text())
+                            .collect(),
+                    }
+                })
+                .collect()
+        })
+    }
+
+    /// Click the toolbar button of the first editor's popover with the tooltip `label`.
+    pub fn click_popover_button(&self, label: &str, cx: &mut TestAppContext) {
+        let native_window = self.native_window.expect("a native window");
+        let index = self.popovers(cx)[0]
+            .buttons
+            .iter()
+            .position(|button| button == label)
+            .expect("a toolbar button");
+        let selector: &'static str = Box::leak(format!("popover-toolbar-{index}").into_boxed_str());
+        cx.refresh().unwrap();
+        let mut visual = VisualTestContext::from_window(native_window, cx);
+        let at = visual.debug_bounds(selector).unwrap().center();
+        visual.simulate_mouse_down(at, gpui::MouseButton::Left, gpui::Modifiers::default());
+        visual.simulate_mouse_up(at, gpui::MouseButton::Left, gpui::Modifiers::default());
+        cx.run_until_parked();
+    }
+
+    /// Click the bar lane of the gutter on `line` of the first editor tab.
+    pub fn click_gutter_bar(&self, line: usize, cx: &mut TestAppContext) {
+        let native_window = self.native_window.expect("a native window");
+        let at = cx.read(|cx| {
+            let workbench = self.window.read(cx).workbench.read(cx);
+            let view = workbench
+                .tabs()
+                .find_map(|tab| workbench.editor(tab))
+                .expect("an editor tab");
+            view.read(cx).click_point_for_test(Some(true), line)
+        });
+        let mut visual = VisualTestContext::from_window(native_window, cx);
+        visual.simulate_click(at, gpui::Modifiers::default());
+        visual.run_until_parked();
     }
 
     /// Split the normal group's pane, moving focus to the new pane beside it.
