@@ -1,5 +1,6 @@
 import { icons, processes, workbench } from "knot";
 import { backendContract, vcs } from "@knot/vcs";
+import { registerActions, rollback } from "./actions.js";
 import { baseline } from "./baseline.js";
 import { compare } from "./compare.js";
 import { isMissingProgram } from "./git.js";
@@ -29,6 +30,7 @@ if (await available()) {
   await icons.define("git.unstage", { lucide: "minus" });
   await icons.define("git.discard", { lucide: "undo-2" });
   await icons.define("git.rollback", { lucide: "rotate-ccw" });
+  await registerActions();
   await backendContract("git").serve({
     repositories: async (root) => {
       const found = await repositories(root).catch(() => []);
@@ -43,9 +45,7 @@ if (await available()) {
     baseline: ({ repository, file }) => baseline(repository, file).catch(() => null),
     status: (repository) => status(repository).catch(() => ({ files: [], groups: [] })),
     compare: ({ repository, group, file }) => compare(repository, group, file).catch(() => null),
-    rollback: async () => {
-      throw new Error("Rollback is not available yet.");
-    },
+    rollback: ({ repository, path }) => rollback(repository, path),
     ref: (repository) => ref(repository).catch(() => null),
   });
   await (await vcs.client()).register("git");

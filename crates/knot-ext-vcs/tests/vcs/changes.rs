@@ -48,6 +48,20 @@ const TREE: [&str; 8] = [
 /// A repository whose `s.txt` is staged, `a.txt` and `src/b.txt` are edited,
 /// and `new.txt` is untracked, shown in the Changes view.
 fn show(cx: &mut TestAppContext) -> (TestProduct, TestWindow, TestTree, tempfile::TempDir) {
+    show_in(false, cx)
+}
+
+/// `show` in a native window, which prompts need.
+fn show_windowed(
+    cx: &mut TestAppContext,
+) -> (TestProduct, TestWindow, TestTree, tempfile::TempDir) {
+    show_in(true, cx)
+}
+
+fn show_in(
+    windowed: bool,
+    cx: &mut TestAppContext,
+) -> (TestProduct, TestWindow, TestTree, tempfile::TempDir) {
     let directory = resolved_tempdir();
     let root = directory.path();
     git(root, &["init", "-q", "-b", "main"]);
@@ -62,7 +76,11 @@ fn show(cx: &mut TestAppContext) -> (TestProduct, TestWindow, TestTree, tempfile
     write(root, "src/b.txt", "b2\n");
     write(root, "new.txt", "new\n");
 
-    let product = TestProduct::launch(knot_ext_vcs::PACKAGES, cx);
+    let product = if windowed {
+        TestProduct::launch_windowed(knot_ext_vcs::PACKAGES, cx)
+    } else {
+        TestProduct::launch(knot_ext_vcs::PACKAGES, cx)
+    };
     // Changes made with `git` need the operating system's file events.
     product.watch_files(cx);
     let window = product.active_window(cx);
@@ -169,4 +187,150 @@ fn an_open_diff_closes_when_the_file_has_no_change_left_in_its_group(cx: &mut Te
     wait_until(cx, |cx| !texts(&window, cx).is_empty());
     git(directory.path(), &["commit", "-q", "-m", "s", "s.txt"]);
     wait_until(cx, |cx| window.composite_titles(cx).is_empty());
+}
+
+/// `git status --porcelain` of the repository.
+fn porcelain(directory: &Path) -> String {
+    let output = Command::new("git")
+        .args(["status", "--porcelain", "--untracked-files=all"])
+        .env("GIT_OPTIONAL_LOCKS", "0")
+        .current_dir(directory)
+        .output()
+        .unwrap();
+    String::from_utf8(output.stdout).unwrap()
+}
+
+/// Waits until `git status --porcelain` is `expected`, and says what it was otherwise.
+#[track_caller]
+fn wait_porcelain(root: &Path, expected: &str, cx: &mut TestAppContext) {
+    let last = std::cell::RefCell::new(String::new());
+    let waited = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        wait_until(cx, |_| {
+            *last.borrow_mut() = porcelain(root);
+            *last.borrow() == expected
+        })
+    }));
+    if waited.is_err() {
+        assert_eq!(*last.borrow(), expected);
+    }
+}
+
+/// Runs the action of `row` and, when it asks, answers the prompt with `answer`.
+fn act(tree: &TestTree, row: &str, command: &str, answer: Option<&str>, cx: &mut TestAppContext) {
+    let id = tree.row_id(row, cx).unwrap();
+    tree.invoke(&id, command, cx);
+    if let Some(answer) = answer {
+        wait_until(cx, |cx| cx.has_pending_prompt());
+        cx.simulate_prompt_answer(answer);
+    }
+}
+
+#[gpui::test]
+fn stage_acts_on_a_file_a_folder_and_a_group(cx: &mut TestAppContext) {
+    let (_product, _window, tree, directory) = show(cx);
+    let root = directory.path();
+
+    act(&tree, "a.txt", "git.stage", None, cx);
+    wait_porcelain(root, "M  a.txt\nM  s.txt\n M src/b.txt\n?? new.txt\n", cx);
+
+    act(&tree, "src", "git.stage", None, cx);
+    wait_porcelain(root, "M  a.txt\nM  s.txt\nM  src/b.txt\n?? new.txt\n", cx);
+
+    act(&tree, "Untracked", "git.stage", None, cx);
+    wait_porcelain(root, "M  a.txt\nA  new.txt\nM  s.txt\nM  src/b.txt\n", cx);
+    wait_until(cx, |cx| {
+        tree.labels(cx) == ["Staged", "src", "b.txt", "a.txt", "new.txt", "s.txt"]
+    });
+}
+
+#[gpui::test]
+fn unstage_acts_on_a_file_and_a_group(cx: &mut TestAppContext) {
+    let (_product, _window, tree, directory) = show(cx);
+    let root = directory.path();
+    git(root, &["add", "a.txt", "src"]);
+    wait_until(cx, |cx| {
+        tree.labels(cx)
+            .starts_with(&["Staged", "src", "b.txt", "a.txt", "s.txt"].map(str::to_owned))
+    });
+
+    act(&tree, "s.txt", "git.unstage", None, cx);
+    wait_porcelain(root, "M  a.txt\n M s.txt\nM  src/b.txt\n?? new.txt\n", cx);
+
+    wait_until(cx, |cx| {
+        tree.labels(cx)
+            == [
+                "Staged",
+                "src",
+                "b.txt",
+                "a.txt",
+                "Unstaged",
+                "s.txt",
+                "Untracked",
+                "new.txt",
+            ]
+    });
+    act(&tree, "Staged", "git.unstage", None, cx);
+    wait_porcelain(root, " M a.txt\n M s.txt\n M src/b.txt\n?? new.txt\n", cx);
+}
+
+#[gpui::test]
+fn discard_restores_tracked_files_and_deletes_untracked_ones_after_asking(cx: &mut TestAppContext) {
+    let (_product, _window, tree, directory) = show_windowed(cx);
+    let root = directory.path();
+
+    act(&tree, "a.txt", "git.discard", Some("Cancel"), cx);
+    assert_eq!(std::fs::read_to_string(root.join("a.txt")).unwrap(), "a2\n");
+
+    act(&tree, "a.txt", "git.discard", Some("Discard"), cx);
+    wait_until(cx, |_| {
+        std::fs::read_to_string(root.join("a.txt")).unwrap() == "a1\n"
+    });
+    assert_eq!(porcelain(root), "M  s.txt\n M src/b.txt\n?? new.txt\n");
+
+    act(&tree, "Untracked", "git.discard", Some("Delete"), cx);
+    wait_until(cx, |_| !root.join("new.txt").exists());
+    assert_eq!(
+        std::fs::read_to_string(root.join("src/b.txt")).unwrap(),
+        "b2\n"
+    );
+}
+
+#[gpui::test]
+fn rollback_restores_head_and_unstages_an_added_file(cx: &mut TestAppContext) {
+    let (_product, _window, tree, directory) = show_windowed(cx);
+    let root = directory.path();
+    git(root, &["add", "new.txt"]);
+    wait_until(cx, |cx| !tree.labels(cx).contains(&"Untracked".to_owned()));
+
+    act(&tree, "Staged", "git.rollback", Some("Roll Back"), cx);
+    wait_porcelain(root, " M a.txt\n M src/b.txt\n?? new.txt\n", cx);
+    assert_eq!(std::fs::read_to_string(root.join("s.txt")).unwrap(), "s1\n");
+    assert_eq!(
+        std::fs::read_to_string(root.join("new.txt")).unwrap(),
+        "new\n"
+    );
+}
+
+#[gpui::test]
+fn rollback_file_restores_the_focused_file_and_reloads_its_document(cx: &mut TestAppContext) {
+    let (_product, window, _tree, directory) = show_windowed(cx);
+    let root = directory.path();
+    window.open_path(&root.join("a.txt"), cx);
+    wait_until(cx, |cx| window.document_texts(cx) == ["a2\n"]);
+    window.append("unsaved\n", cx);
+    window.focus_document(cx);
+
+    let command = window.start_command("vcs.rollbackFile", cx);
+    wait_until(cx, |cx| cx.has_pending_prompt());
+    cx.simulate_prompt_answer("Cancel");
+    assert_eq!(command.finish(cx), CommandOutcome::Completed);
+    assert_eq!(std::fs::read_to_string(root.join("a.txt")).unwrap(), "a2\n");
+
+    let command = window.start_command("vcs.rollbackFile", cx);
+    wait_until(cx, |cx| cx.has_pending_prompt());
+    cx.simulate_prompt_answer("Roll Back");
+    assert_eq!(command.finish(cx), CommandOutcome::Completed);
+    assert_eq!(std::fs::read_to_string(root.join("a.txt")).unwrap(), "a1\n");
+    wait_until(cx, |cx| window.document_texts(cx) == ["a1\n"]);
+    assert_eq!(window.document_tabs(cx), [("a.txt".to_owned(), false)]);
 }

@@ -37,6 +37,7 @@ const ATTEMPTS = 5;
 const POPUP = "vcs.hunk";
 
 export const SHOW_CHANGES = "vcs.showChanges";
+export const ROLLBACK_FILE = "vcs.rollbackFile";
 export const REVERT_HUNK = "vcs.revertHunk";
 export const COPY_HUNK = "vcs.copyHunk";
 
@@ -502,6 +503,32 @@ export async function start(): Promise<Disposable> {
     });
   };
 
+  /** Restores the focused file to its baseline after a confirmation, and reloads its document. */
+  const rollbackFile = async ({ buffer }: CommandContext) => {
+    const follow = [...follows.values()].find((candidate) => candidate.buffer === buffer);
+    if (follow === undefined || follow.uri === null || follow.repository === null) commands.unavailable();
+    const { backend, root } = follow.repository;
+    const name = decodeURIComponent(follow.uri.slice(follow.uri.lastIndexOf("/") + 1));
+    const document = await documents.get(follow.id);
+    const answer = await workbench.showConfirmation({
+      title: `Roll back ${name}?`,
+      message:
+        document?.dirty === true
+          ? "Its changes, including unsaved edits, are discarded and cannot be recovered."
+          : "Its changes are discarded and cannot be recovered.",
+      confirmLabel: "Roll Back",
+    });
+    if (answer.kind !== "confirmed") return;
+    try {
+      await (await backendContract(backend).client()).rollback({ repository: root, path: follow.uri });
+    } catch (error) {
+      if (!isGone(error)) throw error;
+      drop(backend);
+      return;
+    }
+    await documents.reload(follow.id);
+  };
+
   /** What the backend shows as the ref of the file's repository. */
   async function refLabel({ repository }: Follow) {
     if (repository === null) return "Baseline";
@@ -535,6 +562,10 @@ export async function start(): Promise<Disposable> {
     await commands.register(SHOW_CHANGES, showChanges, {
       title: "Compare with Last Commit",
       description: "Open the file's differences from its version control baseline.",
+    }),
+    await commands.register(ROLLBACK_FILE, rollbackFile, {
+      title: "Rollback File",
+      description: "Restore the file to its version control baseline, discarding its changes.",
     }),
     await commands.register(NEXT_HUNK, go("next"), {
       title: "Go to Next Hunk",
