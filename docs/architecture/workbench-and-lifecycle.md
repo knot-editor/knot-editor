@@ -394,6 +394,13 @@ subscribes to both, and when one scrolls it moves the other to the line
 positions so the echo of its own scroll stops there. Setting or replacing a link,
 or replacing the layout, brings the second editor in line with the first.
 
+A connector member is a strip, not a view, so it has no node in the view tree.
+It names two keyed editors of the layout, resolved after each build, and paints
+a band for each link from the line spans of both editors as of their last
+paint, filled with the link's theme color key. Following the scroll costs the
+package nothing, but a change of text needs the package to send the links again
+with the layout.
+
 The toolbar belongs to the tab's data. A click captures a command target for
 the composite's own tab and its focused leaf, as a click on an editor
 contribution does, and dispatches the command there whatever has focus.

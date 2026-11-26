@@ -155,4 +155,39 @@ await commands.register("playground.composite-unlink", async () => {
   await linked?.update({ scrollLink: null });
 }, { title: "Playground: Unlink Scrolling" });
 
+// A connector: two editors with a band joining the lines that differ, which
+// follows both when you scroll. "Move Connector Band" sends the layout again
+// with a taller modified band and an added one; the editors keep their views
+// and text position.
+let connected;
+const connectedLayout = (left, right, links) => ({ type: "row", children: [
+  { type: "editor", key: "left", buffer: left },
+  { type: "connector", first: "left", second: "right", links },
+  { type: "editor", key: "right", buffer: right },
+] });
+let connectedBuffers;
+await commands.register("playground.composite-connector", async () => {
+  connectedBuffers = [
+    await buffers.create({ text: numbered(0, 100) }),
+    await buffers.create({ text: numbered(0, 10) + numbered(200, 210) + numbered(10, 100) }),
+  ];
+  connected = await (await composites()).open({
+    title: "Connector",
+    icon: "file",
+    layout: connectedLayout(...connectedBuffers, [
+      { first: { start: 10, end: 10 }, second: { start: 10, end: 20 }, color: "diff.added.background" },
+    ]),
+    scrollLink: { first: "left", second: "right",
+      map: [{ first: { start: 10, end: 10 }, second: { start: 10, end: 20 } }] },
+  });
+}, { title: "Playground: Open Connector" });
+await commands.register("playground.composite-connector-move", async () => {
+  if (connected === undefined) return;
+  await connected.update({ layout: connectedLayout(...connectedBuffers, [
+    { first: { start: 10, end: 10 }, second: { start: 10, end: 20 }, color: "diff.added.background" },
+    { first: { start: 30, end: 34 }, second: { start: 40, end: 42 }, color: "diff.modified.background" },
+    { first: { start: 50, end: 52 }, second: { start: 58, end: 58 }, color: "diff.removed.background" },
+  ]) });
+}, { title: "Playground: Move Connector Band" });
+
 console.info("playground loaded");

@@ -234,6 +234,34 @@ removes it. A link must name two different editors of the layout the tab shows:
 `open` and `update` reject `InvalidTarget` otherwise, including an update whose
 new layout lacks a key the kept link names.
 
+A `connector` member draws the strip between two editors of the layout, with a
+band from the lines of one to the lines of the other:
+
+```js
+layout: {
+  type: "row",
+  children: [
+    { type: "editor", key: "left", buffer: left },
+    {
+      type: "connector",
+      first: "left",
+      second: "right",
+      links: [{ first: { start: 3, end: 5 }, second: { start: 3, end: 8 }, color: "diff.modified.background" }],
+    },
+    { type: "editor", key: "right", buffer: right },
+  ],
+}
+```
+
+`first` and `second` are the `key`s of two different editor members, and each
+link's line ranges are the lines its band spans at that editor's edge, in the
+theme `color` key it is filled with. The strip follows both editors'
+scrolling. It is 32 pixels wide unless `size` says otherwise, and it is not a
+view: no key, focus, or node in the view tree, and not a member of `tabs`.
+Links do not follow edits, so send the layout again with new links after each
+rediff; the keyed editors keep their views. A connector that does not name two
+different editors of its layout is a `TypeError`.
+
 ## Ask the user transiently
 
 `workbench` exposes window-local pickers, text input, and a native confirmation
