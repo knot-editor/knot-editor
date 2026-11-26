@@ -181,7 +181,9 @@ is out of view or folded away. The model is in `crates/knot-model/src/editor/pop
 `src/app/editor/tests/popovers.rs`. A popover's height does not follow an extension editing its
 buffer unless it reopens the popover.
 
-### 4. Focus, keys, and dismissal
+### 4. Focus, keys, and dismissal ✅
+
+Implemented; awaiting the review gate in the running app.
 
 `focus: true` focuses the popover's focused member; otherwise the editor
 keeps focus. Each open popover adds `popover:<id>` to its editor's key
@@ -193,6 +195,17 @@ Validation: product tests for Escape order, clicks inside and outside, an
 edit from the editor closing every popover while one typed into a popover
 view does not, a toolbar command's edit closing it, key bindings under the
 popover context, and the reported reasons.
+
+**As built.** Escape is the preset binding `editor.close-popover`, which claims
+the key only while the command's editor, or the editor a focused popover view
+floats over, has a popover. An edit counts as typed inside a popover when focus
+is inside one while the buffer changes; a toolbar command's edit made with
+focus there keeps the popovers. The close reasons are `escape`, `click`,
+`edit`, and `deleted`, reported through `onDidClosePopover` on editor handles
+(`EditorEvent::PopoversClosed`). `focus: true` and the return of focus to the
+text after a focused popover closes are applied when the editor next renders.
+While focus is inside a popover, key contexts are the popover view's own, so
+`popover:<id>` bindings apply while the editor has focus.
 
 **Implementation context.** Key contexts follow `editor_completion` in
 `src/app/editor/paint.rs` and
