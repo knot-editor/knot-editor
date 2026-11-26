@@ -273,6 +273,53 @@ Links do not follow edits, so send the layout again with new links after each
 rediff; the keyed editors keep their views. A connector that does not name two
 different editors of its layout is a `TypeError`.
 
+A `controls` member is a wrapping row of checkboxes and buttons, as tall as
+its content:
+
+```js
+{ type: "controls", items: [
+  { type: "checkbox", label: "Amend", checked: false, command: "example.amend", tooltip: "Replace the last commit" },
+  { type: "button", label: "Commit", primary: true, command: "example.commit", arguments: { push: false } },
+] }
+```
+
+A click runs the item's `command` with `arguments`, with the tab as the
+command's target and the view focused in it as its focus, as a toolbar button
+does; it holds no state, so send the layout again to change `checked` or
+`disabled`. Controls have no `key`, `size`, or `focus`, are not members of
+`tabs`, and do not count as a view, so a layout still needs an editor, text
+frame, or tree. An `editor` member takes a `placeholder`, shown muted while its
+buffer is empty.
+
+## Layout tool windows
+
+A view registered with `content: { kind: "layout" }` is a tool window that
+shows a layout like a composite's, which `update` replaces:
+
+```js
+const files = await workbench.registerView({
+  id: "example.files", title: "Files", embedded: true,
+  content: { kind: "tree", provider },
+});
+const panel = await workbench.registerView({
+  id: "example.panel", title: "Panel", content: { kind: "layout" },
+  placement: { location: "leftTop" },
+});
+await panel.update({
+  layout: { type: "column", children: [{ type: "tree", key: "files", view: files }, message, controls] },
+  toolbar: [{ label: "Output", icon: "terminal", command: "example.output" }],
+});
+```
+
+The window is empty until the first update. `update({ layout, toolbar })`
+replaces what it is given, with a composite's rules for keyed members, so a
+tree keeps its selection and an editor its text across updates. A click on a
+control or toolbar button runs its command with the tool window as target.
+`update(changes, { window })` changes one window; without a window it changes
+every window and is kept for windows created later, which an update to one
+window is not. `embedded` and the other content options do not apply to a
+layout, and `update` on a tree or text view rejects `ContentKindMismatch`.
+
 ## Ask the user transiently
 
 `workbench` exposes window-local pickers, text input, and a native confirmation

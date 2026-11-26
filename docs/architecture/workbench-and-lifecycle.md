@@ -416,9 +416,26 @@ paint, filled with the link's theme color key. Following the scroll costs the
 package nothing, but a change of text needs the package to send the links again
 with the layout.
 
-The toolbar belongs to the tab's data. A click captures a command target for
-the composite's own tab and its focused leaf, as a click on an editor
-contribution does, and dispatches the command there whatever has focus.
+A controls member, a wrapping row of checkboxes and buttons, is not a view
+either: it holds no state, so a package changes it by sending the layout again,
+and its height is its content's.
+
+The toolbar belongs to the tab's data. A click on it or on a control captures a
+command target for the composite's own tab and its focused leaf, as a click on
+an editor contribution does, and dispatches the command there whatever has focus.
+
+### Layout tool windows
+
+A view registered with layout content is a tool window whose `LayoutView`
+(`src/app/layout_view.rs`) holds the same layout and toolbar, built per window
+from what the package last sent: `update` goes to every window or one, and the
+last update to every window is kept for windows created later and applied once
+the new window is free. It is empty until the first layout, and replacing it
+follows the composite rules. The view reports its own command target, the
+layout's focused leaf, so keys, typing, and commands reach the editor or tree
+focused in it; clicks on its toolbar and controls target the tool window and
+that leaf. Embedded views in it bind and unbind as in a composite, and the
+layout is dropped when the package that described it goes.
 
 ## Window layouts
 
