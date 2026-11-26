@@ -150,6 +150,7 @@ function emptyState() {
     fileWatches: [] as { uri: string; recursive: boolean; listener: (uris: readonly string[]) => void | Promise<void> }[],
     /** The `documents.open` calls, oldest first. */
     opens: [] as { uri: string; options: Knot.OpenDocumentOptions }[],
+    loads: [] as string[],
     /** The composite kinds registered, and the instances opened of them, oldest first. */
     compositeKinds: new Set<string>(),
     composites: [] as FakeComposite[],
@@ -1507,6 +1508,11 @@ export function opens(): readonly { uri: string; options: Knot.OpenDocumentOptio
   return state.opens;
 }
 
+/** The `documents.load` calls so far. */
+export function loads(): readonly string[] {
+  return state.loads;
+}
+
 /** Sets the fake `homeUri` seen by extension code; `reset()` restores null. */
 export function setHomeUri(uri: string | null) {
   homeUri = uri;
@@ -2443,6 +2449,13 @@ export const api: KnotApi = {
       let document = [...state.documents.values()].find((candidate) => candidate.resourceUri === uri);
       document ??= state.documents.get(addDocument({ uri, text: state.files.get(uri) ?? "" }))!;
       return presentIn(destinationWindow(options.target), document);
+    },
+    load: async (uri) => {
+      maybeFail("documents.load");
+      state.loads.push(uri);
+      let document = [...state.documents.values()].find((candidate) => candidate.resourceUri === uri);
+      document ??= state.documents.get(addDocument({ uri, text: state.files.get(uri) ?? "" }))!;
+      return documentInfo(document);
     },
     createUntitled: notFaked("documents.createUntitled"),
     reload: notFaked("documents.reload"),

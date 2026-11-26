@@ -547,6 +547,49 @@ fn installed_open_command_consumes_the_committed_result_in_its_originating_windo
         assert_eq!(first.read(cx).workbench.read(cx).view_count(document), 1);
         assert_eq!(second.read(cx).workbench.read(cx).view_count(document), 1);
     });
+    let tabs = cx.read(|cx| second.read(cx).workbench.read(cx).tabs().count());
+    assert_eq!(
+        wait_for_command(
+            dispatch_product_command_with(
+                &second,
+                second_window,
+                "example.load-document",
+                CommandArgumentValue::Object(
+                    [(
+                        "uri".to_owned(),
+                        CommandArgumentValue::String("mem://product/notes.txt".to_owned())
+                    )]
+                    .into()
+                ),
+                cx
+            ),
+            cx
+        ),
+        CommandOutcome::Completed
+    );
+    let loaded: serde_json::Value = cx.read(|cx| {
+        serde_json::from_str(&cx.read_from_clipboard().unwrap().text().unwrap()).unwrap()
+    });
+    assert_eq!(loaded["resourceUri"], "mem://product/notes.txt");
+    cx.read(|cx| {
+        assert_eq!(
+            loaded["document"],
+            documents
+                .read(cx)
+                .get(document)
+                .unwrap()
+                .identity()
+                .to_string(),
+            "an open document is reused"
+        );
+    });
+    cx.read(|cx| {
+        assert_eq!(
+            second.read(cx).workbench.read(cx).tabs().count(),
+            tabs,
+            "loading presents no tab"
+        );
+    });
     assert_eq!(
         wait_for_command(
             dispatch_product_command(&first, first_window, "example.application-state", cx),
@@ -1001,4 +1044,76 @@ await commands.register("operations.terminal", async () => {{
     let root = std::fs::canonicalize(root.path()).unwrap();
     assert_eq!(directories[1..], [root.clone(), root]);
     host.update(cx, |host, cx| host.unload(key, cx).unwrap());
+}
+
+#[gpui::test]
+fn loading_a_document_opens_it_without_a_tab_and_it_closes_with_its_last_view(
+    cx: &mut TestAppContext,
+) {
+    let documents = install_globals(cx);
+    let (filesystems, _) = memory_filesystems_with_provider();
+    cx.set_global(ApplicationFileSystems(filesystems));
+    let placeholder = cx.update(|cx| create_untitled_document(&documents, cx));
+    let model = cx.read(|cx| documents.read(cx).get(placeholder).unwrap().model().clone());
+    let (window, window_handle) = product_window(placeholder, model, cx);
+    let tabs = cx.read(|cx| window.read(cx).workbench.read(cx).tabs().count());
+    let load = |cx: &mut TestAppContext| {
+        let target = cx.read(|cx| current_open_target(&window, cx));
+        let (sender, mut receiver) = tokio::sync::oneshot::channel();
+        window.update(cx, |window, cx| {
+            window.start_resource_operation(
+                OpenRequest::from_uri_for_product(
+                    ResourceUri::parse("mem://product/notes.txt").unwrap(),
+                ),
+                target,
+                super::super::operations::OpenOptions {
+                    kind: Some(crate::app::filesystem::ResourceKind::File),
+                    load_only: true,
+                    ..Default::default()
+                },
+                move |result, _| {
+                    let _ = sender.send(result);
+                },
+                cx,
+            )
+        });
+        cx.run_until_parked();
+        let Ok(OpenCommit::Loaded(document)) = receiver.try_recv().unwrap() else {
+            panic!("a load commits a document without presenting it");
+        };
+        document
+    };
+
+    let document = load(cx);
+    cx.read(|cx| {
+        assert_eq!(
+            documents
+                .read(cx)
+                .get(document)
+                .unwrap()
+                .model()
+                .read(cx)
+                .text(),
+            "loaded text"
+        );
+        let workbench = window.read(cx).workbench.read(cx);
+        assert_eq!(workbench.tabs().count(), tabs);
+        assert_eq!(workbench.view_count(document), 0);
+    });
+    assert_eq!(load(cx), document, "an open document is reused");
+
+    // Showing it makes the tab its only view, so closing the tab closes it.
+    cx.update_window(window_handle, |_, native_window, cx| {
+        let target = current_open_target(&window, cx);
+        window.update(cx, |window, cx| {
+            let shown = window.present_open_document(document, &target, false, false, cx);
+            let tab = shown.tab.unwrap();
+            assert_eq!(
+                window.close_tab(tab.pane, tab.tab, document, native_window, cx),
+                CommandOutcome::Completed
+            );
+        });
+    })
+    .unwrap();
+    cx.read(|cx| assert!(documents.read(cx).get(document).is_none()));
 }

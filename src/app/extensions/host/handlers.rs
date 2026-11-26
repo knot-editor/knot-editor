@@ -255,6 +255,49 @@ async fn open_document(
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub(crate) struct LoadArguments {
+    uri: String,
+    target: Option<knot_protocol::DocumentDestination>,
+}
+
+impl HostArguments for LoadArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self {
+            uri: reader.text(2, "resource URI must be text")?,
+            target: reader.destination(3)?,
+        })
+    }
+}
+
+#[host_operation("loadDocument")]
+async fn load_document(
+    context: HostContext,
+    arguments: LoadArguments,
+) -> Result<knot_protocol::DocumentInfo, OpenError> {
+    let (sender, receiver) = tokio::sync::oneshot::channel();
+    let host = context.host.clone();
+    let request = context.request;
+    context.foreground(move |state, cx| {
+        let destination = state.document_destination(&request, arguments.target, cx)?;
+        product::operations::load_document(
+            arguments.uri,
+            destination,
+            product::operations::OperationCaller {
+                host,
+                key: ExtensionKey::new(request.extension, request.lifecycle),
+                invocation: request.invocation,
+            },
+            move |result, _| {
+                let _ = sender.send(result);
+            },
+            cx,
+        )
+    })??;
+    let document = receiver.await.map_err(|_| AccessError::Cancelled)??;
+    context.foreground(move |host, cx| host.document_info(document, cx))?
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) struct TerminalArguments {
     pub cwd: Option<String>,
     pub target: Option<knot_protocol::DocumentDestination>,

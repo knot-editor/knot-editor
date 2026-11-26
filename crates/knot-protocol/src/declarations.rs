@@ -162,6 +162,12 @@ impl HostSuccess for crate::DocumentPresentation {
     }
 }
 
+impl HostSuccess for crate::DocumentInfo {
+    fn encode(self) -> Result<EncodedValue, DecodeError> {
+        encode_json(self)
+    }
+}
+
 impl HostSuccess for crate::PresentationInfo {
     fn encode(self) -> Result<EncodedValue, DecodeError> {
         encode_json(self)

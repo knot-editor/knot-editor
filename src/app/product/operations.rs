@@ -36,6 +36,8 @@ pub(super) struct OpenOptions {
     pub(super) preview: bool,
     /// Leave the focus where it is instead of moving it to the opened tab.
     pub(super) keep_focus: bool,
+    /// Open the document without presenting it in any tab.
+    pub(super) load_only: bool,
     pub(super) kind: Option<ResourceKind>,
     pub(super) caller: Option<OperationCaller>,
 }
@@ -535,7 +537,49 @@ pub(crate) fn open_document(
                             OpenCommit::Document { document, target } => {
                                 Ok((document, target.public_target()))
                             }
-                            OpenCommit::Workspace(_) => Err(OpenError::ResourceWrongKind),
+                            OpenCommit::Workspace(_) | OpenCommit::Loaded(_) => {
+                                Err(OpenError::ResourceWrongKind)
+                            }
+                        }),
+                    cx,
+                )
+            },
+            cx,
+        )
+    });
+    Ok(())
+}
+
+/// Open a file's document through the provider without presenting it. An
+/// already open document is reused. The caller is expected to show it: it
+/// closes with the last view that shows it.
+pub(crate) fn load_document(
+    uri: String,
+    destination: DocumentDestination,
+    caller: OperationCaller,
+    completion: impl FnOnce(Result<DocumentId, OpenError>, &mut App) + 'static,
+    cx: &mut App,
+) -> Result<(), OpenError> {
+    let uri =
+        super::super::resource::ResourceUri::parse(&uri).map_err(|_| OpenError::InvalidUri)?;
+    let (window, target) = capture_destination(&destination, cx)?;
+    window.update(cx, |window, cx| {
+        window.start_resource_operation(
+            OpenRequest::from_uri_for_product(uri),
+            target,
+            OpenOptions {
+                kind: Some(ResourceKind::File),
+                load_only: true,
+                caller: Some(caller),
+                ..Default::default()
+            },
+            move |result, cx| {
+                completion(
+                    result
+                        .map_err(OpenFailure::host_error)
+                        .and_then(|commit| match commit {
+                            OpenCommit::Loaded(document) => Ok(document),
+                            _ => Err(OpenError::ResourceWrongKind),
                         }),
                     cx,
                 )

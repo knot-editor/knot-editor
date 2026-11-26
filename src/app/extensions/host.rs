@@ -3665,14 +3665,12 @@ impl ProductExtensionHost {
         self.drain_command_events(cx);
     }
 
-    fn document_presentation(
+    fn document_info(
         &mut self,
         id: crate::app::documents::DocumentId,
-        target: knot_protocol::PresentationTarget,
         cx: &mut Context<Self>,
-    ) -> Result<knot_protocol::DocumentPresentation, handlers::OpenError> {
+    ) -> Result<knot_protocol::DocumentInfo, handlers::OpenError> {
         use crate::app::documents::ApplicationDocuments;
-        use knot_protocol::DocumentPresentation;
         let documents = cx.global::<ApplicationDocuments>().0.clone();
         let model = documents
             .read(cx)
@@ -3685,13 +3683,22 @@ impl ProductExtensionHost {
             .read(cx)
             .get(id)
             .ok_or(handlers::OpenError::BufferClosed)?;
-        let info = application_document_info(document, buffer, cx);
+        Ok(application_document_info(document, buffer, cx))
+    }
+
+    fn document_presentation(
+        &mut self,
+        id: crate::app::documents::DocumentId,
+        target: knot_protocol::PresentationTarget,
+        cx: &mut Context<Self>,
+    ) -> Result<knot_protocol::DocumentPresentation, handlers::OpenError> {
+        let document = self.document_info(id, cx)?;
         let presentation = self
             .presentation_info(&target, cx)
             .ok_or(handlers::OpenError::BufferClosed)?;
-        Ok(DocumentPresentation {
+        Ok(knot_protocol::DocumentPresentation {
             presentation,
-            document: info,
+            document,
         })
     }
 

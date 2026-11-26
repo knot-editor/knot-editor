@@ -309,7 +309,13 @@ impl KnotWindow {
             completion(Err(OpenFailure::InvalidTarget), cx);
             return;
         }
-        let generation = self.next_open_generation();
+        // A load presents nothing, so it neither supersedes nor yields to
+        // other opens.
+        let generation = if options.load_only {
+            self.open_generation
+        } else {
+            self.next_open_generation()
+        };
         let uri = request.uri().clone();
         let providers = Self::filesystems(cx);
         let task = cx.spawn(async move |this, cx| {
@@ -323,11 +329,20 @@ impl KnotWindow {
                         .is_some_and(|caller| !caller.is_live(cx))
                     {
                         Err(OpenFailure::Cancelled)
-                    } else if this.open_generation != generation
-                        || !window_is_live(&target.window, &this.workbench, cx)
-                        || !target.matches_presentation(&this.workbench, cx)
+                    } else if !window_is_live(&target.window, &this.workbench, cx)
+                        || (!options.load_only
+                            && (this.open_generation != generation
+                                || !target.matches_presentation(&this.workbench, cx)))
                     {
                         Err(OpenFailure::InvalidTarget)
+                    } else if options.load_only {
+                        loaded
+                            .map(|resource| {
+                                let document = Self::resource_document(resource, cx)
+                                    .expect("a file-only load yields a document");
+                                OpenCommit::Loaded(document)
+                            })
+                            .map_err(OpenFailure::Resource)
                     } else {
                         this.apply_open_result(
                             loaded,

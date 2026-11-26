@@ -623,6 +623,8 @@ enum OpenCommit {
         document: DocumentId,
         target: OpenTarget,
     },
+    /// A document opened without a tab.
+    Loaded(DocumentId),
     Workspace(
         #[cfg_attr(
             not(test),

@@ -217,6 +217,12 @@ declare module "knot" {
      * window, otherwise creates one in the captured pane. Focus changes during I/O
      * never retarget the request. Resolves after commit without awaiting observers. */
     open(uri: string, options?: OpenDocumentOptions): Promise<DocumentPresentation>;
+    /** Opens a file's document like `open` (through the provider, reusing an open
+     * document, missing files becoming dirty destinations) but presents no tab.
+     * The document closes with the last view that shows it, so the caller is
+     * expected to show it; one no view ever shows stays open until closed.
+     * @throws HostError as `open` does. */
+    load(uri: string, options?: DocumentDestinationOptions): Promise<DocumentInfo>;
     /** Creates a clean, empty ordinary document together with its native tab. */
     createUntitled(options?: DocumentDestinationOptions): Promise<DocumentPresentation>;
     /** Presents a shared live document, reusing its tab in the destination window.

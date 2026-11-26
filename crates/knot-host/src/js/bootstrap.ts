@@ -2477,6 +2477,10 @@ export async function openDocument(uri: unknown, options?: Opts) {
   return documentPresentationFromNative(value);
 }
 
+export async function loadDocument(uri: unknown, options?: Opts) {
+  return documentFromNative(await request("loadDocument", string(uri, "resource URI must be text"), destinationAuthority(options)));
+}
+
 export async function openTerminal(options?: Opts) {
   const fields = options === undefined ? {} : record(options, "terminal options must be an object");
   const { cwd, location } = fields;

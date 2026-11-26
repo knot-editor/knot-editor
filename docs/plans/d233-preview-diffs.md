@@ -59,26 +59,14 @@ Done and reviewed: the shared preview slot in the layout model, `preview` on
 composites observed for edit promotion. Behavior is covered by the model tests
 and `src/app/product/tests/composite.rs`; the docs land with checkpoint 3.
 
-### 2. Documents without a tab
+### 2. Documents without a tab ✅
 
-Deliverables: `documents.load(uri)` returning the document's info without
-presenting it.
-
-Validation: app tests that it opens through the provider without a tab,
-reuses an open document, and that the document closes with the last view
-that shows it; an extension API test.
-
-Review gate: folded into checkpoint 3's review.
-
-Implementation context:
-- `src/app/extensions/host/handlers.rs` `openDocument` / `OpenArguments`;
-  add a sibling operation calling the open path in
-  `src/app/product/operations.rs` `open_document` without the presentation
-  step of `src/app/product/open.rs`.
-- Closing a document whose last view goes: the rule `update_composite` and
-  composite tab closure already apply; confirm it covers a document that
-  never had a tab.
-- `bootstrap.ts` and `knot.d.ts` `documents`.
+Done: `documents.load(uri)` (`loadDocument` operation, `OpenOptions.load_only`
+in `src/app/product`) opens through the provider, reuses an open document,
+and presents no tab; it neither bumps nor yields to the window's open
+generation. Covered by `src/app/product/tests/operations.rs`; the test fake
+records calls as `loads()`. Review folded into checkpoint 3; the docs land
+there.
 
 ### 3. Preview diffs in the Changes view and gutter
 

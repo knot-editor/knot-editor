@@ -44,6 +44,12 @@ await commands.register("example.open-document", async ({ arguments: args }) => 
     kind: result.document.kind, dirty: result.document.dirty }, null, 2));
 });
 
+await commands.register("example.load-document", async ({ arguments: args }) => {
+  const document = await documents.load(args.uri);
+  await workbench.writeClipboardText(JSON.stringify({ document: document.id,
+    title: document.title, resourceUri: document.resourceUri, kind: document.kind }));
+});
+
 await commands.register("example.open-folder", async ({ arguments: args }) => {
   let uri;
   if (args !== null && typeof args === "object" && !Array.isArray(args) && "uri" in args && typeof args.uri === "string") {
