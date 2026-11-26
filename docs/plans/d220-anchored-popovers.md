@@ -160,30 +160,15 @@ exactly. The extension testing host fakes the two methods.
 
 ### 2. Full content in the view tree ✅
 
-Every composite member kind works in a popover: rows, columns, `tabs`, `text`
-and `tree` frames of embedded views, document editors, and keyed members that
-keep their views across `openPopover` updates. Toolbar buttons run their
-command with the anchoring editor's tab as target. The `popover` node joins
-the view tree under its editor, `workbench.editor` reaches its editors, and
-Vim works in a popover's editor.
-
-Validation: product tests for keyed updates, toolbar command targets,
-document editors counting as views for closure, the `popover` node and its
-`parents`, and `workbench.editor` on a popover's editor.
-
-**Scope decision.** The popover's height is a required `height` option in
-logical pixels, scaled by zoom, until checkpoint 3 replaces it with natural
-sizing; members' `pixels` are window pixels (scale 1). Document editors count
-through `ApplicationWindows::view_count`, which adds the tabs whose popovers
-show the document, so closing the other tabs keeps it open. Tests drive focus
-inside a popover with `PopoverContent::focus_leaf`, as composite tests do,
-because test windows never deliver focus events.
-
-**Implementation context.** The layout module is `src/app/view_layout.rs`
-(`Layout`, `Group`, `toolbar`); `CompositeView` and `PopoverContent`
-(`src/app/editor/popovers.rs`) own one each. A popover's node is a child of its
-editor's node (`EditorView::view_node`), and its toolbar commands run through
-`run_popover_command` in `src/app/product.rs`.
+Done and reviewed. A popover takes a `toolbar` and a `layout` of every
+composite member kind, built by `src/app/view_layout.rs` and owned by
+`PopoverContent` in `src/app/editor/popovers.rs`. Its node is a child of its
+editor's node, toolbar commands run through `run_popover_command` with the
+anchoring editor as their editor, and document editors count as views through
+`ApplicationWindows::view_count`. Limits that checkpoint 3 lifts: the height is
+a required `height` option in logical pixels, and members' `pixels` are window
+pixels (scale 1). Tests drive focus inside a popover with
+`PopoverContent::focus_leaf`, because test windows deliver no focus events.
 
 ### 3. Size, zoom, and placement
 
