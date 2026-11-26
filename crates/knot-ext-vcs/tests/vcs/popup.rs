@@ -33,12 +33,12 @@ fn changed(
 }
 
 const BUTTONS: [&str; 4] = [
-    "Previous Change",
-    "Next Change",
-    "Revert Change",
+    "Previous Hunk",
+    "Next Hunk",
+    "Revert Hunk",
     "Compare with Last Commit",
 ];
-const COPY: &str = "Copy Change";
+const COPY: &str = "Copy Hunk";
 
 #[gpui::test]
 fn a_click_on_a_mark_opens_the_baseline_lines_under_the_hunk(cx: &mut TestAppContext) {
@@ -65,7 +65,7 @@ fn an_insertions_popup_has_only_the_toolbar(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn copy_change_puts_the_baseline_lines_on_the_clipboard(cx: &mut TestAppContext) {
+fn copy_hunk_puts_the_baseline_lines_on_the_clipboard(cx: &mut TestAppContext) {
     let (_product, window, _directory) = changed(cx);
     window.click_gutter_bar(0, cx);
     wait_until(cx, |cx| !window.popovers(cx).is_empty());
@@ -94,11 +94,11 @@ fn next_and_previous_move_the_caret_and_the_popup_and_wrap(cx: &mut TestAppConte
     wait_until(cx, |cx| !window.popovers(cx).is_empty());
 
     for (button, line, anchor) in [
-        ("Next Change", 2, 1..2),
-        ("Next Change", 3, 3..4),
-        ("Next Change", 0, 0..1),
-        ("Previous Change", 3, 3..4),
-        ("Previous Change", 2, 1..2),
+        ("Next Hunk", 2, 1..2),
+        ("Next Hunk", 3, 3..4),
+        ("Next Hunk", 0, 0..1),
+        ("Previous Hunk", 3, 3..4),
+        ("Previous Hunk", 2, 1..2),
     ] {
         window.click_popover_button(button, cx);
         wait_until(cx, |cx| {
@@ -138,7 +138,7 @@ fn reverting_restores_the_baseline_in_one_undo_step_and_closes_the_popup(cx: &mu
     let (_product, window, _directory) = changed(cx);
     window.click_gutter_bar(0, cx);
     wait_until(cx, |cx| !window.popovers(cx).is_empty());
-    window.click_popover_button("Revert Change", cx);
+    window.click_popover_button("Revert Hunk", cx);
     wait_until(cx, |cx| text(&window, cx) == "a\nb\nd\ne\n");
     wait_until(cx, |cx| window.popovers(cx).is_empty());
 
@@ -154,7 +154,7 @@ fn the_commands_work_on_the_hunk_at_the_caret(cx: &mut TestAppContext) {
     let (_product, window, _directory) = changed(cx);
     window.set_view(0, 0, 0, cx);
     assert_eq!(
-        window.run_command("vcs.showChange", cx),
+        window.run_command("vcs.showHunk", cx),
         CommandOutcome::Completed
     );
     wait_until(cx, |cx| !window.popovers(cx).is_empty());
@@ -163,7 +163,7 @@ fn the_commands_work_on_the_hunk_at_the_caret(cx: &mut TestAppContext) {
     // The removal of `c`, and then the added line.
     window.set_view(5, 5, 0, cx);
     assert_eq!(
-        window.run_command("vcs.revertChange", cx),
+        window.run_command("vcs.revertHunk", cx),
         CommandOutcome::Completed
     );
     wait_until(cx, |cx| text(&window, cx) == "A\nb\nc\nd\ne\n");
@@ -173,7 +173,7 @@ fn the_commands_work_on_the_hunk_at_the_caret(cx: &mut TestAppContext) {
 fn a_caret_on_no_change_leaves_the_commands_unavailable(cx: &mut TestAppContext) {
     let (_product, window, _directory) = changed(cx);
     window.set_view(2, 2, 0, cx);
-    for command in ["vcs.showChange", "vcs.revertChange"] {
+    for command in ["vcs.showHunk", "vcs.revertHunk"] {
         assert_eq!(window.run_command(command, cx), CommandOutcome::Unavailable);
     }
     assert!(window.popovers(cx).is_empty());

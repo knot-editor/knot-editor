@@ -345,7 +345,7 @@ export async function run(state: State, command: Command, repeating = false) {
       for (let step = 0; step < command.count; step += 1) {
         let outcome = await commands.invoke(command.forward ? "diff.nextHunk" : "diff.previousHunk");
         if (outcome.kind === "unavailable") {
-          outcome = await commands.invoke(command.forward ? "vcs.nextChange" : "vcs.previousChange");
+          outcome = await commands.invoke(command.forward ? "vcs.nextHunk" : "vcs.previousHunk");
         }
         if (outcome.kind !== "completed") break;
       }

@@ -6,13 +6,13 @@ export const MODIFIED = "diff.modified";
 export const REMOVED = "diff.removed";
 
 /** The command a click on a change mark runs. */
-export const SHOW_CHANGE = "vcs.showChange";
+export const SHOW_HUNK = "vcs.showHunk";
 
 /**
  * One contribution per hunk: a bar over the new lines of an insertion
  * (`diff.added`) or a replacement (`diff.modified`), and a wedge at the
  * boundary where lines were removed (`diff.removed`). A click on a mark
- * runs `vcs.showChange`. Reads line ranges of the buffer's current text, so the caller replaces at the revision it
+ * runs `vcs.showHunk`. Reads line ranges of the buffer's current text, so the caller replaces at the revision it
  * diffed and retries when that no longer holds.
  */
 export async function contributionsOf(buffer: Buffer, hunks: readonly DiffHunk[]): Promise<EditorContribution[]> {
@@ -29,7 +29,7 @@ export async function contributionsOf(buffer: Buffer, hunks: readonly DiffHunk[]
       items.push({
         range: { startByteOffset, endByteOffset: startByteOffset },
         gutter: { color: REMOVED, style: "deletion" },
-        command: SHOW_CHANGE,
+        command: SHOW_HUNK,
       });
       continue;
     }
@@ -38,7 +38,7 @@ export async function contributionsOf(buffer: Buffer, hunks: readonly DiffHunk[]
     items.push({
       range: { startByteOffset: first.startByteOffset, endByteOffset: final.endByteOffset },
       gutter: { color: old.end === old.start ? ADDED : MODIFIED, style: "bar" },
-      command: SHOW_CHANGE,
+      command: SHOW_HUNK,
     });
   }
   return items;

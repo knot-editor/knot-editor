@@ -77,7 +77,7 @@ change.
 
 ## Navigation
 
-`vcs.nextChange` and `vcs.previousChange` (Alt+F5 and Alt+Shift+F5 in editors,
+`vcs.nextHunk` and `vcs.previousHunk` (Alt+F5 and Alt+Shift+F5 in editors,
 `]c` and `[c` in Vim mode) diff the focused editor against its cached baseline
 and move the caret to the first line of the nearest hunk, wrapping at the ends.
 A removal's line is the one that followed the removed lines. A document without

@@ -19,7 +19,7 @@ import type {
 } from "knot";
 import { diffs } from "@knot/diff";
 import { backendContract, vcs } from "./contract.js";
-import { contributionsOf, SHOW_CHANGE } from "./gutter.js";
+import { contributionsOf, SHOW_HUNK } from "./gutter.js";
 import { anchorLines, baselineText, hunkAt, revertEdit } from "./hunk.js";
 import { targetLine, type Direction } from "./navigation.js";
 import { createDiscovery, isGone, type Repository } from "./repositories.js";
@@ -36,8 +36,8 @@ const ATTEMPTS = 5;
 const POPUP = "vcs.hunk";
 
 export const SHOW_CHANGES = "vcs.showChanges";
-export const REVERT_CHANGE = "vcs.revertChange";
-export const COPY_CHANGE = "vcs.copyChange";
+export const REVERT_HUNK = "vcs.revertHunk";
+export const COPY_HUNK = "vcs.copyHunk";
 
 /** The hunk popup that is open on one of a document's editors. */
 type Popup = {
@@ -87,8 +87,8 @@ function same(left: Repository | null, right: Repository | null) {
   return left?.backend === right?.backend && left?.root === right?.root;
 }
 
-export const NEXT_CHANGE = "vcs.nextChange";
-export const PREVIOUS_CHANGE = "vcs.previousChange";
+export const NEXT_HUNK = "vcs.nextHunk";
+export const PREVIOUS_HUNK = "vcs.previousHunk";
 
 /** Serves `vcs` to backends and marks changes; resolves with what stops both. */
 export async function start(): Promise<Disposable> {
@@ -404,12 +404,12 @@ export async function start(): Promise<Disposable> {
       await editor.openPopover(POPUP, {
         anchor: { start: first, end: last + 1 },
         toolbar: [
-          { label: "Previous Change", icon: "vcs.previousChange", command: PREVIOUS_CHANGE },
-          { label: "Next Change", icon: "vcs.nextChange", command: NEXT_CHANGE },
-          { label: "Revert Change", icon: "vcs.revertChange", command: REVERT_CHANGE, arguments: here },
+          { label: "Previous Hunk", icon: "vcs.previousHunk", command: PREVIOUS_HUNK },
+          { label: "Next Hunk", icon: "vcs.nextHunk", command: NEXT_HUNK },
+          { label: "Revert Hunk", icon: "vcs.revertHunk", command: REVERT_HUNK, arguments: here },
           { label: "Compare with Last Commit", icon: "vcs.compare", command: SHOW_CHANGES, arguments: here },
           // An insertion has no baseline lines to copy.
-          ...(text === "" ? [] : [{ label: "Copy Change", icon: "vcs.copyChange", command: COPY_CHANGE, arguments: here }]),
+          ...(text === "" ? [] : [{ label: "Copy Hunk", icon: "vcs.copyHunk", command: COPY_HUNK, arguments: here }]),
         ],
         layout: {
           type: "column",
@@ -436,26 +436,26 @@ export async function start(): Promise<Disposable> {
   }
 
   /** Opens the popup of the clicked mark's hunk, or of the hunk at the caret. */
-  const showChange = async (context: CommandContext) => {
+  const showHunk = async (context: CommandContext) => {
     const { follow, hunk } = await hunkOf(context);
     await openPopup(follow, context, hunk);
   };
 
   /** Replaces the hunk's current lines with its baseline lines. */
-  const revertChange = async (context: CommandContext) => {
+  const revertHunk = async (context: CommandContext) => {
     const { buffer, hunk, baseline, revision } = await hunkOf(context);
     await buffer.applyEdits([await revertEdit(baseline, hunk, buffer)], { ifRevision: revision });
   };
 
-  /** Copies the baseline's lines that the change replaced. */
-  const copyChange = async (context: CommandContext) => {
+  /** Copies the baseline's lines that the hunk replaced. */
+  const copyHunk = async (context: CommandContext) => {
     const { hunk, baseline } = await hunkOf(context);
     const text = baselineText(baseline, hunk);
     if (text === "") commands.unavailable();
     await workbench.writeClipboardText(text);
   };
 
-  /** Moves the caret of the focused editor to the next or previous change, and the open popup with it. */
+  /** Moves the caret of the focused editor to the next or previous hunk, and the open popup with it. */
   const go = (direction: Direction) => async (context: CommandContext) => {
     const { editor, buffer } = context;
     if (editor === null || buffer === null) commands.unavailable();
@@ -506,39 +506,39 @@ export async function start(): Promise<Disposable> {
     }
   }
 
-  await icons.define("vcs.previousChange", { lucide: "arrow-up" });
-  await icons.define("vcs.nextChange", { lucide: "arrow-down" });
-  await icons.define("vcs.revertChange", { lucide: "undo-2" });
-  await icons.define("vcs.copyChange", { lucide: "copy" });
+  await icons.define("vcs.previousHunk", { lucide: "arrow-up" });
+  await icons.define("vcs.nextHunk", { lucide: "arrow-down" });
+  await icons.define("vcs.revertHunk", { lucide: "undo-2" });
+  await icons.define("vcs.copyHunk", { lucide: "copy" });
   await icons.define("vcs.compare", { lucide: "git-compare" });
   const navigation = [
-    await commands.register(SHOW_CHANGE, showChange, {
-      title: "Show Change",
-      description: "Show the version control baseline's lines for the change at the cursor.",
+    await commands.register(SHOW_HUNK, showHunk, {
+      title: "Show Hunk",
+      description: "Show the version control baseline's lines for the hunk at the cursor.",
     }),
-    await commands.register(REVERT_CHANGE, revertChange, {
-      title: "Revert Change",
-      description: "Replace the change at the cursor with its version control baseline.",
+    await commands.register(REVERT_HUNK, revertHunk, {
+      title: "Revert Hunk",
+      description: "Replace the hunk at the cursor with its version control baseline.",
     }),
-    await commands.register(COPY_CHANGE, copyChange, {
-      title: "Copy Change",
-      description: "Copy the version control baseline's lines for the change at the cursor.",
+    await commands.register(COPY_HUNK, copyHunk, {
+      title: "Copy Hunk",
+      description: "Copy the version control baseline's lines for the hunk at the cursor.",
     }),
     await commands.register(SHOW_CHANGES, showChanges, {
       title: "Compare with Last Commit",
       description: "Open the file's differences from its version control baseline.",
     }),
-    await commands.register(NEXT_CHANGE, go("next"), {
-      title: "Go to Next Change",
-      description: "Move the cursor to the next line changed from the version control baseline.",
+    await commands.register(NEXT_HUNK, go("next"), {
+      title: "Go to Next Hunk",
+      description: "Move the cursor to the next hunk from the version control baseline.",
     }),
-    await commands.register(PREVIOUS_CHANGE, go("previous"), {
-      title: "Go to Previous Change",
-      description: "Move the cursor to the previous line changed from the version control baseline.",
+    await commands.register(PREVIOUS_HUNK, go("previous"), {
+      title: "Go to Previous Hunk",
+      description: "Move the cursor to the previous hunk from the version control baseline.",
     }),
   ];
-  keymaps.bind("alt-f5", NEXT_CHANGE, { view: "editor" });
-  keymaps.bind("alt-shift-f5", PREVIOUS_CHANGE, { view: "editor" });
+  keymaps.bind("alt-f5", NEXT_HUNK, { view: "editor" });
+  keymaps.bind("alt-shift-f5", PREVIOUS_HUNK, { view: "editor" });
 
   const observation = await workbench.observe((event) => {
     if (event.type === "workspaceChanged" || event.type === "windowOpened") resolveAll();

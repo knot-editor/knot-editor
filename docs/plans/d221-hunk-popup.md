@@ -5,7 +5,7 @@ Status: 🚧 planned. Roadmap item [D221](../roadmap.md), part of the
 
 ## Outcome
 
-A click on a change mark in the gutter opens a popup under the hunk. It shows
+A click on a hunk mark in the gutter opens a popup under the hunk. It shows
 the baseline's lines that the hunk replaced, in the file's language. Its toolbar
 moves to the previous and next hunk, reverts the hunk, and opens the file's
 diff at that hunk. The same popup opens from the palette for the hunk at the
@@ -32,21 +32,21 @@ with one native change: a popover's layout may hold no view.
 - **One popup per editor.** It has a fixed popover ID, `vcs.hunk`. The package
   remembers, per editor, which hunk the popup shows. Opening it on another hunk
   updates it in place.
-- **Opening.** A click on a change mark runs `vcs.showChange` instead of
-  `vcs.showChanges`. `vcs.showChange` ("Show Change") opens the popup for the
+- **Opening.** A click on a hunk mark runs `vcs.showHunk` instead of
+  `vcs.showChanges`. `vcs.showHunk` ("Show Hunk") opens the popup for the
   clicked mark's hunk, or for the hunk at the caret from the palette. It has no
   default key. A caret on no hunk leaves it unavailable.
-- **Toolbar.** Previous Change, Next Change, Revert Change, Compare with Last
-  Commit, and Copy Change (not on an insertion). `vcs.copyChange` ("Copy
-  Change") copies the baseline's lines for the change at the caret. Previous
-  and Next move the caret to that hunk, as `vcs.previousChange` and
-  `vcs.nextChange` do (wrapping at the ends), and move the popup there. Compare with Last Commit runs `vcs.showChanges` at the
-  hunk's line.
-- **Navigation while open.** `vcs.nextChange` and `vcs.previousChange` (Alt+F5,
+- **Toolbar.** Previous Hunk, Next Hunk, Revert Hunk, Compare with Last
+  Commit, and Copy Hunk (not on an insertion). `vcs.copyHunk` ("Copy
+  Hunk") copies the baseline's lines for the hunk at the caret. Previous
+  and Next move the caret to that hunk, as `vcs.previousHunk` and
+  `vcs.nextHunk` do (wrapping at the ends), and move the popup there. Compare
+  with Last Commit runs `vcs.showChanges` at the hunk's line.
+- **Navigation while open.** `vcs.nextHunk` and `vcs.previousHunk` (Alt+F5,
   Alt+Shift+F5, `]c` and `[c`) also move the popup when it is open on the
   focused editor, so stepping through changes keeps it showing. Without a popup
   they behave as today.
-- **Revert.** `vcs.revertChange` ("Revert Change") replaces the hunk's current
+- **Revert.** `vcs.revertHunk` ("Revert Hunk") replaces the hunk's current
   lines with its baseline lines in one edit at the diffed revision, one undo
   step. It works from the toolbar on the popup's hunk, and from the palette on
   the hunk at the caret. The edit closes the popup, since popovers close on any
@@ -64,7 +64,7 @@ with one native change: a popover's layout may hold no view.
 - Showing the hunk inline, with the deleted lines pushed between the editor's
   lines as Zed does: a follow-up of D231, inline zones.
 - Highlighting changes inside a line.
-- A default key for `vcs.showChange`.
+- A default key for `vcs.showHunk`.
 
 ### Deferred decisions
 
@@ -82,10 +82,10 @@ lines carry their terminators and have no trailing empty line, unlike
 
 ### 2. The popup, its commands, and the click 🚧
 
-The user-visible feature: `vcs.showChange`, `vcs.revertChange`, the toolbar,
+The user-visible feature: `vcs.showHunk`, `vcs.revertHunk`, the toolbar,
 navigation moving the popup, and the closing rules.
 
-- Gutter marks run `vcs.showChange` with the mark's range as arguments, as
+- Gutter marks run `vcs.showHunk` with the mark's range as arguments, as
   they now pass it to `vcs.showChanges`.
 - The popup state per editor (hunk, baseline buffer) is dropped on
   `onDidClosePopover`, on baseline refetch, and on document close, and its
@@ -110,8 +110,8 @@ manual check.
 **Validation.** Product tests: a click on a mark opens the popup with the
 baseline lines; Next and Previous move the caret and the popup, wrapping;
 Revert restores the baseline text in one undo step and closes the popup;
-`vcs.showChange` and `vcs.revertChange` from the caret; a baseline refetch
-closes the popup; an insertion's popup has only the toolbar; Copy Change
+`vcs.showHunk` and `vcs.revertHunk` from the caret; a baseline refetch
+closes the popup; an insertion's popup has only the toolbar; Copy Hunk
 copies the baseline lines. `just check`.
 
 **Review gate.** Manual check in the app through the `Try:` commands.
