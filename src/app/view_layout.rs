@@ -23,6 +23,7 @@ use super::text_view::TextView;
 use super::theme::{color, theme};
 use super::tokens;
 use super::tree_view::TreeView;
+use super::view_controls::{ControlItem, ControlsView};
 use super::view_tree::{ViewKind, ViewNode, ViewTree as _};
 use super::workbench::{CommandView, ExtensionView};
 use super::zoom;
@@ -51,6 +52,15 @@ fn no_arguments() -> CommandArgumentValue {
     CommandArgumentValue::Null
 }
 
+/// Runs the command of a clicked control with the window it was clicked in,
+/// once the foreground is free.
+pub(crate) type RunCommand = Rc<dyn Fn(AnyWindowHandle, Command, &mut App)>;
+
+/// A command runner for a layout that has no controls.
+pub(crate) fn ignore_commands() -> RunCommand {
+    Rc::new(|_, _, _| {})
+}
+
 /// How much of a group's main axis a member takes.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum LayoutSize {
@@ -58,6 +68,8 @@ pub(crate) enum LayoutSize {
     /// other weights.
     Weight(f32),
     Pixels(f32),
+    /// As much as the member's content takes.
+    Auto,
 }
 
 impl Default for LayoutSize {
@@ -146,12 +158,16 @@ pub(crate) enum ContentSpec {
     Editor {
         buffer: Entity<Buffer>,
         document: Option<DocumentId>,
+        /// Muted text shown while the buffer is empty.
+        placeholder: Option<String>,
     },
     /// A text frame of the contributed view of this kind.
     Text(String),
     /// A tree of the contributed view of this kind.
     Tree(String),
     Connector(ConnectorSpec),
+    /// A wrapping row of checkboxes and buttons.
+    Controls(Vec<ControlItem>),
     Group(GroupSpec),
 }
 
@@ -159,7 +175,7 @@ impl ContentSpec {
     fn leaf_count(&self) -> usize {
         match self {
             Self::Group(group) => group.leaf_count(),
-            Self::Connector(_) => 0,
+            Self::Connector(_) | Self::Controls(_) => 0,
             _ => 1,
         }
     }
@@ -318,6 +334,7 @@ enum Source {
     Text(String),
     Tree(String),
     Connector,
+    Controls,
     Group,
 }
 
@@ -328,6 +345,7 @@ impl Source {
             ContentSpec::Text(kind) => Self::Text(kind.clone()),
             ContentSpec::Tree(kind) => Self::Tree(kind.clone()),
             ContentSpec::Connector(_) => Self::Connector,
+            ContentSpec::Controls(_) => Self::Controls,
             ContentSpec::Group(_) => Self::Group,
         }
     }
@@ -358,7 +376,7 @@ impl Member {
         match &self.content {
             Content::Leaf(leaf) => Extent::Leaf(leaf.natural_height(self.limit, cx)),
             Content::Group(group) => group.read(cx).0.extent(cx),
-            Content::Connector(_) => Extent::Leaf(0.),
+            Content::Connector(_) | Content::Controls(_) => Extent::Leaf(0.),
         }
     }
 }
@@ -372,6 +390,7 @@ enum Content {
     Leaf(Leaf),
     Group(Entity<GroupView>),
     Connector(Entity<ConnectorView>),
+    Controls(Entity<ControlsView>),
 }
 
 impl Content {
@@ -384,7 +403,7 @@ impl Content {
                 let group = &group.read(cx).0;
                 group.members.get(group.shown())?.content.entry_leaf(cx)
             }
-            Self::Connector(_) => None,
+            Self::Connector(_) | Self::Controls(_) => None,
         }
     }
 
@@ -393,6 +412,7 @@ impl Content {
             Self::Leaf(leaf) => leaf.element(),
             Self::Group(group) => group.clone().into_any_element(),
             Self::Connector(connector) => connector.clone().into_any_element(),
+            Self::Controls(controls) => controls.clone().into_any_element(),
         }
     }
 }
@@ -418,6 +438,7 @@ impl Group {
         spec: GroupSpec,
         window: &str,
         sizing: Sizing,
+        run: &RunCommand,
         kept: &mut Kept,
         shown: Option<&str>,
         cx: &mut App,
@@ -447,16 +468,38 @@ impl Group {
                     (ContentSpec::Group(group), Some(Content::Group(entity))) => {
                         let before = entity.read(cx).0.shown_key();
                         entity.update(cx, |view, cx| {
-                            view.0 =
-                                Self::build(group, window, sizing, kept, before.as_deref(), cx);
+                            view.0 = Self::build(
+                                group,
+                                window,
+                                sizing,
+                                run,
+                                kept,
+                                before.as_deref(),
+                                cx,
+                            );
                             cx.notify();
                         });
                         Content::Group(entity)
                     }
-                    (_, Some(content)) => content,
-                    (ContentSpec::Editor { buffer, .. }, None) => {
-                        Content::Leaf(Leaf::Editor(cx.new(|cx| EditorView::new(buffer, cx))))
+                    (ContentSpec::Editor { placeholder, .. }, Some(content)) => {
+                        if let Content::Leaf(Leaf::Editor(view)) = &content {
+                            view.update(cx, |view, cx| view.set_placeholder(placeholder, cx));
+                        }
+                        content
                     }
+                    (_, Some(content)) => content,
+                    (
+                        ContentSpec::Editor {
+                            buffer,
+                            placeholder,
+                            ..
+                        },
+                        None,
+                    ) => Content::Leaf(Leaf::Editor(cx.new(|cx| {
+                        let mut view = EditorView::new(buffer, cx);
+                        view.set_placeholder(placeholder, cx);
+                        view
+                    }))),
                     (ContentSpec::Text(kind), None) => Content::Leaf(Leaf::Text(
                         cx.new(|cx| TextView::new(kind, window.to_owned(), cx)),
                     )),
@@ -469,8 +512,11 @@ impl Group {
                             editors: None,
                         }))
                     }
+                    (ContentSpec::Controls(items), _) => {
+                        Content::Controls(cx.new(|_| ControlsView::new(items, run.clone())))
+                    }
                     (ContentSpec::Group(group), None) => {
-                        let group = Self::build(group, window, sizing, kept, None, cx);
+                        let group = Self::build(group, window, sizing, run, kept, None, cx);
                         Content::Group(cx.new(|_| GroupView(group)))
                     }
                 };
@@ -532,7 +578,7 @@ impl Group {
             match &member.content {
                 Content::Connector(connector) => connectors.push(connector.clone()),
                 Content::Group(group) => connectors.extend(group.read(cx).0.connectors(cx)),
-                Content::Leaf(_) => {}
+                Content::Leaf(_) | Content::Controls(_) => {}
             }
         }
         connectors
@@ -564,7 +610,7 @@ impl Group {
                     cx.notify();
                     found
                 }),
-                Content::Connector(_) => false,
+                Content::Connector(_) | Content::Controls(_) => false,
             };
             if contains {
                 if self.arrangement == Arrangement::Tabs {
@@ -591,7 +637,7 @@ impl Group {
             match &member.content {
                 Content::Leaf(leaf) => leaves.push(leaf.clone()),
                 Content::Group(group) => leaves.extend(group.read(cx).0.leaves(cx)),
-                Content::Connector(_) => {}
+                Content::Connector(_) | Content::Controls(_) => {}
             }
         }
         leaves
@@ -625,7 +671,7 @@ impl Group {
                     focused,
                     cx,
                 )),
-                Content::Connector(_) => None,
+                Content::Connector(_) | Content::Controls(_) => None,
             })
             .collect();
         ViewNode {
@@ -693,6 +739,7 @@ impl Group {
                     slot = slot.flex_basis(px(0.));
                     slot.style().flex_grow = Some(weight);
                 }
+                LayoutSize::Auto => slot = slot.flex_none(),
                 LayoutSize::Pixels(pixels) => {
                     slot = slot.flex_none();
                     slot = if row {
@@ -922,6 +969,8 @@ pub(crate) struct LayoutChange {
 /// A built layout: its groups and views, and which view commands act on.
 pub(crate) struct Layout {
     root: Group,
+    /// Runs the command of a clicked control.
+    run: RunCommand,
     /// The views in layout order, which the layout holds at least one of, and
     /// the index of the one that has focus or had it last.
     shared: Rc<Shared>,
@@ -936,16 +985,23 @@ pub(crate) struct Layout {
 impl Layout {
     /// A layout of `spec` in the window `window`; the spec is a row or column that holds at
     /// least one view.
-    pub(crate) fn new(spec: GroupSpec, window: &str, sizing: Sizing, cx: &mut App) -> Self {
+    pub(crate) fn new(
+        spec: GroupSpec,
+        window: &str,
+        sizing: Sizing,
+        run: RunCommand,
+        cx: &mut App,
+    ) -> Self {
         debug_assert!(spec.leaf_count() > 0 && spec.arrangement != Arrangement::Tabs);
         let focused = spec.focused_leaf().unwrap_or(0);
-        let mut root = Group::build(spec, window, sizing, &mut Kept::new(), None, cx);
+        let mut root = Group::build(spec, window, sizing, &run, &mut Kept::new(), None, cx);
         root.connect(cx);
         let leaves: Rc<[Leaf]> = root.leaves(cx).into();
         root.reveal(leaves[focused].entity_id(), cx);
         let hosted = hosted_ids(&leaves, cx);
         Self {
             root,
+            run,
             shared: Rc::new(Shared {
                 leaves: RefCell::new(leaves),
                 focused: Cell::new(focused),
@@ -973,7 +1029,7 @@ impl Layout {
         let initial = spec.focused_leaf().unwrap_or(0);
         let mut kept = Kept::new();
         self.root.keep(&mut kept, cx);
-        self.root = Group::build(spec, window, sizing, &mut kept, None, cx);
+        self.root = Group::build(spec, window, sizing, &self.run, &mut kept, None, cx);
         self.root.connect(cx);
         let leaves: Rc<[Leaf]> = self.root.leaves(cx).into();
         let kept_focus = leaves.iter().position(|leaf| leaf.entity_id() == focused);

@@ -66,6 +66,7 @@ fn open(
                         content: ContentSpec::Editor {
                             buffer: shown,
                             document: None,
+                            placeholder: None,
                         },
                     }],
                 },
@@ -221,6 +222,7 @@ fn a_toolbar_adds_its_height(cx: &mut TestAppContext) {
                         content: ContentSpec::Editor {
                             buffer: shown,
                             document: None,
+                            placeholder: None,
                         },
                     }],
                 },

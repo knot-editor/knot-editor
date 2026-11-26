@@ -55,6 +55,7 @@ pub(crate) mod tool_layout;
 mod transient;
 mod tree_view;
 mod typography;
+mod view_controls;
 mod view_layout;
 mod view_tree;
 mod window_layout;

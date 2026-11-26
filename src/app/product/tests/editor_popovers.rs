@@ -666,6 +666,7 @@ fn an_editor_on_a_document_in_a_popover_counts_as_a_view_of_it(cx: &mut TestAppC
                 content: ContentSpec::Editor {
                     buffer: other_model,
                     document: Some(other),
+                    placeholder: None,
                 },
             }],
         },

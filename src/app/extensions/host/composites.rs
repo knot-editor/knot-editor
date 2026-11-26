@@ -18,6 +18,7 @@ use super::handlers::{AccessError, OpenError};
 use crate::app::composite_view::{CompositeTab, ScrollLink};
 use crate::app::extensions::semantics::SemanticError;
 use crate::app::product;
+use crate::app::view_controls::ControlItem;
 use crate::app::view_layout::{
     Arrangement, CONNECTOR_WIDTH, ConnectorSpec, ContentSpec, GroupSpec, LayoutSize, MemberSpec,
     ToolbarButton,
@@ -95,6 +96,9 @@ enum ContentWire {
         document: Option<String>,
         #[serde(default)]
         max_lines: Option<u32>,
+        /// Muted text shown while the buffer is empty.
+        #[serde(default)]
+        placeholder: Option<String>,
     },
     /// A text frame of the embedded view of this ID.
     Text {
@@ -110,6 +114,10 @@ enum ContentWire {
     },
     /// A strip that joins lines of two editors of the layout.
     Connector(ConnectorSpec),
+    /// A wrapping row of checkboxes and buttons.
+    Controls {
+        items: Vec<ControlItem>,
+    },
     Row {
         children: Vec<LayoutWire>,
     },
@@ -148,7 +156,9 @@ impl LayoutWire {
     /// beneath it, at most one member asking for focus per group, sizes that
     /// are positive and finite, a title on exactly the members of tabs, keys
     /// that are not empty and name one member each, and connectors that join
-    /// two editors by key and have no key, focus, or tabs of their own.
+    /// two editors by key and have no key, focus, or tabs of their own,
+    /// and controls that have no key, size, focus, or tabs either and are not
+    /// in a popover.
     ///
     /// A popover's layout may hold no view, leaving only its toolbar.
     pub(crate) fn check(&self, popover: bool) -> Result<(), &'static str> {
@@ -162,6 +172,7 @@ impl LayoutWire {
             node: &LayoutWire,
             root: bool,
             in_tabs: bool,
+            popover: bool,
             seen: &mut Seen,
         ) -> Result<usize, &'static str> {
             if let Some(key) = &node.key
@@ -189,6 +200,14 @@ impl LayoutWire {
                     seen.editors.insert(key.clone());
                 }
             }
+            if matches!(node.content, ContentWire::Controls { .. }) {
+                if node.key.is_some() || node.size.is_some() || node.focused || in_tabs || popover {
+                    return Err(
+                        "composite controls have no key, size, or focus and are not in tabs or popovers",
+                    );
+                }
+                return Ok(0);
+            }
             if let ContentWire::Connector(connector) = &node.content {
                 if node.key.is_some() || node.focused || in_tabs {
                     return Err("a composite connector has no key or focus and is not in tabs");
@@ -211,11 +230,18 @@ impl LayoutWire {
                 return Err("a composite group has one focused member");
             }
             children.iter().try_fold(0, |views, child| {
-                Ok(views + check(child, false, arrangement == Arrangement::Tabs, seen)?)
+                Ok(views
+                    + check(
+                        child,
+                        false,
+                        arrangement == Arrangement::Tabs,
+                        popover,
+                        seen,
+                    )?)
             })
         }
         let mut seen = Seen::default();
-        let views = check(self, true, false, &mut seen)?;
+        let views = check(self, true, false, popover, &mut seen)?;
         if seen.connectors.iter().any(|(first, second)| {
             first == second || !seen.editors.contains(first) || !seen.editors.contains(second)
         }) {
@@ -242,16 +268,16 @@ impl LayoutWire {
             }),
             None => leaf(&self.content)?,
         };
-        let default = match self.content {
-            ContentWire::Connector(_) => SizeWire::Pixels(CONNECTOR_WIDTH),
-            _ => SizeWire::default(),
+        let size = match (self.size, &self.content) {
+            (Some(SizeWire::Weight(weight)), _) => LayoutSize::Weight(weight),
+            (Some(SizeWire::Pixels(pixels)), _) => LayoutSize::Pixels(pixels),
+            (None, ContentWire::Connector(_)) => LayoutSize::Pixels(CONNECTOR_WIDTH),
+            (None, ContentWire::Controls { .. }) => LayoutSize::Auto,
+            (None, _) => LayoutSize::default(),
         };
         Ok(MemberSpec {
             key: self.key.clone(),
-            size: match self.size.unwrap_or(default) {
-                SizeWire::Weight(weight) => LayoutSize::Weight(weight),
-                SizeWire::Pixels(pixels) => LayoutSize::Pixels(pixels),
-            },
+            size,
             focused: self.focused,
             title: self.title.clone(),
             limit: match self.content {
@@ -330,6 +356,7 @@ impl ProductExtensionHost {
         let mut leaf = |content: &ContentWire| match content {
             ContentWire::Editor {
                 buffer: Some(buffer),
+                placeholder,
                 ..
             } => self
                 .extension_buffers
@@ -338,15 +365,18 @@ impl ProductExtensionHost {
                 .map(|state| ContentSpec::Editor {
                     buffer: state.model.clone(),
                     document: None,
+                    placeholder: placeholder.clone(),
                 })
                 .ok_or(OpenError::BufferClosed),
             ContentWire::Editor {
                 document: Some(identity),
+                placeholder,
                 ..
             } => product::operations::document_model(identity, cx).map(|(document, buffer)| {
                 ContentSpec::Editor {
                     buffer,
                     document: Some(document),
+                    placeholder: placeholder.clone(),
                 }
             }),
             ContentWire::Editor { .. } => Err(AccessError::InvalidTarget.into()),
@@ -357,6 +387,7 @@ impl ProductExtensionHost {
                 .embedded_view(view, owner, ViewContentKind::Tree)
                 .map(|_| ContentSpec::Tree(view.clone())),
             ContentWire::Connector(connector) => Ok(ContentSpec::Connector(connector.clone())),
+            ContentWire::Controls { items } => Ok(ContentSpec::Controls(items.clone())),
             ContentWire::Row { .. } | ContentWire::Column { .. } | ContentWire::Tabs { .. } => {
                 Err(AccessError::InvalidTarget.into())
             }

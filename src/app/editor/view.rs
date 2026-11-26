@@ -51,6 +51,8 @@ pub struct EditorView {
     pub(super) suppress_drag_selection: bool,
     /// The URL under the pointer while the link modifier is held.
     pub(super) link_hover: Option<LinkHover>,
+    /// Muted text shown while the buffer is empty.
+    pub(super) placeholder: Option<SharedString>,
     /// What opens a URL; tests replace it.
     pub(super) open_link: crate::app::link_open::LinkOpener,
     pub(super) caret_blink: CaretBlink,
@@ -155,6 +157,7 @@ impl EditorView {
             drag_anchor: None,
             suppress_drag_selection: false,
             link_hover: None,
+            placeholder: None,
             open_link: crate::app::link_open::browser_opener(),
             caret_blink: CaretBlink::default(),
             scroll_fade: Default::default(),
@@ -178,6 +181,20 @@ impl EditorView {
 
     pub(crate) fn model(&self) -> &Entity<Buffer> {
         &self.model
+    }
+
+    /// Show `placeholder` muted while the buffer is empty.
+    pub(crate) fn set_placeholder(&mut self, placeholder: Option<String>, cx: &mut Context<Self>) {
+        let placeholder = placeholder.map(SharedString::from);
+        if self.placeholder != placeholder {
+            self.placeholder = placeholder;
+            cx.notify();
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn placeholder(&self) -> Option<&str> {
+        self.placeholder.as_deref()
     }
 
     /// Show or hide the gutter of markers and line numbers.

@@ -3113,6 +3113,8 @@ declare module "knot" {
    * unsaved changes when closing it would close the document's last view. */
   export type CompositeEditor = CompositeLayoutMember & {
     readonly type: "editor";
+    /** Muted text shown while the buffer is empty. */
+    readonly placeholder?: string;
   } & (
     | { readonly buffer: ExtensionBuffer; readonly document?: never }
     | { readonly document: DocumentId; readonly buffer?: never }
@@ -3168,7 +3170,42 @@ declare module "knot" {
      * `diff.added.background`. */
     readonly color: string;
   }
-  export type CompositeLayout = CompositeEditor | CompositeText | CompositeTree | CompositeGroup | CompositeTabs | CompositeConnector;
+  /** A checkbox of a controls member. Clicking it runs `command` with the
+   * composite's tab or the tool window as the target; the package sends the
+   * controls again to change `checked`. */
+  export interface CompositeCheckbox {
+    readonly type: "checkbox";
+    readonly label: string;
+    /** Defaults to false. */
+    readonly checked?: boolean;
+    readonly command: string;
+    readonly arguments?: JsonValue;
+    readonly tooltip?: string;
+  }
+  /** A button of a controls member, which runs `command` as a toolbar
+   * button does. */
+  export interface CompositeControlButton {
+    readonly type: "button";
+    readonly label: string;
+    /** Draws the button as the main action. Defaults to false. */
+    readonly primary?: boolean;
+    /** Dims the button and ignores clicks. Defaults to false. */
+    readonly disabled?: boolean;
+    readonly command: string;
+    readonly arguments?: JsonValue;
+  }
+  /**
+   * A wrapping row of checkboxes and buttons, as tall as its content. It is
+   * not a view: it has no key, size, or focus, and is not a member of `tabs`
+   * or in a popover. A click runs the item's command with the tab or tool
+   * window as the target, and the view focused there as its focus, wherever
+   * focus is.
+   */
+  export interface CompositeControls {
+    readonly type: "controls";
+    readonly items: readonly (CompositeCheckbox | CompositeControlButton)[];
+  }
+  export type CompositeLayout = CompositeEditor | CompositeText | CompositeTree | CompositeGroup | CompositeTabs | CompositeConnector | CompositeControls;
   /** Which lines of two editors lie side by side, so scrolling one scrolls
    * the other to the same place. */
   export interface CompositeScrollLink {

@@ -301,10 +301,55 @@ await commands.register("composite.invalid-layouts", async () => {
   const scratch = await buffers.create({ text: "x" });
   await rejected({ type: "row", children: [{ type: "editor", buffer: scratch, document: document.id }] }, "buffer and document");
   await rejected({ type: "row", children: [{ type: "editor", document: 5 }] }, "document not an ID");
+  await rejected({ type: "row", children: [{ ...editor, placeholder: 5 }] }, "placeholder not text");
+  const controls = { type: "controls", items: [{ type: "button", label: "Go", command: "composite.control-run" }] };
+  await rejected({ type: "row", children: [editor, { ...controls, key: "c" }] }, "controls key");
+  await rejected({ type: "row", children: [editor, { ...controls, size: { weight: 1 } }] }, "controls size");
+  await rejected({ type: "row", children: [editor, { ...controls, focused: true }] }, "controls focus");
+  await rejected({ type: "row", children: [{ type: "tabs", children: [{ ...controls, title: "C" }] }] }, "controls in tabs");
+  await rejected({ type: "row", children: [editor, { type: "controls", items: [{ type: "slider" }] }] }, "unknown control");
+  await rejected({ type: "row", children: [editor, { type: "controls", items: [{ type: "button", label: "Go" }] }] }, "control without command");
+  await rejected({ type: "row", children: [editor, { type: "controls", items: [{ type: "button", label: "Go", command: "x", checked: true }] }] }, "button checked");
+  await rejected({ type: "row", children: [editor, { type: "controls", items: [{ type: "checkbox", label: "Go", command: "x", checked: "yes" }] }] }, "checked not boolean");
+  await rejected({ type: "row", children: [controls] }, "only controls");
   await expectCode(
     () => kind.open({ title: "x", layout: { type: "row", children: [{ type: "editor", document: "nope" }] } }),
     "DocumentNotFound",
   );
+});
+// An editor with a placeholder over controls whose commands record a click.
+let clicks = [];
+await commands.register("composite.control-run", async (context) => {
+  clicks.push(context.editor !== null ? context.arguments : "no editor");
+});
+await commands.register("composite.control-expect-none", async () => {
+  check(clicks.length === 0, `no click: ${JSON.stringify(clicks)}`);
+});
+await commands.register("composite.control-expect-box-go", async () => {
+  check(JSON.stringify(clicks) === '["box","go"]', `clicks: ${JSON.stringify(clicks)}`);
+});
+const controlItems = (checked) => [
+  { type: "checkbox", label: "Box", checked, command: "composite.control-run", arguments: "box", tooltip: "Tick" },
+  { type: "button", label: "Go", primary: true, command: "composite.control-run", arguments: "go" },
+  { type: "button", label: "Off", disabled: true, command: "composite.control-run", arguments: "off" },
+];
+await commands.register("composite.open-controls", async () => {
+  const kind = registration ?? (registration = await workbench.registerComposite({ id: "example.view" }));
+  const buffer = await buffers.create();
+  instance = await kind.open({
+    title: "Controls",
+    layout: { type: "column", children: [
+      { type: "editor", key: "message", buffer, placeholder: "Message" },
+      { type: "controls", items: controlItems(false) },
+    ] },
+  });
+  keyed = { buffer };
+});
+await commands.register("composite.controls-update", async () => {
+  await instance.update({ layout: { type: "column", children: [
+    { type: "editor", key: "message", buffer: keyed.buffer, placeholder: "Changed" },
+    { type: "controls", items: controlItems(true) },
+  ] } });
 });
 await commands.register("composite.update", async () => {
   await instance.update({ title: "Renamed", resource: "file:///a.txt" });
@@ -1281,6 +1326,48 @@ fn a_toolbar_button_targets_its_composite_when_focus_is_elsewhere(cx: &mut TestA
     run(&window, native_window, "composite.toolbar-expect-one", cx);
 }
 
+/// The placeholder of the focused composite's first editor.
+fn placeholder(window: &Entity<KnotWindow>, cx: &TestAppContext) -> Option<String> {
+    cx.read(|cx| {
+        let workbench = window.read(cx).workbench.read(cx);
+        let tab = workbench.focused_pane().unwrap().active_tab();
+        let leaves = workbench.composite_view(tab).unwrap().read(cx).leaves();
+        let editor = leaves[0].editor().unwrap().read(cx);
+        editor.placeholder().map(str::to_owned)
+    })
+}
+
+#[gpui::test]
+fn controls_run_their_commands_with_the_composite_as_target(cx: &mut TestAppContext) {
+    let (window, native_window, _, _) = window_with_extension(cx);
+    run(&window, native_window, "composite.open-controls", cx);
+    assert_eq!(placeholder(&window, cx).as_deref(), Some("Message"));
+
+    // A disabled button does nothing.
+    click_toolbar_button(native_window, "control-2", cx);
+    run(&window, native_window, "composite.control-expect-none", cx);
+    click_toolbar_button(native_window, "control-0", cx);
+    click_toolbar_button(native_window, "control-1", cx);
+    run(
+        &window,
+        native_window,
+        "composite.control-expect-box-go",
+        cx,
+    );
+}
+
+#[gpui::test]
+fn an_update_changes_the_controls_and_the_placeholder_and_keeps_the_editor(
+    cx: &mut TestAppContext,
+) {
+    let (window, native_window, _, _) = window_with_extension(cx);
+    run(&window, native_window, "composite.open-controls", cx);
+    let before = leaf_ids(&window, cx);
+    run(&window, native_window, "composite.controls-update", cx);
+    assert_eq!(leaf_ids(&window, cx), before);
+    assert_eq!(placeholder(&window, cx).as_deref(), Some("Changed"));
+}
+
 #[gpui::test]
 fn an_update_replaces_the_toolbar_and_other_updates_keep_it(cx: &mut TestAppContext) {
     let (window, native_window, _, _) = window_with_extension(cx);
@@ -1529,6 +1616,7 @@ mod documents {
             content: ContentSpec::Editor {
                 buffer: buffer.clone(),
                 document: Some(document),
+                placeholder: None,
             },
         };
         window.update(cx, |window, cx| {
@@ -1707,6 +1795,7 @@ mod documents {
                         content: ContentSpec::Editor {
                             buffer,
                             document: Some(document),
+                            placeholder: None,
                         },
                     }
                 })

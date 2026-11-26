@@ -16,7 +16,9 @@ use knot_protocol::IconRef;
 
 use super::editor::{Editor, Scrolled};
 use super::resource::ResourceUri;
-use super::view_layout::{GroupSpec, Layout, LayoutChange, Shared, Sizing, ToolbarButton, toolbar};
+use super::view_layout::{
+    GroupSpec, Layout, LayoutChange, RunCommand, Shared, Sizing, ToolbarButton, toolbar,
+};
 use super::view_tree::{ViewFocusChanged, ViewKind, ViewNode, ViewTree, ViewTreeChanged};
 use super::workbench::{CommandView, ExtensionView};
 
@@ -118,7 +120,13 @@ impl CompositeView {
         window: &str,
         cx: &mut Context<Self>,
     ) -> Self {
-        let layout = Layout::new(layout, window, Sizing::Fill, cx);
+        let this = cx.weak_entity();
+        let run: RunCommand = Rc::new(move |window, command, cx| {
+            if let Some(view) = this.upgrade() {
+                crate::app::product::run_toolbar_command(window, view, command, cx);
+            }
+        });
+        let layout = Layout::new(layout, window, Sizing::Fill, run, cx);
         cx.on_release(|this, cx| {
             let hosted = this.layout.take_hosted();
             crate::app::view_layout::detach_views(hosted, cx);

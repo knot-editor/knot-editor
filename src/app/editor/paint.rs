@@ -242,13 +242,16 @@ impl Element for EditorElement {
                 release_listener(event, window, cx);
             }
         });
-        let (scroll_x, metrics, cell_width, base_font) = {
+        let (scroll_x, metrics, cell_width, base_font, placeholder) = {
             let view = self.entity.read(cx);
             (
                 view.editor.read(cx).scroll_x(),
                 view.metrics,
                 view.cell_width,
                 view.font.clone(),
+                view.placeholder
+                    .clone()
+                    .filter(|_| view.model.read(cx).is_empty()),
             )
         };
         // Read the view state, compute the visible rows, then read just the
@@ -665,6 +668,29 @@ impl Element for EditorElement {
 
             self.entity
                 .update(cx, |view, _| view.fold_placeholders = placeholders);
+
+            // The hint an empty editor shows.
+            if let Some(hint) = placeholder {
+                let run = TextRun {
+                    len: hint.len(),
+                    font: base_font.clone(),
+                    color: theme(cx).paint_color(color::TEXT_MUTED),
+                    background_color: None,
+                    underline: None,
+                    strikethrough: None,
+                };
+                let shaped = window
+                    .text_system()
+                    .shape_line(hint, font_size, &[run], None);
+                let _ = shaped.paint(
+                    point(bounds.origin.x - px(scroll_x), top(0)),
+                    line_height,
+                    TextAlign::Left,
+                    None,
+                    window,
+                    cx,
+                );
+            }
 
             // IME preedit (marked text) underline: a bar at the bottom of the
             // marked span of each row, partitioned like the selection.

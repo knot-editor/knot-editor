@@ -2308,6 +2308,35 @@ function compositeLayoutJson(node: unknown, popover = false): string {
   return JSON.stringify(wire);
 }
 type CompositeSeen = { keys: Set<string>; editors: Set<string>; connectors: [string, string][]; popover: boolean };
+/** The items of a controls member: checkboxes and buttons that run a command. */
+function compositeControls(value: unknown): Rec[] {
+  if (!Array.isArray(value)) throw new TypeError("composite controls items must be an array");
+  return value.map((item) => {
+    const given = record(item, "composite control must be an object");
+    const { type } = given;
+    if (type !== "checkbox" && type !== "button") throw new TypeError("composite control type must be checkbox or button");
+    const flags = type === "checkbox" ? ["checked"] : ["primary", "disabled"];
+    for (const flag of flags) {
+      if (given[flag] !== undefined && typeof given[flag] !== "boolean") {
+        throw new TypeError(`composite control ${flag} must be a boolean`);
+      }
+    }
+    if (type === "checkbox" && given.tooltip !== undefined && typeof given.tooltip !== "string") {
+      throw new TypeError("composite control tooltip must be text");
+    }
+    const known = ["type", "label", "command", "arguments", ...flags, ...(type === "checkbox" ? ["tooltip"] : [])];
+    for (const name of Object.keys(given)) {
+      if (!known.includes(name)) throw new TypeError(`composite ${type} has no ${name}`);
+    }
+    return {
+      type,
+      label: string(given.label, "composite control label must be text"),
+      command: string(given.command, "composite control command must be text"),
+      arguments: given.arguments === undefined ? null : validateJsonValue(given.arguments),
+      ...Object.fromEntries(Object.entries(given).filter(([name]) => name === "tooltip" || flags.includes(name))),
+    };
+  });
+}
 function compositeConnector(given: Rec, seen: CompositeSeen): Rec {
   const first = string(given.first, "composite connector first must be a member key");
   const second = string(given.second, "composite connector second must be a member key");
@@ -2326,12 +2355,15 @@ function compositeConnector(given: Rec, seen: CompositeSeen): Rec {
 function compositeLayout(node: unknown, root: boolean, inTabs: boolean, seen: CompositeSeen): Rec {
   const given = record(node, "composite layout must be an object");
   const { type, size, focused, title, key } = given;
-  if (type !== "row" && type !== "column" && type !== "tabs" && type !== "editor" && type !== "text" && type !== "tree" && type !== "connector") {
-    throw new TypeError("composite layout type must be row, column, tabs, editor, text, tree, or connector");
+  if (type !== "row" && type !== "column" && type !== "tabs" && type !== "editor" && type !== "text" && type !== "tree" && type !== "connector" && type !== "controls") {
+    throw new TypeError("composite layout type must be row, column, tabs, editor, text, tree, connector, or controls");
   }
   if (root && type !== "row" && type !== "column") throw new TypeError("composite layout must be a row or column");
   if (type === "connector" && (key !== undefined || focused !== undefined || inTabs)) {
     throw new TypeError("a composite connector has no key or focus and is not in tabs");
+  }
+  if (type === "controls" && (key !== undefined || size !== undefined || focused !== undefined || inTabs || seen.popover)) {
+    throw new TypeError("composite controls have no key, size, or focus and are not in tabs or popovers");
   }
   if (focused !== undefined && typeof focused !== "boolean") throw new TypeError("composite focused must be a boolean");
   if (key !== undefined) {
@@ -2372,8 +2404,14 @@ function compositeLayout(node: unknown, root: boolean, inTabs: boolean, seen: Co
     ...(title === undefined ? {} : { title }),
   };
   if (type === "editor" && key !== undefined) seen.editors.add(key as string);
+  if (given.placeholder !== undefined) {
+    if (type !== "editor") throw new TypeError("only a composite editor has a placeholder");
+    wire.placeholder = string(given.placeholder, "composite placeholder must be text");
+  }
   if (type === "connector") {
     Object.assign(wire, compositeConnector(given, seen));
+  } else if (type === "controls") {
+    wire.items = compositeControls(given.items);
   } else if (type === "editor" && given.document !== undefined) {
     if (given.buffer !== undefined) throw new TypeError("a composite editor shows a buffer or a document");
     if (typeof given.document !== "string") throw new TypeError("composite document must be a document ID");

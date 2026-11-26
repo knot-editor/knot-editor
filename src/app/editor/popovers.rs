@@ -59,8 +59,15 @@ impl PopoverContent {
         window: &str,
         cx: &mut Context<Self>,
     ) -> Self {
-        let layout =
-            (layout.leaf_count() > 0).then(|| Layout::new(layout, window, Sizing::Natural, cx));
+        let layout = (layout.leaf_count() > 0).then(|| {
+            Layout::new(
+                layout,
+                window,
+                Sizing::Natural,
+                crate::app::view_layout::ignore_commands(),
+                cx,
+            )
+        });
         cx.on_release(|this, cx| {
             if let Some(layout) = &mut this.layout {
                 let hosted = layout.take_hosted();
@@ -90,7 +97,13 @@ impl PopoverContent {
         let attached = match (&mut self.layout, layout.leaf_count() > 0) {
             (Some(current), true) => current.update(layout, window, Sizing::Natural, cx).attached,
             (None, true) => {
-                let layout = Layout::new(layout, window, Sizing::Natural, cx);
+                let layout = Layout::new(
+                    layout,
+                    window,
+                    Sizing::Natural,
+                    crate::app::view_layout::ignore_commands(),
+                    cx,
+                );
                 let attached = layout.hosted_views();
                 self.layout = Some(layout);
                 attached
