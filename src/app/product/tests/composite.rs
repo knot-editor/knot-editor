@@ -437,6 +437,9 @@ await commands.register("composite.preview-keep", async () => {
   await previews[previews.length - 1].keep();
   await previews[previews.length - 1].keep();
 });
+await commands.register("composite.preview-activate", async () => {
+  await previews[0].activate();
+});
 await commands.register("composite.preview-expect-replaced", async () => {
   await expectCode(() => previews[0].update({ title: "Late" }), "InvalidTarget");
   await previews[1].update({ title: "Current" });
@@ -529,6 +532,20 @@ fn focus_document_tab(window: &Entity<KnotWindow>, cx: &mut TestAppContext) {
         });
         window.focus_active_surface(cx);
     });
+}
+
+fn active_tab_is_composite(window: &Entity<KnotWindow>, cx: &TestAppContext) -> bool {
+    cx.read(|cx| {
+        let workbench = window.read(cx).workbench.read(cx);
+        let pane = workbench
+            .center_pane()
+            .and_then(|pane| workbench.pane(pane))
+            .unwrap();
+        pane.tabs()
+            .iter()
+            .find(|tab| tab.id() == pane.active_tab_id())
+            .is_some_and(|tab| matches!(tab.surface_id(), TabSurfaceId::Composite(_)))
+    })
 }
 
 fn composite_tabs(window: &Entity<KnotWindow>, cx: &TestAppContext) -> usize {
@@ -869,6 +886,17 @@ fn keep_makes_a_preview_composite_regular(cx: &mut TestAppContext) {
     run(&window, native_window, "composite.preview-keep", cx);
     run_elsewhere(&window, native_window, "composite.preview-open", cx);
     assert_eq!(composite_tabs(&window, cx), 2);
+}
+
+#[gpui::test]
+fn activate_shows_a_composite_tab_behind_the_active_one(cx: &mut TestAppContext) {
+    let (window, native_window, _, _) = window_with_extension(cx);
+    run_elsewhere(&window, native_window, "composite.preview-open", cx);
+    focus_document_tab(&window, cx);
+    assert_eq!(tab_state(&window, cx).title, "Preview 0");
+    assert!(!active_tab_is_composite(&window, cx));
+    run(&window, native_window, "composite.preview-activate", cx);
+    assert!(active_tab_is_composite(&window, cx));
 }
 
 #[gpui::test]

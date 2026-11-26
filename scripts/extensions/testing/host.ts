@@ -3118,6 +3118,9 @@ export const api: KnotApi = {
               if (composite.closed) throw hostError("InvalidTarget");
               composite.kept = true;
             },
+            activate: async () => {
+              if (composite.closed) throw hostError("InvalidTarget");
+            },
             close,
             [Symbol.asyncDispose]: async () => void (await close()),
           };

@@ -2447,6 +2447,10 @@ export async function registerComposite(contribution: unknown) {
           owned.assertActive();
           await owned.track(request("keepComposite", destinationAuthority({ target })));
         },
+        async activate() {
+          owned.assertActive();
+          await owned.track(request("activateComposite", destinationAuthority({ target })));
+        },
         async close(closeOptions?: Opts) {
           try {
             return await closePresentation(target, closeOptions);

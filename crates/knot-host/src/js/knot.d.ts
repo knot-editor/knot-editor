@@ -3240,6 +3240,10 @@ declare module "knot" {
      * @throws HostError with InvalidTarget for a tab that was closed, or
      * OwnershipDisposed after disposal. */
     keep(): Promise<void>;
+    /** Show the tab and focus it: it becomes its pane's active tab.
+     * @throws HostError with InvalidTarget for a tab that was closed, or
+     * OwnershipDisposed after disposal. */
+    activate(): Promise<void>;
     /** Close the tab as `workbench.close` does; a tab already closed resolves
      * as closed. */
     close(options?: CloseOptions): Promise<PresentationCloseOutcome>;

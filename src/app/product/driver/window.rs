@@ -605,6 +605,25 @@ impl TestWindow {
         })
     }
 
+    /// Whether each composite tab of the center pane is its preview, in layout
+    /// order.
+    pub fn composite_previews(&self, cx: &mut TestAppContext) -> Vec<bool> {
+        cx.read(|cx| {
+            let workbench = self.window.read(cx).workbench.read(cx);
+            let Some(pane) = workbench
+                .center_pane()
+                .and_then(|pane| workbench.pane(pane))
+            else {
+                return Vec::new();
+            };
+            pane.tabs()
+                .iter()
+                .filter(|tab| matches!(tab.surface_id(), TabSurfaceId::Composite(_)))
+                .map(|tab| tab.is_preview())
+                .collect()
+        })
+    }
+
     /// The editors of the first composite tab, in layout order.
     pub fn composite_editors(&self, cx: &mut TestAppContext) -> Vec<CompositeEditor> {
         cx.read(|cx| {

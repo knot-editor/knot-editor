@@ -457,6 +457,23 @@ impl ProductExtensionHost {
         product::operations::keep_composite(target, cx)
     }
 
+    /// Show the tab of an instance `owner` opened.
+    pub(crate) fn activate_composite(
+        &mut self,
+        owner: ExtensionKey,
+        target: &PresentationTarget,
+        cx: &mut App,
+    ) -> Result<(), OpenError> {
+        if !self
+            .owned_composites
+            .get(&owner)
+            .is_some_and(|owned| owned.iter().any(|instance| &instance.target == target))
+        {
+            return Err(AccessError::InvalidTarget.into());
+        }
+        product::operations::activate_composite(target, cx)
+    }
+
     /// Replace what the tab shows and, when `layout` is given, the layout.
     pub(crate) fn update_composite(
         &mut self,

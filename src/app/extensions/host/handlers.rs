@@ -832,6 +832,16 @@ pub(crate) async fn keep_composite(
     context.foreground(|host, cx| host.keep_composite(owner, &arguments.target, cx))?
 }
 
+/// Show the tab of a composite view the caller opened.
+#[host_operation("activateComposite")]
+pub(crate) async fn activate_composite(
+    context: HostContext,
+    arguments: ViewTargetArguments,
+) -> Result<(), OpenError> {
+    let owner = ExtensionKey::new(context.request.extension, context.request.lifecycle);
+    context.foreground(|host, cx| host.activate_composite(owner, &arguments.target, cx))?
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct UpdateCompositeArguments {
     target: knot_protocol::PresentationTarget,

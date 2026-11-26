@@ -333,6 +333,20 @@ pub(crate) fn keep_composite(target: &PresentationTarget, cx: &mut App) -> Resul
     Ok(())
 }
 
+/// Make the tab of the composite view `target` names the active one of its
+/// pane, and focus it.
+pub(crate) fn activate_composite(
+    target: &PresentationTarget,
+    cx: &mut App,
+) -> Result<(), OpenError> {
+    let (window, open) = capture_destination(&DocumentDestination::View(target.clone()), cx)?;
+    let location = open.tab.ok_or(AccessError::InvalidTarget)?;
+    window.update(cx, |window, cx| {
+        window.activate_tab(location.pane, location.tab, cx)
+    });
+    Ok(())
+}
+
 /// Replace what the tab of the composite view `target` names shows, and its
 /// layout when given. Returns the window's ID and the contributed views the
 /// new layout added.
