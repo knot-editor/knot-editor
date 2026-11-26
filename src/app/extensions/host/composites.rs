@@ -24,6 +24,15 @@ use crate::app::view_layout::{
 };
 use knot_model::editor::popovers::{PopoverSpec, PopoverWidth};
 
+/// What `openComposite` opens: an instance of a registered kind.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct CompositeOpening {
+    pub kind: String,
+    pub tab: CompositeTabSpec,
+    pub layout: LayoutWire,
+    pub preview: bool,
+}
+
 /// What `openComposite` and `updateComposite` set on a tab and its toolbar.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct CompositeTabSpec {
@@ -363,18 +372,22 @@ impl ProductExtensionHost {
         &mut self,
         owner: ExtensionKey,
         destination: DocumentDestination,
-        kind: String,
-        tab: CompositeTabSpec,
-        layout: LayoutWire,
+        opening: CompositeOpening,
         cx: &mut Context<Self>,
     ) -> Result<PresentationTarget, OpenError> {
+        let CompositeOpening {
+            kind,
+            tab,
+            layout,
+            preview,
+        } = opening;
         if self.composite_kinds.get(&kind) != Some(&owner) {
             return Err(AccessError::InvalidTarget.into());
         }
         let layout = self.composite_spec(owner, layout, &*cx)?;
         let tab = tab.tab()?;
         let (target, window, hosted) =
-            product::operations::open_composite(destination, tab, layout, cx)?;
+            product::operations::open_composite(destination, tab, layout, preview, cx)?;
         for view in hosted {
             let kind = view.kind(cx);
             self.attach_view(kind, window.clone(), view, cx);
@@ -425,6 +438,23 @@ impl ProductExtensionHost {
             Some(found) if found == content => Ok(()),
             _ => Err(AccessError::InvalidTarget.into()),
         }
+    }
+
+    /// Make the preview tab of an instance `owner` opened regular.
+    pub(crate) fn keep_composite(
+        &mut self,
+        owner: ExtensionKey,
+        target: &PresentationTarget,
+        cx: &mut App,
+    ) -> Result<(), OpenError> {
+        if !self
+            .owned_composites
+            .get(&owner)
+            .is_some_and(|owned| owned.iter().any(|instance| &instance.target == target))
+        {
+            return Err(AccessError::InvalidTarget.into());
+        }
+        product::operations::keep_composite(target, cx)
     }
 
     /// Replace what the tab shows and, when `layout` is given, the layout.

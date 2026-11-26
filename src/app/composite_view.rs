@@ -240,7 +240,6 @@ impl CompositeView {
     }
 
     /// The views in layout order.
-    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn leaves(&self) -> Vec<crate::app::view_layout::Leaf> {
         self.layout.leaves().to_vec()
     }

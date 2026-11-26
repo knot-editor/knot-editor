@@ -52,7 +52,9 @@ file it edits.
 
 ## Checkpoints
 
-### 1. Composite preview tabs
+### 1. Composite preview tabs ✅
+
+Status: implemented; the `Try:` commands wait on the review gate.
 
 Deliverables: the generalized preview slot in the layout model; replacement
 across document and composite previews with the right cleanup; promotion of

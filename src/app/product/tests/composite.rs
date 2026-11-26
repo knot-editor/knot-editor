@@ -410,6 +410,43 @@ await commands.register("composite.invalid-connectors", async () => {
   await bad([...editors, { ...connector("left", "right"), links: [{ first: { start: 2, end: 1 }, second: { start: 0, end: 1 }, color: "x" }] }]);
   await bad([...editors, { ...connector("left", "right"), links: [{ first: { start: 0, end: 1 }, second: { start: 0, end: 1 } }] }]);
 });
+// Preview composites: each opens as the pane's preview, and the instances
+// stay in `previews` to see which the next one replaced.
+let previews = [];
+await commands.register("composite.preview-open", async () => {
+  const kind = registration ?? (registration = await workbench.registerComposite({ id: "example.view" }));
+  const buffer = await buffers.create({ text: "preview\n" });
+  previews.push(await kind.open({
+    title: `Preview ${previews.length}`,
+    preview: true,
+    layout: { type: "row", children: [{ type: "editor", buffer }] },
+  }));
+});
+// A preview composite on a document only it shows.
+await commands.register("composite.preview-document", async () => {
+  const kind = registration ?? (registration = await workbench.registerComposite({ id: "example.view" }));
+  const made = await documents.createUntitled();
+  previews.push(await kind.open({
+    title: `Preview ${previews.length}`,
+    preview: true,
+    layout: { type: "row", children: [{ type: "editor", document: made.document.id }] },
+  }));
+  await workbench.close(made.presentation.target);
+});
+await commands.register("composite.preview-keep", async () => {
+  await previews[previews.length - 1].keep();
+  await previews[previews.length - 1].keep();
+});
+await commands.register("composite.preview-expect-replaced", async () => {
+  await expectCode(() => previews[0].update({ title: "Late" }), "InvalidTarget");
+  await previews[1].update({ title: "Current" });
+  await expectCode(() => previews[0].keep(), "InvalidTarget");
+  const buffer = await buffers.create({ text: "x\n" });
+  try {
+    await registration.open({ title: "Bad", preview: "yes", layout: { type: "row", children: [{ type: "editor", buffer }] } });
+    throw new Error("accepted");
+  } catch (error) { if (!(error instanceof TypeError)) throw error; }
+});
 await commands.register("composite.dispose-registration", async () => {
   await registration[Symbol.asyncDispose]();
   registration = undefined;
@@ -727,6 +764,128 @@ fn closing_disposing_and_unloading_end_the_tab(cx: &mut TestAppContext) {
     host.update(cx, |host, cx| host.unload(key, cx).unwrap());
     cx.run_until_parked();
     assert_eq!(composite_tabs(&window, cx), 0);
+}
+
+fn document_count(cx: &TestAppContext) -> usize {
+    cx.read(|cx| {
+        cx.global::<ApplicationDocuments>()
+            .0
+            .read(cx)
+            .documents()
+            .count()
+    })
+}
+
+#[gpui::test]
+fn a_preview_composite_is_replaced_by_the_next_preview_and_released(cx: &mut TestAppContext) {
+    let (window, native_window, _, _) = window_with_extension(cx);
+    run_elsewhere(&window, native_window, "composite.preview-open", cx);
+    run_elsewhere(&window, native_window, "composite.preview-open", cx);
+    assert_eq!(composite_tabs(&window, cx), 1);
+    assert_eq!(tab_state(&window, cx).title, "Preview 1");
+    // The first instance's owner sees its tab closed.
+    focus_document_tab(&window, cx);
+    run(
+        &window,
+        native_window,
+        "composite.preview-expect-replaced",
+        cx,
+    );
+
+    // A document preview replaces it in turn.
+    cx.update(|cx| {
+        window.update(cx, |window, cx| {
+            let document = window
+                .workbench
+                .read(cx)
+                .tabs()
+                .next()
+                .unwrap()
+                .document_id();
+            let model = KnotWindow::documents(cx)
+                .read(cx)
+                .get(document.unwrap())
+                .unwrap()
+                .model()
+                .clone();
+            window.workbench.update(cx, |workbench, cx| {
+                let (_, _, replaced) =
+                    workbench.open_preview_in_center(document.unwrap(), model, cx);
+                assert!(matches!(replaced, Some(TabSurfaceId::Composite(_))));
+            });
+        })
+    });
+    assert_eq!(composite_tabs(&window, cx), 0);
+}
+
+#[gpui::test]
+fn replacing_a_preview_composite_closes_the_documents_only_it_showed(cx: &mut TestAppContext) {
+    let (window, native_window, _, _) = window_with_extension(cx);
+    run_elsewhere(&window, native_window, "composite.preview-document", cx);
+    assert_eq!(document_count(cx), 2);
+    run_elsewhere(&window, native_window, "composite.preview-open", cx);
+    assert_eq!(composite_tabs(&window, cx), 1);
+    assert_eq!(document_count(cx), 1);
+}
+
+#[gpui::test]
+fn editing_through_a_preview_composite_keeps_it(cx: &mut TestAppContext) {
+    let (window, native_window, _, _) = window_with_extension(cx);
+    run_elsewhere(&window, native_window, "composite.preview-document", cx);
+    let model = cx.read(|cx| {
+        let workbench = window.read(cx).workbench.read(cx);
+        let tab = workbench
+            .tabs()
+            .find(|tab| matches!(tab.surface_id(), TabSurfaceId::Composite(_)))
+            .unwrap();
+        let document = workbench.shown_documents(tab)[0];
+        cx.global::<ApplicationDocuments>()
+            .0
+            .read(cx)
+            .get(document)
+            .unwrap()
+            .model()
+            .clone()
+    });
+    model.update(cx, |model, cx| {
+        model.replace(0..0, "edited ").unwrap();
+        cx.notify();
+    });
+    let leaf = leaf_of(&window, 0, cx);
+    cx.update(|cx| {
+        let editor = leaf.editor().unwrap().read(cx).editor().clone();
+        editor.update(cx, |_, cx| cx.notify());
+    });
+    cx.run_until_parked();
+    run_elsewhere(&window, native_window, "composite.preview-open", cx);
+    assert_eq!(composite_tabs(&window, cx), 2);
+}
+
+#[gpui::test]
+fn keep_makes_a_preview_composite_regular(cx: &mut TestAppContext) {
+    let (window, native_window, _, _) = window_with_extension(cx);
+    run_elsewhere(&window, native_window, "composite.preview-open", cx);
+    focus_document_tab(&window, cx);
+    run(&window, native_window, "composite.preview-keep", cx);
+    run_elsewhere(&window, native_window, "composite.preview-open", cx);
+    assert_eq!(composite_tabs(&window, cx), 2);
+}
+
+#[gpui::test]
+fn previews_off_opens_regular_composite_tabs(cx: &mut TestAppContext) {
+    let (window, native_window, _, _) = window_with_extension(cx);
+    let mut settings = crate::app::settings::SettingsStore::default();
+    settings
+        .set(
+            crate::app::settings::WORKBENCH_PREVIEW_TABS,
+            false.into(),
+            Default::default(),
+        )
+        .unwrap();
+    cx.set_global(crate::app::settings::ApplicationSettings(settings));
+    run_elsewhere(&window, native_window, "composite.preview-open", cx);
+    run_elsewhere(&window, native_window, "composite.preview-open", cx);
+    assert_eq!(composite_tabs(&window, cx), 2);
 }
 
 fn composite_root(info: &knot_protocol::WindowInfo) -> &knot_protocol::ViewNodeInfo {
@@ -1356,6 +1515,7 @@ mod documents {
                             editor(b, &b_model),
                         ],
                     },
+                    false,
                     "window",
                     cx,
                 );

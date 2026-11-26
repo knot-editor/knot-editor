@@ -295,6 +295,7 @@ pub(crate) fn open_composite(
     destination: DocumentDestination,
     tab: crate::app::composite_view::CompositeTab,
     layout: crate::app::view_layout::GroupSpec,
+    preview: bool,
     cx: &mut App,
 ) -> Result<
     (
@@ -311,8 +312,23 @@ pub(crate) fn open_composite(
     }
     let (window, _) = capture_destination(&destination, cx)?;
     let id = super::window_id(window.entity_id());
-    let (target, hosted) = window.update(cx, |window, cx| window.open_composite(tab, layout, cx));
+    let (target, hosted) = window.update(cx, |window, cx| {
+        window.open_composite(tab, layout, preview, cx)
+    });
     Ok((target.public_target(), id, hosted))
+}
+
+/// Make the preview tab of the composite view `target` names regular.
+pub(crate) fn keep_composite(target: &PresentationTarget, cx: &mut App) -> Result<(), OpenError> {
+    let (window, open) = capture_destination(&DocumentDestination::View(target.clone()), cx)?;
+    let location = open.tab.ok_or(AccessError::InvalidTarget)?;
+    window.update(cx, |window, cx| {
+        window.workbench.update(cx, |workbench, _| {
+            workbench.promote_preview(location.pane, location.tab)
+        });
+        cx.notify();
+    });
+    Ok(())
 }
 
 /// Replace what the tab of the composite view `target` names shows, and its

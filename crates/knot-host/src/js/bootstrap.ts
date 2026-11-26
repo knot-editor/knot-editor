@@ -2412,9 +2412,10 @@ export async function registerComposite(contribution: unknown) {
       const given = record(options, "composite options must be an object");
       const tab = compositeTab(given, true);
       const layout = compositeLayoutJson(given.layout);
+      if (given.preview !== undefined && typeof given.preview !== "boolean") throw new TypeError("preview must be a boolean");
       const value = await registration.track(request("openComposite", destinationAuthority(given), id,
         tab.title, tab.icon === null ? null : JSON.stringify(tab.icon), tab.resource, tab.toolbar ?? "[]",
-        tab.scrollLink ?? null, layout));
+        tab.scrollLink ?? null, layout, given.preview ?? null));
       const target = presentationTarget(value.target);
       let current = { title: tab.title as string, icon: tab.icon, resource: tab.resource, toolbar: tab.toolbar ?? "[]",
         scrollLink: tab.scrollLink ?? null };
@@ -2441,6 +2442,10 @@ export async function registerComposite(contribution: unknown) {
             merged.title, merged.icon === null ? null : JSON.stringify(merged.icon), merged.resource,
             merged.toolbar, merged.scrollLink, layout));
           current = merged;
+        },
+        async keep() {
+          owned.assertActive();
+          await owned.track(request("keepComposite", destinationAuthority({ target })));
         },
         async close(closeOptions?: Opts) {
           try {

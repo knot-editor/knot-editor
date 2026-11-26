@@ -2604,12 +2604,16 @@ impl KnotWindow {
         &mut self,
         tab: crate::app::composite_view::CompositeTab,
         layout: crate::app::view_layout::GroupSpec,
+        preview: bool,
         cx: &mut Context<Self>,
     ) -> (OpenTarget, Vec<super::workbench::ExtensionView>) {
         let window = window_id(cx.entity_id());
-        let (pane, tab) = self.workbench.update(cx, |workbench, cx| {
-            workbench.open_composite_in_center(tab, layout, &window, cx)
+        let preview = preview
+            && crate::app::settings::boolean(crate::app::settings::WORKBENCH_PREVIEW_TABS, cx);
+        let (pane, tab, replaced) = self.workbench.update(cx, |workbench, cx| {
+            workbench.open_composite_in_center(tab, layout, preview, &window, cx)
         });
+        self.release_replaced_preview(replaced, None, cx);
         let hosted = {
             let workbench = self.workbench.read(cx);
             workbench

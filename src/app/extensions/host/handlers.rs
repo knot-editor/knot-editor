@@ -740,21 +740,24 @@ fn decode_composite_layout(
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct OpenCompositeArguments {
     target: Option<knot_protocol::DocumentDestination>,
-    kind: String,
-    tab: super::composites::CompositeTabSpec,
-    layout: super::composites::LayoutWire,
+    opening: super::composites::CompositeOpening,
 }
 
 impl HostArguments for OpenCompositeArguments {
     fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
         Ok(Self {
             target: reader.destination(2)?,
-            kind: reader.text(3, "composite kind must be text")?,
-            tab: decode_composite_tab(reader, 4)?,
-            layout: decode_composite_layout(
-                &reader.text(9, "composite layout must be text")?,
-                false,
-            )?,
+            opening: super::composites::CompositeOpening {
+                kind: reader.text(3, "composite kind must be text")?,
+                tab: decode_composite_tab(reader, 4)?,
+                layout: decode_composite_layout(
+                    &reader.text(9, "composite layout must be text")?,
+                    false,
+                )?,
+                preview: reader
+                    .optional_boolean(10, "preview must be a boolean")?
+                    .unwrap_or(false),
+            },
         })
     }
 }
@@ -770,17 +773,20 @@ pub(crate) async fn open_composite(
     context.foreground(|host, cx| {
         let destination = host.document_destination(&request, arguments.target, cx)?;
         let owner = ExtensionKey::new(request.extension, request.lifecycle);
-        let target = host.open_composite(
-            owner,
-            destination,
-            arguments.kind,
-            arguments.tab,
-            arguments.layout,
-            cx,
-        )?;
+        let target = host.open_composite(owner, destination, arguments.opening, cx)?;
         host.presentation_info(&target, cx)
             .ok_or(OpenError::from(AccessError::InvalidTarget))
     })?
+}
+
+/// Make the preview tab of a composite view the caller opened regular.
+#[host_operation("keepComposite")]
+pub(crate) async fn keep_composite(
+    context: HostContext,
+    arguments: ViewTargetArguments,
+) -> Result<(), OpenError> {
+    let owner = ExtensionKey::new(context.request.extension, context.request.lifecycle);
+    context.foreground(|host, cx| host.keep_composite(owner, &arguments.target, cx))?
 }
 
 #[derive(Clone, Debug, PartialEq)]

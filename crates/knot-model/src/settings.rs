@@ -433,7 +433,7 @@ fn native_definitions() -> Vec<SettingDefinition> {
             key: WORKBENCH_PREVIEW_TABS.into(),
             value_type: SettingType::Boolean,
             default: true.into(),
-            description: "Open documents browsed from the explorer or search as preview tabs that the next preview replaces".into(),
+            description: "Open documents browsed from the explorer or search, and diffs, as preview tabs that the next preview replaces".into(),
         },
         text(
             WORKBENCH_BOTTOM_DOCK_LAYOUT,

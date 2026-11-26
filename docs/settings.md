@@ -83,7 +83,7 @@ and `icons.pack` when the user runs Select Icon Pack.
 | Key | Type | Default | Scope | Owner | Description |
 | --- | --- | --- | --- | --- | --- |
 | `keymap.preset` | string | `"knot"` | Global; an unregistered name selects `knot` | native | Keymap preset that supplies default key bindings. |
-| `workbench.previewTabs` | boolean | `true` | Global | native | Open documents browsed from the explorer or search as preview tabs that the next preview replaces. |
+| `workbench.previewTabs` | boolean | `true` | Global | native | Open documents browsed from the explorer or search, and diffs, as preview tabs that the next preview replaces. |
 | `workbench.bottomDockLayout` | string | `"contained"` | Global; an unknown value is `contained` | native | Where the bottom slots sit: `"contained"` under the center between the side slots, or `"full"` across the window width under them. |
 | `workbench.toolStripes` | boolean | `true` | Global | native | Show a stripe of tool buttons on the left and right window edges. |
 | `statusBar.visible` | boolean | `true` | Global | native | Show the status bar below the workbench. |

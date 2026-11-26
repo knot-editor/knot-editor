@@ -279,7 +279,8 @@ pub struct WorkbenchTab {
     id: TabId,
     /// Pinned tabs form a prefix of their pane's tabs.
     pinned: bool,
-    /// A preview document tab is replaced by the pane's next preview.
+    /// A preview tab, of a document or a composite view, is replaced by the
+    /// pane's next preview.
     preview: bool,
     surface: TabSurfaceId,
     presentation: PresentationId,
@@ -769,32 +770,13 @@ impl Workbench {
 
     /// Open a document as the pane's preview tab, replacing its current
     /// preview in place; a dock pane opens it in the center instead. Returns
-    /// the pane, the tab, and the document the preview replaced.
+    /// the pane, the tab, and the surface the preview replaced.
     pub fn open_preview_for_document(
         &mut self,
         pane_id: PaneId,
         document_id: DocumentId,
-    ) -> Option<(PaneId, TabId, Option<DocumentId>)> {
-        if self.pane_area(pane_id)? != Area::Center {
-            let center = self.ensure_center_pane();
-            return self.open_preview_for_document(center, document_id);
-        }
-        let preview = self
-            .pane(pane_id)?
-            .tabs
-            .iter()
-            .find(|tab| tab.preview)
-            .map(|tab| (tab.id, tab.document_id()));
-        let (tab, replaced) = match preview {
-            Some((tab, replaced)) => {
-                self.replace_tab_document(pane_id, tab, document_id);
-                (tab, replaced)
-            }
-            None => (self.open_tab_for_document(pane_id, document_id)?, None),
-        };
-        let pane = self.panes.iter_mut().find(|pane| pane.id == pane_id)?;
-        pane.tabs.iter_mut().find(|item| item.id == tab)?.preview = true;
-        Some((pane_id, tab, replaced))
+    ) -> Option<(PaneId, TabId, Option<TabSurfaceId>)> {
+        self.open_preview(pane_id, TabSurfaceId::Document(document_id))
     }
 
     /// Open a document as the center pane's preview tab, creating the
@@ -802,10 +784,51 @@ impl Workbench {
     pub fn open_preview_in_center(
         &mut self,
         document_id: DocumentId,
-    ) -> (PaneId, TabId, Option<DocumentId>) {
+    ) -> (PaneId, TabId, Option<TabSurfaceId>) {
         let pane = self.ensure_center_pane();
         self.open_preview_for_document(pane, document_id)
             .expect("the center pane is live")
+    }
+
+    /// Open a composite view as the center pane's preview tab, replacing the
+    /// pane's current preview in place. Returns the pane, the tab, and the
+    /// surface the preview replaced.
+    pub fn open_preview_composite_in_center(
+        &mut self,
+        composite: CompositeViewId,
+    ) -> Option<(PaneId, TabId, Option<TabSurfaceId>)> {
+        if self.has_composite(composite) {
+            return None;
+        }
+        let pane = self.ensure_center_pane();
+        self.open_preview(pane, TabSurfaceId::Composite(composite))
+    }
+
+    fn open_preview(
+        &mut self,
+        pane_id: PaneId,
+        surface: TabSurfaceId,
+    ) -> Option<(PaneId, TabId, Option<TabSurfaceId>)> {
+        if self.pane_area(pane_id)? != Area::Center {
+            let center = self.ensure_center_pane();
+            return self.open_preview(center, surface);
+        }
+        let preview = self
+            .pane(pane_id)?
+            .tabs
+            .iter()
+            .find(|tab| tab.preview)
+            .map(|tab| (tab.id, tab.surface));
+        let (tab, replaced) = match preview {
+            Some((tab, replaced)) => {
+                self.replace_tab_surface(pane_id, tab, surface);
+                (tab, Some(replaced))
+            }
+            None => (self.insert_tab(pane_id, surface)?, None),
+        };
+        let pane = self.panes.iter_mut().find(|pane| pane.id == pane_id)?;
+        pane.tabs.iter_mut().find(|item| item.id == tab)?.preview = true;
+        Some((pane_id, tab, replaced))
     }
 
     /// Make a preview tab regular. Returns whether it was a preview.
@@ -821,11 +844,24 @@ impl Workbench {
         std::mem::replace(&mut tab.preview, false)
     }
 
-    /// Make every preview tab whose document `edited` reports regular.
+    /// Make every preview tab regular when `edited` reports a document it
+    /// shows.
     pub fn promote_edited_previews(&mut self, edited: impl Fn(DocumentId) -> bool) -> bool {
         let mut promoted = false;
+        let composite_documents = &self.composite_documents;
         for tab in self.panes.iter_mut().flat_map(|pane| &mut pane.tabs) {
-            if tab.preview && tab.document_id().is_some_and(&edited) {
+            if !tab.preview {
+                continue;
+            }
+            let shown = match tab.surface {
+                TabSurfaceId::Document(document) => std::slice::from_ref(&document).to_vec(),
+                TabSurfaceId::Composite(composite) => composite_documents
+                    .get(&composite)
+                    .cloned()
+                    .unwrap_or_default(),
+                TabSurfaceId::Terminal(_) | TabSurfaceId::Tool(_) => Vec::new(),
+            };
+            if shown.into_iter().any(&edited) {
                 tab.preview = false;
                 promoted = true;
             }
@@ -926,6 +962,21 @@ impl Workbench {
         tab_id: TabId,
         document_id: DocumentId,
     ) -> bool {
+        let is_document = self
+            .pane(pane_id)
+            .and_then(|pane| pane.tabs.iter().find(|tab| tab.id == tab_id))
+            .is_some_and(|tab| tab.document_id().is_some());
+        is_document
+            && self.replace_tab_surface(pane_id, tab_id, TabSurfaceId::Document(document_id))
+    }
+
+    /// Show another surface in a tab, as a fresh presentation.
+    fn replace_tab_surface(
+        &mut self,
+        pane_id: PaneId,
+        tab_id: TabId,
+        surface: TabSurfaceId,
+    ) -> bool {
         let presentation = self.allocate_presentation();
         let Some(pane) = self.panes.iter_mut().find(|pane| pane.id == pane_id) else {
             return false;
@@ -933,10 +984,7 @@ impl Workbench {
         let Some(tab) = pane.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
             return false;
         };
-        if tab.document_id().is_none() {
-            return false;
-        }
-        tab.surface = TabSurfaceId::Document(document_id);
+        tab.surface = surface;
         tab.presentation = presentation;
         pane.select(tab_id);
         self.set_focus(pane_id);
@@ -1747,7 +1795,10 @@ mod tests {
             let (_, preview, replaced) = workbench.open_preview_for_document(pane, second).unwrap();
             assert_eq!(replaced, None);
             let (_, again, replaced) = workbench.open_preview_for_document(pane, third).unwrap();
-            assert_eq!((again, replaced), (preview, Some(second)));
+            assert_eq!(
+                (again, replaced),
+                (preview, Some(TabSurfaceId::Document(second)))
+            );
             let tabs = |workbench: &Workbench| {
                 workbench
                     .pane(pane)
@@ -1797,6 +1848,57 @@ mod tests {
                     .all(|tab| tab.id() != moved.destination.tab_id || !tab.is_preview())
             );
         }
+    }
+
+    #[test]
+    fn a_preview_slot_is_shared_by_documents_and_composite_views() {
+        let [first, second, third] = [1, 2, 3].map(DocumentId::new);
+        let [one, two] = [1, 2].map(CompositeViewId);
+        let workbench = &mut Workbench::new_for_document(first);
+        let pane = workbench.focused_pane_id().unwrap();
+        let surfaces = |workbench: &Workbench| {
+            workbench
+                .pane(pane)
+                .unwrap()
+                .tabs()
+                .iter()
+                .map(|tab| (tab.surface_id(), tab.is_preview()))
+                .collect::<Vec<_>>()
+        };
+
+        let (_, tab, replaced) = workbench.open_preview_composite_in_center(one).unwrap();
+        assert_eq!(replaced, None);
+        workbench.set_composite_documents(one, vec![second]);
+
+        // A document preview replaces a composite preview, and back.
+        let (_, same, replaced) = workbench.open_preview_for_document(pane, third).unwrap();
+        assert_eq!((same, replaced), (tab, Some(TabSurfaceId::Composite(one))));
+        assert_eq!(workbench.composite_documents(one), &[second]);
+        let (_, same, replaced) = workbench.open_preview_composite_in_center(two).unwrap();
+        assert_eq!((same, replaced), (tab, Some(TabSurfaceId::Document(third))));
+        assert_eq!(
+            surfaces(workbench),
+            [
+                (TabSurfaceId::Document(first), false),
+                (TabSurfaceId::Composite(two), true)
+            ]
+        );
+
+        // An edit to a document the composite shows promotes it.
+        workbench.set_composite_documents(two, vec![second]);
+        assert!(!workbench.promote_edited_previews(|document| document == third));
+        assert!(workbench.promote_edited_previews(|document| document == second));
+        assert!(!surfaces(workbench)[1].1);
+
+        // Pinning promotes a composite preview and keeps the pinned prefix.
+        let (_, tab, _) = workbench
+            .open_preview_composite_in_center(CompositeViewId(3))
+            .unwrap();
+        assert_eq!(workbench.toggle_pin(pane, tab), Some(true));
+        assert_eq!(
+            surfaces(workbench)[0],
+            (TabSurfaceId::Composite(CompositeViewId(3)), false)
+        );
     }
 
     #[test]

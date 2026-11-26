@@ -423,7 +423,7 @@ impl Workbench {
         document_id: DocumentId,
         model: Entity<Buffer>,
         cx: &mut Context<Self>,
-    ) -> Option<(PaneId, TabId, Option<DocumentId>)> {
+    ) -> Option<(PaneId, TabId, Option<TabSurfaceId>)> {
         let opened = self
             .layout
             .open_preview_for_document(pane_id, document_id)?;
@@ -439,7 +439,7 @@ impl Workbench {
         document_id: DocumentId,
         model: Entity<Buffer>,
         cx: &mut Context<Self>,
-    ) -> (PaneId, TabId, Option<DocumentId>) {
+    ) -> (PaneId, TabId, Option<TabSurfaceId>) {
         let opened = self.layout.open_preview_in_center(document_id);
         self.attach_editor(self.presentation_of(opened.0, opened.1), model, cx);
         self.drop_ended_views();
@@ -547,19 +547,25 @@ impl Workbench {
         Some(pane)
     }
 
-    /// Open a composite view in the center and return its tab.
+    /// Open a composite view in the center and return its tab and the
+    /// surface it replaced when it is a preview.
     pub(crate) fn open_composite_in_center(
         &mut self,
         tab: CompositeTab,
         layout: GroupSpec,
+        preview: bool,
         window: &str,
         cx: &mut Context<Self>,
-    ) -> (PaneId, TabId) {
+    ) -> (PaneId, TabId, Option<TabSurfaceId>) {
         let id = super::composite_view::allocate_composite_id();
-        let (pane, tab_id) = self
-            .layout
-            .open_composite_in_center(id)
-            .expect("a new composite view has a fresh identity");
+        let (pane, tab_id, replaced) = if preview {
+            self.layout.open_preview_composite_in_center(id)
+        } else {
+            self.layout
+                .open_composite_in_center(id)
+                .map(|(pane, tab)| (pane, tab, None))
+        }
+        .expect("a new composite view has a fresh identity");
         self.layout.set_composite_documents(id, layout.documents());
         let view = cx.new(|cx| CompositeView::new(tab, layout, window, cx));
         let target = view.read(cx).command_target();
@@ -575,7 +581,8 @@ impl Workbench {
             self.presentation_of(pane, tab_id),
             PresentationView::Composite(view, target, subscriptions),
         );
-        (pane, tab_id)
+        self.drop_ended_views();
+        (pane, tab_id, replaced)
     }
 
     /// Replace the layout of the composite view in `pane`'s tab `tab`.

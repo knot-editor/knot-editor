@@ -321,6 +321,8 @@ export type FakeComposite = {
   scrollLink: Knot.CompositeScrollLink | null;
   /** The layout now, after any `update`. */
   layout: Knot.CompositeGroup;
+  /** Whether `keep` made a preview request regular. */
+  kept: boolean;
   closed: boolean;
 };
 
@@ -3071,6 +3073,7 @@ export const api: KnotApi = {
             },
             scrollLink: options.scrollLink ?? null,
             layout: options.layout,
+            kept: options.preview !== true,
             closed: false,
           };
           state.composites.push(composite);
@@ -3097,6 +3100,10 @@ export const api: KnotApi = {
                 toolbar: changes.toolbar ?? composite.tab.toolbar,
               };
               if (changes.scrollLink !== undefined) composite.scrollLink = changes.scrollLink;
+            },
+            keep: async () => {
+              if (composite.closed) throw hostError("InvalidTarget");
+              composite.kept = true;
             },
             close,
             [Symbol.asyncDispose]: async () => void (await close()),

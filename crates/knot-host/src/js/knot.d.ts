@@ -500,8 +500,9 @@ declare module "knot" {
     /** The keymap preset that supplies default bindings. Native default
      * "knot"; an unregistered name selects "knot". */
     "keymap.preset": string;
-    /** Whether documents browsed from the explorer or search open as preview
-     * tabs that the next preview replaces. Native default true. */
+    /** Whether documents browsed from the explorer or search, and views opened
+     * with `preview`, open as preview tabs that the next preview replaces.
+     * Native default true. */
     "workbench.previewTabs": boolean;
     /** Where the bottom side sits: "contained" under the center between the
      * left and right sides, or "full" across the window width under them.
@@ -3188,6 +3189,14 @@ declare module "knot" {
     readonly layout: CompositeGroup;
     /** The buttons of a bar above the layout, in order; none shows no bar. */
     readonly toolbar?: readonly CompositeButton[];
+    /** Open the view as the center pane's preview tab, replacing that pane's
+     * current preview, a document's or another composite view's, in place. A
+     * replaced view closes as closing its tab does. A preview becomes a
+     * regular tab when pinned, double-clicked, dragged, kept with `keep`, or
+     * when a document its editors show is edited. With the
+     * `workbench.previewTabs` setting off, a preview request opens a regular
+     * tab. */
+    readonly preview?: boolean;
   }
   /** An open composite view. Disposing it closes the tab, as `close` does. */
   export interface CompositeInstance extends AsyncDisposable {
@@ -3220,6 +3229,11 @@ declare module "knot" {
       readonly toolbar?: readonly CompositeButton[];
       readonly scrollLink?: CompositeScrollLink | null;
     }): Promise<void>;
+    /** Make a preview tab regular, as Keep Tab Open does; a regular tab stays
+     * as it is.
+     * @throws HostError with InvalidTarget for a tab that was closed, or
+     * OwnershipDisposed after disposal. */
+    keep(): Promise<void>;
     /** Close the tab as `workbench.close` does; a tab already closed resolves
      * as closed. */
     close(options?: CloseOptions): Promise<PresentationCloseOutcome>;

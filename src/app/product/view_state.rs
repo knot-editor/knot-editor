@@ -35,8 +35,18 @@ impl KnotWindow {
         let workbench = self.workbench.read(cx);
         let editors = workbench
             .tabs()
-            .filter_map(|tab| workbench.editor(tab))
-            .map(|view| view.read(cx).editor().clone())
+            .flat_map(|tab| {
+                let composite = workbench
+                    .composite_view(tab)
+                    .map(|view| view.read(cx).leaves())
+                    .unwrap_or_default();
+                workbench
+                    .editor(tab)
+                    .into_iter()
+                    .chain(composite.iter().filter_map(|leaf| leaf.editor()))
+                    .map(|view| view.read(cx).editor().clone())
+                    .collect::<Vec<_>>()
+            })
             .collect::<Vec<_>>();
         self.view_state
             .editors

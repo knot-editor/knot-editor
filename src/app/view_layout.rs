@@ -235,7 +235,6 @@ pub(crate) enum Leaf {
 }
 
 impl Leaf {
-    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn editor(&self) -> Option<&Entity<EditorView>> {
         match self {
             Self::Editor(view) => Some(view),

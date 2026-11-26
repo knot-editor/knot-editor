@@ -438,6 +438,32 @@ impl KnotWindow {
         }
     }
 
+    /// Close the documents a replaced preview was the last view of, other
+    /// than `keep`.
+    pub(super) fn release_replaced_preview(
+        &mut self,
+        replaced: Option<TabSurfaceId>,
+        keep: Option<DocumentId>,
+        cx: &mut Context<Self>,
+    ) {
+        let shown = match replaced {
+            Some(TabSurfaceId::Document(document)) => vec![document],
+            Some(TabSurfaceId::Composite(composite)) => self
+                .workbench
+                .read(cx)
+                .composite_documents(composite)
+                .to_vec(),
+            _ => return,
+        };
+        for document in shown.into_iter().filter(|document| Some(*document) != keep) {
+            if cx.global::<ApplicationWindows>().view_count(document, cx) == 0 {
+                Self::documents(cx).update(cx, |documents, cx| {
+                    documents.remove(document, cx);
+                });
+            }
+        }
+    }
+
     pub(super) fn present_open_document(
         &mut self,
         document: DocumentId,
@@ -473,13 +499,7 @@ impl KnotWindow {
                         .expect("validated destination pane"),
                     None => workbench.open_preview_in_center(document, model, cx),
                 });
-            if let Some(replaced) = replaced.filter(|replaced| *replaced != document)
-                && cx.global::<ApplicationWindows>().view_count(replaced, cx) == 0
-            {
-                documents.update(cx, |documents, cx| {
-                    documents.remove(replaced, cx);
-                });
-            }
+            self.release_replaced_preview(replaced, Some(document), cx);
             (pane, tab)
         } else {
             let documents = Self::documents(cx);
