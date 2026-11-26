@@ -97,7 +97,7 @@ a consumer.
 
 The change colors are native `diff.added`, `diff.modified`, and `diff.removed`
 keys rather than keys of the version control package, because comparing texts
-is an editor feature shared by the change gutter and the diff view.
+is an editor feature shared by the change gutter and the diff package.
 
 Relative line numbers exist because they cost one subtraction and a Vim mode
 needs them. The cursor-line highlight has no setting because a theme can make

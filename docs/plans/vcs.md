@@ -1,6 +1,6 @@
 # Version control
 
-Status: 🚧 in progress; milestone 1 and D213 are done, D229 is next. Replaces D126 from the [roadmap](../roadmap.md)
+Status: 🚧 in progress; milestone 1, D213, and D229 are done, D220 is next. Replaces D126 from the [roadmap](../roadmap.md)
 with D209–D216, D220, D221, and D229, and sequences D087, D199, and D197 into it.
 
 ## Goal
@@ -73,12 +73,11 @@ gutter and change navigation. See [version control](../architecture/version-cont
 
 ### 3. Diffs
 
-- ✅ **D197 — Diff view.** See [the workbench's diff view](../architecture/workbench-and-lifecycle.md#diff-view)
+- ✅ **D197 — Diff view.** See [the diff package](../architecture/version-control.md#the-diff-package)
   and [version control](../architecture/version-control.md#showing-changes).
-- 🚧 **D229 — Composite views and the diff as a package.** [Plan](d229-composite-views.md).
-  Next, since the diff is hardly
-  usable without Vim mode, which attaches only to editors extensions can
-  reach. Depends on D197.
+- ✅ **D229 — Composite views and the diff as a package.** See
+  [composite views](../architecture/workbench-and-lifecycle.md#composite-views)
+  and [the diff package](../architecture/version-control.md#the-diff-package).
 - **D220 — Anchored floating panels.** Split from D145, which keeps virtual
   text for later consumers.
 - **D221 — Hunk popup.** The hunk's baseline against the current lines, with

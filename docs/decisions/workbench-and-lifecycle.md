@@ -160,21 +160,29 @@ a session test bounding a small history.
 
 Reference: [terminal sessions](../architecture/workbench-and-lifecycle.md#terminal-sessions-and-views).
 
-## Diff view
+## Composite views and the diff package
 
-A diff is a native center-only tab kind presenting two ordinary editors, not a
-contributed text frame: it holds live documents and needs its own scrolling and
-painting. Its identity sits in the workbench like a terminal session's, so
-placement, relocation, drag, and split follow the tab kind's rules. Snapshot
-sides are private read-only buffers outside document identity, as text frames
-are; the modified side can instead be a document, sharing its buffer and
-history. Diff tabs are left out of window layouts and Reopen Closed Tab: native
-code cannot recreate a snapshot without the package that supplied it.
+The workbench stays tabs of one view each, and a view lays out its own
+contents. A package describes a composite view as data, and every child view has
+its own identity in a tree extensions see, so Vim, the status bar, and editor
+handles work in any editor wherever it sits and nothing is privileged because
+it is built in. Rejected: a native diff with per-side targets, and diff-specific
+`sides` on tabs, which give a three-way merge or a mixed view nothing; nested
+workbenches with draggable tabs inside a view, which would let the user
+rearrange what the package lays out.
 
-The view rediffs itself with the native line diff after a short debounce, off
-the foreground, keeping the result only if both revisions still match. Rejected:
-a package that diffs and pushes hunks to the view, which adds latency and state
-for no policy gain.
+The diff is the `@knot/diff` package on those parts, not a native view that
+rediffs itself. That reverses the rejection of a package that diffs and pushes
+hunks to the view, which cited latency and state: `diff()` reads both buffers
+natively, so no text crosses to the package, and it returns each side's
+revision, so the package debounces and drops stale results. What remains is
+pushing decorations, the scroll map, and block rows after each rediff.
+
+A side's editability follows its content, as in IntelliJ: an open document is
+editable and a snapshot is read-only. A lock on the modified side, which needed
+a per-view read-only flag on every editor beside its buffer's, is gone.
+Composite views are left out of window layouts and Reopen Closed Tab: native
+code cannot recreate buffers the package supplied.
 
 Side by side follows IntelliJ: no filler rows, a strip joining each hunk to its
 counterpart, and scrolling mapped through the hunks. Rejected: VS Code's filler
@@ -183,7 +191,8 @@ Inline shows the modified document with each hunk's original lines as read-only
 block rows in the wrap map, the counterpart of the zero-row lines folds already
 use, so the text stays one editable editor.
 
-Reference: [diff view](../architecture/workbench-and-lifecycle.md#diff-view).
+Reference: [composite views](../architecture/workbench-and-lifecycle.md#composite-views)
+and the [diff package](../architecture/version-control.md#the-diff-package).
 
 ## Window layouts and restoration by position
 

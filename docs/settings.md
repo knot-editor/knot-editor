@@ -37,12 +37,6 @@ values take effect.
 | `editor.folding` | boolean | `true` | Any | native | Show the fold lane in the editor gutter. |
 | `editor.showFoldingControls` | string: `mouseover`, `always` | `"mouseover"` | Any; other text means `mouseover` | native | When the fold lane shows chevrons on foldable lines; collapsed folds always show one. |
 
-## Diff
-
-| Key | Type | Default | Scope | Owner | Description |
-| --- | --- | --- | --- | --- | --- |
-| `diff.layout` | string: `sideBySide`, `inline` | `"sideBySide"` | Global; other text means `sideBySide` | native | How a diff tab opens; Toggle Diff Layout changes one open tab. |
-
 ## Files
 
 | Key | Type | Default | Scope | Owner | Description |
@@ -113,6 +107,7 @@ and `icons.pack` when the user runs Select Icon Pack.
 | `vim.regex` | string | `"vim"` | Read with the editor's `document`, `language`, and `view: "editor"` | `@knot/vim` | The syntax of search patterns and replacements: `"vim"` or `"rust"`, as Find's regex mode reads them. |
 | `vim.ignoreCase` | boolean | `true` | Read with the editor's `document`, `language`, and `view: "editor"`; `:set ic` writes it for the document | `@knot/vim` | Ignore case when searching. |
 | `vim.smartCase` | boolean | `true` | Read with the editor's `document`, `language`, and `view: "editor"`; `:set scs` writes it for the document | `@knot/vim` | Search case-sensitively when the pattern has an uppercase letter, even while ignoring case. |
+| `diff.layout` | string: `sideBySide`, `inline` | `"sideBySide"` | Global; other text means `sideBySide` | `@knot/diff` | How a diff tab opens; Toggle Diff Layout changes one open tab. |
 | `wordHighlight.enabled` | boolean | `true` | Global | `@knot/word-highlight` | Highlight every whole-word occurrence of the word at the cursor. |
 | `selectionHighlight.enabled` | boolean | `true` | Global | `@knot/word-highlight` | Highlight the other occurrences of the selected text. |
 | `wordHighlight.delay` | integer | `250` | Global | `@knot/word-highlight` | Milliseconds the cursor rests before the highlights update. |

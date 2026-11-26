@@ -196,16 +196,14 @@ The layout model (`knot_model::workbench`) owns a window's areas: a center of
 documents and terminals surrounded by six dock slots, each showing at most one
 tool window; the center and every tool window are the same binary split tree of
 tabbed panes; stable pane/tab identities, ordered tabs, and the focused pane. A tab holds the
-identity of what it shows (a document, a terminal session, a diff, or a tool) and a
+identity of what it shows (a document, a terminal session, a composite view, or a tool) and a
 presentation identity, which captured targets compare. The window's workbench
 entity pairs the layout with the view behind each presentation: it creates a
 view when a transition opens a tab and drops it once no tab or tool presents
 it. A document tab presents one `EditorView` of an application-owned document,
 fresh whenever it opens, shows another document, or moves to another window. A
 terminal tab presents the sole attached view of an application-owned session,
-with no document model. A diff tab presents a `DiffView`, described [below](#diff-view). Its identity
-sits in the workbench like a terminal session's, and its split opens the same
-comparison in a fresh view.
+with no document model. A composite tab presents a `CompositeView`, described [below](#composite-views).
 A fixed tool window's tab presents its tool's native frame, whose
 definition and presentation survive hiding.
 The slots are left top and bottom, right top and bottom, and bottom left and
@@ -230,7 +228,7 @@ Split Right and Down open a new tab in a new pane beside the current one, Split
 and Move moves the current tab there, and Unsplit merges the panes back. Each
 tab kind declares where it may live (`TabKind::allows`), and placement,
 relocation, directional moves, and restore check it: documents live in the
-center, a fixed tool's tab in its own window, a diff only in the center, and a
+center, a fixed tool's tab in its own window, a composite view only in the center, and a
 terminal in the center or in the container it was opened into, never in another
 tool window. Open as
 Editor Tab and Return to Tool Window, or a drag onto the center or any strip of
@@ -405,46 +403,6 @@ The toolbar belongs to the tab's data. A click captures a command target for
 the composite's own tab and its focused leaf, as a click on an editor
 contribution does, and dispatches the command there whatever has focus.
 
-## Diff view
-
-A `DiffView` (`src/app/diff_view.rs`) is a center-only tab of two ordinary
-`EditorView`s. The original is always a snapshot: a private read-only buffer
-with a label and a language, outside document identity as text frames are. The
-modified side is a snapshot or an application document, an editable view of the
-document's shared buffer that counts as a view of that document for closure and
-view counts, so closing the document's last view prompts as usual. Diff tabs are
-left out of window layouts, hot exit, and Reopen Closed Tab: native code cannot
-recreate a snapshot without the package that supplied it.
-
-The view diffs its sides itself with `knot_model::diff::line_hunks`: when it
-opens and 150 ms after an edit to either side, off the foreground, keeping the
-result only if both sides' revisions still match. `hunk_decorations` turns each
-hunk into `diff.*.background` line bands on both sides, with a gutter wedge on
-a side that has no lines in the hunk.
-
-Side by side, the editors have no filler rows. Scrolling one scrolls the other
-through `knot_model::diff::map_line`, which maps lines outside hunks one to one
-and lines inside a hunk proportionally, and a strip between them joins each
-hunk's lines in the band colors. Inline shows only the modified editor, with
-each hunk's original lines above it as [block rows](editor-and-languages.md#editor-views)
-banded in `diff.removed.background`; it stops scroll syncing. `diff.layout` sets
-how a new tab opens and `diff.toggle-layout`, also a toolbar button, switches
-an open one.
-
-Commands on a diff tab act on the editor of the side that last had focus; inline
-that is the modified side, and the status bar follows that side. Both editors hold the `diff` key context, in which
-Alt+F5 and Alt+Shift+F5 run `diff.next-hunk` and `diff.previous-hunk` ahead of
-the version control package's bindings; they move that caret to the first line
-of the next or previous hunk on that side, wrapping at the ends. A bar above the
-sides holds buttons for those commands, the layout toggle, and, when the
-modified side is a document, a lock that runs `diff.toggle-read-only`: it makes
-that side's editor refuse edits through a per-view read-only flag on the editor,
-so the document's other views stay editable.
-
-Extensions open a diff with
-[`workbench.openDiff`](../extension-api/application.md#show-the-differences),
-and version control opens one from [its commands and gutter](version-control.md#showing-changes).
-
 ## Window layouts
 
 One versioned `WindowLayout` value serves both restorers: native window hot exit
@@ -453,8 +411,8 @@ window bounds, windowed, maximized, or fullscreen state, and the display UUID;
 the center's split tree and each tool window's slot, size, share, visibility,
 and split tree, with each split's ratio; ordered tabs, which are pinned, and the selected tab per
 pane; the focused pane; and each editor tab's view state. Preview, maximize, recent order, and the reopen stack
-are not recorded, so restored tabs are regular. Diff tabs are not recorded or
-kept for Reopen Closed Tab, since native code cannot recreate a snapshot. Every
+are not recorded, so restored tabs are regular. Composite views are not recorded or
+kept for Reopen Closed Tab. Every
 other tab kind is restored by position and records only what recreates it: a document tab its
 document identity, resource URI, and explicit language, a fixed tool window records no tabs, and a terminal tab its shell's working
 directory and label, so a restored terminal starts a fresh shell there under

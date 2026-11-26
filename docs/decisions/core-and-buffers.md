@@ -95,7 +95,7 @@ Reference: [core and buffers](../architecture/core-and-buffers.md).
 ## Line diff for extensions
 
 Comparing two texts is an editor feature, not part of version control: version
-control and the diff view consume it. It is one stateless native function over
+control and the diff package consume it. It is one stateless native function over
 strings or buffers, with policy (when to diff, what to show) left to packages,
 as `buffer.find` leaves it for search. Reload and the extension API share one
 comparison so they agree on what changed.

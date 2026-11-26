@@ -30,7 +30,6 @@ point.
 
 The [version control plan](plans/vcs.md) comes first, in its milestone order:
 
-- D229 — Composite views and the diff as a package.
 - D220 — Anchored floating panels.
 - D221 — Hunk popup.
 - D214 — VCS changes view.
@@ -441,26 +440,15 @@ milestones these items belong to.
   - Description: Conflicted files show only their markers. Do it after the
     [version control plan](plans/vcs.md): list conflicted files, accept ours,
     theirs, or both per conflict from the editor, and a three-way merge view
-    built on the diff view.
-
-- **D229 — Composite views and the diff as a package** 🚧
-  - Depends on: none
-  - Description: The diff view is native and privileged: extensions cannot
-    build anything like it, and they see only tabs, so Vim cannot reach its
-    editors. Expose the views inside a tab as a tree with editors reachable at
-    any depth, add declarative composite views, extension buffers, block rows,
-    and linked editor scrolling, and rebuild the diff as `@knot/diff` on them.
-    Part of the [version control plan](plans/vcs.md). Plan:
-    [d229-composite-views.md](plans/d229-composite-views.md).
+    built on composite views.
 
 - **D228 — Diff toolbar design**
   - Depends on: none
   - Description: The diff tab's bar is a bare row of three small icon buttons
-    (previous hunk, next hunk, read-only lock) with no labels, state, or
-    grouping, and looks unfinished next to the rest of the workbench. Do it
-    after the diff view ships: design the bar like the other tab toolbars,
-    with clear button states, tooltips, a hunk position indicator, and room
-    for the layout toggle.
+    (previous hunk, next hunk, layout toggle) with no labels, state, or
+    grouping, and looks unfinished next to the rest of the workbench. Design
+    the bar like the other tab toolbars, with clear button states, tooltips,
+    and a hunk position indicator.
 
 ### Package manager
 

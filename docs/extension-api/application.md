@@ -15,8 +15,8 @@ a root is rejected.
 
 A tab's `root` is its tree of views: each `ViewNodeInfo` has a `target`, a
 `kind`, its `children`, and for an editor its `document` (null for a buffer
-outside document identity), `buffer`, `language`, and `readOnly`. A diff lists
-its visible editors as children. `WindowInfo.focusedView` is the focused leaf of
+outside document identity), `buffer`, `language`, and `readOnly`. A composite view lists
+its views as children. `WindowInfo.focusedView` is the focused leaf of
 the focused tab and `statusView` the editor a status display describes, so
 follow `statusView` rather than `statusTarget` to see a diff side. Never search
 `pane.tabs` for a view: `windows.findView(info, target)` takes a `ViewNodeTarget`
@@ -159,31 +159,14 @@ size limit, and reports no changes inside a line.
 
 ### Show the differences
 
-`workbench.openDiff` opens a diff tab in the center of the destination's
-window, with changed lines banded in the `diff.*` colors. The original side is
-a read-only snapshot. The modified side is a snapshot too, or an open document,
-which the tab edits live and keeps compared as either side changes:
-
-```js
-const handle = await workbench.openDiff({
-  original: { label: "HEAD", text: baseline, language: "typescript" },
-  modified: { label: "Working copy", document: document.id },
-  line: 41, // optional: start the caret at this 0-based line of the modified side
-});
-await handle.setText("original", newBaseline); // a snapshot side only
-await handle.close();
-```
-
-Closing the tab, disposing the handle, or unloading the extension closes the
-tab, with the usual prompt when it is the last view of a document with unsaved
-changes. A diff tab is not restored with its window, and `setText` rejects
-`InvalidTarget` for a document side or a tab already closed.
-
-A package that requires `@knot/diff` opens the same comparison through its
-contract, which also keeps the gutter, strip, and scrolling current and moves
-between hunks. The tab opens side by side or, as the `diff.layout` setting
-says, inline, with the original's changed lines above the modified text; the
-toolbar and `diff.toggleLayout` switch it:
+A package that requires `@knot/diff` opens a diff tab through its contract. Each
+side is an open document, which the tab edits live, or a read-only snapshot. The
+tab opens side by side or, as the `diff.layout` setting says, inline, with the
+original's changed lines above the modified text; its toolbar and
+`diff.toggleLayout` switch it, and `diff.nextHunk` and `diff.previousHunk` move
+between hunks. The tab keeps its bands, strip, and scrolling current as either
+side changes, and is not restored with its window. `setText` throws for a
+document side or a closed tab, and unloading the package closes its tabs.
 
 ```js
 import { diffs } from "@knot/diff";
