@@ -287,7 +287,12 @@ export async function start(): Promise<Disposable> {
 
   const titleOf = ([original, modified]: [Part, Part]) => `${original.label} ↔ ${modified.label}`;
 
-  async function openDiff(options: { original: SideSpec; modified: SideSpec; line?: number | undefined }) {
+  async function openDiff(options: {
+    original: SideSpec;
+    modified: SideSpec;
+    line?: number | undefined;
+    preview?: boolean | undefined;
+  }) {
     const parts: [Part, Part] = [await makePart(options.original), await makePart(options.modified)];
     try {
       const { hunks } = await diff(parts[0].buffer, parts[1].buffer);
@@ -300,6 +305,7 @@ export async function start(): Promise<Disposable> {
         layout: layout(shape),
         ...(scroll === null ? {} : { scrollLink: scroll }),
         toolbar: toolbar(style),
+        ...(options.preview === true ? { preview: true } : {}),
       });
       counter += 1;
       const diffView: Open = {
@@ -330,13 +336,18 @@ export async function start(): Promise<Disposable> {
     }
   }
 
+  function openOf(id: string) {
+    const diffView = open.get(id);
+    if (diffView === undefined) throw new Error(`no open diff ${id}`);
+    return diffView;
+  }
+
   const served = await diffs.serve({
     async open(options) {
       return (await openDiff(options)).id;
     },
     async setText({ id, side, text }) {
-      const diffView = open.get(id);
-      if (diffView === undefined) throw new Error(`no open diff ${id}`);
+      const diffView = openOf(id);
       const part = diffView.parts[SIDES.indexOf(side)]!;
       if (part.owned === null) throw new Error("a document side has no text to replace");
       // A read-only buffer takes no edits, so the side shows a new buffer.
@@ -356,6 +367,12 @@ export async function start(): Promise<Disposable> {
       await locate(diffView);
       await listen(diffView, part);
       kick(diffView);
+    },
+    async keep(id) {
+      await openOf(id).composite.keep();
+    },
+    async activate(id) {
+      await openOf(id).composite.activate();
     },
     async close(id) {
       const diffView = open.get(id);

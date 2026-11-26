@@ -64,7 +64,10 @@ and `src/app/product/tests/composite.rs`; the docs land with checkpoint 3.
 Done and approved: `documents.load(uri)` opens a file's document without a
 tab, covered by app and extension API tests. Its docs land with checkpoint 3.
 
-### 3. Preview diffs in the Changes view and gutter
+### 3. Preview diffs in the Changes view and gutter ✅ (awaiting review)
+
+Scope decision: reusing an open diff needs to show its tab, so composite
+instances also gained `activate()` and the `diff` contract `activate(id)`.
 
 Deliverables: the `diff` contract's `preview` and `keep(id)`; Changes view
 click, double-click, and Enter as designed, reusing a row's open diff; the

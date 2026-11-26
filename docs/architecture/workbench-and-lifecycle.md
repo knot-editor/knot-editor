@@ -290,10 +290,11 @@ every pane of a same-direction chain in the focused pane's area an even share. E
 tabs in recently activated order; a recent-tab walk (`workbench::RecentWalk`) shows tabs without
 reordering them and commits one activation when ctrl is released. Pinned tabs
 form a prefix of their pane, and every insertion, move, and restore keeps a tab
-in its pinned or unpinned section. A document opened as a preview replaces the
-pane's current preview in place and becomes regular when edited, pinned,
-double-clicked, moved, kept open by command, or opened again without
-`preview`; the
+in its pinned or unpinned section. A document or composite view opened as a preview replaces the
+pane's current preview in place, closing a replaced composite as closing its tab
+does, and becomes regular when edited (a composite: any document it shows),
+pinned, double-clicked, moved, kept open by command, or opened again without
+`preview` (a composite instance: `keep()`); the
 `workbench.previewTabs` setting turns previews into regular tabs. Directional
 focus and moves find the neighbor across areas from pane rectangles laid out
 from ratios and tool-window sizes over the painted workbench, so they work while a

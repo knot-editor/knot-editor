@@ -119,14 +119,16 @@ backend decides what it means and asks for any confirmation itself. A row's menu
 lists the backend's actions, then Show Diff (files) and Open File, then the
 [native file commands](commands.md#file-commands).
 
-Double-click or Enter on a file runs `vcs.showFileChanges`, which asks the
+A click on a file runs `vcs.showFileChanges` as a preview diff, and double-click or Enter as
+a regular one; the command asks the
 backend's `compare({ repository, group, file })` for the sides of that file's diff
 in that group, an `original` snapshot and a `modified` side that is either
 `"document"` (the working file, editable) or a snapshot, and opens them through
-the `diff` contract; `null` means the file has no diff there. Each file and group
-keeps at most one diff, and a second request closes the open one and opens a new
-tab. When the repository's status is pulled again, snapshot sides are replaced
-and the tab closes once `compare` returns null. A single click only selects.
+the `diff` contract; `null` means the file has no diff there. The working file is
+loaded without a tab of its own. Each file and group
+keeps at most one diff, and a second request shows that tab, keeping it for
+double-click or Enter. When the repository's status is pulled again, snapshot sides are replaced
+and the tab closes once `compare` returns null.
 
 `vcs.rollbackFile` (Rollback File) works from the palette on the focused editor's
 file. It confirms, saying that unsaved edits will be lost when the document is
@@ -161,16 +163,15 @@ a snapshot labeled with the backend's ref (or "Baseline" without one), against
 the document, which stays editable. It starts the caret at the hunk popup's line, or the
 caret's line from the palette. A file without a baseline leaves
 the command unavailable, and a file equal to its baseline raises a "No changes"
-notice instead of a tab. Each document keeps at most one such diff: a second
+notice instead of a tab. The diff opens as the pane's preview tab. Each document keeps at most one such diff: a second
 request closes the open one and opens a new tab. The open diff's original side
 is replaced when the baseline is fetched again, and the tab closes when the file
-has no baseline any more or the document closes. The tab is a regular tab, not a
-preview.
+has no baseline any more or the document closes.
 
 ## The diff package
 
 `@knot/diff` opens comparisons as composite tabs and serves the `diff` contract
-(`open`, `setText`, `close`) to packages that show one. A tab is a row of two
+(`open`, `setText`, `keep`, `activate`, `close`) to packages that show one; `open` takes `preview` for the pane's preview tab. A tab is a row of two
 editors, `original` and `modified`, with a connector strip between them. A side
 is an open document, which the tab edits, or a read-only snapshot held in an
 extension buffer; `setText` on a snapshot shows a new buffer, as a read-only

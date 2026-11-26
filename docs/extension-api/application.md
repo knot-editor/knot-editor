@@ -30,7 +30,9 @@ const place = info.statusView && windows.findView(info, info.statusView);
 const file = place?.view.document ?? null;
 ```
 
-Use `documents.open` for files, `createUntitled` for new documents, and `present`
+Use `documents.open` for files, `documents.load(uri)` for a file's document that
+a view of yours will show instead of a tab (it closes with the last view that
+shows it, and one no view ever shows stays open until closed), `createUntitled` for new documents, and `present`
 for another presentation of a live document. These return committed document and
 presentation data. `documents.save(id, { uri? })` saves without a dialog, as Save
 and Save As do: with `uri` it replaces whatever file is there and the document

@@ -10,10 +10,12 @@ declare module "@knot/diff" {
 
   export const diffs: Contract<{
     open: FnSchema<
-      { readonly original: Snapshot | Open; readonly modified: Snapshot | Open; readonly line?: number },
+      { readonly original: Snapshot | Open; readonly modified: Snapshot | Open; readonly line?: number; readonly preview?: boolean },
       string
     >;
     setText: FnSchema<{ readonly id: string; readonly side: "original" | "modified"; readonly text: string }, void>;
+    keep: FnSchema<string, void>;
+    activate: FnSchema<string, void>;
     close: FnSchema<string, void>;
   }>;
 }

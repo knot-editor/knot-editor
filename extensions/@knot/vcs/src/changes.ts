@@ -61,19 +61,24 @@ function object(value: JsonValue | undefined): Record<string, JsonValue> | null 
   return value !== null && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, JsonValue>) : null;
 }
 
-/** What `vcs.showFileChanges` was asked for, or null for a row gesture that does not open it. */
-function requestOf(args: JsonValue): Request | null {
+/**
+ * What `vcs.showFileChanges` was asked for, or null for a row gesture that
+ * does not open it. A click asks for a preview diff, the other requests for a
+ * regular one.
+ */
+function requestOf(args: JsonValue): (Request & { readonly preview: boolean }) | null {
   let given = object(args);
+  let preview = false;
   if (given !== null && "gesture" in given) {
-    // A row's command: a click only selects.
-    if (given.gesture !== "doubleClick" && given.gesture !== "enter") return null;
+    if (given.gesture !== "click" && given.gesture !== "doubleClick" && given.gesture !== "enter") return null;
+    preview = given.gesture === "click";
     given = object(given.arguments);
   }
   const { backend, repository, group, file } = given ?? {};
   if (typeof backend !== "string" || typeof repository !== "string" || typeof group !== "string" || typeof file !== "string") {
     commands.unavailable();
   }
-  return { repository: { backend, root: repository }, group, file };
+  return { repository: { backend, root: repository }, group, file, preview };
 }
 
 const keyOf = ({ repository, group, file }: Request) => JSON.stringify([repository.backend, repository.root, group, file]);
@@ -137,22 +142,39 @@ export async function registerChanges(deps: ChangesDeps): Promise<Changes> {
     }
   }
 
-  /** Opens the file's changes in its group, replacing the diff open for them. */
+  /** Shows the diff open for `key`, keeping it unless `preview`; false when it is gone. */
+  async function reuse(key: string, preview: boolean) {
+    const shown = open.get(key);
+    if (shown === undefined) return false;
+    try {
+      const client = await diffs.client();
+      if (!preview) await client.keep(shown.id);
+      await client.activate(shown.id);
+      return true;
+    } catch {
+      // A later preview replaced it.
+      open.delete(key);
+      return false;
+    }
+  }
+
+  /** Opens the file's changes in its group, or shows the diff already open for them. */
   async function showFileChanges({ target, arguments: args }: CommandContext) {
     const request = requestOf(args);
     if (request === null) return;
+    const { preview } = request;
     const sides = await compare(request);
     if (sides === null) {
       await workbench.showNotice({ title: "Version Control", message: "No changes to show for this file." });
       return;
     }
     const key = keyOf(request);
-    await closeDiff(key);
+    if (await reuse(key, preview)) return;
     const document = sides.modified === "document";
     const modified = document
-      ? { label: "Working Copy", document: (await documents.open(request.file, { target: target.windowTarget, focus: false })).document.id }
+      ? { label: "Working Copy", document: (await documents.load(request.file, { target: target.windowTarget })).id }
       : sides.modified;
-    const id = await (await diffs.client()).open({ original: sides.original, modified });
+    const id = await (await diffs.client()).open({ original: sides.original, modified, ...(preview ? { preview } : {}) });
     open.set(key, { id, repository: request.repository, group: request.group, file: request.file, document });
   }
 

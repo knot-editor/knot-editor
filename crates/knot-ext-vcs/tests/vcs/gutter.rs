@@ -184,4 +184,5 @@ fn show_changes_opens_the_baseline_against_the_file_and_follows_edits(cx: &mut T
         super::texts(&window, cx),
         [("a\nb\nc\nd\n".to_owned(), "a\nB\nc\nd\n".to_owned())]
     );
+    assert_eq!(window.composite_previews(cx), [true]);
 }

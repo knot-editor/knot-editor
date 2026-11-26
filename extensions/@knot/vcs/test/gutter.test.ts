@@ -13,7 +13,7 @@ const running = () => (started ??= start());
 
 /** A diff opened through the `diff` contract, which these tests serve. */
 type Shown = {
-  options: { original: { label: string; text?: string; language?: string }; modified: { label: string; document?: string }; line?: number };
+  options: { original: { label: string; text?: string; language?: string }; modified: { label: string; document?: string }; line?: number; preview?: boolean };
   /** The text of the original side now, after any `setText`. */
   original: string;
   closed: boolean;
@@ -35,6 +35,8 @@ beforeEach(async () => {
       if (diff.closed) throw new Error("closed");
       diff.original = text;
     },
+    keep: () => {},
+    activate: () => {},
     close: (id) => {
       shown[Number(id.slice(5)) - 1]!.closed = true;
     },
@@ -362,6 +364,7 @@ test("Show Changes opens the baseline against the document at the caret line", a
   assert.deepEqual(diff!.options.original, { label: "main", text: "a\nb\nc\n", language: "plaintext" });
   assert.deepEqual(diff!.options.modified, { label: "Working Copy", document: id });
   assert.equal(diff!.options.line, 1);
+  assert.equal(diff!.options.preview, true);
 });
 
 test("Compare with Last Commit says so when nothing changed", async () => {

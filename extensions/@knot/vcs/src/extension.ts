@@ -500,6 +500,7 @@ export async function start(): Promise<Disposable> {
       original: { label, text: follow.baseline, language: follow.language },
       modified: { label: "Working Copy", document: follow.id },
       line,
+      preview: true,
     });
   };
 

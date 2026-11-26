@@ -146,15 +146,30 @@ fn a_change_made_with_git_moves_the_file_between_groups(cx: &mut TestAppContext)
 }
 
 #[gpui::test]
-fn double_click_opens_the_staged_diff_and_a_second_request_replaces_it(cx: &mut TestAppContext) {
+fn click_opens_a_preview_diff_that_the_next_click_replaces(cx: &mut TestAppContext) {
     let (_product, window, tree, _directory) = show(cx);
-    // A click only selects.
     tree.gesture("s.txt", "click", cx);
-    assert!(window.composite_titles(cx).is_empty());
+    wait_until(cx, |cx| !texts(&window, cx).is_empty());
+    assert_eq!(texts(&window, cx), [("s1\n".to_owned(), "s2\n".to_owned())]);
+    assert_eq!(window.composite_previews(cx), [true]);
 
+    // The working file has no tab of its own.
+    tree.gesture("b.txt", "click", cx);
+    wait_until(cx, |cx| {
+        texts(&window, cx) == [("b1\n".to_owned(), "b2\n".to_owned())]
+    });
+    assert_eq!(window.composite_titles(cx).len(), 1);
+    assert_eq!(window.composite_previews(cx), [true]);
+    assert!(window.document_texts(cx).is_empty());
+}
+
+#[gpui::test]
+fn double_click_opens_a_regular_diff_and_a_second_request_reuses_it(cx: &mut TestAppContext) {
+    let (_product, window, tree, _directory) = show(cx);
     tree.gesture("s.txt", "doubleClick", cx);
     wait_until(cx, |cx| !texts(&window, cx).is_empty());
     assert_eq!(texts(&window, cx), [("s1\n".to_owned(), "s2\n".to_owned())]);
+    assert_eq!(window.composite_previews(cx), [false]);
 
     // Another file keeps its own diff, and the same file has one at most.
     tree.gesture("b.txt", "doubleClick", cx);
@@ -162,6 +177,27 @@ fn double_click_opens_the_staged_diff_and_a_second_request_replaces_it(cx: &mut 
     tree.gesture("s.txt", "enter", cx);
     wait_until(cx, |cx| texts(&window, cx).len() == 1);
     assert_eq!(window.composite_titles(cx).len(), 2);
+}
+
+#[gpui::test]
+fn a_gesture_on_a_row_whose_preview_is_open_activates_or_keeps_it(cx: &mut TestAppContext) {
+    let (_product, window, tree, _directory) = show(cx);
+    tree.gesture("s.txt", "click", cx);
+    wait_until(cx, |cx| window.composite_previews(cx) == [true]);
+
+    // A click on the same row leaves the one preview as it is.
+    tree.gesture("s.txt", "click", cx);
+    assert_eq!(window.composite_previews(cx), [true]);
+
+    // Double-click keeps that diff instead of opening another.
+    tree.gesture("s.txt", "doubleClick", cx);
+    wait_until(cx, |cx| window.composite_previews(cx) == [false]);
+    assert_eq!(window.composite_titles(cx).len(), 1);
+
+    // A new preview does not replace the kept diff.
+    tree.gesture("b.txt", "click", cx);
+    wait_until(cx, |cx| window.composite_titles(cx).len() == 2);
+    assert_eq!(window.composite_previews(cx), [false, true]);
 }
 
 #[gpui::test]

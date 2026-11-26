@@ -71,7 +71,8 @@ commands use laid-out pane rectangles rather than painted bounds, because a
 maximized window paints only one pane; tying maximize to focus ends it on every
 focus change without separate hooks.
 
-Preview tabs follow VS Code. Previews, the
+Preview tabs follow VS Code, and documents and composite views share one
+preview slot per pane so browsing diffs and files never piles up tabs. Previews, the
 reopen stack, recent order, and maximize describe a moment of browsing rather
 than an arrangement worth restoring, so none is recorded. Reopen Closed Tab
 recreates tabs through the layout's per-kind step rather than its own, so a

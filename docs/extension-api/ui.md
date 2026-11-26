@@ -194,6 +194,13 @@ An editor on a document counts the tab as a view of that document, once however
 many editors show it, so closing the tab asks about unsaved changes when it is
 the document's last view.
 
+Open with `preview: true` to make the tab the center pane's preview, which the
+next preview, a document's or another composite's, replaces by closing it as
+closing its tab does. It becomes a regular tab when pinned, double-clicked,
+moved, or edited through any document it shows, and `instance.keep()` makes it
+regular. `instance.activate()` shows the tab and focuses it. The
+`workbench.previewTabs` setting turns previews off.
+
 `instance.update({ title, icon, resource, layout, toolbar })` changes what the
 tab shows; a field left out keeps its value. A member with a `key` that the new
 layout also has, with the same buffer, document, or view, keeps its view and so

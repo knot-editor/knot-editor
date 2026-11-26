@@ -15,7 +15,13 @@ const VIEW = "vcs.changes";
 
 type Side = { label: string; text: string };
 type Compared = { original: Side; modified: "document" | Side } | null;
-type Shown = { options: { original: Side; modified: { label: string; document?: string; text?: string } }; original: string; closed: boolean };
+type Shown = {
+  options: { original: Side; modified: { label: string; document?: string; text?: string }; preview?: boolean };
+  original: string;
+  closed: boolean;
+  kept: boolean;
+  activated: number;
+};
 
 let started: Promise<unknown> | null = null;
 const running = () => (started ??= start());
@@ -27,13 +33,21 @@ beforeEach(async () => {
   shown = [];
   await diffs.serve({
     open: (options) => {
-      shown.push({ options: options as Shown["options"], original: (options.original as Side).text, closed: false });
+      shown.push({ options: options as Shown["options"], original: (options.original as Side).text, closed: false, kept: false, activated: 0 });
       return `diff-${shown.length}`;
     },
     setText: ({ id, side, text }) => {
       const diff = shown[Number(id.slice(5)) - 1]!;
       if (diff.closed) throw new Error("closed");
       if (side === "original") diff.original = text;
+    },
+    keep: (id) => {
+      shown[Number(id.slice(5)) - 1]!.kept = true;
+    },
+    activate: (id) => {
+      const diff = shown[Number(id.slice(5)) - 1]!;
+      if (diff.closed) throw new Error("closed");
+      diff.activated += 1;
     },
     close: (id) => {
       shown[Number(id.slice(5)) - 1]!.closed = true;
@@ -182,7 +196,7 @@ test("the view is invalidated when a snapshot arrives, and shows what the backen
 const showArguments = (groupId: string, file: string) => ({ backend: "one", repository: ROOT, group: groupId, file });
 const FILE = `${ROOT}/a.txt`;
 
-test("double click and Enter open a file's changes, and a click only selects", async () => {
+test("a click opens a preview diff, and double click and Enter a regular one", async () => {
   const window = host.openWindow({ roots: [ROOT] });
   host.addDocument({ uri: FILE, text: "new\n" });
   await backend("one", {
@@ -190,12 +204,23 @@ test("double click and Enter open a file's changes, and a click only selects", a
     compare: (groupId, file) => ({ original: { label: "HEAD", text: "old\n" }, modified: { label: "Index", text: "new\n" } }),
   });
   const gesture = (name: string) => ({ gesture: name, arguments: showArguments("staged", FILE) });
-  await host.run("vcs.showFileChanges", { window, view: VIEW, arguments: gesture("click") });
+  await host.run("vcs.showFileChanges", { window, view: VIEW, arguments: gesture("middleClick") });
   assert.equal(shown.length, 0);
-  await host.run("vcs.showFileChanges", { window, view: VIEW, arguments: gesture("doubleClick") });
+  await host.run("vcs.showFileChanges", { window, view: VIEW, arguments: gesture("click") });
   assert.equal(shown.length, 1);
+  assert.equal(shown[0]!.options.preview, true);
   assert.deepEqual(shown[0]!.options.original, { label: "HEAD", text: "old\n" });
   assert.deepEqual(shown[0]!.options.modified, { label: "Index", text: "new\n" });
+  // The row whose diff is open shows it, and a double click keeps it.
+  await host.run("vcs.showFileChanges", { window, view: VIEW, arguments: gesture("click") });
+  assert.deepEqual([shown.length, shown[0]!.activated, shown[0]!.kept], [1, 1, false]);
+  await host.run("vcs.showFileChanges", { window, view: VIEW, arguments: gesture("doubleClick") });
+  assert.deepEqual([shown.length, shown[0]!.activated, shown[0]!.kept], [1, 2, true]);
+  // A preview replaced by another is opened again.
+  shown[0]!.closed = true;
+  await host.run("vcs.showFileChanges", { window, view: VIEW, arguments: gesture("enter") });
+  assert.equal(shown.length, 2);
+  assert.equal(shown[1]!.options.preview, undefined);
 });
 
 test("an unstaged diff edits the working file's document", async () => {
@@ -209,7 +234,7 @@ test("an unstaged diff edits the working file's document", async () => {
   assert.deepEqual(shown[0]!.options.modified, { label: "Working Copy", document: id });
 });
 
-test("a second request closes the open diff of the file and group, and another group keeps its own", async () => {
+test("a second request reuses the open diff of the file and group, and another group has its own", async () => {
   const window = host.openWindow({ roots: [ROOT] });
   host.addDocument({ uri: FILE, text: "new\n" });
   await backend("one", {
@@ -220,7 +245,7 @@ test("a second request closes the open diff of the file and group, and another g
   await host.run("vcs.showFileChanges", { window, arguments: showArguments("unstaged", FILE) });
   assert.deepEqual(shown.map((diff) => diff.closed), [false, false]);
   await host.run("vcs.showFileChanges", { window, arguments: showArguments("staged", FILE) });
-  assert.deepEqual(shown.map((diff) => diff.closed), [true, false, false]);
+  assert.deepEqual(shown.map((diff) => [diff.closed, diff.activated]), [[false, 1], [false, 0]]);
 });
 
 test("an open diff follows each new snapshot and closes when the file has no diff left", async () => {
