@@ -34,7 +34,6 @@ The [version control plan](plans/vcs.md) comes first, in its milestone order:
 
 Then:
 
-- D231 — Inline zones.
 - D225 — Gutter mark tooltips.
 - D174 — Show Difference for files changed on disk.
 - D022 — Editor autocompletion.
@@ -273,19 +272,6 @@ hold the analyses that support some items.
     virtual text or inlay hints. Do it before D067 needs inlay hints or
     diagnostic text, or blame (D217) needs annotations: design them against a
     real language server, as inline virtual text.
-
-- **D231 — Inline zones** 🚧 ([plan](plans/d231-inline-zones.md))
-  - Depends on: none
-  - Description: Block rows show read-only lines between an editor's lines,
-    and [popovers](architecture/editor-and-languages.md#editor-popovers) float over the text, but extensions cannot push
-    lines apart to show live content between them. Do it when a consumer
-    needs it, such as a peek-style hunk view, inline review comments, or an
-    inline diff hunk with actions: let block rows host a popover's content (a
-    toolbar and a composite layout, with a popover's natural sizing), at any pixel
-    height, with views inside them that take focus, clicks, and typing, and
-    that scroll, fold, and follow edits as block rows do. Then show the hunk
-    popup inline, as Zed does: the deleted lines as rows between the
-    editor's lines, above the current ones, with the popup's actions.
 
 - **D115 — Lifecycle hooks and native command overrides**
   - Depends on: none
