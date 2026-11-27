@@ -230,6 +230,20 @@ fn clicking_the_open_hunks_mark_again_closes_the_popup(cx: &mut TestAppContext) 
 }
 
 #[gpui::test]
+fn clicking_the_gutter_beside_the_zone_closes_it(cx: &mut TestAppContext) {
+    let (_product, window, _directory) = changed(cx);
+    window.click_gutter_bar(2, cx);
+    wait_until(cx, |cx| !window.zones(cx).is_empty());
+    for _ in 0..2 {
+        cx.refresh().unwrap();
+        cx.run_until_parked();
+    }
+    // Row 2 is the zone's first row.
+    window.click_gutter_bar(2, cx);
+    wait_until(cx, |cx| window.zones(cx).is_empty());
+}
+
+#[gpui::test]
 fn escape_in_the_text_closes_the_popup(cx: &mut TestAppContext) {
     let (_product, window, _directory) = changed(cx);
     window.click_gutter_bar(0, cx);

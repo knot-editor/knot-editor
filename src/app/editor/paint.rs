@@ -213,6 +213,29 @@ impl Element for EditorElement {
                         }
                     }),
             );
+            // The gutter beside a zone toggles the hunk of its line, as the mark does.
+            let last_line = editor.line_count().saturating_sub(1);
+            for (key, span) in editor.wrap().zone_frames() {
+                let Some(zone) = editor.zones().by_key(key) else {
+                    continue;
+                };
+                let line = zone.spec.line.min(last_line);
+                if !editor
+                    .gutter_bars()
+                    .iter()
+                    .any(|bar| bar.line == line && bar.command.is_some())
+                {
+                    continue;
+                }
+                let span = span.start.max(rows.start)..span.end.min(rows.end);
+                if !span.is_empty() {
+                    markers.push(row_bounds(
+                        span,
+                        view.gutter.bars_start,
+                        view.gutter.bars_width,
+                    ));
+                }
+            }
             (view.gutter, markers)
         });
         let gutter_width = px(gutter.width).min(bounds.size.width);
