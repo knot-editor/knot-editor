@@ -104,31 +104,15 @@ diff whose file leaves its group now moves to the group that lists it. Showing
 staged hunks in the diff view's Working Copy sides is left to checkpoint 2,
 which needs per-hunk staged state there anyway.
 
-### 2. Hunk actions and Stage/Unstage Hunk
+### 2. Hunk actions and Stage/Unstage Hunk ✅
 
-Deliverables: `hunkActions` in the contract and the popup toolbar, Git's
-`git.stageHunk` and `git.unstageHunk` with the index computation, also
-runnable from the palette on the hunk at the caret, and staged hunks drawn
-dimmer in the diff view of Compare with Last Commit (`open` takes `staged`,
-`setText` replaces it, and `@knot/diff` now defines the staged colors).
-
-Validation: unit tests for the index computation (pure function over HEAD,
-index, and buffer texts and a line), including a partly staged hunk, a
-removal, a missing final newline, and CRLF through filters; product tests in
-`popup.rs` over a temporary repository that stage and unstage a hunk of a
-dirty buffer and check `git diff --cached`.
-
-Review gate: staging from the popup in the real app.
-
-**Implementation context:** the toolbar in `openPopup` and `hunkOf` in
-`extensions/@knot/vcs/src/extension.ts`; hunk lookup in `src/hunk.ts`
-(`hunkAt`, reusable in Git as a copy, since a bundled package compiles alone);
-Git commands registered outside the palette as in
-`extensions/@knot/git/src/actions.ts`, plus palette titles; `git()` and
-`gitLogged` in `src/git.ts` (`git()` takes stdin for `hash-object`). Record
-the staged-hunk choice in `docs/decisions/bundled-packages.md` (Git baseline
-or a new "Git staging" section) and update the hunk popup and Git sections of
-the architecture reference.
+Done: `hunkActions` in the backend contract and the popup toolbar, Git's
+`git.stageHunk` and `git.unstageHunk` over the index text, a Staged or
+Unstaged toolbar badge, and staged hunks drawn dimmer in the diff of Compare
+with Last Commit ([version control](../architecture/version-control.md#hunk-popup),
+[Git baseline](../decisions/bundled-packages.md#git-baseline)). Moving the
+popup between an insertion and a hunk with baseline lines still closes and
+opens its zone, since an in-place update across them mismeasures the zone.
 
 ### 3. Ref command and branches
 
