@@ -120,6 +120,24 @@ fn resizing_a_zone_above_the_viewport_keeps_the_top_text_in_place() {
 }
 
 #[test]
+fn the_first_rows_of_a_zone_above_the_top_line_show() {
+    let mut f = Fixture::new("l0\nl1\nl2\nl3\nl4\nl5");
+    f.editor.lay_out_for_test(3., 40, &f.buffer);
+    f.editor.scroll_to_for_test(2.);
+    // Above the top line, `l2`: the zone shows, and the text moves down.
+    let key = f.editor.open_zone(owner(1), "z", spec(2), &f.buffer);
+    f.editor.set_zone_rows(key, 2, &f.buffer);
+    assert_eq!(f.editor.scroll_top(), 2.);
+    // Once it has rows, the top text stays where it is.
+    f.editor.set_zone_rows(key, 3, &f.buffer);
+    assert_eq!(f.editor.scroll_top(), 5.);
+    // A zone above the top line stays out of view.
+    let above = f.editor.open_zone(owner(1), "a", spec(1), &f.buffer);
+    f.editor.set_zone_rows(above, 2, &f.buffer);
+    assert_eq!(f.editor.scroll_top(), 7.);
+}
+
+#[test]
 fn opening_updates_in_place_and_closing_frees_the_rows() {
     let mut f = editor();
     let key = f.editor.zones().get(owner(1), "above").unwrap().key;

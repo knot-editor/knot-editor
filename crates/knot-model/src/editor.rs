@@ -1089,17 +1089,21 @@ impl EditorState {
         key
     }
 
-    /// Reserve `rows` rows for zone `key`, wherever edits have moved it.
+    /// Reserve `rows` rows for zone `key`, wherever edits have moved it. The
+    /// first rows of a zone above the top line of the text show in the
+    /// viewport; any other change keeps the top row's text at the top.
     pub fn set_zone_rows(&mut self, key: u64, rows: usize, model: &BufferModel) {
-        self.change_rows(model, |wrap| {
-            match wrap.zones().iter().find(|zone| zone.key == key) {
-                Some(zone) => {
-                    let line = zone.line;
-                    wrap.set_zone(key, line, rows)
-                }
-                None => false,
-            }
-        });
+        let Some(zone) = self.wrap.zones().iter().find(|zone| zone.key == key) else {
+            return;
+        };
+        let (line, appearing) = (zone.line, zone.rows == 0);
+        self.sync_wrap(model);
+        let (top_line, _) = flat_byte_to_position(model, self.top_offset(model));
+        if appearing && line == top_line {
+            self.wrap.set_zone(key, line, rows);
+        } else {
+            self.change_rows(model, |wrap| wrap.set_zone(key, line, rows));
+        }
     }
 
     /// Close `owner`'s zone `id`; false when it has none.
