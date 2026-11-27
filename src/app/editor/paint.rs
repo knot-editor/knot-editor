@@ -394,6 +394,7 @@ impl Element for EditorElement {
             };
             let line_highlight = editor
                 .highlighted_line()
+                .filter(|_| view.rendering.show_gutter)
                 .map(|line| editor.wrap().rows(line))
                 .map(|lit| lit.start.max(rows.start)..lit.end.min(rows.end))
                 .filter(|lit| !lit.is_empty());

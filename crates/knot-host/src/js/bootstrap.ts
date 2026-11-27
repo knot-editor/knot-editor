@@ -2434,6 +2434,11 @@ function compositeLayout(node: unknown, root: boolean, inTabs: boolean, seen: Co
     if (type !== "editor") throw new TypeError("only a composite editor has a placeholder");
     wire.placeholder = string(given.placeholder, "composite placeholder must be text");
   }
+  if (given.gutter !== undefined) {
+    if (type !== "editor") throw new TypeError("only a composite editor has a gutter");
+    if (typeof given.gutter !== "boolean") throw new TypeError("composite gutter must be a boolean");
+    wire.gutter = given.gutter;
+  }
   if (type === "connector") {
     Object.assign(wire, compositeConnector(given, seen));
   } else if (type === "controls") {

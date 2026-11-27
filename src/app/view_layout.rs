@@ -160,6 +160,8 @@ pub(crate) enum ContentSpec {
         document: Option<DocumentId>,
         /// Muted text shown while the buffer is empty.
         placeholder: Option<String>,
+        /// Whether the editor shows its gutter and current line highlight.
+        gutter: bool,
     },
     /// A text frame of the contributed view of this kind.
     Text(String),
@@ -481,9 +483,19 @@ impl Group {
                         });
                         Content::Group(entity)
                     }
-                    (ContentSpec::Editor { placeholder, .. }, Some(content)) => {
+                    (
+                        ContentSpec::Editor {
+                            placeholder,
+                            gutter,
+                            ..
+                        },
+                        Some(content),
+                    ) => {
                         if let Content::Leaf(Leaf::Editor(view)) = &content {
-                            view.update(cx, |view, cx| view.set_placeholder(placeholder, cx));
+                            view.update(cx, |view, cx| {
+                                view.set_placeholder(placeholder, cx);
+                                view.set_show_gutter(gutter, cx);
+                            });
                         }
                         content
                     }
@@ -492,12 +504,14 @@ impl Group {
                         ContentSpec::Editor {
                             buffer,
                             placeholder,
+                            gutter,
                             ..
                         },
                         None,
                     ) => Content::Leaf(Leaf::Editor(cx.new(|cx| {
                         let mut view = EditorView::new(buffer, cx);
                         view.set_placeholder(placeholder, cx);
+                        view.set_show_gutter(gutter, cx);
                         view
                     }))),
                     (ContentSpec::Text(kind), None) => Content::Leaf(Leaf::Text(

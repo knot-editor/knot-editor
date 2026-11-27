@@ -3153,6 +3153,10 @@ declare module "knot" {
     readonly type: "editor";
     /** Muted text shown while the buffer is empty. */
     readonly placeholder?: string;
+    /** Whether the editor shows its gutter of line numbers and markers, and
+     * highlights the current line. Defaults to true; false suits a small
+     * input such as a message. */
+    readonly gutter?: boolean;
   } & (
     | { readonly buffer: ExtensionBuffer; readonly document?: never }
     | { readonly document: DocumentId; readonly buffer?: never }

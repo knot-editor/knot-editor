@@ -99,6 +99,9 @@ enum ContentWire {
         /// Muted text shown while the buffer is empty.
         #[serde(default)]
         placeholder: Option<String>,
+        /// Whether the editor shows its gutter; true when absent.
+        #[serde(default)]
+        gutter: Option<bool>,
     },
     /// A text frame of the embedded view of this ID.
     Text {
@@ -357,6 +360,7 @@ impl ProductExtensionHost {
             ContentWire::Editor {
                 buffer: Some(buffer),
                 placeholder,
+                gutter,
                 ..
             } => self
                 .extension_buffers
@@ -366,17 +370,20 @@ impl ProductExtensionHost {
                     buffer: state.model.clone(),
                     document: None,
                     placeholder: placeholder.clone(),
+                    gutter: gutter.unwrap_or(true),
                 })
                 .ok_or(OpenError::BufferClosed),
             ContentWire::Editor {
                 document: Some(identity),
                 placeholder,
+                gutter,
                 ..
             } => product::operations::document_model(identity, cx).map(|(document, buffer)| {
                 ContentSpec::Editor {
                     buffer,
                     document: Some(document),
                     placeholder: placeholder.clone(),
+                    gutter: gutter.unwrap_or(true),
                 }
             }),
             ContentWire::Editor { .. } => Err(AccessError::InvalidTarget.into()),

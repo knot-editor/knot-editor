@@ -197,6 +197,11 @@ impl EditorView {
         self.placeholder.as_deref()
     }
 
+    #[cfg(any(test, feature = "test-support"))]
+    pub(crate) fn shows_gutter(&self) -> bool {
+        self.rendering.show_gutter
+    }
+
     /// Show or hide the gutter of markers and line numbers.
     pub(crate) fn set_show_gutter(&mut self, show: bool, cx: &mut Context<Self>) {
         if self.rendering.show_gutter != show {

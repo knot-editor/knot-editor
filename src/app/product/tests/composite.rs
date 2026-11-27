@@ -1618,6 +1618,7 @@ mod documents {
                 buffer: buffer.clone(),
                 document: Some(document),
                 placeholder: None,
+                gutter: true,
             },
         };
         window.update(cx, |window, cx| {
@@ -1797,6 +1798,7 @@ mod documents {
                             buffer,
                             document: Some(document),
                             placeholder: None,
+                            gutter: true,
                         },
                     }
                 })
