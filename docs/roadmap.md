@@ -274,7 +274,7 @@ hold the analyses that support some items.
     diagnostic text, or blame (D217) needs annotations: design them against a
     real language server, as inline virtual text.
 
-- **D231 — Inline zones**
+- **D231 — Inline zones** 🚧 ([plan](plans/d231-inline-zones.md))
   - Depends on: none
   - Description: Block rows show read-only lines between an editor's lines,
     and [popovers](architecture/editor-and-languages.md#editor-popovers) float over the text, but extensions cannot push
