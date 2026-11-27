@@ -242,16 +242,23 @@ impl Element for EditorElement {
                 release_listener(event, window, cx);
             }
         });
-        let (scroll_x, metrics, cell_width, base_font, placeholder) = {
+        let (scroll_x, metrics, cell_width, base_font, placeholder, rulers) = {
             let view = self.entity.read(cx);
+            let scroll_x = view.editor.read(cx).scroll_x();
+            let rulers = view
+                .ruler_columns(cx)
+                .into_iter()
+                .map(|column| view.ruler_x(column, scroll_x))
+                .collect::<Vec<_>>();
             (
-                view.editor.read(cx).scroll_x(),
+                scroll_x,
                 view.metrics,
                 view.cell_width,
                 view.font.clone(),
                 view.placeholder
                     .clone()
                     .filter(|_| view.model.read(cx).is_empty()),
+                rulers,
             )
         };
         // Read the view state, compute the visible rows, then read just the
@@ -422,6 +429,7 @@ impl Element for EditorElement {
                     marked_text: theme.paint_color(color::EDITOR_MARKED_TEXT),
                     bracket_match: theme.paint_color(color::EDITOR_BRACKET_MATCH),
                     line_highlight: theme.paint_color(color::EDITOR_LINE_HIGHLIGHT),
+                    ruler: theme.paint_color(color::EDITOR_RULER),
                     fold_placeholder: theme.paint_color(color::EDITOR_FOLD_PLACEHOLDER),
                     scrollbar: theme.paint_color(color::SCROLLBAR_THUMB),
                 },
@@ -535,6 +543,17 @@ impl Element for EditorElement {
                     size: size(pane_w, line_height * rows.len() as f32),
                 };
                 window.paint_quad(fill(rect, colors.line_highlight));
+            }
+
+            // The rulers' vertical guides, behind the text.
+            for x in &rulers {
+                if *x >= px(0.) && *x < pane_w {
+                    let rect = Bounds {
+                        origin: point(bounds.origin.x + *x, bounds.origin.y),
+                        size: size(px(1.), bounds.size.height),
+                    };
+                    window.paint_quad(fill(rect, colors.ruler));
+                }
             }
 
             // Decoration backgrounds: line bands across the text area, then
@@ -978,6 +997,7 @@ pub(super) struct PaintColors {
     marked_text: Hsla,
     bracket_match: Hsla,
     line_highlight: Hsla,
+    ruler: Hsla,
     fold_placeholder: Hsla,
     scrollbar: Hsla,
 }

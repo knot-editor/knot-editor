@@ -134,6 +134,20 @@ pub(crate) fn editor_soft_wrap(context: &SettingsScope, cx: &App) -> bool {
         .expect("editor.softWrap is a native boolean setting")
 }
 
+/// The columns an editor in `context` draws a vertical guide at.
+pub(crate) fn editor_rulers(context: &SettingsScope, cx: &App) -> Vec<usize> {
+    resolve(EDITOR_RULERS, context, cx, |value| {
+        value.as_array().map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_u64)
+                .map(|c| c as usize)
+                .collect()
+        })
+    })
+    .expect("editor.rulers is a native integer-list setting")
+}
+
 /// Whether an editor in `context` scrolls past its last line.
 pub(crate) fn editor_scroll_beyond_last_line(context: &SettingsScope, cx: &App) -> bool {
     resolve(EDITOR_SCROLL_BEYOND_LAST_LINE, context, cx, Value::as_bool)

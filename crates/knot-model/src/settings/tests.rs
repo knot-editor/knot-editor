@@ -92,6 +92,26 @@ fn text_lists_accept_only_strings() {
 }
 
 #[test]
+fn a_rulers_setting_accepts_only_a_list_of_integers() {
+    let mut store = SettingsStore::default();
+    assert_eq!(
+        store.get(EDITOR_RULERS, &SettingsScope::default()),
+        Some(&json!([]))
+    );
+    store
+        .set(EDITOR_RULERS, json!([72, 100]), SettingsScope::default())
+        .unwrap();
+    for invalid in [json!(72), json!(["72"]), json!([72.5])] {
+        assert_eq!(
+            store.set(EDITOR_RULERS, invalid, SettingsScope::default()),
+            Err(SettingsError::TypeMismatch {
+                expected: SettingType::Integers
+            })
+        );
+    }
+}
+
+#[test]
 fn find_skips_the_default_and_reports_undefined_keys() {
     let mut store = store_with_integer();
     assert_eq!(store.find(KEY, &rust_editor()), None);

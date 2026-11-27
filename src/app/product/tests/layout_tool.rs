@@ -36,6 +36,7 @@ let clicks = [];
 const layoutOf = (checked, placeholder) => ({ type: "column", children: [
   { type: "tree", key: "files", view: files },
   { type: "editor", key: "message", buffer: message, placeholder, gutter: placeholder === "Message",
+    rulers: placeholder === "Message" ? [72] : undefined,
     size: { pixels: 96 }, resize: "layout-message" },
   { type: "controls", items: [
     { type: "checkbox", label: "Amend", checked, command: "layout.click", arguments: "amend" },
@@ -174,6 +175,15 @@ fn shows_gutter(window: &Entity<KnotWindow>, cx: &TestAppContext) -> bool {
     })
 }
 
+fn ruler_columns(window: &Entity<KnotWindow>, cx: &TestAppContext) -> Vec<usize> {
+    let view = tool(window, cx);
+    cx.read(|cx| {
+        let leaves = view.read(cx).leaves();
+        let editor = leaves[1].editor().unwrap().read(cx);
+        editor.ruler_columns(cx)
+    })
+}
+
 fn placeholder(window: &Entity<KnotWindow>, cx: &TestAppContext) -> Option<String> {
     let view = tool(window, cx);
     cx.read(|cx| {
@@ -196,6 +206,7 @@ fn a_layout_tool_window_is_empty_until_updated_and_then_hosts_its_views(cx: &mut
     assert_eq!(leaf_ids(&window, cx).len(), 2);
     assert_eq!(placeholder(&window, cx).as_deref(), Some("Message"));
     assert!(shows_gutter(&window, cx));
+    assert_eq!(ruler_columns(&window, cx), [72]);
     let view = tool(&window, cx);
     cx.read(|cx| {
         let view = view.read(cx);
@@ -216,6 +227,7 @@ fn an_update_keeps_the_views_of_keyed_members_and_changes_the_rest(cx: &mut Test
     assert_eq!(leaf_ids(&window, cx), before);
     assert_eq!(placeholder(&window, cx).as_deref(), Some("Changed"));
     assert!(!shows_gutter(&window, cx));
+    assert!(ruler_columns(&window, cx).is_empty());
     // A toolbar left out of an update stays; `[]` removes it.
     let view = tool(&window, cx);
     cx.read(|cx| assert_eq!(view.read(cx).toolbar().len(), 1));

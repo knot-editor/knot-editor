@@ -1127,6 +1127,7 @@ mod blocks;
 mod gutter;
 mod indentation;
 mod popovers;
+mod rulers;
 mod wrap;
 
 fn press(

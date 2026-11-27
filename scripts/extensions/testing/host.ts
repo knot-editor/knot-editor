@@ -2248,7 +2248,7 @@ export const NATIVE_COLOR_KEYS: readonly string[] = [
   "background", "border", "border.hover", "button.background", "button.hover.background",
   "card.background", "card.focusedBorder", "diff.added", "diff.added.background", "diff.modified", "diff.modified.background", "diff.removed", "diff.removed.background", "dropTarget.background", "editor.background", "editor.bar.background", "editor.bar.border", "editor.bracketMatch", "editor.cursor", "editor.findMatch", "editor.findMatchCurrent", "editor.findScope", "editor.foldPlaceholder", "editor.foreground",
   "editor.gutter.background", "editor.lineHighlight", "editor.lineNumber", "editor.lineNumber.active",
-  "editor.markedText", "editor.selection", "editor.selectionHighlight", "editor.wordHighlight", "error", "icon", "info", "input.background", "input.border", "input.focused.border", "list.group.background",
+  "editor.markedText", "editor.ruler", "editor.selection", "editor.selectionHighlight", "editor.wordHighlight", "error", "icon", "info", "input.background", "input.border", "input.focused.border", "list.group.background",
   "list.hover.background", "list.match.foreground", "list.selected.background", "list.selected.foreground",
   "notification.background", "notification.border", "notification.description.foreground", "notification.error", "notification.foreground", "notification.info", "notification.warning",
   "popover.background", "popover.border", "scrim", "scrollbar.thumb",
@@ -2348,6 +2348,7 @@ const settingTypes: Record<Knot.SettingType, (value: unknown) => boolean> = {
   integer: (value) => Number.isSafeInteger(value),
   number: (value) => Number.isFinite(value),
   string: (value) => typeof value === "string",
+  integers: (value) => Array.isArray(value) && value.every((item) => Number.isSafeInteger(item)),
   strings: (value) => Array.isArray(value) && value.every((item) => typeof item === "string"),
 };
 

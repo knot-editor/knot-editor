@@ -454,6 +454,8 @@ declare module "knot" {
      * Soft Wrap writes it scoped to one document, and the bundled Markdown
      * package sets it for { language: "markdown" }. Native default false. */
     "editor.softWrap": boolean;
+    /** Columns where editors draw a vertical guide behind the text. */
+    "editor.rulers": readonly number[];
     /** Whether editor views scroll until the last row is the first visible
      * one, rather than stopping with it at the bottom edge. Native default
      * true. */
@@ -564,8 +566,8 @@ declare module "knot" {
   }
   export type SettingKey = keyof Settings & string;
   /** "integer" accepts safe integers; "number" accepts any finite number;
-   * "strings" accepts an array of strings. */
-  export type SettingType = "boolean" | "integer" | "number" | "string" | "strings";
+   * "strings" accepts an array of strings and "integers" an array of integers. */
+  export type SettingType = "boolean" | "integer" | "number" | "string" | "strings" | "integers";
   export interface SettingDefinition<K extends SettingKey = SettingKey> {
     /** Flat dotted name saying what the key sets, such as "lsp.timeout.launch". */
     readonly key: K;
@@ -700,6 +702,8 @@ declare module "knot" {
     readonly "editor.lineNumber.active"?: string;
     /** Underline of text being composed by an input method. */
     readonly "editor.markedText"?: string;
+    /** Vertical guides at the columns of an editor's rulers. */
+    readonly "editor.ruler"?: string;
     /** Selected text. */
     readonly "editor.selection"?: string;
     /** Background of the other occurrences of the selected text. */
@@ -3158,6 +3162,9 @@ declare module "knot" {
     readonly type: "editor";
     /** Muted text shown while the buffer is empty. */
     readonly placeholder?: string;
+    /** Columns where the editor draws a vertical guide behind the text, in
+     * place of the `editor.rulers` setting. */
+    readonly rulers?: readonly number[];
     /** Whether the editor shows its gutter of line numbers and markers, and
      * highlights the current line. Defaults to true; false suits a small
      * input such as a message. */

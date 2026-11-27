@@ -1620,6 +1620,7 @@ mod documents {
                 document: Some(document),
                 placeholder: None,
                 gutter: true,
+                rulers: None,
             },
         };
         window.update(cx, |window, cx| {
@@ -1801,6 +1802,7 @@ mod documents {
                             document: Some(document),
                             placeholder: None,
                             gutter: true,
+                            rulers: None,
                         },
                     }
                 })

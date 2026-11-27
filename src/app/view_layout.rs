@@ -166,6 +166,9 @@ pub(crate) enum ContentSpec {
         placeholder: Option<String>,
         /// Whether the editor shows its gutter and current line highlight.
         gutter: bool,
+        /// The columns of the editor's vertical guides; the `editor.rulers`
+        /// setting when absent.
+        rulers: Option<Vec<usize>>,
     },
     /// A text frame of the contributed view of this kind.
     Text(String),
@@ -559,6 +562,7 @@ impl Group {
                         ContentSpec::Editor {
                             placeholder,
                             gutter,
+                            rulers,
                             ..
                         },
                         Some(content),
@@ -567,6 +571,7 @@ impl Group {
                             view.update(cx, |view, cx| {
                                 view.set_placeholder(placeholder, cx);
                                 view.set_show_gutter(gutter, cx);
+                                view.set_rulers(rulers, cx);
                             });
                         }
                         content
@@ -577,6 +582,7 @@ impl Group {
                             buffer,
                             placeholder,
                             gutter,
+                            rulers,
                             ..
                         },
                         None,
@@ -584,6 +590,7 @@ impl Group {
                         let mut view = EditorView::new(buffer, cx);
                         view.set_placeholder(placeholder, cx);
                         view.set_show_gutter(gutter, cx);
+                        view.set_rulers(rulers, cx);
                         view
                     }))),
                     (ContentSpec::Text(kind), None) => Content::Leaf(Leaf::Text(

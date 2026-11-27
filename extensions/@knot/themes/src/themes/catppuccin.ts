@@ -63,6 +63,7 @@ function catppuccin(name: string, appearance: "dark" | "light", p: Flavor): Them
       "editor.lineNumber": p.surface1,
       "editor.lineNumber.active": p.lavender,
       "editor.markedText": `${p.text}99`,
+      "editor.ruler": `${p.text}24`,
       "editor.selection": `${p.overlay2}40`,
       "editor.selectionHighlight": `${p.overlay2}22`,
       "editor.wordHighlight": `${p.overlay2}33`,

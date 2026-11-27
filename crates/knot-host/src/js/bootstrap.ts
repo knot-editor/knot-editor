@@ -2448,6 +2448,13 @@ function compositeLayout(node: unknown, root: boolean, inTabs: boolean, seen: Co
     if (typeof given.gutter !== "boolean") throw new TypeError("composite gutter must be a boolean");
     wire.gutter = given.gutter;
   }
+  if (given.rulers !== undefined) {
+    if (type !== "editor") throw new TypeError("only a composite editor has rulers");
+    if (!Array.isArray(given.rulers) || !given.rulers.every((column) => Number.isInteger(column) && column > 0)) {
+      throw new TypeError("composite rulers are positive column numbers");
+    }
+    wire.rulers = given.rulers;
+  }
   if (type === "connector") {
     Object.assign(wire, compositeConnector(given, seen));
   } else if (type === "controls") {

@@ -53,6 +53,9 @@ pub struct EditorView {
     pub(super) link_hover: Option<LinkHover>,
     /// Muted text shown while the buffer is empty.
     pub(super) placeholder: Option<SharedString>,
+    /// The columns of the vertical guides this view sets for itself, which
+    /// replace `editor.rulers`.
+    pub(super) rulers: Option<Vec<usize>>,
     /// What opens a URL; tests replace it.
     pub(super) open_link: crate::app::link_open::LinkOpener,
     pub(super) caret_blink: CaretBlink,
@@ -158,6 +161,7 @@ impl EditorView {
             suppress_drag_selection: false,
             link_hover: None,
             placeholder: None,
+            rulers: None,
             open_link: crate::app::link_open::browser_opener(),
             caret_blink: CaretBlink::default(),
             scroll_fade: Default::default(),
@@ -190,6 +194,28 @@ impl EditorView {
             self.placeholder = placeholder;
             cx.notify();
         }
+    }
+
+    /// Draw vertical guides at `rulers` instead of the `editor.rulers` setting.
+    pub(crate) fn set_rulers(&mut self, rulers: Option<Vec<usize>>, cx: &mut Context<Self>) {
+        if self.rulers != rulers {
+            self.rulers = rulers;
+            cx.notify();
+        }
+    }
+
+    /// The columns of the guides the view draws.
+    pub(crate) fn ruler_columns(&self, cx: &App) -> Vec<usize> {
+        self.rulers.clone().unwrap_or_else(|| {
+            let scope = self.editor.read(cx).settings_scope(self.model.read(cx), cx);
+            settings::editor_rulers(&scope, cx)
+        })
+    }
+
+    /// Where the guide of `column` is, from the text area's left edge, with
+    /// the text scrolled `scroll_x` pixels.
+    pub(super) fn ruler_x(&self, column: usize, scroll_x: f32) -> Pixels {
+        px(column as f32 * self.cell_width - scroll_x)
     }
 
     #[cfg(any(test, feature = "test-support"))]

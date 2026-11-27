@@ -32,6 +32,7 @@ values take effect.
 | `editor.autoClosingBrackets` | boolean | `true` | Any | native | Insert the closer of a typed bracket or quote where the language allows, and step over or delete it with the opener. |
 | `editor.autoSurround` | boolean | `true` | Any | native | Wrap the selection when typing an opening bracket or quote over it. |
 | `editor.softWrap` | boolean | `false` | Any; Toggle Soft Wrap writes document scope; `language-markdown` sets `{ language: "markdown" }` | native | Wrap long lines at the viewport width. |
+| `editor.rulers` | integers | `[]` | Any | native | Columns where editors draw a vertical guide behind the text; a layout editor member's `rulers` replace it. |
 | `editor.scrollBeyondLastLine` | boolean | `true` | Any | native | Scroll until the last line is the first one visible; off stops with the last line at the bottom edge. |
 | `editor.lineNumbers` | string: `on`, `off`, `relative` | `"on"` | Any; other text means `on` | native | Line numbers in the editor gutter; `relative` numbers lines by distance from the cursor. |
 | `editor.folding` | boolean | `true` | Any | native | Show the fold lane in the editor gutter. |

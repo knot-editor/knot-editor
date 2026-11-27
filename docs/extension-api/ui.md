@@ -295,8 +295,9 @@ does; it holds no state, so send the layout again to change `checked` or
 `disabled`. Controls have no `key`, `size`, or `focus`, are not members of
 `tabs`, and do not count as a view, so a layout still needs an editor, text
 frame, or tree. An `editor` member takes a `placeholder`, shown muted while its
-buffer is empty, and `gutter: false` to drop its line numbers, markers, and
-current line highlight.
+buffer is empty, `gutter: false` to drop its line numbers, markers, and
+current line highlight, and `rulers: [72]` to draw vertical guides at those
+columns in place of the `editor.rulers` setting.
 
 ## Layout tool windows
 

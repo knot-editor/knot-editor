@@ -145,6 +145,7 @@ export async function createPanel(deps: PanelDeps): Promise<Panel> {
           resize: "commit-message",
           focused: true,
           gutter: false,
+          rulers: [72],
         },
         {
           type: "controls",

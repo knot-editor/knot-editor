@@ -189,7 +189,11 @@ text. Each lane shows one mark per line and hidden lines paint nothing. The numb
 numbers count from the caret's line, which shows its absolute number, and the
 caret line's number paints in `editor.lineNumber.active`. As VS Code's default
 does, the caret's line paints `editor.lineHighlight` across the text area
-while nothing is selected, focused or not. Each lane handles its own pointer:
+while nothing is selected, focused or not. A view draws a one-pixel
+`editor.ruler` guide behind the text at each column of its own rulers or, when
+it sets none, of `editor.rulers`; a column is measured in monospace cells from
+the text area's left edge, so it follows zoom and horizontal scroll and ignores
+wrapping. Each lane handles its own pointer:
 a number click selects its line with the line break, shift-click extends from
 the selection's anchor, and dragging extends by lines; a click on a marker or bar
 runs the command of the mark painted there, an inline contribution's text click

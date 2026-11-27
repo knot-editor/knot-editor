@@ -181,7 +181,7 @@ name for the whole application rather than per window, as one record in the
 state database, so every repository's commit editor shares it.
 
 
-### 7. Message ruler
+### 7. Message ruler (built; review gate pending)
 
 Deliverables: editors can show a vertical guide at a column, as IntelliJ's
 right margin does, set per editor member and by a setting for documents (a list

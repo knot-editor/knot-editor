@@ -246,6 +246,7 @@ native_colors! {
     EDITOR_LINE_NUMBER = "editor.lineNumber", "Line numbers.", Rgb(0x4b5059), Rgb(0xaeb3c1);
     EDITOR_LINE_NUMBER_ACTIVE = "editor.lineNumber.active", "The cursor line's number.", Rgb(0xa1a3ab), Rgb(0x767a8a);
     EDITOR_MARKED_TEXT = "editor.markedText", "Underline of text being composed by an input method.", Rgba(0xbcbec499), Rgba(0x08080899);
+    EDITOR_RULER = "editor.ruler", "Vertical guides at the columns of an editor's rulers.", Rgba(0xffffff1f), Rgba(0x0000001a);
     EDITOR_SELECTION = "editor.selection", "Selected text.", Rgba(0x21428399), Rgb(0xa6d2ff);
     EDITOR_SELECTION_HIGHLIGHT = "editor.selectionHighlight", "Background of the other occurrences of the selected text.", Rgba(0x3574f033), Rgba(0x3574f026);
     EDITOR_WORD_HIGHLIGHT = "editor.wordHighlight", "Background of the occurrences of the word at the cursor.", Rgba(0x3574f026), Rgba(0x3574f01f);

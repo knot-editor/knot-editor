@@ -30,8 +30,8 @@ await settings.observe("lsp.timeout.launch", async () => {
 });
 ```
 
-A definition's `type` is `"boolean"`, `"integer"`, `"number"`, `"string"`, or
-`"strings"`, a list of strings.
+A definition's `type` is `"boolean"`, `"integer"`, `"number"`, `"string"`,
+`"strings"` (a list of strings), or `"integers"` (a list of integers).
 
 A write applies everywhere, or only where every fact of its scope matches:
 `language` is a document's language ID and `view` a surface kind such as

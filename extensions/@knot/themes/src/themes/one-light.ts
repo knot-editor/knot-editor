@@ -52,6 +52,7 @@ export const ONE_LIGHT: ThemeDefinition = {
     "editor.lineNumber": "#9d9d9f",
     "editor.lineNumber.active": fg,
     "editor.markedText": "#383a4299",
+    "editor.ruler": "#383a4224",
     "editor.selection": "#383a421a",
     "editor.selectionHighlight": "#383a4214",
     "editor.wordHighlight": "#383a4222",

@@ -46,6 +46,7 @@ pub const EDITOR_AUTO_CLOSING_BRACKETS: &str = "editor.autoClosingBrackets";
 pub const EDITOR_AUTO_SURROUND: &str = "editor.autoSurround";
 /// Whether editor views wrap long lines at the viewport width.
 pub const EDITOR_SOFT_WRAP: &str = "editor.softWrap";
+pub const EDITOR_RULERS: &str = "editor.rulers";
 /// Whether editor views scroll until the last row is the first visible one.
 pub const EDITOR_SCROLL_BEYOND_LAST_LINE: &str = "editor.scrollBeyondLastLine";
 /// Line numbers in the editor gutter: `on`, `off`, or `relative`.
@@ -122,6 +123,8 @@ pub enum SettingType {
     String,
     /// A list of strings.
     Strings,
+    /// A list of integers.
+    Integers,
 }
 
 impl SettingType {
@@ -132,6 +135,7 @@ impl SettingType {
             "number" => Self::Number,
             "string" => Self::String,
             "strings" => Self::Strings,
+            "integers" => Self::Integers,
             _ => return None,
         })
     }
@@ -143,6 +147,7 @@ impl SettingType {
             Self::Number => "number",
             Self::String => "string",
             Self::Strings => "strings",
+            Self::Integers => "integers",
         }
     }
 
@@ -155,6 +160,9 @@ impl SettingType {
             Self::Strings => value
                 .as_array()
                 .is_some_and(|items| items.iter().all(Value::is_string)),
+            Self::Integers => value
+                .as_array()
+                .is_some_and(|items| items.iter().all(Value::is_i64)),
         }
     }
 }
@@ -343,6 +351,12 @@ fn native_definitions() -> Vec<SettingDefinition> {
             value_type: SettingType::Boolean,
             default: false.into(),
             description: "Wrap long lines at the viewport width; Toggle Soft Wrap sets it for one document".into(),
+        },
+        SettingDefinition {
+            key: EDITOR_RULERS.into(),
+            value_type: SettingType::Integers,
+            default: serde_json::json!([]),
+            description: "Columns where editors draw a vertical guide behind the text".into(),
         },
         SettingDefinition {
             key: EDITOR_SCROLL_BEYOND_LAST_LINE.into(),

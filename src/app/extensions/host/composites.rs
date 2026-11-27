@@ -105,6 +105,9 @@ enum ContentWire {
         /// Whether the editor shows its gutter; true when absent.
         #[serde(default)]
         gutter: Option<bool>,
+        /// Columns of vertical guides; the setting's when absent.
+        #[serde(default)]
+        rulers: Option<Vec<usize>>,
     },
     /// A text frame of the embedded view of this ID.
     Text {
@@ -365,6 +368,7 @@ impl ProductExtensionHost {
                 buffer: Some(buffer),
                 placeholder,
                 gutter,
+                rulers,
                 ..
             } => self
                 .extension_buffers
@@ -375,12 +379,14 @@ impl ProductExtensionHost {
                     document: None,
                     placeholder: placeholder.clone(),
                     gutter: gutter.unwrap_or(true),
+                    rulers: rulers.clone(),
                 })
                 .ok_or(OpenError::BufferClosed),
             ContentWire::Editor {
                 document: Some(identity),
                 placeholder,
                 gutter,
+                rulers,
                 ..
             } => product::operations::document_model(identity, cx).map(|(document, buffer)| {
                 ContentSpec::Editor {
@@ -388,6 +394,7 @@ impl ProductExtensionHost {
                     document: Some(document),
                     placeholder: placeholder.clone(),
                     gutter: gutter.unwrap_or(true),
+                    rulers: rulers.clone(),
                 }
             }),
             ContentWire::Editor { .. } => Err(AccessError::InvalidTarget.into()),
