@@ -528,6 +528,7 @@ impl ProductSaveDialog for FixedSaveDialog {
     }
 }
 
+#[track_caller]
 fn wait_for_command(
     mut execution: crate::app::CommandExecution,
     cx: &mut TestAppContext,

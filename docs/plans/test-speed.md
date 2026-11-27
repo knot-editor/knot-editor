@@ -93,15 +93,33 @@ on the same machine).
    which waits on the real file watcher) and `project_sessions` tests are
    0.12–0.26s. The 3.6–4.0s per area in the parallel timings was contention.
    Nothing to change.
-5. Decide whether to add a guard (a budget in CI or a slow-test report) so the
-   suite stays under control.
+5. Dropped: no CI guard or budget.
 
-6. After step 4: look into two product tests that fail under `cargo test`
-   (one shared process, a loaded machine) and may have failed once under
-   nextest: `editor_zones::escape_in_a_focused_zone_closes_it_and_tells_its_owner`
-   (`editor_zones.rs:254`) and `startup::declared_api_options_are_accepted_by_the_real_host`
-   (`tests.rs:536`). Nextest stays the runner: `cargo test` was slower (22s for
-   the `knot` lib alone, against 17s for the workspace) and less reliable.
+6. ✅ Flaky product tests. Repeated nextest runs of the `knot` package
+   (about 1 run in 3 had a failure) and 400–800 parallel runs of single tests
+   found five races, all in the tests, not the product:
+   - `files::indexed_roots_answer_from_memory_...` polled with only the
+     simulated clock. Step 3 made each poll fast enough for the loop to end
+     before the watch event arrived, so it failed every time; it now polls in
+     real time.
+   - `editor_zones::escape_in_a_focused_zone_...` and
+     `editor_popovers::a_toolbar_button_runs_its_command_...` asserted right
+     after `run_until_parked`, which does not wait for the command the host
+     runs from a toolbar button.
+   - `editor_popovers::escape_closes_the_focused_popover_...` sent its last
+     Escape before the owner's close report landed, which then overwrote the
+     binding's clipboard mark.
+   - `extension_api::tree_rows_report_gestures_...` clicked a row before the
+     package had registered its row command.
+   - `TestTree::gesture` could run while an earlier gesture's command was still
+     moving focus to the tab it opened, and the tree drops a gesture without
+     focus (`vcs::changes::a_gesture_on_a_row_whose_preview_is_open_...`). It
+     now parks the packages before focusing and after.
+   Twelve workspace runs afterwards had no failure. Under `cargo test` (one
+   process for all 1081 `knot` tests) `startup::declared_api_options_...` still
+   fails: one of its waits takes 15s there against 0.7s alone, so it is
+   contention in a shared process, which nextest avoids. Nextest stays the
+   runner (CI runs it, and `cargo test` is slower and less reliable).
 
 Re-run `just test-timings` after each step and record the new totals here.
 

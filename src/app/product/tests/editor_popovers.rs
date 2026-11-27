@@ -143,10 +143,6 @@ await commands.register("LABEL.validate", async ({ editor: captured }) => {
 });
 "#;
 
-fn clipboard_text(cx: &TestAppContext) -> Option<String> {
-    cx.read(|cx| cx.read_from_clipboard().and_then(|item| item.text()))
-}
-
 fn load(label: &str, id: u64, cx: &mut TestAppContext) -> ExtensionKey {
     let host = cx.read(|cx| crate::app::extensions::host::entity(cx).unwrap());
     let key = ExtensionKey::new(ExtensionId::new(id), ExtensionLifecycleId::new(1));
