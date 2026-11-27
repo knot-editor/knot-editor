@@ -130,7 +130,12 @@ mod tree;
 ///
 /// Snapshots copy the tail, so this bounds their per-call copy; a single
 /// larger insert seals as soon as it is appended.
+#[cfg(not(test))]
 const ADD_CHUNK_SIZE: usize = 16 * 1024;
+
+/// Tests use small chunks, so a few inserts seal them.
+#[cfg(test)]
+const ADD_CHUNK_SIZE: usize = 256;
 
 /// Monotonically-issued identity for each `TextBuffer` instance.
 ///

@@ -45,8 +45,13 @@ on the same machine).
    seed). The sizes are far beyond what the rules need (the rules involve at
    most a few ranges around one edit), so it joins the proptest conversion
    with about 10 ranges and 30 edits.
-2. Add `proptest` as a dev-dependency and convert the buffer differential
-   tests to focused properties (agreed direction):
+2. 🚧 Add `proptest` as a dev-dependency and convert the buffer differential
+   tests to focused properties (agreed direction). ✅ Buffer differential tests
+   converted (four properties: edits against the model, chunk sealing,
+   snapshot immutability, position tracking; chunks are 256 bytes under
+   `cfg(test)`): 10.8s down to 0.7s, and two deliberate bugs (chunks never
+   sealing, a wrong UTF-16 length) are caught and shrunk. Remaining: the
+   anchored-range oracle.
    - edit sequences against the `String` model: short sequences (about 20–50
      edits) with occasional full-oracle checks, relying on shrinking;
    - chunk sealing as its own property, with a test-only way to make chunks

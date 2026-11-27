@@ -1,33 +1,12 @@
-//! Randomized differential test: a seeded stream of edits is applied to a
-//! `TextBuffer` and to a plain `String`, and every public read, line, UTF-16,
-//! snapshot, and position query is compared against the `String` model.
+//! Property tests: random edit streams are applied to a `TextBuffer` and to a
+//! plain `String`, and every public read, line, UTF-16, snapshot, and position
+//! query is compared against the `String` model. Failing streams shrink to a
+//! minimal sequence of edits. Chunks are small under test, so a few large
+//! inserts seal add chunks.
 
 use super::*;
-
-/// Dependency-free xorshift64* generator, so every seed replays identically.
-struct Rng(u64);
-
-impl Rng {
-    fn new(seed: u64) -> Self {
-        Rng(seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1)
-    }
-
-    fn next(&mut self) -> u64 {
-        self.0 ^= self.0 >> 12;
-        self.0 ^= self.0 << 25;
-        self.0 ^= self.0 >> 27;
-        self.0.wrapping_mul(0x2545_F491_4F6C_DD1D)
-    }
-
-    /// A value in `0..bound`; `bound` must be positive.
-    fn below(&mut self, bound: usize) -> usize {
-        (self.next() >> 11) as usize % bound
-    }
-
-    fn chance(&mut self, percent: usize) -> bool {
-        self.below(100) < percent
-    }
-}
+use proptest::collection::vec;
+use proptest::prelude::*;
 
 const FRAGMENTS: &[&str] = &[
     "a",
@@ -48,26 +27,107 @@ const FRAGMENTS: &[&str] = &[
     "\n\n",
 ];
 
-fn random_text(rng: &mut Rng, max_fragments: usize) -> String {
-    let count = 1 + rng.below(max_fragments);
-    (0..count)
-        .map(|_| FRAGMENTS[rng.below(FRAGMENTS.len())])
-        .collect()
+const ORIGINAL: &str = "fn main() {\n    println!(\"héllo 日本\");\r\n}\n";
+
+/// Text of a number of fragments in `count`.
+fn text(count: std::ops::RangeInclusive<usize>) -> impl Strategy<Value = String> {
+    vec(prop::sample::select(FRAGMENTS), count).prop_map(|parts| parts.concat())
 }
 
-/// A random char boundary of `model`, biased toward the start, the end, and
-/// the `hot` offsets (edges of earlier edits, which are piece boundaries).
-fn random_offset(rng: &mut Rng, model: &str, hot: &[usize]) -> usize {
-    let mut offset = match rng.below(10) {
-        0 => 0,
-        1 => model.len(),
-        2..=4 if !hot.is_empty() => hot[rng.below(hot.len())].min(model.len()),
-        _ => rng.below(model.len() + 1),
-    };
+fn initial_text() -> impl Strategy<Value = String> {
+    prop_oneof![
+        Just(ORIGINAL.to_string()),
+        Just(String::new()),
+        Just("no newline at all 😀".to_string()),
+        text(0..=20),
+    ]
+}
+
+/// Where an edit lands, resolved against the current model so it is always a
+/// char boundary.
+#[derive(Clone, Debug)]
+enum Place {
+    Start,
+    End,
+    At(usize),
+}
+
+impl Place {
+    fn resolve(&self, model: &str) -> usize {
+        let raw = match self {
+            Place::Start => 0,
+            Place::End => model.len(),
+            Place::At(n) => n % (model.len() + 1),
+        };
+        floor_boundary(model, raw)
+    }
+}
+
+fn floor_boundary(model: &str, mut offset: usize) -> usize {
     while !model.is_char_boundary(offset) {
         offset -= 1;
     }
     offset
+}
+
+fn place() -> impl Strategy<Value = Place> {
+    prop_oneof![
+        1 => Just(Place::Start),
+        1 => Just(Place::End),
+        6 => any::<usize>().prop_map(Place::At),
+    ]
+}
+
+#[derive(Clone, Debug)]
+enum Op {
+    Insert(Place, String),
+    Delete(Place, Place),
+    /// Replace up to the given number of bytes after the place.
+    Replace(Place, usize, String),
+}
+
+/// An edit mix where one insert in six is large enough to seal an add chunk.
+/// `replace` adds replaces, which push two edits.
+fn op(replace: bool) -> BoxedStrategy<Op> {
+    let insert = prop_oneof![
+        5 => (place(), text(1..=8)),
+        1 => (place(), text(40..=150)),
+    ]
+    .prop_map(|(at, text)| Op::Insert(at, text));
+    let delete = (place(), place()).prop_map(|(a, b)| Op::Delete(a, b));
+    if replace {
+        let replace = (place(), 0..40usize, text(1..=8))
+            .prop_map(|(at, span, text)| Op::Replace(at, span, text));
+        prop_oneof![5 => insert, 3 => delete, 2 => replace].boxed()
+    } else {
+        prop_oneof![5 => insert, 3 => delete].boxed()
+    }
+}
+
+/// Apply an op to both sides; returns the bytes it inserted.
+fn apply(b: &mut TextBuffer, model: &mut String, op: &Op) -> usize {
+    match op {
+        Op::Insert(at, text) => {
+            let at = at.resolve(model);
+            b.insert(at, text);
+            model.insert_str(at, text);
+            text.len()
+        }
+        Op::Delete(a, c) => {
+            let (a, c) = (a.resolve(model), c.resolve(model));
+            let range = a.min(c)..a.max(c);
+            b.delete(range.clone());
+            model.replace_range(range, "");
+            0
+        }
+        Op::Replace(at, span, text) => {
+            let at = at.resolve(model);
+            let end = floor_boundary(model, (at + span).min(model.len()));
+            b.replace(at..end, text);
+            model.replace_range(at..end, text);
+            text.len()
+        }
+    }
 }
 
 fn model_line_starts(model: &str) -> Vec<(usize, usize)> {
@@ -99,33 +159,30 @@ fn model_offset_of_utf16(model: &str, utf16: usize) -> usize {
     offset
 }
 
-/// Compare every query against the model. `full` also compares every line
-/// and a dense sample of offsets; otherwise a few random ones are checked.
-fn check_buffer(b: &TextBuffer, model: &str, rng: &mut Rng, full: bool) {
+/// `count` evenly spread char boundaries of `model`, including both ends.
+fn sample_offsets(model: &str, count: usize) -> Vec<usize> {
+    let mut offsets: Vec<usize> = (0..=count)
+        .map(|i| floor_boundary(model, model.len() * i / count))
+        .collect();
+    offsets.dedup();
+    offsets
+}
+
+/// Compare every query against the model: every line start, a spread of
+/// offsets and UTF-16 indexes, every non-boundary byte, and ranges between
+/// the sampled offsets.
+fn check_buffer(b: &TextBuffer, model: &str) {
     assert_eq!(b.len(), model.len());
     assert_eq!(b.is_empty(), model.is_empty());
     assert_eq!(b.read_range(0..b.len()), model);
 
     let starts = model_line_starts(model);
     assert_eq!(b.line_count(), starts.len());
-    if full {
-        for (line, &(byte, _)) in starts.iter().enumerate() {
-            assert_eq!(b.line_start(line), byte, "line_start({line})");
-        }
-    } else {
-        for _ in 0..4 {
-            let line = rng.below(starts.len());
-            assert_eq!(b.line_start(line), starts[line].0, "line_start({line})");
-        }
+    for (line, &(byte, _)) in starts.iter().enumerate() {
+        assert_eq!(b.line_start(line), byte, "line_start({line})");
     }
 
-    let offsets: Vec<usize> = if full {
-        (0..=model.len())
-            .filter(|&o| model.is_char_boundary(o))
-            .collect()
-    } else {
-        (0..12).map(|_| random_offset(rng, model, &[])).collect()
-    };
+    let offsets = sample_offsets(model, 40);
     for &offset in &offsets {
         let line = starts.partition_point(|&(byte, _)| byte <= offset) - 1;
         assert_eq!(b.line_of_offset(offset), line, "line_of_offset({offset})");
@@ -145,43 +202,32 @@ fn check_buffer(b: &TextBuffer, model: &str, rng: &mut Rng, full: bool) {
         assert!(b.is_char_boundary(offset));
     }
     let total_utf16 = model.encode_utf16().count();
-    let utf16s: Vec<usize> = if full {
-        (0..=total_utf16 + 2).collect()
-    } else {
-        (0..12).map(|_| rng.below(total_utf16 + 3)).collect()
-    };
-    for utf16 in utf16s {
+    for i in 0..=40 {
+        let utf16 = (total_utf16 + 2) * i / 40;
         assert_eq!(
             b.offset_of_utf16(utf16),
             model_offset_of_utf16(model, utf16),
             "offset_of_utf16({utf16})"
         );
     }
-    if !model.is_empty() {
-        for offset in 0..model.len() {
-            if !model.is_char_boundary(offset) {
-                assert!(!b.is_char_boundary(offset), "mid-scalar {offset}");
-                if !full {
-                    break;
-                }
-            }
+    for offset in 0..model.len() {
+        if !model.is_char_boundary(offset) {
+            assert!(!b.is_char_boundary(offset), "mid-scalar {offset}");
         }
     }
-
-    for _ in 0..6 {
-        let a = random_offset(rng, model, &[]);
-        let c = random_offset(rng, model, &[]);
+    for (i, &a) in offsets.iter().enumerate() {
+        let c = offsets[(i * 7 + 3) % offsets.len()];
         let range = a.min(c)..a.max(c);
         assert_eq!(b.read_range(range.clone()), model[range]);
     }
 }
 
-fn check_snapshot(snapshot: &TextSnapshot, model: &str, rng: &mut Rng) {
+fn check_snapshot(snapshot: &TextSnapshot, model: &str) {
     assert_eq!(snapshot.len(), model.len());
     assert_eq!(snapshot.read_range(0..model.len()), model);
-    for _ in 0..4 {
-        let a = random_offset(rng, model, &[]);
-        let c = random_offset(rng, model, &[]);
+    let offsets = sample_offsets(model, 12);
+    for (i, &a) in offsets.iter().enumerate() {
+        let c = offsets[(i * 5 + 1) % offsets.len()];
         let range = a.min(c)..a.max(c);
         assert_eq!(snapshot.read_range(range.clone()), model[range.clone()]);
         let streamed: String = snapshot.chunks(range.clone()).collect();
@@ -279,9 +325,12 @@ fn check_positions(b: &TextBuffer, tracked: &mut Vec<Tracked>, edit: &BufferEdit
     });
 }
 
-fn issue_positions(b: &TextBuffer, model: &str, rng: &mut Rng, tracked: &mut Vec<Tracked>) {
+/// Top the tracked tokens up to 24, spread over the model.
+fn issue_positions(b: &TextBuffer, model: &str, tracked: &mut Vec<Tracked>) {
+    let mut i = 0;
     while tracked.len() < 24 {
-        let at = random_offset(rng, model, &[]);
+        let at = floor_boundary(model, model.len() * i / 23);
+        i += 1;
         match b.position_at(at) {
             Some(position) => {
                 assert_eq!(b.resolve(position), Some(at), "fresh token at {at}");
@@ -298,128 +347,95 @@ fn issue_positions(b: &TextBuffer, model: &str, rng: &mut Rng, tracked: &mut Vec
     }
 }
 
-fn run(seed: u64, steps: usize, initial: &str) {
-    let mut rng = Rng::new(seed);
-    let mut b = TextBuffer::from_text(initial);
-    let mut model = initial.to_string();
-    let mut hot: Vec<usize> = Vec::new();
-    let mut tracked: Vec<Tracked> = Vec::new();
-    let mut snapshots: Vec<(TextSnapshot, String)> = Vec::new();
-    let mut inserted_bytes = 0usize;
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(64))]
 
-    for step in 0..steps {
-        issue_positions(&b, &model, &mut rng, &mut tracked);
-        let seq = b.edit_seq();
-        match rng.below(10) {
-            0..=4 => {
-                let at = random_offset(&mut rng, &model, &hot);
-                // Occasional large inserts so add chunks seal.
-                let max = if rng.chance(10) { 600 } else { 12 };
-                let text = random_text(&mut rng, max);
-                b.insert(at, &text);
-                model.insert_str(at, &text);
-                inserted_bytes += text.len();
-                hot.extend([at, at + text.len()]);
-            }
-            5..=7 => {
-                let a = random_offset(&mut rng, &model, &hot);
-                let c = if rng.chance(70) {
-                    let span = rng.below(40);
-                    let mut end = (a + span).min(model.len());
-                    while !model.is_char_boundary(end) {
-                        end -= 1;
-                    }
-                    end
-                } else {
-                    random_offset(&mut rng, &model, &hot)
-                };
-                let range = a.min(c)..a.max(c);
-                b.delete(range.clone());
-                model.replace_range(range.clone(), "");
-                hot.push(range.start);
-            }
-            _ => {
-                let a = random_offset(&mut rng, &model, &hot);
-                let span = rng.below(30);
-                let mut end = (a + span).min(model.len());
-                while !model.is_char_boundary(end) {
-                    end -= 1;
-                }
-                let text = random_text(&mut rng, 8);
-                b.replace(a..end, &text);
-                model.replace_range(a..end, &text);
-                inserted_bytes += text.len();
-                hot.extend([a, a + text.len()]);
-                // A replace pushes two edits; its tokens are re-issued.
-                tracked.clear();
+    /// Every query matches the model after every edit, and the piece tree's
+    /// invariants hold.
+    #[test]
+    fn edits_match_a_string_model(
+        initial in initial_text(),
+        ops in vec(op(true), 1..=40),
+    ) {
+        let mut b = TextBuffer::from_text(initial.as_str());
+        let mut model = initial;
+        for op in &ops {
+            apply(&mut b, &mut model, op);
+            b.validate();
+            check_buffer(&b, &model);
+        }
+    }
+
+    /// Large inserts seal add chunks without disturbing text, lines, or
+    /// pieces.
+    #[test]
+    fn large_inserts_seal_chunks(
+        initial in initial_text(),
+        ops in vec(
+            prop_oneof![
+                (place(), text(80..=200)).prop_map(|(at, text)| Op::Insert(at, text)),
+                (place(), place()).prop_map(|(a, b)| Op::Delete(a, b)),
+            ],
+            4..=12,
+        ),
+    ) {
+        let mut b = TextBuffer::from_text(initial.as_str());
+        let mut model = initial;
+        let mut inserted = 0;
+        for op in &ops {
+            inserted += apply(&mut b, &mut model, op);
+            b.validate();
+            check_buffer(&b, &model);
+        }
+        if inserted >= ADD_CHUNK_SIZE {
+            prop_assert!(!b.backings.sealed.is_empty(), "{inserted} bytes inserted, none sealed");
+        }
+    }
+
+    /// A snapshot keeps reading the text it was taken from, whatever edits
+    /// follow.
+    #[test]
+    fn snapshots_are_immutable(
+        initial in initial_text(),
+        steps in vec((op(true), any::<bool>()), 1..=30),
+    ) {
+        let mut b = TextBuffer::from_text(initial.as_str());
+        let mut model = initial;
+        let mut snapshots = vec![(b.snapshot(), model.clone())];
+        for (op, snap) in &steps {
+            apply(&mut b, &mut model, op);
+            if *snap {
+                let snapshot = b.snapshot();
+                check_snapshot(&snapshot, &model);
+                snapshots.push((snapshot, model.clone()));
             }
         }
-        if hot.len() > 512 {
-            hot.drain(..256);
-        }
-
-        // One edit-log entry per primitive: verify tokens against it.
-        let edits = b.edits_since(seq);
-        // Nothing to follow after a replace (tokens re-issued), on an empty
-        // buffer, or when an empty delete logged nothing.
-        if !tracked.is_empty() && !edits.is_empty() {
-            assert_eq!(edits.len(), 1, "a primitive edit logs exactly one event");
-            check_positions(&b, &mut tracked, &edits[0]);
-        }
-
-        b.validate();
-        check_buffer(&b, &model, &mut rng, step % 40 == 0);
+        check_snapshot(&b.snapshot(), &model);
         for (snapshot, expected) in &snapshots {
-            if rng.chance(10) {
-                check_snapshot(snapshot, expected, &mut rng);
-            }
+            check_snapshot(snapshot, expected);
         }
-        if step % 25 == 0 {
-            let snapshot = b.snapshot();
-            check_snapshot(&snapshot, &model, &mut rng);
-            snapshots.push((snapshot, model.clone()));
-            if snapshots.len() > 6 {
-                snapshots.remove(0);
+    }
+
+    /// Position tokens follow primitive edits through the edit log: shifted
+    /// past inserts and deletes, stopping to resolve inside a deleted span.
+    #[test]
+    fn positions_follow_edits(
+        initial in initial_text(),
+        ops in vec(op(false), 1..=30),
+    ) {
+        let mut b = TextBuffer::from_text(initial.as_str());
+        let mut model = initial;
+        let mut tracked: Vec<Tracked> = Vec::new();
+        for op in &ops {
+            issue_positions(&b, &model, &mut tracked);
+            let seq = b.edit_seq();
+            apply(&mut b, &mut model, op);
+            let edits = b.edits_since(seq);
+            // An empty delete logs nothing.
+            if !tracked.is_empty() && !edits.is_empty() {
+                assert_eq!(edits.len(), 1, "a primitive edit logs exactly one event");
+                check_positions(&b, &mut tracked, &edits[0]);
             }
         }
     }
-    for (snapshot, expected) in &snapshots {
-        check_snapshot(snapshot, expected, &mut rng);
-    }
-    assert!(
-        initial.len() + inserted_bytes > 2 * ADD_CHUNK_SIZE,
-        "seed {seed} inserted too little text ({inserted_bytes} bytes) to seal chunks"
-    );
-}
-
-const ORIGINAL: &str = "fn main() {\n    println!(\"héllo 日本\");\r\n}\n";
-
-#[test]
-fn differential_seed_1() {
-    run(1, 900, ORIGINAL);
-}
-
-#[test]
-fn differential_seed_2() {
-    run(2, 900, ORIGINAL);
-}
-
-#[test]
-fn differential_seed_3() {
-    run(3, 900, "");
-}
-
-#[test]
-fn differential_seed_4() {
-    run(4, 900, ORIGINAL);
-}
-
-#[test]
-fn differential_seed_5() {
-    run(5, 900, "no newline at all 😀");
-}
-
-#[test]
-fn differential_seed_6() {
-    run(6, 900, ORIGINAL);
 }

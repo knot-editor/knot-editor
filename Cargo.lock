@@ -3882,6 +3882,9 @@ version = "0.1.0"
 [[package]]
 name = "knot-core"
 version = "0.1.0"
+dependencies = [
+ "proptest",
+]
 
 [[package]]
 name = "knot-ext-languages"
