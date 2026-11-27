@@ -624,7 +624,10 @@ fn a_toolbar_button_runs_its_command_on_the_anchoring_editor(cx: &mut TestAppCon
     let content = cx.read(|cx| fixture.editor.read(cx).popover_contents()[0].clone());
     content.update(cx, |content, cx| content.focus_leaf(1, cx));
     super::composite::click_toolbar_button(fixture.native_window, "popover-toolbar-0", cx);
-    cx.run_until_parked();
+    // The button's command runs in the host, which closes the popover.
+    wait_for_api_condition(cx, |cx| {
+        fixture.editor.read(cx).popovers().popovers().is_empty()
+    });
     assert!(fixture.popovers(cx).is_empty());
     fixture.run("tool.expect-tool", cx);
 }

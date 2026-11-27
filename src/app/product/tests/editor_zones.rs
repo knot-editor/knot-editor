@@ -250,7 +250,8 @@ fn escape_in_a_focused_zone_closes_it_and_tells_its_owner(cx: &mut TestAppContex
     fixture.run("esc.open", cx);
     fixture.refresh(cx);
     super::composite::click_toolbar_button(fixture.native_window, "popover-toolbar-0", cx);
-    cx.run_until_parked();
+    // The button's command runs in the host, which closes the extra zone.
+    wait_for_api_condition(cx, |cx| fixture.editor.read(cx).zones().zones().len() == 1);
     assert_eq!(fixture.zones(cx).len(), 1);
     assert_eq!(clipboard_text(cx).as_deref(), Some("esc:hunk:1"));
 }
