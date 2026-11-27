@@ -25,6 +25,7 @@ import { targetLine, type Direction } from "./navigation.js";
 import { createDiscovery, isGone, type Repository } from "./repositories.js";
 import { createRefs } from "./ref.js";
 import { registerChanges } from "./changes.js";
+import { createOutput } from "./output.js";
 import { createStatuses, defineColors, keyOf } from "./status.js";
 
 /** Milliseconds after the last edit before the marks are diffed again. */
@@ -133,6 +134,7 @@ export async function start(): Promise<Disposable> {
     gone: drop,
   });
 
+  const output = await createOutput();
   const changes = await registerChanges({
     covering: (rootUris) => discovery.covering(rootUris),
     snapshot: (repository) => statuses.snapshot(repository),
@@ -324,6 +326,9 @@ export async function start(): Promise<Disposable> {
     },
     statusChanged({ backend, repository }) {
       statuses.request(keyOf({ backend, root: repository }));
+    },
+    async log(entry) {
+      if (registered.has(entry.backend)) await output.append(entry);
     },
     async backends() {
       // A backend that stopped without unregistering has nothing to bind.
@@ -592,6 +597,7 @@ export async function start(): Promise<Disposable> {
       await tracker[Symbol.asyncDispose]();
       await statuses[Symbol.asyncDispose]();
       await changes[Symbol.asyncDispose]();
+      await output[Symbol.asyncDispose]();
       await refs[Symbol.asyncDispose]();
       await served[Symbol.asyncDispose]();
     },

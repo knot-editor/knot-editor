@@ -1,6 +1,6 @@
 # D215 — VCS commit
 
-Status: 🚧 in progress (checkpoints 1 and 2 done). Source: [roadmap D215](../roadmap.md#version-control), milestone 4 of
+Status: 🚧 in progress (checkpoints 1 to 3 done). Source: [roadmap D215](../roadmap.md#version-control), milestone 4 of
 the [version control plan](vcs.md).
 
 ## Outcome
@@ -125,7 +125,7 @@ and [workbench and lifecycle](../architecture/workbench-and-lifecycle.md#layout-
 The controls' look uses plain gpui-component checkbox and button styling and
 may deserve polish when the commit panel lands.
 
-### 3. Version Control output
+### 3. Version Control output ✅
 
 Deliverables: `vcs.log` on the `vcs` contract, the `vcs.output` tool window,
 `vcs.showOutput`, the Changes toolbar button; `@knot/git` logs its existing

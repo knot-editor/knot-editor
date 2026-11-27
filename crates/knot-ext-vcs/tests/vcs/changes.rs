@@ -105,7 +105,10 @@ fn the_groups_list_their_files_in_folders_and_a_window_without_repository_says_s
 #[gpui::test]
 fn the_toggle_switches_between_folders_and_a_flat_list(cx: &mut TestAppContext) {
     let (_product, window, tree, _directory) = show(cx);
-    assert_eq!(tree.frame_commands(cx), ["vcs.changes.toggleLayout"]);
+    assert_eq!(
+        tree.frame_commands(cx),
+        ["vcs.changes.toggleLayout", "vcs.showOutput"]
+    );
     assert_eq!(
         window.run_command("vcs.changes.toggleLayout", cx),
         CommandOutcome::Completed
@@ -369,4 +372,21 @@ fn rollback_file_restores_the_focused_file_and_reloads_its_document(cx: &mut Tes
     assert_eq!(std::fs::read_to_string(root.join("a.txt")).unwrap(), "a1\n");
     wait_until(cx, |cx| window.document_texts(cx) == ["a1\n"]);
     assert_eq!(window.document_tabs(cx), [("a.txt".to_owned(), false)]);
+}
+
+#[gpui::test]
+fn staging_logs_the_command_in_the_version_control_output(cx: &mut TestAppContext) {
+    let (_product, window, tree, directory) = show(cx);
+
+    act(&tree, "a.txt", "git.stage", None, cx);
+    wait_porcelain(
+        directory.path(),
+        "M  a.txt\nM  s.txt\n M src/b.txt\n?? new.txt\n",
+        cx,
+    );
+    let root = uri(directory.path());
+    let block = format!("[git] {root}\n$ git add -A -- a.txt\nDone\n\n");
+    wait_until(cx, |cx| {
+        window.frame_text("vcs.output", cx).as_deref() == Some(block.as_str())
+    });
 }

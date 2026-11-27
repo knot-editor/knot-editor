@@ -3,7 +3,7 @@
 // never touches files that belong to another group, and runs one `git` call
 // per kind of change.
 import { commands, workbench } from "knot";
-import { git } from "./git.js";
+import { git, gitLogged } from "./git.js";
 import { parseGroups, type Groups } from "./status.js";
 import { relative } from "./uri.js";
 
@@ -24,8 +24,8 @@ async function listed(repository: string, path: string, groups: readonly (keyof 
 }
 
 async function run(repository: string, args: readonly string[]) {
-  const output = await git(repository, args);
-  if (output === null || output.exitCode !== 0) throw new Error(`git ${args[0]} failed`);
+  const output = await gitLogged(repository, args);
+  if (output.exitCode !== 0) throw new Error(`git ${args[0]} failed`);
 }
 
 /** The paths of `paths` that HEAD has. */

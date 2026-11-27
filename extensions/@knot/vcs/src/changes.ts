@@ -6,6 +6,7 @@ import { commands, documents, icons, settings, windows, workbench, workspaces } 
 import type { CommandContext, Disposable, JsonValue, TreeItem, ViewRegistration } from "knot";
 import { diffs } from "@knot/diff";
 import { backendContract } from "./contract.js";
+import { SHOW_OUTPUT } from "./output.js";
 import { isGone, type Repository } from "./repositories.js";
 import {
   OPEN_FILE,
@@ -223,7 +224,10 @@ export async function registerChanges(deps: ChangesDeps): Promise<Changes> {
     title: "Changes",
     content: { kind: "tree", provider: { getChildren: (parentId, { window }) => children(parentId, window) } },
     placement: { location: "leftTop", order: 1 },
-    actions: [{ label: "Toggle Tree and List", icon: "vcs.changes.layout", command: TOGGLE_LAYOUT }],
+    actions: [
+      { label: "Toggle Tree and List", icon: "vcs.changes.layout", command: TOGGLE_LAYOUT },
+      { label: "Show Version Control Output", icon: "vcs.output", command: SHOW_OUTPUT },
+    ],
   });
   registrations.push(view);
   registrations.push(await settings.observe(LAYOUT, invalidate));

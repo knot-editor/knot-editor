@@ -121,7 +121,7 @@ impl TextView {
         &self.editor
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn text(&self, cx: &App) -> String {
         self.model.read(cx).text()
     }

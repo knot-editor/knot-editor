@@ -18,6 +18,20 @@ export const vcs = defineContract("vcs", {
    * its baselines did not.
    */
   statusChanged: s.fn(s.object({ backend: s.string(), repository: s.string() }), s.void()),
+  /**
+   * Appends to the Version Control output a command the user started: its
+   * `command` line, the `output` of both its streams, and whether it `failed`.
+   */
+  log: s.fn(
+    s.object({
+      backend: s.string(),
+      repository: s.string(),
+      command: s.string(),
+      output: s.string(),
+      failed: s.boolean(),
+    }),
+    s.void(),
+  ),
   /** The IDs of the registered backends that are still being served. */
   backends: s.fn(s.void(), s.array(s.string())),
 });

@@ -437,6 +437,16 @@ impl TestWindow {
         })
     }
 
+    /// The text of the text frame `view`, or `None` when there is no such frame.
+    pub fn frame_text(&self, view: &str, cx: &mut TestAppContext) -> Option<String> {
+        cx.read(
+            |cx| match &self.window.read(cx).contributed_views.get(view)?.content {
+                crate::app::workbench::ExtensionView::Text(text) => Some(text.read(cx).text(cx)),
+                _ => None,
+            },
+        )
+    }
+
     /// Whether the tool window `stable_id` is shown.
     pub fn tool_shown(&self, stable_id: &str, cx: &mut TestAppContext) -> bool {
         cx.read(|cx| {

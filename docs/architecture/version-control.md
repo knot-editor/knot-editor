@@ -243,6 +243,12 @@ not register.
   another group's files. A file that is added but not in HEAD is unstaged and left
   on disk as untracked. The index and working tree watches report the change, so
   an action needs no refresh of its own.
+- **Output** is the Version Control tool window (`vcs.output`, bottom right, text
+  frame that follows its end), which `@knot/vcs` owns. A backend reports each
+  command the user started through `vcs.log` (command line, stdout and stderr,
+  failure), never its background reads, and the log keeps the last 256 KiB. It
+  opens from its stripe button, the Changes toolbar, or `vcs.showOutput`. Git logs
+  its actions through `gitLogged`.
 - **Ref** is the branch name, or the short commit ID when HEAD is detached; an
   unborn branch keeps its name.
 
