@@ -82,8 +82,13 @@ on the same machine).
    and losing what the tests check. The suite stays as it is.
 4a. Cutting the launch floor with a V8 code cache has its own plan:
    [v8-code-cache](v8-code-cache.md).
-4b. The same look at `knot-ext-vim`, then `knot-ext-workbench`, one step each
-   (`vim::topics` 11s over 15 tests; `project_sessions`, `explorer`, `find`).
+4b. ✅ `knot-ext-vim`. Run serially (`cargo nextest run -p knot-ext-vim -j1`)
+   the 71 tests take 10.7s, 0.15s on average. `vim::topics` is 5.6s of that
+   over 15 tests (0.14–0.72s each, `search` the slowest); each topic runs its
+   cases in one product, so launch is paid once per topic. The 11s in the
+   parallel timings was contention. Nothing to change.
+4c. The same look at `knot-ext-workbench` (`project_sessions`, `explorer`,
+   `find`).
 5. Decide whether to add a guard (a budget in CI or a slow-test report) so the
    suite stays under control.
 
