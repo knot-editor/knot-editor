@@ -80,25 +80,14 @@ until the view measures it (checkpoint 2). Only Escape reports a closure to
 the owner. Approved; verified by model tests only, since nothing opens a zone
 yet.
 
-### 2. Measuring and painting zones
+### 2. Measuring and painting zones ✅
 
-Deliverable: the editor view measures a zone's `PopoverContent` at the text
-area's width, sets its row count, re-measures on content or width change, and
-paints it in the reserved frame, pinned horizontally; scroll, clipping at the
-viewport, and folded lines hide it.
-
-Validation: app tests with gpui test contexts beside
-`src/app/editor/tests/popovers.rs` and `tests/blocks.rs`: sizing, re-measure
-after a content and a width change, viewport clamp, frame position under
-vertical and horizontal scroll, fold.
-
-Review gate: code review of the measure/paint loop (no oscillation, one
-re-wrap per change).
-
-**Implementation context:** `src/app/editor/popovers.rs` (`PopoverContent`,
-`popover_frames`), `src/app/editor/paint.rs` and `layout.rs` (row painting,
-block rows), `src/app/view_layout.rs` (`Sizing::Natural`, `natural_height`),
-and `src/app/view_tree.rs` for children.
+The editor view (`src/app/editor/zones.rs`) measures a zone's `PopoverContent`
+while rendering, reserves whole rows capped at the viewport's, and paints it
+over them at the text area's width. A resize requests another frame, since a
+notify during paint schedules none. Approved; verified by app tests only, since
+nothing opens a zone until checkpoint 4. `Editor::open_zone`, `close_zone`, and
+`Leaf::observe` carry `allow(dead_code)` until then.
 
 ### 3. Input and focus in zones
 
