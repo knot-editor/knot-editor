@@ -17,20 +17,48 @@ const ADDED_BACKGROUND = "diff.added.background";
 const REMOVED_BACKGROUND = "diff.removed.background";
 const MODIFIED_BACKGROUND = "diff.modified.background";
 
+/** A color key's dimmer form for a hunk whose change the staged text already holds. */
+const dimmed = (color: string, staged: boolean | undefined) => (staged === true ? `${color}.staged` : color);
+
+/** Whether two ranges of lines share a line, or an empty one lies within or beside the other. */
+function overlap(left: DiffHunk["new"], right: DiffHunk["new"]): boolean {
+  if (left.start === left.end || right.start === right.end) return left.start <= right.end && right.start <= left.end;
+  return left.start < right.end && right.start < left.end;
+}
+
+/**
+ * For each of `hunks`, the original's against the modified text, whether it
+ * is staged: `unstaged`, the hunks of the staged text against the modified
+ * text, has none overlapping its modified lines. A partly staged hunk counts
+ * as unstaged.
+ */
+export function stagedFlags(hunks: readonly DiffHunk[], unstaged: readonly DiffHunk[]): boolean[] {
+  return hunks.map((hunk) => !unstaged.some((other) => overlap(hunk.new, other.new)));
+}
+
 /** The strip's links: one band per hunk, colored by what the hunk does. */
-export function connectorLinks(hunks: readonly DiffHunk[]): CompositeConnectorLink[] {
-  return hunks.map(({ old, new: now }) => ({
+export function connectorLinks(hunks: readonly DiffHunk[], staged: readonly boolean[] = []): CompositeConnectorLink[] {
+  return hunks.map(({ old, new: now }, index) => ({
     first: old,
     second: now,
-    color: old.start === old.end ? ADDED_BACKGROUND : now.start === now.end ? REMOVED_BACKGROUND : MODIFIED_BACKGROUND,
+    color: dimmed(
+      old.start === old.end ? ADDED_BACKGROUND : now.start === now.end ? REMOVED_BACKGROUND : MODIFIED_BACKGROUND,
+      staged[index],
+    ),
   }));
 }
 
 /** The inline layout's rows: each hunk's original lines above the modified line they precede. */
-export function blocksOf(hunks: readonly DiffHunk[], original: Buffer): EditorBlockRows[] {
-  return hunks
-    .filter(({ old }) => old.start !== old.end)
-    .map(({ old, new: now }) => ({ line: now.start, source: original, lines: old, color: REMOVED_BACKGROUND }));
+export function blocksOf(
+  hunks: readonly DiffHunk[],
+  original: Buffer,
+  staged: readonly boolean[] = [],
+): EditorBlockRows[] {
+  return hunks.flatMap(({ old, new: now }, index) =>
+    old.start === old.end
+      ? []
+      : [{ line: now.start, source: original, lines: old, color: dimmed(REMOVED_BACKGROUND, staged[index]) }],
+  );
 }
 
 /** The scroll link of the original and modified editors, keyed as the layout is. */
@@ -43,11 +71,16 @@ export function scrollLink(hunks: readonly DiffHunk[]): CompositeScrollLink {
  * the boundary where the side has none. Reads line ranges of the buffer's
  * current text, so the caller sets them at the revision it diffed.
  */
-export async function decorationsOf(buffer: Buffer, hunks: readonly DiffHunk[], side: Side): Promise<ViewDecoration[]> {
+export async function decorationsOf(
+  buffer: Buffer,
+  hunks: readonly DiffHunk[],
+  side: Side,
+  staged: readonly boolean[] = [],
+): Promise<ViewDecoration[]> {
   if (hunks.length === 0) return [];
   const last = (await buffer.lineCount()) - 1;
   const items: ViewDecoration[] = [];
-  for (const { old, new: now } of hunks) {
+  for (const [index, { old, new: now }] of hunks.entries()) {
     const [lines, other] = side === "original" ? [old, now] : [now, old];
     if (lines.start === lines.end) {
       // After the last line of a text without a final newline, the wedge sits at the end of the text.
@@ -57,7 +90,7 @@ export async function decorationsOf(buffer: Buffer, hunks: readonly DiffHunk[], 
           : (await buffer.lineRange(lines.start)).startByteOffset;
       items.push({
         range: { startByteOffset: offset, endByteOffset: offset },
-        gutter: { color: side === "original" ? ADDED : REMOVED, style: "deletion" },
+        gutter: { color: dimmed(side === "original" ? ADDED : REMOVED, staged[index]), style: "deletion" },
       });
       continue;
     }
@@ -67,7 +100,7 @@ export async function decorationsOf(buffer: Buffer, hunks: readonly DiffHunk[], 
       other.start !== other.end ? MODIFIED_BACKGROUND : side === "original" ? REMOVED_BACKGROUND : ADDED_BACKGROUND;
     items.push({
       range: { startByteOffset: first.startByteOffset, endByteOffset: final.endByteOffset },
-      decoration: { color, style: "line" },
+      decoration: { color: dimmed(color, staged[index]), style: "line" },
     });
   }
   return items;

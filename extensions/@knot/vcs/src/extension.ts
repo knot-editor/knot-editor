@@ -27,7 +27,7 @@ import { createRefs } from "./ref.js";
 import { registerChanges, TOGGLE_LAYOUT } from "./changes.js";
 import { createPanel } from "./commit.js";
 import { createOutput } from "./output.js";
-import { createStatuses, defineColors, defineStagedColors, keyOf } from "./status.js";
+import { createStatuses, defineColors, keyOf } from "./status.js";
 
 /** Milliseconds after the last edit before the marks are diffed again. */
 const DELAY = 150;
@@ -134,7 +134,6 @@ export async function start(): Promise<Disposable> {
     },
   });
   await defineColors();
-  await defineStagedColors();
   const refs = await createRefs({
     async fileOf(window) {
       const view = window.statusView === null ? null : windows.findView(window, window.statusView)?.view;
@@ -271,7 +270,9 @@ export async function start(): Promise<Disposable> {
     if (id === null) return;
     if (baseline === null) return closeDiff(follow);
     try {
-      await (await diffs.client()).setText({ id, side: "original", text: baseline });
+      const client = await diffs.client();
+      await client.setText({ id, side: "original", text: baseline });
+      await client.setText({ id, side: "staged", text: follow.staged ?? baseline });
     } catch {
       // The tab was closed.
       follow.diff = null;
@@ -580,6 +581,7 @@ export async function start(): Promise<Disposable> {
       modified: { label: "Working Copy", document: follow.id },
       line,
       preview: true,
+      ...(follow.staged === null ? {} : { staged: follow.staged }),
     });
   };
 

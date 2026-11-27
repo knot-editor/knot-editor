@@ -13,9 +13,11 @@ const running = () => (started ??= start());
 
 /** A diff opened through the `diff` contract, which these tests serve. */
 type Shown = {
-  options: { original: { label: string; text?: string; language?: string }; modified: { label: string; document?: string }; line?: number; preview?: boolean };
+  options: { original: { label: string; text?: string; language?: string }; modified: { label: string; document?: string }; line?: number; preview?: boolean; staged?: string };
   /** The text of the original side now, after any `setText`. */
   original: string;
+  /** The staged text now, after any `setText`. */
+  staged: string | undefined;
   closed: boolean;
 };
 let shown: Shown[] = [];
@@ -27,13 +29,14 @@ beforeEach(async () => {
   shown = [];
   await diffs.serve({
     open: (options) => {
-      shown.push({ options, original: (options.original as { text: string }).text, closed: false });
+      shown.push({ options, original: (options.original as { text: string }).text, staged: options.staged, closed: false });
       return `diff-${shown.length}`;
     },
-    setText: ({ id, text }) => {
+    setText: ({ id, side, text }) => {
       const diff = shown[Number(id.slice(5)) - 1]!;
       if (diff.closed) throw new Error("closed");
-      diff.original = text;
+      if (side === "original") diff.original = text;
+      if (side === "staged") diff.staged = text;
     },
     keep: () => {},
     activate: () => {},
@@ -373,6 +376,21 @@ test("Show Changes opens the baseline against the document at the caret line", a
   assert.deepEqual(diff!.options.modified, { label: "Working Copy", document: id });
   assert.equal(diff!.options.line, 1);
   assert.equal(diff!.options.preview, true);
+});
+
+test("Show Changes hands the diff the staged text, and a refetch updates it", async () => {
+  open("a\nB\nc\nD\n");
+  let staged: string | undefined = "a\nB\nc\nd\n";
+  await backend("one", { repositories: () => [ROOT], baseline: () => "a\nb\nc\nd\n", staged: () => staged });
+  await rest();
+  await host.run("vcs.showChanges");
+  const [diff] = shown;
+  assert.equal(diff!.options.staged, "a\nB\nc\nd\n");
+  staged = undefined;
+  await (await vcs.client()).changed({ backend: "one", repository: ROOT });
+  await rest();
+  // Nothing is staged now: the staged text is the baseline.
+  assert.equal(diff!.staged, "a\nb\nc\nd\n");
 });
 
 test("Compare with Last Commit says so when nothing changed", async () => {

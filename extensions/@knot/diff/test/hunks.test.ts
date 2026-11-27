@@ -3,7 +3,7 @@ import { beforeEach, test } from "node:test";
 import { buffers } from "knot";
 import type { DiffHunk } from "knot";
 import * as host from "knot/testing";
-import { blocksOf, connectorLinks, decorationsOf, scrollLink, targetLine } from "../src/hunks.js";
+import { blocksOf, connectorLinks, decorationsOf, scrollLink, stagedFlags, targetLine } from "../src/hunks.js";
 
 beforeEach(() => host.reset());
 
@@ -73,5 +73,37 @@ test("the inline rows put each hunk's original lines above the modified line, sk
       { line: 1, lines: { start: 1, end: 2 }, color: "diff.removed.background" },
       { line: 4, lines: { start: 4, end: 5 }, color: "diff.removed.background" },
     ],
+  );
+});
+
+test("hunks the staged text already holds are staged, and a partly staged one is not", () => {
+  const all = [hunk([1, 2], [1, 2]), hunk([4, 5], [4, 5]), hunk([7, 7], [7, 9])];
+  // The staged text against the modified one differs only in the second hunk.
+  assert.deepEqual(stagedFlags(all, [hunk([4, 5], [4, 5])]), [true, false, true]);
+  assert.deepEqual(stagedFlags(all, []), [true, true, true]);
+});
+
+test("a removal is staged unless the staged text differs at its boundary", () => {
+  const removal = hunk([3, 4], [3, 3]);
+  assert.deepEqual(stagedFlags([removal], [hunk([3, 3], [3, 4])]), [false]);
+  assert.deepEqual(stagedFlags([removal], [hunk([5, 6], [5, 6])]), [true]);
+});
+
+test("staged hunks use the dimmer colors in the strip, the blocks, and the bands", async () => {
+  const hunks = [hunk([1, 2], [1, 2]), hunk([4, 5], [4, 4])];
+  assert.deepEqual(
+    connectorLinks(hunks, [true, false]).map((link) => link.color),
+    ["diff.modified.background.staged", "diff.removed.background"],
+  );
+  const original = await buffers.create({ text: "a\nb\nc\nd\ne\n" });
+  assert.deepEqual(
+    blocksOf(hunks, original, [false, true]).map((block) => block.color),
+    ["diff.removed.background", "diff.removed.background.staged"],
+  );
+  const modified = await buffers.create({ text: "a\nB\nc\nd\n" });
+  const items = await decorationsOf(modified, hunks, "modified", [true, true]);
+  assert.deepEqual(
+    items.map((item) => item.decoration?.color ?? item.gutter?.color),
+    ["diff.modified.background.staged", "diff.removed.staged"],
   );
 });

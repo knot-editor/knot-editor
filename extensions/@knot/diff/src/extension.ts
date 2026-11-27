@@ -18,8 +18,9 @@ import type {
   ExtensionBuffer,
   ViewNodeTarget,
 } from "knot";
+import { defineStagedColors } from "./colors.js";
 import { diffs } from "./contract.js";
-import { blocksOf, connectorLinks, decorationsOf, scrollLink, targetLine, type Side } from "./hunks.js";
+import { blocksOf, connectorLinks, decorationsOf, scrollLink, stagedFlags, targetLine, type Side } from "./hunks.js";
 
 /** Milliseconds after the last edit before the sides are compared again. */
 const DELAY = 150;
@@ -64,6 +65,10 @@ type Open = {
   parts: [Part, Part];
   layout: Layout;
   hunks: readonly DiffHunk[];
+  /** The text between the sides whose changes are drawn dimmer, null when there is none. */
+  staged: string | null;
+  /** Whether each hunk is staged. */
+  flags: readonly boolean[];
   timer: ReturnType<typeof setTimeout> | null;
   running: boolean;
   /** A request arrived while a run was in flight, joined into one more run. */
@@ -72,6 +77,12 @@ type Open = {
 };
 
 const SIDES: readonly Side[] = ["original", "modified"];
+
+/** Whether each hunk of the sides is staged: `modified` has its lines as the `staged` text does. */
+async function flagsOf(hunks: readonly DiffHunk[], staged: string | null, modified: Buffer): Promise<boolean[]> {
+  if (staged === null || hunks.length === 0) return hunks.map(() => false);
+  return stagedFlags(hunks, (await diff(staged, modified)).hunks);
+}
 
 function isGone(error: unknown) {
   const code = (error as { code?: string }).code;
@@ -87,7 +98,7 @@ async function quietly(work: PromiseLike<unknown> | undefined) {
   }
 }
 
-function same(left: readonly DiffHunk[], right: readonly DiffHunk[]) {
+function same(left: readonly unknown[], right: readonly unknown[]) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
@@ -103,6 +114,7 @@ export async function start(): Promise<Disposable> {
     description:
       'How a diff tab opens: "sideBySide" shows the original and modified texts in two editors, "inline" shows the modified text with the original\'s changed lines above it.',
   });
+  await defineStagedColors();
   await icons.define("diff.tab", { lucide: "git-compare" });
   await icons.define("diff.previous", { lucide: "arrow-up" });
   await icons.define("diff.next", { lucide: "arrow-down" });
@@ -110,7 +122,7 @@ export async function start(): Promise<Disposable> {
   await icons.define("diff.layout.inline", { lucide: "columns-2" });
   const registration: CompositeRegistration = await workbench.registerComposite({ id: "diff.view" });
 
-  const layout = ({ parts, hunks, layout }: Pick<Open, "parts" | "hunks" | "layout">): CompositeGroup => {
+  const layout = ({ parts, hunks, flags, layout }: Pick<Open, "parts" | "hunks" | "flags" | "layout">): CompositeGroup => {
     const source = (part: Part) => (part.owned !== null ? { buffer: part.owned } : { document: part.document! });
     const modified = { type: "editor", key: "modified", focused: true, ...source(parts[1]) } as const;
     if (layout === "inline") return { type: "row", children: [modified] };
@@ -118,7 +130,7 @@ export async function start(): Promise<Disposable> {
       type: "row",
       children: [
         { type: "editor", key: "original", ...source(parts[0]) },
-        { type: "connector", first: "original", second: "modified", links: connectorLinks(hunks) },
+        { type: "connector", first: "original", second: "modified", links: connectorLinks(hunks, flags) },
         modified,
       ],
     };
@@ -214,7 +226,7 @@ export async function start(): Promise<Disposable> {
       // A layout change during the awaits clears the part's editor, so paint the one it had.
       const editor = part.editor;
       if (editor === null) continue;
-      const items = await decorationsOf(part.buffer, diffView.hunks, SIDES[index]!);
+      const items = await decorationsOf(part.buffer, diffView.hunks, SIDES[index]!, diffView.flags);
       await editor.setDecorations(items, { ifRevision: revisions[index]! });
     }
   }
@@ -223,7 +235,8 @@ export async function start(): Promise<Disposable> {
   async function showBlocks(diffView: Open) {
     const editor = diffView.parts[1].editor;
     if (editor === null) return;
-    const blocks = diffView.layout === "inline" ? blocksOf(diffView.hunks, diffView.parts[0].buffer) : [];
+    const blocks =
+      diffView.layout === "inline" ? blocksOf(diffView.hunks, diffView.parts[0].buffer, diffView.flags) : [];
     await editor.setBlocks(blocks);
   }
 
@@ -231,8 +244,10 @@ export async function start(): Promise<Disposable> {
   async function refresh(diffView: Open) {
     const [original, modified] = diffView.parts;
     const result = await diff(original.buffer, modified.buffer);
-    const changed = !same(result.hunks, diffView.hunks);
+    const flags = await flagsOf(result.hunks, diffView.staged, modified.buffer);
+    const changed = !same(result.hunks, diffView.hunks) || !same(flags, diffView.flags);
     diffView.hunks = result.hunks;
+    diffView.flags = flags;
     if (changed) {
       await diffView.composite.update({ layout: layout(diffView), scrollLink: link(diffView) });
     }
@@ -292,12 +307,15 @@ export async function start(): Promise<Disposable> {
     modified: SideSpec;
     line?: number | undefined;
     preview?: boolean | undefined;
+    staged?: string | undefined;
   }) {
     const parts: [Part, Part] = [await makePart(options.original), await makePart(options.modified)];
     try {
       const { hunks } = await diff(parts[0].buffer, parts[1].buffer);
       const style: Layout = (await settings.get("diff.layout")) === "inline" ? "inline" : "sideBySide";
-      const shape = { parts, hunks, layout: style };
+      const staged = options.staged ?? null;
+      const flags = await flagsOf(hunks, staged, parts[1].buffer);
+      const shape = { parts, hunks, flags, layout: style };
       const scroll = link(shape);
       const composite = await registration.open({
         title: titleOf(parts),
@@ -314,6 +332,8 @@ export async function start(): Promise<Disposable> {
         parts,
         layout: style,
         hunks,
+        staged,
+        flags,
         timer: null,
         running: false,
         pending: false,
@@ -348,6 +368,11 @@ export async function start(): Promise<Disposable> {
     },
     async setText({ id, side, text }) {
       const diffView = openOf(id);
+      if (side === "staged") {
+        diffView.staged = text;
+        kick(diffView);
+        return;
+      }
       const part = diffView.parts[SIDES.indexOf(side)]!;
       if (part.owned === null) throw new Error("a document side has no text to replace");
       // A read-only buffer takes no edits, so the side shows a new buffer.
@@ -400,7 +425,7 @@ export async function start(): Promise<Disposable> {
     const diffView = [...open.values()].find((candidate) => candidate.composite.target === target.viewTarget);
     if (diffView === undefined) commands.unavailable();
     const next: Layout = diffView.layout === "inline" ? "sideBySide" : "inline";
-    const shape = { parts: diffView.parts, hunks: diffView.hunks, layout: next };
+    const shape = { parts: diffView.parts, hunks: diffView.hunks, flags: diffView.flags, layout: next };
     // A failed update changes nothing, so the layout is recorded once it succeeds.
     await diffView.composite.update({ layout: layout(shape), scrollLink: link(shape), toolbar: toolbar(next) });
     diffView.layout = next;

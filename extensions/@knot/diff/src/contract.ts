@@ -17,7 +17,9 @@ export const diffs = defineContract("diff", {
    * ID. A document side is editable and a snapshot side read-only. `line` is
    * the 0-based line of the modified side the caret starts at. With `preview`
    * the tab is the pane's preview, which the next preview replaces; the
-   * replacement closes the diff as closing its tab does.
+   * replacement closes the diff as closing its tab does. `staged` is a text
+   * between the sides, such as a version control index: the hunks whose lines
+   * the modified side already has as in `staged` are drawn dimmer.
    */
   open: s.fn(
     s.object({
@@ -25,14 +27,18 @@ export const diffs = defineContract("diff", {
       modified: s.union([snapshot, document]),
       line: s.optional(s.int()),
       preview: s.optional(s.boolean()),
+      staged: s.optional(s.string()),
     }),
     s.string(),
   ),
   /**
-   * Replaces the text of a snapshot side, for example with a new baseline. A
-   * document side or a closed diff rejects it.
+   * Replaces the text of a snapshot side, for example with a new baseline, or
+   * the `staged` text. A document side or a closed diff rejects it.
    */
-  setText: s.fn(s.object({ id: s.string(), side: s.enum(["original", "modified"]), text: s.string() }), s.void()),
+  setText: s.fn(
+    s.object({ id: s.string(), side: s.enum(["original", "modified", "staged"]), text: s.string() }),
+    s.void(),
+  ),
   /** Makes a preview diff a regular tab; a regular one stays as it is. */
   keep: s.fn(s.string(), s.void()),
   /** Shows the diff's tab and focuses it. */

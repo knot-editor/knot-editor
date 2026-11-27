@@ -63,18 +63,6 @@ export async function defineColors() {
   }
 }
 
-/** Defines the dimmer gutter colors of staged hunks, each a faded form of its diff color. */
-export async function defineStagedColors() {
-  const colors = [
-    { key: "diff.added.staged", description: "Staged added lines, in the gutter.", dark: "#5fb86566", light: "#36965066" },
-    { key: "diff.modified.staged", description: "Staged changed lines, in the gutter.", dark: "#548af766", light: "#3574f066" },
-    { key: "diff.removed.staged", description: "Staged removed lines, in the gutter.", dark: "#f7546466", light: "#db5c5c66" },
-  ];
-  for (const { key, description, dark, light } of colors) {
-    await themes.defineColor({ key, description, defaults: { dark, light } });
-  }
-}
-
 const rank = (status: Status) => PRIORITY.indexOf(status);
 
 /** The folders from the one holding `file` up to and including `root`. */
