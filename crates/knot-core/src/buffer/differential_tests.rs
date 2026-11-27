@@ -438,4 +438,49 @@ proptest! {
             }
         }
     }
+
+    /// Each logged edit carries the line and column of its offsets in the
+    /// text it saw, edit by edit.
+    #[test]
+    fn edit_points_describe_the_text_each_edit_saw(
+        initial in initial_text(),
+        ops in vec(op(true), 1..=30),
+    ) {
+        fn point(text: &str, offset: usize) -> TextPoint {
+            let before = &text[..offset];
+            let line_start = before.rfind('\n').map_or(0, |newline| newline + 1);
+            TextPoint {
+                line: before.matches('\n').count(),
+                column: offset - line_start,
+            }
+        }
+
+        let mut b = TextBuffer::from_text(initial.as_str());
+        let mut text = initial;
+        for op in &ops {
+            let seq = b.edit_seq();
+            let mut model = text.clone();
+            apply(&mut b, &mut model, op);
+            let inserted = match op {
+                Op::Insert(_, t) | Op::Replace(_, _, t) => t.as_str(),
+                Op::Delete(..) => "",
+            };
+            // Replay the log against the text the edits saw.
+            for edit in b.edits_since(seq) {
+                match edit {
+                    BufferEdit::Delete { range, start_point, end_point, .. } => {
+                        assert_eq!(*start_point, point(&text, range.start));
+                        assert_eq!(*end_point, point(&text, range.end));
+                        text.replace_range(range.clone(), "");
+                    }
+                    BufferEdit::Insert { at, inserted_len, at_point, end_point, .. } => {
+                        assert_eq!(*at_point, point(&text, *at));
+                        text.insert_str(*at, inserted);
+                        assert_eq!(*end_point, point(&text, at + inserted_len));
+                    }
+                }
+            }
+            assert_eq!(text, model);
+        }
+    }
 }
