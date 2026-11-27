@@ -96,7 +96,8 @@ gutter and change navigation. See [version control](../architecture/version-cont
 
 - **D216 — Git operations.** Staging hunks, branches, push and pull, stash, and
   other Git-specific workflows outside the shared contract, and backend
-  actions in the hunk popup, such as staging a hunk. Depends on D215.
+  actions in the hunk popup, such as staging a hunk. Depends on D215. 🚧
+  [Plan](d216-git-operations.md).
 
 ### After this plan
 

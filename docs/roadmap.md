@@ -386,7 +386,7 @@ milestones these items belong to.
     Git-specific workflows stay outside the shared provider contract. Build
     them in `@knot/git` as the plan's last milestone. Let backends add their
     own actions to the hunk popup through the contract, starting with
-    staging a hunk.
+    staging a hunk. Plan: [d216-git-operations](plans/d216-git-operations.md).
 
 - **D217 — Blame**
   - Depends on: D145
