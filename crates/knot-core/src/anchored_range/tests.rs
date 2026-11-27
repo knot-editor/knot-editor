@@ -1,5 +1,7 @@
 use super::*;
 use crate::buffer::TextPoint;
+use proptest::collection::vec;
+use proptest::prelude::*;
 
 // Expected byte-offset transform for the randomized correctness oracle.
 fn transform_offset(off: usize, edit: &BufferEdit) -> usize {
@@ -272,29 +274,7 @@ fn consumed_anchored_range_stays_removed_through_undo_redo() {
     );
 }
 
-// ---- Randomized correctness oracle (workload 4 of the plan) ----------
-
-/// xorshift64 — deterministic RNG for the oracle test.
-struct Rng(u64);
-impl Rng {
-    fn new(seed: u64) -> Self {
-        Rng(seed.max(1))
-    }
-    fn next_u64(&mut self) -> u64 {
-        let mut x = self.0;
-        x ^= x << 13;
-        x ^= x >> 7;
-        x ^= x << 17;
-        self.0 = x;
-        x
-    }
-    fn below(&mut self, n: usize) -> usize {
-        if n == 0 {
-            return 0;
-        }
-        (self.next_u64() % n as u64) as usize
-    }
-}
+// ---- Property: ranges follow edits like the offset-transform oracle ----
 
 fn edit_insert(at: usize, len: usize) -> BufferEdit {
     BufferEdit::Insert {
@@ -321,124 +301,102 @@ fn edit_delete(s: usize, e: usize) -> BufferEdit {
     }
 }
 
-#[test]
-fn randomized_correctness_oracle() {
-    // ASCII source text: every offset is a UTF-8 char boundary, so all
-    // random edits are valid.
-    let src = "the quick brown fox jumps over the lazy dog and then some more text here";
-    let mut b = TextBuffer::from_text(src);
-    let mut store = AnchoredRangeStore::new();
-    let mut rng = Rng::new(0x1234_ABCD);
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(128))]
 
-    // Seed anchored ranges at random byte ranges.
-    const N: usize = 200;
-    let mut o_start = Vec::with_capacity(N);
-    let mut o_end = Vec::with_capacity(N);
-    let mut o_collapsed = [false; N];
-    let mut ids = Vec::with_capacity(N);
-    for _ in 0..N {
-        let s = rng.below(b.len() + 1);
-        let e = rng.below(b.len() + 1);
-        let (s, e) = if s <= e { (s, e) } else { (e, s) };
-        let id = store.add(&b, s, e);
-        o_start.push(s);
-        o_end.push(e);
-        ids.push(id);
-    }
+    /// After every insert, delete, or replace, each anchored range resolves
+    /// to what transforming its endpoints through the edit predicts. A range
+    /// a delete swallowed from the inside stays removed.
+    #[test]
+    fn ranges_follow_edits_like_the_oracle(
+        src in "[a-z ]{1,40}",
+        ranges in vec((any::<usize>(), any::<usize>()), 1..=10),
+        edits in vec((0..3u8, any::<usize>(), 1..=4usize), 1..=30),
+    ) {
+        let mut b = TextBuffer::from_text(src.as_str());
+        let mut store = AnchoredRangeStore::new();
+        let mut text = src.clone();
 
-    // Replay a randomized edit stream on both the buffer and the oracle,
-    // asserting store.resolve matches the oracle after every edit.
-    const EDITS: usize = 2000;
-    let mut text = String::from(src);
-    for _ in 0..EDITS {
-        let len = b.len();
-        let at = rng.below(len + 1);
-        let pick = rng.next_u64() % 3;
-        // delete/replace need at least 1 byte to remove; at end-of-buffer
-        // fall back to an insert (append) to avoid out-of-range spans.
-        let pick = if pick != 0 && at >= len { 0 } else { pick };
-        match pick {
-            0 => {
-                let ins = "xy";
-                b.insert(at, ins);
-                text.insert_str(at, ins);
-                let e = edit_insert(at, ins.len());
-                for i in 0..N {
-                    if o_collapsed[i] {
-                        continue;
-                    }
-                    o_start[i] = transform_offset(o_start[i], &e);
-                    o_end[i] = transform_offset(o_end[i], &e);
-                }
-            }
-            1 => {
-                let span = 1 + rng.below(4.min(len - at).max(1));
-                let end = at + span;
-                b.delete(at..end);
-                text.replace_range(at..end, "");
-                let e = edit_delete(at, end);
-                for i in 0..N {
-                    if o_collapsed[i] {
-                        continue;
-                    }
-                    // Only collapse if the delete actually consumed an
-                    // endpoint (a zero-length anchored range untouched by the
-                    // delete stays valid at its point).
-                    let s_in = o_start[i] > at && o_start[i] < end;
-                    let e_in = o_end[i] > at && o_end[i] < end;
-                    o_start[i] = transform_offset(o_start[i], &e);
-                    o_end[i] = transform_offset(o_end[i], &e);
-                    if (s_in || e_in) && o_start[i] >= o_end[i] {
-                        o_collapsed[i] = true;
-                    }
-                }
-            }
-            _ => {
-                // replace (delete then insert) — exercise both rules.
-                let span = 1 + rng.below(4.min(len - at).max(1));
-                let end = at + span;
-                let ins = "zz";
-                b.replace(at..end, ins);
-                text.replace_range(at..end, ins);
-                let d = edit_delete(at, end);
-                let ii = edit_insert(at, ins.len());
-                for i in 0..N {
-                    if o_collapsed[i] {
-                        continue;
-                    }
-                    let s_in = o_start[i] > at && o_start[i] < end;
-                    let e_in = o_end[i] > at && o_end[i] < end;
-                    o_start[i] = transform_offset(o_start[i], &d);
-                    o_end[i] = transform_offset(o_end[i], &d);
-                    if (s_in || e_in) && o_start[i] >= o_end[i] {
-                        o_collapsed[i] = true;
-                        continue;
-                    }
-                    o_start[i] = transform_offset(o_start[i], &ii);
-                    o_end[i] = transform_offset(o_end[i], &ii);
-                }
-            }
+        let mut o_start = Vec::new();
+        let mut o_end = Vec::new();
+        let mut o_collapsed = vec![false; ranges.len()];
+        let mut ids = Vec::new();
+        for &(s, e) in &ranges {
+            let (s, e) = (s % (b.len() + 1), e % (b.len() + 1));
+            let (s, e) = (s.min(e), s.max(e));
+            ids.push(store.add(&b, s, e));
+            o_start.push(s);
+            o_end.push(e);
         }
 
-        store.stabilize(&b);
+        for &(pick, at, span) in &edits {
+            let len = b.len();
+            let at = at % (len + 1);
+            // Delete and replace need a byte to remove; at the end of the
+            // buffer they fall back to an append.
+            let pick = if pick != 0 && at >= len { 0 } else { pick };
+            // The edit as primitives, each with the endpoints it consumes.
+            let mut primitives = Vec::new();
+            match pick {
+                0 => {
+                    b.insert(at, "xy");
+                    text.insert_str(at, "xy");
+                    primitives.push(edit_insert(at, 2));
+                }
+                1 => {
+                    let end = (at + span).min(len);
+                    b.delete(at..end);
+                    text.replace_range(at..end, "");
+                    primitives.push(edit_delete(at, end));
+                }
+                _ => {
+                    let end = (at + span).min(len);
+                    b.replace(at..end, "zz");
+                    text.replace_range(at..end, "zz");
+                    primitives.push(edit_delete(at, end));
+                    primitives.push(edit_insert(at, 2));
+                }
+            }
+            for i in 0..ranges.len() {
+                if o_collapsed[i] {
+                    continue;
+                }
+                for edit in &primitives {
+                    // A delete consumes a range whose endpoint lies strictly
+                    // inside it and leaves it empty; an empty range the
+                    // delete doesn't touch stays valid at its point.
+                    let swallowed = match edit {
+                        BufferEdit::Delete { range, .. } => {
+                            (o_start[i] > range.start && o_start[i] < range.end)
+                                || (o_end[i] > range.start && o_end[i] < range.end)
+                        }
+                        BufferEdit::Insert { .. } => false,
+                    };
+                    o_start[i] = transform_offset(o_start[i], edit);
+                    o_end[i] = transform_offset(o_end[i], edit);
+                    if swallowed && o_start[i] >= o_end[i] {
+                        o_collapsed[i] = true;
+                        break;
+                    }
+                }
+            }
 
-        // Assert every anchored range against the oracle.
-        for i in 0..N {
-            let expected = if o_collapsed[i] {
-                None
-            } else if o_start[i] <= o_end[i] {
-                Some(o_start[i]..o_end[i])
-            } else {
-                Some(o_end[i]..o_start[i])
-            };
-            let got = store.resolve(&b, ids[i]);
-            assert_eq!(
-                got, expected,
-                "ann {i} diverges after edit at={at} pick={pick} (buffer='{}')",
-                text
-            );
+            store.stabilize(&b);
+
+            for i in 0..ranges.len() {
+                let expected = if o_collapsed[i] {
+                    None
+                } else {
+                    Some(o_start[i].min(o_end[i])..o_start[i].max(o_end[i]))
+                };
+                prop_assert_eq!(
+                    store.resolve(&b, ids[i]),
+                    expected,
+                    "range {} diverges after edit at={} pick={} (buffer={:?})",
+                    i, at, pick, text
+                );
+            }
+            prop_assert_eq!(b.read_range(0..b.len()), text.as_str());
         }
-        // Cross-check the buffer text itself stayed faithful.
-        assert_eq!(b.read_range(0..b.len()), text, "buffer text drifted");
     }
 }
