@@ -425,7 +425,12 @@ fn escape_closes_the_focused_popover_else_the_newest(cx: &mut TestAppContext) {
     cx.simulate_keystrokes(fixture.native_window, "escape");
     cx.run_until_parked();
     assert!(fixture.popovers(cx).is_empty());
-    assert_ne!(clipboard_text(cx).as_deref(), Some("esc:shadow"));
+    // The owner's close report is written first, so it cannot overwrite the
+    // binding's mark below.
+    wait_for_api_condition(cx, |cx| {
+        cx.read_from_clipboard().and_then(|item| item.text())
+            == Some("esc:hover:escape:3".to_owned())
+    });
     cx.simulate_keystrokes(fixture.native_window, "escape");
     cx.run_until_parked();
     wait_for_api_condition(cx, |cx| {
