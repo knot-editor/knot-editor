@@ -97,28 +97,12 @@ the Changes view.
 
 ### 1. Staged hunks in the gutter ✅
 
-Implemented; the review gate is pending (`Try: staged hunks …` commands).
-
-Deliverables: `staged` in the baseline answer, Git serving the index text,
-staged marks and color keys, and the popup knowing a hunk's state. Staging a
-file from the Changes view now dims its hunks.
-
-Validation: `extensions/@knot/vcs/test` cases for the staged rule (fully,
-partly, not staged; removals at the boundary and end of file) and refetch;
-a product test in `crates/knot-ext-vcs/tests/vcs/gutter.rs` or `git.rs` that
-stages a file with `git add` and sees the staged color keys.
-
-Review gate: the staged colors in the real app, with `Try:` commands that
-stage and unstage a file.
-
-**Implementation context:** contract in `extensions/@knot/vcs/src/contract.ts`
-and its restatement in `extensions/@knot/git/src/vcs.d.ts`; baseline caching
-and `diff` runs in `extensions/@knot/vcs/src/extension.ts` (the `Follow`
-record, the debounced rediff); marks in `src/gutter.ts` (`colorOf`,
-`contributionsOf`); color keys like `defineColors` in `src/status.ts`; Git's
-baseline read in `extensions/@knot/git/src/baseline.ts` and the `serve` call
-in `src/main.ts`. Update the gutter section of
-`docs/architecture/version-control.md`.
+Done: `baseline` answers `{ text, staged? }`, and staged hunks paint with the
+dimmer `diff.*.staged` colors ([version control](../architecture/version-control.md#gutter),
+[Git baseline](../decisions/bundled-packages.md#git-baseline)). A Changes-view
+diff whose file leaves its group now moves to the group that lists it. Showing
+staged hunks in the diff view's Working Copy sides is left to checkpoint 2,
+which needs per-hunk staged state there anyway.
 
 ### 2. Hunk actions and Stage/Unstage Hunk
 
