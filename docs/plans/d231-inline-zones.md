@@ -70,7 +70,7 @@ painting both independently.
 
 ## Checkpoints
 
-### 1. Zones in the wrap map
+### 1. Zones in the wrap map ✅
 
 Deliverable: zone entries in `WrapMap` reserving N rows above a line or below
 the last one, with their row count settable, following edits, hiding with a
@@ -88,15 +88,12 @@ place, close reasons, owner teardown).
 Review gate: row semantics match block rows; no change to existing block-row
 behavior.
 
-**Implementation context:** `crates/knot-model/src/editor/wrap.rs`
-(`Block`, `BlockEntry`, `block_rows`, `block_row`, `follow_blocks`,
-`normalized`, `rebuild_rows`) and `crates/knot-model/src/editor.rs`
-(`set_blocks`, `top_offset`); mirror
-`crates/knot-model/src/editor/tests/blocks.rs`. `BlockEntry` becomes an enum
-of block and zone entries; `normalized` merges blocks on a line but never
-across kinds, sorts zones before blocks, and lets only zones keep
-`line == line_count`. Add a zone variant to `block_row`'s result (or a sibling
-`zone_row`). `EditorZones` lives beside `crates/knot-model/src/editor/popovers.rs`.
+**Done:** zones are a separate sorted list in `WrapMap` (`Zone`, `zone_row`,
+`zone_frames`), not a `BlockEntry` variant, so block normalization is
+untouched. `EditorZones` is `crates/knot-model/src/editor/zones.rs`;
+`EditorState` offers `open_zone`, `set_zone_rows`, `close_zone`,
+`dismiss_zone`, and `take_closed_zones`. A new zone has no rows until the view
+measures it (checkpoint 2). Only Escape reports a closure to the owner.
 
 ### 2. Measuring and painting zones
 

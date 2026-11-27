@@ -28,6 +28,7 @@ mod rows;
 mod save_hygiene;
 mod text;
 mod wrap;
+pub mod zones;
 
 pub use decorations::ViewDecoration;
 pub use input::unit_range;
@@ -308,6 +309,9 @@ pub struct EditorState {
     /// that has the editor's focus. Presentation state, never recorded.
     bars: bars::EditorBars,
     popovers: popovers::EditorPopovers,
+    /// Zones in rows reserved between the lines. Presentation state, never
+    /// recorded.
+    zones: zones::EditorZones,
     /// The input recordings in progress. Never part of the buffer.
     recordings: recording::Recordings,
 }
@@ -365,6 +369,7 @@ impl EditorState {
             caret_shapes: Vec::new(),
             bars: bars::EditorBars::default(),
             popovers: popovers::EditorPopovers::default(),
+            zones: zones::EditorZones::default(),
             recordings: recording::Recordings::default(),
         }
     }
@@ -399,6 +404,7 @@ impl EditorState {
     pub fn release(&mut self, buffer: &mut BufferModel) {
         buffer.remove_view_position(self.position_range);
         self.popovers.release(buffer);
+        self.zones.release();
         let pairs = std::mem::take(&mut self.auto_closed);
         self.release_auto_closed(pairs, buffer);
         self.release_folds(buffer);
@@ -710,6 +716,7 @@ impl EditorState {
         self.caret_shapes.retain(|(key, _)| *key != owner);
         self.bars.remove_owner(owner);
         self.popovers.remove_owner(owner, buffer);
+        self.remove_zones(owner, buffer);
         self.remove_decorations(owner, buffer);
         self.project_contributions(buffer);
     }
@@ -1038,11 +1045,94 @@ impl EditorState {
     /// Show read-only `blocks` above their lines, keeping the top row's text
     /// at the top. They follow their lines through edits.
     pub fn set_blocks(&mut self, blocks: Vec<Block>, model: &BufferModel) {
+        self.change_rows(model, |wrap| wrap.set_blocks(blocks));
+    }
+
+    /// Run `change` on the wrap map, which reports whether the rows changed,
+    /// keeping the top row's text at the top.
+    fn change_rows(
+        &mut self,
+        model: &BufferModel,
+        change: impl FnOnce(&mut wrap::WrapMap) -> bool,
+    ) {
         self.sync_wrap(model);
         let top = self.top_offset(model);
-        if self.wrap.set_blocks(blocks) {
+        if change(&mut self.wrap) {
             let (line, col) = flat_byte_to_position(model, top);
             self.scroll_top = self.wrap.row_of(line, col) as f32;
+        }
+    }
+
+    /// The zones in rows between the lines.
+    pub fn zones(&self) -> &zones::EditorZones {
+        &self.zones
+    }
+
+    /// Open `owner`'s zone `id`, or move it in place; a new zone has no rows
+    /// until [`Self::set_zone_rows`] gives it some. Returns its key.
+    pub fn open_zone(
+        &mut self,
+        owner: knot_protocol::ExtensionKey,
+        id: &str,
+        spec: zones::ZoneSpec,
+        model: &BufferModel,
+    ) -> u64 {
+        let key = self.zones.open(owner, id, spec);
+        let rows = self
+            .wrap
+            .zones()
+            .iter()
+            .find(|zone| zone.key == key)
+            .map_or(0, |zone| zone.rows);
+        self.change_rows(model, |wrap| wrap.set_zone(key, spec.line, rows));
+        key
+    }
+
+    /// Reserve `rows` rows for zone `key`, wherever edits have moved it.
+    pub fn set_zone_rows(&mut self, key: u64, rows: usize, model: &BufferModel) {
+        self.change_rows(model, |wrap| {
+            match wrap.zones().iter().find(|zone| zone.key == key) {
+                Some(zone) => {
+                    let line = zone.line;
+                    wrap.set_zone(key, line, rows)
+                }
+                None => false,
+            }
+        });
+    }
+
+    /// Close `owner`'s zone `id`; false when it has none.
+    pub fn close_zone(
+        &mut self,
+        owner: knot_protocol::ExtensionKey,
+        id: &str,
+        model: &BufferModel,
+    ) -> bool {
+        let Some(key) = self.zones.close(owner, id) else {
+            return false;
+        };
+        self.change_rows(model, |wrap| wrap.remove_zone(key));
+        true
+    }
+
+    /// Close zone `key` because the user dismissed it, for its owner to hear
+    /// of; false when there is none.
+    pub fn dismiss_zone(&mut self, key: u64, model: &BufferModel) -> bool {
+        if !self.zones.dismiss(key) {
+            return false;
+        }
+        self.change_rows(model, |wrap| wrap.remove_zone(key));
+        true
+    }
+
+    /// The zones Knot closed since this was last called.
+    pub fn take_closed_zones(&mut self) -> Vec<zones::ClosedZone> {
+        self.zones.take_closed()
+    }
+
+    fn remove_zones(&mut self, owner: knot_protocol::ExtensionKey, model: &BufferModel) {
+        for key in self.zones.remove_owner(owner) {
+            self.change_rows(model, |wrap| wrap.remove_zone(key));
         }
     }
 

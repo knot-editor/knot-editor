@@ -13,6 +13,7 @@ mod indentation;
 mod lines;
 mod paste;
 mod save_hygiene;
+mod zones;
 
 type Position = (usize, usize);
 

@@ -198,13 +198,33 @@ pub struct BlockRow<'a> {
     pub indent: usize,
 }
 
+/// Rows reserved for content the view paints itself, above buffer line `line`
+/// or, with `line` equal to the line count, below the last line. Opaque to the
+/// map: `key` names the content.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Zone {
+    pub key: u64,
+    pub line: usize,
+    pub rows: usize,
+}
+
+/// One row of a zone, as [`WrapMap::zone_row`] reports it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ZoneRow {
+    pub key: u64,
+    /// The row's index within the zone.
+    pub index: usize,
+}
+
 /// The rows of every line of one view's buffer. Lines a fold hides have no
-/// rows. Without a width, hidden lines, or blocks, each line is one row and
-/// nothing is stored per line.
+/// rows. Without a width, hidden lines, blocks, or zones, each line is one row
+/// and nothing is stored per line.
 ///
-/// A line's rows are its block's rows, if it has one, then the rows of its
-/// text. Block rows belong to no line: [`Self::position`] reports them as the
-/// first row of the line below, and [`Self::first_row`] and [`Self::rows`]
+/// A line's rows are its zones' rows, then its block's rows, if it has one,
+/// then the rows of its text. Zones at the line count come after the last
+/// line's text. Zone and block rows belong to no line: [`Self::position`]
+/// reports them as the first row of the line below (a zone below the last
+/// line as its last text row), and [`Self::first_row`] and [`Self::rows`]
 /// cover only a line's text.
 pub struct WrapMap {
     width: Option<WrapWidth>,
@@ -218,6 +238,8 @@ pub struct WrapMap {
     hidden: Vec<Range<usize>>,
     /// The blocks above lines, ascending by line, at most one per line.
     blocks: Vec<BlockEntry>,
+    /// The zones, ascending by line, in the order they were set on a line.
+    zones: Vec<Zone>,
 }
 
 impl WrapMap {
@@ -229,12 +251,16 @@ impl WrapMap {
             first_rows: Vec::new(),
             hidden: Vec::new(),
             blocks: Vec::new(),
+            zones: Vec::new(),
         }
     }
 
     /// Whether `first_rows` is stored, because rows are not the lines.
     fn mapped(&self) -> bool {
-        self.width.is_some() || !self.hidden.is_empty() || !self.blocks.is_empty()
+        self.width.is_some()
+            || !self.hidden.is_empty()
+            || !self.blocks.is_empty()
+            || !self.zones.is_empty()
     }
 
     fn entry(&self, line: usize) -> Option<&BlockEntry> {
@@ -298,7 +324,7 @@ impl WrapMap {
     /// `old_count` lines to `line_count`: a block above a replaced line stays
     /// at the start of the replacement.
     fn follow_blocks(&mut self, old_count: usize, change: Option<LineChange>) {
-        if self.blocks.is_empty() {
+        if self.blocks.is_empty() && self.zones.is_empty() {
             return;
         }
         let line_count = self.line_count;
@@ -308,17 +334,149 @@ impl WrapMap {
                 && old_count - change.old_end == line_count - change.new_end
         });
         if let Some(change) = change {
-            for entry in &mut self.blocks {
-                let line = &mut entry.block.line;
+            let follow = |line: &mut usize| {
                 if *line >= change.old_end {
                     *line = *line + change.new_end - change.old_end;
                 } else if *line > change.first {
                     *line = change.first;
                 }
+            };
+            for entry in &mut self.blocks {
+                follow(&mut entry.block.line);
+            }
+            for zone in &mut self.zones {
+                follow(&mut zone.line);
             }
         }
         let entries = std::mem::take(&mut self.blocks);
         self.blocks = self.normalized(entries);
+        for zone in &mut self.zones {
+            zone.line = zone.line.min(line_count);
+        }
+        // Clamping can only merge lines at the end, so the order holds.
+    }
+
+    /// The indexes in `zones` of the zones on `line`.
+    fn zones_on(&self, line: usize) -> Range<usize> {
+        let start = self.zones.partition_point(|zone| zone.line < line);
+        let end = self.zones.partition_point(|zone| zone.line <= line);
+        start..end
+    }
+
+    /// Whether the zones on `line` show: a zone below the last line goes with
+    /// that line.
+    fn zones_visible(&self, line: usize) -> bool {
+        match line.checked_sub(self.line_count) {
+            None => !self.is_hidden(line),
+            Some(_) => self.line_count == 0 || !self.is_hidden(self.line_count - 1),
+        }
+    }
+
+    /// The rows of the zones above `line`, or below the last line for the line
+    /// count; none while hidden.
+    fn zone_rows(&self, line: usize) -> usize {
+        if self.zones.is_empty() || !self.zones_visible(line) {
+            return 0;
+        }
+        self.zones[self.zones_on(line)]
+            .iter()
+            .map(|zone| zone.rows)
+            .sum()
+    }
+
+    /// The first row after the last line's text, where zones below it begin.
+    fn text_end(&self) -> usize {
+        self.first_rows
+            .get(self.line_count)
+            .copied()
+            .unwrap_or(self.line_count)
+    }
+
+    /// The zones, ascending by line.
+    pub fn zones(&self) -> &[Zone] {
+        &self.zones
+    }
+
+    /// Reserve `rows` rows for zone `key` above `line` (the line count means
+    /// below the last line; further lines clamp to it). A new zone follows the
+    /// others on its line; one that stays on its line keeps its place.
+    /// Returns whether anything changed.
+    pub fn set_zone(&mut self, key: u64, line: usize, rows: usize) -> bool {
+        let line = line.min(self.line_count);
+        let zone = Zone { key, line, rows };
+        match self.zones.iter().position(|zone| zone.key == key) {
+            Some(at) if self.zones[at] == zone => return false,
+            Some(at) if self.zones[at].line == line => self.zones[at] = zone,
+            found => {
+                if let Some(at) = found {
+                    self.zones.remove(at);
+                }
+                let at = self.zones.partition_point(|zone| zone.line <= line);
+                self.zones.insert(at, zone);
+            }
+        }
+        self.rebuild_rows(0);
+        true
+    }
+
+    /// Drop zone `key`; false when there is none.
+    pub fn remove_zone(&mut self, key: u64) -> bool {
+        let Some(at) = self.zones.iter().position(|zone| zone.key == key) else {
+            return false;
+        };
+        self.zones.remove(at);
+        self.rebuild_rows(0);
+        true
+    }
+
+    /// The rows each shown zone covers, ascending; a zone with no rows or
+    /// under a fold is left out.
+    pub fn zone_frames(&self) -> impl Iterator<Item = (u64, Range<usize>)> + '_ {
+        let mut start = 0;
+        let mut line = usize::MAX;
+        self.zones.iter().filter_map(move |zone| {
+            if zone.line != line {
+                line = zone.line;
+                start = if line >= self.line_count {
+                    self.text_end()
+                } else {
+                    self.group_start(line)
+                };
+            }
+            let range = start..start + zone.rows;
+            if self.zones_visible(zone.line) {
+                start += zone.rows;
+                (zone.rows > 0).then_some((zone.key, range))
+            } else {
+                None
+            }
+        })
+    }
+
+    /// The part of a zone that `row` shows, or `None` for another row.
+    pub fn zone_row(&self, row: usize) -> Option<ZoneRow> {
+        if self.zones.is_empty() || row >= self.row_count() {
+            return None;
+        }
+        let (line, mut index) = if row >= self.text_end() {
+            (self.line_count, row - self.text_end())
+        } else {
+            let (line, _) = self.position(row);
+            (line, row.checked_sub(self.group_start(line))?)
+        };
+        if index >= self.zone_rows(line) {
+            return None;
+        }
+        for zone in &self.zones[self.zones_on(line)] {
+            if index < zone.rows {
+                return Some(ZoneRow {
+                    key: zone.key,
+                    index,
+                });
+            }
+            index -= zone.rows;
+        }
+        None
     }
 
     /// Whether `line` has no rows.
@@ -351,7 +509,7 @@ impl WrapMap {
             return;
         }
         // Hidden lines and blocks are not tracked by the lines that changed.
-        let first = if self.hidden.is_empty() && self.blocks.is_empty() {
+        let first = if self.hidden.is_empty() && self.blocks.is_empty() && self.zones.is_empty() {
             first
         } else {
             0
@@ -361,7 +519,10 @@ impl WrapMap {
             let rows = if self.is_hidden(line) {
                 0
             } else {
-                self.block_rows(line) + self.lines.get(line).map_or(0, |wrap| wrap.breaks.len()) + 1
+                self.zone_rows(line)
+                    + self.block_rows(line)
+                    + self.lines.get(line).map_or(0, |wrap| wrap.breaks.len())
+                    + 1
             };
             self.first_rows[line + 1] = self.first_rows[line] + rows;
         }
@@ -372,20 +533,23 @@ impl WrapMap {
     }
 
     pub fn row_count(&self) -> usize {
-        self.first_rows.last().copied().unwrap_or(self.line_count)
+        match self.first_rows.last() {
+            Some(end) => end + self.zone_rows(self.line_count),
+            None => self.line_count,
+        }
     }
 
-    /// The first row of `line`'s text, below its block.
+    /// The first row of `line`'s text, below its zones and block.
     pub fn first_row(&self, line: usize) -> usize {
         if self.mapped() {
             let line = line.min(self.line_count);
-            self.first_rows[line] + self.block_rows(line)
+            self.first_rows[line] + self.zone_rows(line) + self.block_rows(line)
         } else {
             line
         }
     }
 
-    /// Where `line`'s rows begin, its block's first.
+    /// Where `line`'s rows begin, its zones' first.
     fn group_start(&self, line: usize) -> usize {
         if self.mapped() {
             self.first_rows[line.min(self.line_count)]
@@ -400,23 +564,26 @@ impl WrapMap {
     }
 
     /// The line `row` belongs to and its index among that line's text rows.
-    /// A block row reports the first row of the line below it.
+    /// A block or zone row reports the first row of the line below it.
     pub fn position(&self, row: usize) -> (usize, usize) {
         let row = row.min(self.row_count().saturating_sub(1));
         if !self.mapped() {
             return (row, 0);
         }
+        let row = row.min(self.text_end().saturating_sub(1));
         let line = self.first_rows[..self.line_count].partition_point(|first| *first <= row) - 1;
         (line, row.saturating_sub(self.first_row(line)))
     }
 
     /// The part of a block that `row` shows, or `None` for a row of text.
     pub fn block_row(&self, row: usize) -> Option<BlockRow<'_>> {
-        if self.blocks.is_empty() || row >= self.row_count() {
+        if self.blocks.is_empty() || row >= self.text_end() {
             return None;
         }
         let (line, _) = self.position(row);
-        let mut index = row.checked_sub(self.group_start(line))?;
+        let mut index = row
+            .checked_sub(self.group_start(line))?
+            .checked_sub(self.zone_rows(line))?;
         let entry = self.entry(line).filter(|_| index < self.block_rows(line))?;
         for (block_line, wrap) in entry.block.lines.iter().zip(&entry.wraps) {
             let rows = wrap.breaks.len() + 1;
@@ -443,12 +610,16 @@ impl WrapMap {
         None
     }
 
-    /// The row of text nearest `row`: `row` itself unless it shows a block,
-    /// then the first row of the line below it, or with `forward` false the
-    /// last row of the line above, falling back to the first when none.
+    /// The row of text nearest `row`: `row` itself unless it shows a block or
+    /// zone, then the first row of the line below it, or with `forward` false
+    /// the last row of the line above, falling back to the first when none. A
+    /// row below the last line's text is that text's last row.
     pub fn text_row(&self, row: usize, forward: bool) -> usize {
         let row = row.min(self.row_count().saturating_sub(1));
-        if self.block_row(row).is_none() {
+        if self.mapped() && row >= self.text_end() {
+            return self.text_end().saturating_sub(1);
+        }
+        if self.block_row(row).is_none() && self.zone_row(row).is_none() {
             return row;
         }
         let (line, _) = self.position(row);
@@ -816,6 +987,151 @@ mod tests {
         // An edit that is not described clamps them to the text.
         map.edit(1, None, |line| text[line].into());
         assert_eq!((at(&map), map.row_count()), (vec![0], 3));
+    }
+
+    fn frames(map: &WrapMap) -> Vec<(u64, Range<usize>)> {
+        map.zone_frames().collect()
+    }
+
+    fn zone_lines(map: &WrapMap) -> Vec<(u64, usize)> {
+        map.zones()
+            .iter()
+            .map(|zone| (zone.key, zone.line))
+            .collect()
+    }
+
+    #[test]
+    fn zone_rows_sit_above_their_line_or_below_the_last_and_belong_to_none() {
+        let mut map = WrapMap::new(4);
+        assert!(map.set_zone(1, 2, 2));
+        assert!(map.set_zone(2, 4, 1));
+        assert!(!map.set_zone(2, 4, 1));
+        // l0, l1, z, z, l2, l3, z
+        assert_eq!(map.row_count(), 7);
+        assert_eq!((map.first_row(2), map.rows(2)), (4, 4..5));
+        assert_eq!(map.rows(3), 5..6);
+        assert_eq!(frames(&map), [(1, 2..4), (2, 6..7)]);
+        let zone_at = |row| map.zone_row(row).map(|zone| (zone.key, zone.index));
+        assert_eq!(
+            (0..8).map(zone_at).collect::<Vec<_>>(),
+            [
+                None,
+                None,
+                Some((1, 0)),
+                Some((1, 1)),
+                None,
+                None,
+                Some((2, 0)),
+                None
+            ]
+        );
+        // A zone row reports the line below; one past the end, the last text row.
+        assert_eq!([map.position(2), map.position(3)], [(2, 0), (2, 0)]);
+        assert_eq!(map.position(6), (3, 0));
+        // A step onto a zone row goes on in its direction, or back at the end.
+        assert_eq!(map.text_row(2, true), 4);
+        assert_eq!(map.text_row(3, false), 1);
+        assert_eq!(map.text_row(6, true), 5);
+        assert_eq!(map.text_row(6, false), 5);
+        assert_eq!(map.text_row(4, true), 4);
+        // Rows resize in place and zones drop by key.
+        assert!(map.set_zone(1, 2, 3));
+        assert_eq!(map.row_count(), 8);
+        assert!(map.remove_zone(1));
+        assert!(!map.remove_zone(1));
+        assert_eq!((map.row_count(), frames(&map)), (5, vec![(2, 4..5)]));
+        // Lines past the count clamp to the end.
+        assert!(map.set_zone(3, 9, 0));
+        assert_eq!(zone_lines(&map), [(2, 4), (3, 4)]);
+        // A zone without rows has no frame.
+        assert_eq!(frames(&map), [(2, 4..5)]);
+    }
+
+    #[test]
+    fn a_lines_rows_are_its_zones_then_its_block_then_its_text() {
+        let mut map = WrapMap::new(4);
+        map.set_blocks(vec![block(2, &["x"])]);
+        map.set_zone(1, 2, 2);
+        map.set_zone(2, 2, 1);
+        map.set_zone(3, 0, 1);
+        // z, l0, l1, z1, z1, z2, x, l2, l3
+        assert_eq!(map.row_count(), 9);
+        assert_eq!(frames(&map), [(3, 0..1), (1, 3..5), (2, 5..6)]);
+        assert_eq!(map.first_row(2), 7);
+        assert!(map.block_row(6).is_some());
+        assert!(
+            (0..9)
+                .filter(|row| *row != 6)
+                .all(|row| map.block_row(row).is_none())
+        );
+        assert_eq!(map.zone_row(5).map(|zone| zone.key), Some(2));
+        assert!(map.zone_row(6).is_none());
+        // Moving a zone to another line puts it after that line's zones.
+        map.set_zone(3, 2, 1);
+        assert_eq!(zone_lines(&map), [(1, 2), (2, 2), (3, 2)]);
+        // Staying on its line keeps its place.
+        map.set_zone(1, 2, 4);
+        assert_eq!(zone_lines(&map), [(1, 2), (2, 2), (3, 2)]);
+    }
+
+    #[test]
+    #[allow(clippy::single_range_in_vec_init)]
+    fn zones_hide_with_their_line_and_ignore_wrapping() {
+        let text = ["aaa bbb ccc ddd", "b", "c", "d"];
+        let mut map = WrapMap::new(4);
+        map.set_zone(1, 1, 2);
+        map.set_zone(2, 4, 1);
+        let wrap = WrapWidth {
+            columns: 7,
+            tab_size: 4,
+        };
+        map.set_width(Some(wrap), 4, |line| text[line].into());
+        // The first line wraps into two rows.
+        assert_eq!(frames(&map), [(1, 2..4), (2, 7..8)]);
+        // A fold hides the zones above its lines, and the end zone with the
+        // last line.
+        map.set_hidden(vec![1..2]);
+        assert_eq!(frames(&map), [(2, 4..5)]);
+        map.set_hidden(vec![3..4]);
+        assert_eq!(frames(&map), [(1, 2..4)]);
+        assert_eq!(map.row_count(), 6);
+        assert!(map.zone_row(5).is_none());
+        map.set_hidden(Vec::new());
+        map.set_width(None, 4, |line| text[line].into());
+        assert_eq!(frames(&map), [(1, 1..3), (2, 6..7)]);
+    }
+
+    #[test]
+    fn zones_follow_their_lines_through_edits() {
+        let text = ["a", "b", "c", "d", "e"];
+        let change = |first, old_end, new_end| {
+            Some(LineChange {
+                first,
+                old_end,
+                new_end,
+            })
+        };
+        let mut map = WrapMap::new(5);
+        map.set_zone(1, 1, 1);
+        map.set_zone(2, 3, 1);
+        map.set_zone(3, 5, 1);
+        // A line inserted above shifts all, the end zone too.
+        map.edit(6, change(0, 1, 2), |line| text[line.min(4)].into());
+        assert_eq!(zone_lines(&map), [(1, 2), (2, 4), (3, 6)]);
+        // Lines inserted at the end keep the end zone below them.
+        map.edit(8, change(6, 6, 8), |line| text[line.min(4)].into());
+        assert_eq!(zone_lines(&map), [(1, 2), (2, 4), (3, 8)]);
+        // Deleting a zone's line moves it to the start of the edit.
+        map.edit(5, change(1, 4, 1), |line| text[line.min(4)].into());
+        assert_eq!(zone_lines(&map), [(1, 1), (2, 1), (3, 5)]);
+        assert_eq!(map.row_count(), 8);
+        // Deleting the last lines keeps the end zone at the end.
+        map.edit(3, change(2, 4, 2), |line| text[line.min(4)].into());
+        assert_eq!(zone_lines(&map), [(1, 1), (2, 1), (3, 3)]);
+        // An edit that is not described clamps them to the text.
+        map.edit(1, None, |line| text[line].into());
+        assert_eq!(zone_lines(&map), [(1, 1), (2, 1), (3, 1)]);
+        assert_eq!(map.row_count(), 4);
     }
 
     #[test]
