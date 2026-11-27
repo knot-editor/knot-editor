@@ -5,7 +5,7 @@
 //! closes when the instance is disposed, its kind is unregistered, or the
 //! lifecycle ends.
 
-use crate::app::editor::PopoverContentSpec;
+use crate::app::editor::{PopoverContentSpec, ZoneContentSpec};
 use gpui::{App, Context};
 use knot_protocol::{
     BufferHandle, DocumentDestination, ExtensionKey, PresentationTarget, ViewContentKind,
@@ -24,6 +24,7 @@ use crate::app::view_layout::{
     ToolbarButton,
 };
 use knot_model::editor::popovers::{PopoverSpec, PopoverWidth};
+use knot_model::editor::zones::ZoneSpec;
 
 /// What `openComposite` opens: an instance of a registered kind.
 #[derive(Clone, Debug, PartialEq)]
@@ -313,6 +314,15 @@ pub(crate) struct PopoverOptions {
     pub toolbar: Vec<ToolbarButton>,
 }
 
+/// What `openZone` sets besides its line and layout.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct ZoneOptions {
+    #[serde(default)]
+    pub focus: bool,
+    pub toolbar: Vec<ToolbarButton>,
+}
+
 pub(super) struct OwnedComposite {
     kind: String,
     target: PresentationTarget,
@@ -471,6 +481,26 @@ impl ProductExtensionHost {
         }
         Ok(PopoverContentSpec {
             spec,
+            toolbar: options.toolbar,
+            layout: self.composite_spec(owner, layout, cx)?,
+        })
+    }
+
+    /// What a zone above line `line` shows: the toolbar and layout, whose
+    /// buffers, documents, and views must be `owner`'s.
+    pub(crate) fn zone_content(
+        &self,
+        owner: ExtensionKey,
+        line: u32,
+        options: ZoneOptions,
+        layout: LayoutWire,
+        cx: &App,
+    ) -> Result<ZoneContentSpec, OpenError> {
+        Ok(ZoneContentSpec {
+            spec: ZoneSpec {
+                line: line as usize,
+                focus: options.focus,
+            },
             toolbar: options.toolbar,
             layout: self.composite_spec(owner, layout, cx)?,
         })

@@ -20,6 +20,7 @@ mod zones;
 pub(crate) use bars::BarFieldEdited;
 pub(crate) use popovers::{PopoverClosed, PopoverContentSpec};
 pub use view::EditorView;
+pub(crate) use zones::{ZoneClosed, ZoneContentSpec};
 
 use std::{
     cell::RefCell,

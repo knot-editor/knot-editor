@@ -14,6 +14,7 @@ mod editor_api;
 mod editor_bars;
 mod editor_popovers;
 mod editor_tabs;
+mod editor_zones;
 mod entitlements;
 mod extension_api;
 mod extension_restart;

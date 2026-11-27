@@ -59,6 +59,11 @@ type FakeTab = {
   /** Popover close listeners of the long-lived handles bound to this tab,
    * run once per `dismissPopover`. */
   popoverListeners: Set<(close: Knot.EditorPopoverClose) => void | Promise<void>>;
+  /** The open zones, in the order they opened. */
+  zones: { id: string; line: number }[];
+  /** Zone close listeners of the long-lived handles bound to this tab, run
+   * once per `dismissZone`. */
+  zoneListeners: Set<(close: Knot.EditorZoneClose) => void | Promise<void>>;
 };
 
 /** An open bar as the fake keeps it, with each field's text. */
@@ -1024,6 +1029,8 @@ export function present(target: Knot.WindowTarget, id: Knot.DocumentId) {
     barFocus: null,
     barListeners: new Set(),
     popoverListeners: new Set(),
+    zones: [],
+    zoneListeners: new Set(),
     reveal: null,
   });
   window.selected = window.tabs.length - 1;
@@ -1624,6 +1631,17 @@ export async function dismissPopover(
   for (const listener of [...tab.popoverListeners]) await listener(close);
 }
 
+/** Closes the caller's zone `id` on the window's selected editor as the user's
+ * Escape would and runs the close listeners; a zone that is not open does
+ * nothing. */
+export async function dismissZone(id: string, window: Knot.WindowTarget = state.windows[0]!.target) {
+  const tab = selectedTab(window);
+  if (!tab.zones.some((zone) => zone.id === id)) return;
+  tab.zones = tab.zones.filter((zone) => zone.id !== id);
+  const close = { zone: id };
+  for (const listener of [...tab.zoneListeners]) await listener(close);
+}
+
 /** Clicks a toggle or button of a bar of the window's selected editor as the
  * user would: runs its command in that editor, as `run` does. */
 export async function clickBarControl(
@@ -1913,6 +1931,21 @@ function editor(tab: FakeTab): Knot.Editor {
       const tab = live();
       tab.popovers = tab.popovers.filter((popover) => popover.id !== id);
     },
+    openZone: async (id, zone) => {
+      const tab = live();
+      if (typeof id !== "string" || id === "") throw new TypeError("zone id must be a non-empty string");
+      if (!Number.isSafeInteger(zone.line) || zone.line < 0) {
+        throw new TypeError("a zone line must be a non-negative safe integer");
+      }
+      const next = { id, line: zone.line };
+      const index = tab.zones.findIndex((candidate) => candidate.id === id);
+      if (index >= 0) tab.zones[index] = next;
+      else tab.zones.push(next);
+    },
+    closeZone: async (id) => {
+      const tab = live();
+      tab.zones = tab.zones.filter((zone) => zone.id !== id);
+    },
     focusBarField: async (id, field, options) => {
       const tab = live();
       const target = tab.bars.find((bar) => bar.id === id)?.fields.find((f) => f.id === field);
@@ -1973,6 +2006,7 @@ function editorHandle(target: Knot.ViewNodeTarget): Knot.EditorHandle {
   const selectionListeners = new Set<(selection: Knot.EditorSelectionWithLines) => void | Promise<void>>();
   const barListeners = new Set<(edit: Knot.EditorBarEdit) => void | Promise<void>>();
   const popoverListeners = new Set<(close: Knot.EditorPopoverClose) => void | Promise<void>>();
+  const zoneListeners = new Set<(close: Knot.EditorZoneClose) => void | Promise<void>>();
   let disposed = false;
   const live = editor(tab);
   const guard =
@@ -2005,6 +2039,8 @@ function editorHandle(target: Knot.ViewNodeTarget): Knot.EditorHandle {
     closeBar: guard(live.closeBar),
     openPopover: guard(live.openPopover),
     closePopover: guard(live.closePopover),
+    openZone: guard(live.openZone),
+    closeZone: guard(live.closeZone),
     focusBarField: guard(live.focusBarField),
     barFields: guard(live.barFields),
     viewState: guard(live.viewState),
@@ -2055,6 +2091,17 @@ function editorHandle(target: Knot.ViewNodeTarget): Knot.EditorHandle {
         }),
       };
     },
+    async onDidCloseZone(listener) {
+      if (disposed) throw hostError("InvalidTarget");
+      tab.zoneListeners.add(listener);
+      zoneListeners.add(listener);
+      return {
+        ...disposers(async () => {
+          tab.zoneListeners.delete(listener);
+          zoneListeners.delete(listener);
+        }),
+      };
+    },
     ...disposers(async () => {
       disposed = true;
       for (const listener of listeners) tab.closeListeners.delete(listener);
@@ -2062,6 +2109,8 @@ function editorHandle(target: Knot.ViewNodeTarget): Knot.EditorHandle {
       for (const listener of barListeners) tab.barListeners.delete(listener);
       for (const listener of popoverListeners) tab.popoverListeners.delete(listener);
       popoverListeners.clear();
+      for (const listener of zoneListeners) tab.zoneListeners.delete(listener);
+      zoneListeners.clear();
       listeners.clear();
       selectionListeners.clear();
       barListeners.clear();

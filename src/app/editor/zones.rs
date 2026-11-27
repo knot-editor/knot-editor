@@ -19,7 +19,6 @@ use crate::app::view_tree::{ViewKind, ViewNode};
 use crate::app::workbench::ExtensionView;
 
 /// Knot closed a zone `owner` opened because the user dismissed it.
-#[allow(dead_code)]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ZoneClosed {
     pub owner: ExtensionKey,
@@ -28,7 +27,6 @@ pub(crate) struct ZoneClosed {
 
 impl EventEmitter<ZoneClosed> for Editor {}
 
-#[allow(dead_code)]
 /// What `open_zone` sets: where the zone sits, and what it shows.
 pub(crate) struct ZoneContentSpec {
     pub spec: ZoneSpec,
@@ -59,7 +57,6 @@ impl Editor {
     /// place. An update keeps the views of keyed members. Returns the
     /// contributed views the content added, which the host binds. The zone
     /// has no rows until the view next measures it.
-    #[allow(dead_code)]
     pub(crate) fn open_zone(
         &mut self,
         owner: ExtensionKey,
@@ -123,7 +120,6 @@ impl Editor {
     }
 
     /// Close `owner`'s zone `id`; false when it has none.
-    #[allow(dead_code)]
     pub(crate) fn close_zone(
         &mut self,
         owner: ExtensionKey,

@@ -540,6 +540,40 @@ the editor closing, and unloading the package report nothing. To keep a popover
 across an edit, open it again with the same ID. The precise contracts are in
 `knot.d.ts`.
 
+## Show a zone
+
+A zone shows the same content as a popover, a toolbar over a layout of views,
+but in rows reserved between the editor's lines, so it pushes the text apart
+instead of covering it: the deleted lines of a hunk, a peeked definition. Open
+it on an editor handle, above a line or, with the line count, below the last
+one; opening the same ID again updates it in place and keeps the views of keyed
+members.
+
+```js
+const editor = await workbench.editor(target);
+await editor.openZone("hunk", {
+  line: 10,
+  focus: true,
+  toolbar: [{ label: "Revert", icon: "vcs.revert", command: "vcs.revert-hunk" }],
+  layout: { type: "column", children: [{ type: "editor", buffer: baseline, maxLines: 8 }] },
+});
+await editor.onDidCloseZone(({ zone }) => forget(zone));
+```
+
+The zone spans the text area's width, stays put when the text scrolls
+sideways, and is as tall as its content (sized as a popover's) rounded up to
+whole line heights and at most the viewport's, so members scroll themselves
+beyond that. A wheel over it scrolls the member under the pointer when that can
+scroll, else the editor. The zone holds no caret: the editor's caret steps over
+its rows. Like a popover's, its views are children of the editor in the view
+tree, and it takes focus only with `focus: true`.
+
+An edit does not close a zone; it follows its line, and one whose line an edit
+deletes moves to the start of the edit. A click elsewhere does not close it
+either. Escape closes the zone with focus, and `onDidCloseZone` reports its ID;
+`closeZone`, the editor closing, and unloading the package report nothing. The
+precise contracts are in `knot.d.ts`.
+
 ## Show status items
 
 Every window shows a status bar below the workbench. A package fills

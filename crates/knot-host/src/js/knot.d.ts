@@ -108,11 +108,11 @@ declare module "knot" {
   /** One view of a tab's view tree. */
   export interface ViewNodeInfo {
     readonly target: ViewNodeTarget;
-    /** `editor`, `terminal`, `tree`, `text`, `composite`, or `popover`. */
-    readonly kind: "editor" | "terminal" | "tree" | "text" | "composite" | "popover";
+    /** `editor`, `terminal`, `tree`, `text`, `composite`, `popover`, or `zone`. */
+    readonly kind: "editor" | "terminal" | "tree" | "text" | "composite" | "popover" | "zone";
     /** The views this one contains, in layout order; empty for a leaf. An
-     * editor's children are the popovers floating over it, whose own
-     * children are their layouts' members. */
+     * editor's children are the popovers floating over it and the zones in
+     * it, whose own children are their layouts' members. */
     readonly children: readonly ViewNodeInfo[];
     /** An editor's document; null for a buffer outside document identity and
      * for other views. */
@@ -2012,6 +2012,28 @@ declare module "knot" {
   export type EditorPopoverCloseReason = "escape" | "click" | "edit" | "deleted";
   /** Knot closed the caller's popover `popover`. */
   export type EditorPopoverClose = Readonly<{ popover: string; reason: EditorPopoverCloseReason }>;
+  /** What an editor zone shows and where it sits. */
+  export interface EditorZone {
+    /** The line of the editor's buffer the zone sits above, between that
+     * line and the one before it; the line count, or any larger number, puts
+     * it below the last line. The zone follows edits as block rows do: a zone
+     * whose line is deleted moves to the start of the edit. */
+    readonly line: number;
+    /** Whether the zone's focused member (the first, or the one marked
+     * `focused`) takes focus when the zone opens, instead of the editor
+     * keeping it. Default false. */
+    readonly focus?: boolean;
+    /** Icon buttons above the layout; each runs its command with the
+     * editor's tab as its target and the editor as its editor, wherever focus
+     * is. */
+    readonly toolbar?: readonly CompositeButton[];
+    /** Its content, as a popover's: the members of a row or column, with
+     * `key`s that keep their views when the zone is updated. It may hold no
+     * view, leaving the toolbar alone. */
+    readonly layout: CompositeGroup;
+  }
+  /** The user dismissed the caller's zone `zone` with Escape. */
+  export type EditorZoneClose = Readonly<{ zone: string }>;
   /** The user edited a field of the bar `bar`; `fields` holds every field's
    * text by ID. */
   export type EditorBarEdit = Readonly<{ bar: string; fields: Readonly<Record<string, string>> }>;
@@ -2211,6 +2233,29 @@ declare module "knot" {
      * nothing.
      * @throws HostError with InvalidTarget or Cancelled. */
     closePopover(id: string): Promise<void>;
+    /**
+     * Open a zone in this editor: a toolbar over a layout of views, shown in
+     * whole rows reserved between its lines, above a line or below the last
+     * one, or update the caller's zone `id` in place. Rows count in line
+     * heights: the zone is as tall as its content, rounded up to whole rows
+     * and at most the editor's viewport, so members past that scroll
+     * themselves; the member heights follow a popover's (`maxLines`,
+     * `maxRows`). It spans the text area's width and stays put when the text
+     * scrolls sideways. A wheel over it scrolls the member under the pointer
+     * when that can scroll, else the editor. The zone has no caret, and the
+     * editor's caret steps over its rows. It belongs to the caller's
+     * lifecycle, as popovers do, and teardown closes it. It is presentation
+     * state, never recorded, and lasts until closed or the view closes; an
+     * edit or a click elsewhere does not close it. Escape in a focused zone
+     * closes it; use `onDidCloseZone` on a handle to learn of that.
+     * @throws HostError with InvalidTarget, BufferClosed, or Cancelled;
+     * TypeError for an empty ID or a malformed zone.
+     */
+    openZone(id: string, zone: EditorZone): Promise<void>;
+    /** Close the caller's zone `id`; closing one that is not open does
+     * nothing.
+     * @throws HostError with InvalidTarget or Cancelled. */
+    closeZone(id: string): Promise<void>;
     /**
      * Give a field of the caller's bar `id` the editor's focus in place of its
      * text, first replacing the field's text with `text`, all selected, when
@@ -3128,10 +3173,10 @@ declare module "knot" {
     | { readonly weight: number }
     | { readonly pixels: number };
   interface CompositeLayoutMember {
-    /** In a popover, the most lines an `editor` or `text` member shows
+    /** In a popover or zone, the most lines an `editor` or `text` member shows
      * before it scrolls (default 12). Not for composite views. */
     readonly maxLines?: number;
-    /** In a popover, the most rows a `tree` member shows before it scrolls
+    /** In a popover or zone, the most rows a `tree` member shows before it scrolls
      * (default 12). Not for composite views. */
     readonly maxRows?: number;
     /** Names the member across `update`. A member of the new layout with the
@@ -3537,6 +3582,14 @@ declare module "knot" {
      * @throws HostError with InvalidTarget or Cancelled.
      */
     onDidClosePopover(listener: (close: EditorPopoverClose) => void | Promise<void>): Promise<Disposable>;
+    /**
+     * Runs after the user dismisses one of the caller's zones on this editor
+     * with Escape, with the zone's ID. Closing it with `closeZone`, the
+     * editor closing, and the package unloading report nothing. Dismissals
+     * while a notification is queued join it, one call per zone.
+     * @throws HostError with InvalidTarget or Cancelled.
+     */
+    onDidCloseZone(listener: (close: EditorZoneClose) => void | Promise<void>): Promise<Disposable>;
   }
   /** Contributed view registration, captured selection, and clipboard access. */
   export const workbench: Readonly<{

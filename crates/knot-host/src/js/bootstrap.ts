@@ -287,6 +287,10 @@ function popoverAnchor(value: unknown) {
   }
   return [start, end];
 }
+function zoneId(value: unknown) {
+  if (typeof value !== "string" || value === "") throw new TypeError("zone id must be a non-empty string");
+  return value;
+}
 function barCommand(value: unknown) {
   expectRecord(value, "bar command must be an object");
   const name = string(value.name, "bar command name must be a string");
@@ -1037,6 +1041,22 @@ function editorFor(authority: Native) {
     async closePopover(id: unknown) {
       await request("editorClosePopover", authority, popoverId(id));
     },
+    async openZone(id: unknown, zone: unknown) {
+      expectRecord(zone, "zone must be an object");
+      const { line, toolbar, focus } = zone;
+      if (typeof line !== "number" || !Number.isSafeInteger(line) || line < 0) {
+        throw new TypeError("a zone line must be a non-negative safe integer");
+      }
+      if (focus !== undefined && typeof focus !== "boolean") throw new TypeError("zone focus must be a boolean");
+      const options = JSON.stringify({
+        ...(focus === undefined ? {} : { focus }),
+        toolbar: JSON.parse(toolbar === undefined ? "[]" : compositeToolbar(toolbar)),
+      });
+      await request("editorOpenZone", authority, zoneId(id), line, options, compositeLayoutJson(zone.layout, true));
+    },
+    async closeZone(id: unknown) {
+      await request("editorCloseZone", authority, zoneId(id));
+    },
     async focusBarField(id: unknown, field: unknown, options?: Opts) {
       const text = options?.text ?? null;
       if (text !== null && typeof text !== "string") throw new TypeError("bar field text must be a string");
@@ -1095,9 +1115,12 @@ type EditorEntry = {
   watchingBars: Promise<unknown> | null;
   popoverListeners: Set<Fn>;
   watchingPopovers: Promise<unknown> | null;
+  zoneListeners: Set<Fn>;
+  watchingZones: Promise<unknown> | null;
   selectionTurn?: Promise<unknown>;
   barsTurn?: Promise<unknown>;
   popoversTurn?: Promise<unknown>;
+  zonesTurn?: Promise<unknown>;
 };
 const editorHandles = new Map<Native, EditorEntry>();
 
@@ -1109,6 +1132,7 @@ export async function openEditor(target: unknown) {
     closed: false, listeners: new Set(), selectionListeners: new Map(), watching: null,
     barListeners: new Set(), watchingBars: null,
     popoverListeners: new Set(), watchingPopovers: null,
+    zoneListeners: new Set(), watchingZones: null,
   };
   editorHandles.set(authority, entry);
   const owned = ownership(() => {
@@ -1117,6 +1141,7 @@ export async function openEditor(target: unknown) {
     entry.selectionListeners.clear();
     entry.barListeners.clear();
     entry.popoverListeners.clear();
+    entry.zoneListeners.clear();
   }, () => request("releaseEditor", authority));
   return Object.freeze({
     ...editorFor(authority),
@@ -1157,6 +1182,15 @@ export async function openEditor(target: unknown) {
       });
       return disposableHandle({ dispose: async () => { entry.popoverListeners.delete(listener); } });
     },
+    async onDidCloseZone(listener: unknown) {
+      expectFunction(listener, "onDidCloseZone requires a listener");
+      owned.assertActive();
+      await registerCallable(() => entry.zoneListeners.add(listener), async () => {
+        entry.watchingZones ??= request("watchEditorZones", authority);
+        try { await entry.watchingZones; } catch (error) { entry.watchingZones = null; throw error; }
+      });
+      return disposableHandle({ dispose: async () => { entry.zoneListeners.delete(listener); } });
+    },
     [Symbol.asyncDispose]: () => owned.dispose(),
   });
 }
@@ -1180,6 +1214,12 @@ globalThis.__knotDispatchEditorEvent = async (authority, kind) => {
     return inTurn(entry, "popoversTurn", async () => {
       await whenRegistered(() => entry.popoverListeners.size > 0);
       return dispatchPopovers(authority, entry);
+    });
+  }
+  if (kind === "zones") {
+    return inTurn(entry, "zonesTurn", async () => {
+      await whenRegistered(() => entry.zoneListeners.size > 0);
+      return dispatchZones(authority, entry);
     });
   }
   if (kind === "closed") {
@@ -1227,6 +1267,19 @@ async function dispatchPopovers(authority: Native, entry: EditorEntry) {
   for (const { id, reason } of closed as Native[]) {
     const event = Object.freeze({ popover: id, reason });
     for (const listener of [...entry.popoverListeners]) calls.push(Promise.resolve().then(() => listener(event)));
+  }
+  const results = await Promise.allSettled(calls);
+  const failure = results.find((result) => result.status === "rejected");
+  if (failure) throw failure.reason;
+}
+
+async function dispatchZones(authority: Native, entry: EditorEntry) {
+  // Acknowledge first, so dismissals during the listeners queue one more turn.
+  const closed = await request("acknowledgeEditorZones", authority);
+  const calls: Promise<unknown>[] = [];
+  for (const id of closed as string[]) {
+    const event = Object.freeze({ zone: id });
+    for (const listener of [...entry.zoneListeners]) calls.push(Promise.resolve().then(() => listener(event)));
   }
   const results = await Promise.allSettled(calls);
   const failure = results.find((result) => result.status === "rejected");

@@ -459,3 +459,23 @@ test("an editor handle opens popovers and hears why Knot closed them", async () 
   await host.dismissPopover("hunk", "escape");
   assert.deepEqual(closes, [{ popover: "hunk", reason: "escape" }]);
 });
+
+test("an editor handle opens zones and hears when the user dismissed them", async () => {
+  const document = host.addDocument({ text: "a\nb\nc" });
+  const window = host.openWindow({ documents: [document] });
+  const editor = await workbench.editor(host.viewTarget(window, 0));
+  const closes: unknown[] = [];
+  await editor.onDidCloseZone((close) => {
+    closes.push(close);
+  });
+  const zone = { line: 1, focus: true, layout: { type: "column", children: [] } } as never;
+  await editor.openZone("hunk", zone);
+  await editor.openZone("end", { ...(zone as object), line: 3 } as never);
+  await editor.closeZone("end");
+  assert.deepEqual(closes, []);
+  await host.dismissZone("hunk");
+  await host.dismissZone("hunk");
+  assert.deepEqual(closes, [{ zone: "hunk" }]);
+  await assert.rejects(editor.openZone("", zone), TypeError);
+  await assert.rejects(editor.openZone("x", { ...(zone as object), line: -1 } as never), TypeError);
+});

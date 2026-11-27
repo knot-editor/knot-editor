@@ -824,6 +824,7 @@ struct EditorHandle {
     selection: Option<SelectionWatch>,
     bars: Option<BarWatch>,
     popovers: Option<PopoverWatch>,
+    zones: Option<ZoneWatch>,
 }
 
 /// An undo group a lifecycle holds open on one buffer. `handle` is the
@@ -868,6 +869,15 @@ struct BarWatch {
 /// since the listener turn last acknowledged.
 struct PopoverWatch {
     closed: Vec<handlers::ClosedPopover>,
+    pending: bool,
+    _subscription: Subscription,
+}
+
+/// Follows the zones the user dismisses in the handle's owner's name on its
+/// editor, as `PopoverWatch` follows popovers: `closed` collects the IDs
+/// since the listener turn last acknowledged.
+struct ZoneWatch {
+    closed: Vec<String>,
     pending: bool,
     _subscription: Subscription,
 }
@@ -2269,6 +2279,7 @@ impl ProductExtensionHost {
                 selection: None,
                 bars: None,
                 popovers: None,
+                zones: None,
             },
         );
         Ok(handlers::EditorAuthority::handle_wire(id))
@@ -2518,6 +2529,79 @@ impl ProductExtensionHost {
         std::mem::take(&mut watch.closed)
     }
 
+    /// Start notifying the handle's owner when the user dismisses one of its
+    /// zones on the handle's editor. Idempotent.
+    pub(super) fn watch_editor_zones(
+        &mut self,
+        request: &knot_protocol::RequestContext,
+        authority: handlers::EditorAuthority,
+        cx: &mut Context<Self>,
+    ) -> Result<(), handlers::AccessError> {
+        let editor = self.contextual_editor(request, authority, cx)?;
+        let handlers::EditorAuthority::Handle(id) = authority else {
+            return Err(handlers::AccessError::InvalidTarget);
+        };
+        let handle = self.editor_handles.get_mut(&id).expect("resolved handle");
+        if handle.zones.is_none() {
+            let subscription = cx.subscribe(
+                &editor,
+                move |host, _, event: &crate::app::editor::ZoneClosed, _| {
+                    host.editor_zone_closed(id, event)
+                },
+            );
+            handle.zones = Some(ZoneWatch {
+                closed: Vec::new(),
+                pending: false,
+                _subscription: subscription,
+            });
+        }
+        Ok(())
+    }
+
+    fn editor_zone_closed(&mut self, id: u64, event: &crate::app::editor::ZoneClosed) {
+        let Some(handle) = self.editor_handles.get_mut(&id) else {
+            return;
+        };
+        let Some(watch) = handle.zones.as_mut() else {
+            return;
+        };
+        if event.owner != handle.owner {
+            return;
+        }
+        watch.closed.push(event.id.clone());
+        if !watch.pending {
+            watch.pending = true;
+            let _ = self.pool.dispatch_editor_event(
+                handle.owner,
+                handlers::EditorAuthority::handle_wire(id),
+                knot_protocol::EditorEvent::ZonesClosed,
+            );
+        }
+    }
+
+    /// A zone notification's listener turn has started: returns the zones
+    /// dismissed since the last one, and later dismissals queue the next
+    /// notification.
+    pub(super) fn acknowledge_editor_zones(
+        &mut self,
+        owner: ExtensionKey,
+        authority: handlers::EditorAuthority,
+    ) -> Vec<String> {
+        let handlers::EditorAuthority::Handle(id) = authority else {
+            return Vec::new();
+        };
+        let Some(watch) = self
+            .editor_handles
+            .get_mut(&id)
+            .filter(|handle| handle.owner == owner)
+            .and_then(|handle| handle.zones.as_mut())
+        else {
+            return Vec::new();
+        };
+        watch.pending = false;
+        std::mem::take(&mut watch.closed)
+    }
+
     pub(super) fn release_editor(&mut self, owner: ExtensionKey, id: u64, cx: &mut App) {
         if self
             .editor_handles
@@ -2747,6 +2831,27 @@ impl ProductExtensionHost {
     ) {
         let attached = editor.update(cx, |editor, cx| {
             editor.open_popover(owner, id, window, content, cx)
+        });
+        for view in attached {
+            let kind = view.kind(cx);
+            self.attach_view(kind, window.to_owned(), view, cx);
+        }
+        self.track_owned_editor(owner, &editor);
+    }
+
+    /// Open or update the calling lifecycle's zone on an editor in the window
+    /// `window`, remembering the editor so teardown closes it.
+    pub(super) fn open_editor_zone(
+        &mut self,
+        owner: ExtensionKey,
+        editor: Entity<crate::app::editor::Editor>,
+        window: &str,
+        id: &str,
+        content: crate::app::editor::ZoneContentSpec,
+        cx: &mut Context<Self>,
+    ) {
+        let attached = editor.update(cx, |editor, cx| {
+            editor.open_zone(owner, id, window, content, cx)
         });
         for view in attached {
             let kind = view.kind(cx);

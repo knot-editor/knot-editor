@@ -4661,6 +4661,123 @@ pub(crate) async fn acknowledge_editor_popovers(
     })
 }
 
+fn zone_id(reader: &mut dyn ArgumentReader, index: usize) -> Result<String, DecodeError> {
+    let id = reader.text(index, "zone id must be text")?;
+    if id.is_empty() {
+        return Err(DecodeError::Range("zone id must not be empty"));
+    }
+    Ok(id)
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct OpenZoneArguments {
+    pub authority: EditorAuthority,
+    pub id: String,
+    pub line: u32,
+    pub options: super::composites::ZoneOptions,
+    pub layout: super::composites::LayoutWire,
+}
+impl HostArguments for OpenZoneArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self {
+            authority: EditorAuthority::decode(reader, 2)?,
+            id: zone_id(reader, 3)?,
+            line: u32::try_from(reader.integer(4)?)
+                .map_err(|_| DecodeError::Range("zone line is too large"))?,
+            options: serde_json::from_str(&reader.text(5, "zone options must be text")?)
+                .map_err(|_| DecodeError::Type("zone options are invalid"))?,
+            layout: decode_composite_layout(&reader.text(6, "zone layout must be text")?, true)?,
+        })
+    }
+}
+
+/// Open the caller's zone on the captured editor, above a line or below the
+/// last one, or update it in place. The zone lasts until closed, dismissed,
+/// the view closes, or the caller's lifecycle ends.
+#[host_operation("editorOpenZone")]
+pub(crate) async fn editor_open_zone(
+    context: HostContext,
+    arguments: OpenZoneArguments,
+) -> Result<(), OpenError> {
+    let request = context.request;
+    context.foreground(|host, cx| {
+        let (editor, window) =
+            host.contextual_editor_in_window(&request, arguments.authority, cx)?;
+        let owner = ExtensionKey::new(request.extension, request.lifecycle);
+        let content = host.zone_content(
+            owner,
+            arguments.line,
+            arguments.options,
+            arguments.layout,
+            cx,
+        )?;
+        host.open_editor_zone(owner, editor, &window, &arguments.id, content, cx);
+        Ok(())
+    })?
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct ZoneArguments {
+    pub authority: EditorAuthority,
+    pub id: String,
+}
+impl HostArguments for ZoneArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self {
+            authority: EditorAuthority::decode(reader, 2)?,
+            id: zone_id(reader, 3)?,
+        })
+    }
+}
+
+/// Close the caller's zone on the captured editor; closing a zone that is not
+/// open does nothing.
+#[host_operation("editorCloseZone")]
+pub(crate) async fn editor_close_zone(
+    context: HostContext,
+    arguments: ZoneArguments,
+) -> Result<(), AccessError> {
+    let request = context.request;
+    context.foreground(|host, cx| {
+        let editor = host.contextual_editor(&request, arguments.authority, cx)?;
+        let owner = ExtensionKey::new(request.extension, request.lifecycle);
+        editor.update(cx, |editor, cx| editor.close_zone(owner, &arguments.id, cx));
+        Ok(())
+    })?
+}
+
+/// Start dismissal notifications for a handle's zones.
+#[host_operation("watchEditorZones")]
+pub(crate) async fn watch_editor_zones(
+    context: HostContext,
+    arguments: EditorArguments,
+) -> Result<(), AccessError> {
+    let request = context.request;
+    context.foreground(|host, cx| host.watch_editor_zones(&request, arguments.authority, cx))?
+}
+
+/// The IDs of the zones the user dismissed.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub(crate) struct ClosedZones(pub Vec<String>);
+impl HostSuccess for ClosedZones {
+    fn encode(self) -> Result<EncodedValue, DecodeError> {
+        encode_json(self)
+    }
+}
+
+/// A zone notification's listener turn began: returns the zones dismissed
+/// since the last one; see `ZoneWatch`.
+#[host_operation("acknowledgeEditorZones")]
+pub(crate) async fn acknowledge_editor_zones(
+    context: HostContext,
+    arguments: EditorArguments,
+) -> Result<ClosedZones, AccessError> {
+    let owner = ExtensionKey::new(context.request.extension, context.request.lifecycle);
+    context.foreground(|host, _| {
+        ClosedZones(host.acknowledge_editor_zones(owner, arguments.authority))
+    })
+}
+
 /// The first row wholly inside an editor's viewport and the rows that are.
 #[derive(Clone, Copy, Debug, PartialEq, serde::Serialize)]
 pub(crate) struct Viewport {
