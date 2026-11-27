@@ -1377,13 +1377,16 @@ impl TestTree {
         let row = self
             .row_id(label, cx)
             .unwrap_or_else(|| panic!("no visible row labelled {label}"));
+        // An earlier gesture's command can still move focus (to the tab it
+        // opens), and the tree takes a gesture only while it has focus.
+        super::park_packages(cx);
         self.focus(cx);
         in_window(self.native_window, cx, |cx| {
             self.tree.update(cx, |tree, cx| {
                 tree.activate_row_as_for_test(&row, gesture, cx)
             });
         });
-        cx.run_until_parked();
+        super::park_packages(cx);
     }
 
     /// Invoke the row `row`'s action running `command`, as a click on it
