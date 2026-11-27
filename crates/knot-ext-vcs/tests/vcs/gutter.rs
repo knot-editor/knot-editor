@@ -17,6 +17,7 @@ await backendContract("fixed").serve({
   rollback: () => {},
   commitOptions: () => [],
   commitMessage: () => null,
+  hunkActions: () => [],
   commit: () => null,
   ref: () => null,
 });

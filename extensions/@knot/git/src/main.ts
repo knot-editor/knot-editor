@@ -6,6 +6,7 @@ import { commit, commitMessage, commitOptions } from "./commit.js";
 import { compare } from "./compare.js";
 import { isMissingProgram } from "./git.js";
 import { ref } from "./ref.js";
+import { hunkActions, registerStaging } from "./staging.js";
 import { status } from "./status.js";
 import { repositories, repositoryOf } from "./repositories.js";
 import { watch } from "./watch.js";
@@ -31,7 +32,10 @@ if (await available()) {
   await icons.define("git.unstage", { lucide: "minus" });
   await icons.define("git.discard", { lucide: "undo-2" });
   await icons.define("git.rollback", { lucide: "rotate-ccw" });
+  await icons.define("git.stageHunk", { lucide: "plus" });
+  await icons.define("git.unstageHunk", { lucide: "minus" });
   await registerActions();
+  await registerStaging();
   await backendContract("git").serve({
     repositories: async (root) => {
       const found = await repositories(root).catch(() => []);
@@ -50,6 +54,7 @@ if (await available()) {
     commitOptions: () => commitOptions,
     commitMessage: ({ repository, options }) => commitMessage(repository, options),
     commit: ({ repository, message, options }, { window }) => commit(repository, message, options, window),
+    hunkActions: () => hunkActions,
     ref: (repository) => ref(repository).catch(() => null),
   });
   await (await vcs.client()).register("git");

@@ -53,6 +53,19 @@ const action = s.object({
   showOnHover: s.optional(s.boolean()),
 });
 
+/**
+ * What a backend adds to the hunk popup's toolbar for a hunk in one of the
+ * states `on`. `command` is one of the backend's own commands, run in the
+ * editor with `{ repository, file, line }`: the hunk's first current line, or
+ * the line at a removal's boundary.
+ */
+const hunkAction = s.object({
+  label: s.string(),
+  icon: s.string(),
+  command: s.string(),
+  on: s.array(s.enum(["staged", "unstaged"])),
+});
+
 const backends = new Map<string, ReturnType<typeof defineBackend>>();
 
 function defineBackend(id: string) {
@@ -126,6 +139,8 @@ function defineBackend(id: string) {
       s.object({ repository: s.string(), message: s.string(), options: s.array(s.string()) }),
       s.nullable(s.object({ summary: s.string() })),
     ),
+    /** The actions the hunk popup offers for a repository's hunks. */
+    hunkActions: s.fn(s.string(), s.array(hunkAction)),
     /** What is checked out in the repository, or null when the backend has nothing to show. */
     ref: s.fn(s.string(), s.nullable(s.object({ label: s.string(), tooltip: s.optional(s.string()) }))),
   });

@@ -20,6 +20,7 @@ test("a registered backend is listed while it is served and not after it stops",
     repositoryOf: () => null,
     baseline: () => null,
     status: () => ({ files: [], groups: [] }), compare: () => null, rollback: () => {}, commitOptions: () => [], commitMessage: () => null, commit: () => null,
+    hunkActions: () => [],
     ref: () => null,
   });
   const client = await vcs.client();
@@ -32,7 +33,7 @@ test("a registered backend is listed while it is served and not after it stops",
 
 test("a backend that unregisters is not listed", async () => {
   await start();
-  await backendContract("one").serve({ repositories: () => [], repositoryOf: () => null, baseline: () => null, status: () => ({ files: [], groups: [] }), compare: () => null, rollback: () => {}, commitOptions: () => [], commitMessage: () => null, commit: () => null, ref: () => null });
+  await backendContract("one").serve({ repositories: () => [], repositoryOf: () => null, baseline: () => null, status: () => ({ files: [], groups: [] }), compare: () => null, rollback: () => {}, commitOptions: () => [], commitMessage: () => null, commit: () => null, hunkActions: () => [], ref: () => null });
   const client = await vcs.client();
   await client.register("one");
   await client.unregister("one");

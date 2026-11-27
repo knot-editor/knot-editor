@@ -30,6 +30,7 @@ const serving = await backendContract("{id}").serve({{
   rollback: () => {{}},
   commitOptions: () => [],
   commitMessage: () => null,
+  hunkActions: () => [],
   commit: () => null,
   ref: () => null,
 }});

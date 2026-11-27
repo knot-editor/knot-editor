@@ -43,6 +43,7 @@ async function backend(id: string, answers: Answers) {
     commitOptions: () => [],
     commitMessage: () => null,
     commit: () => null,
+    hunkActions: () => [],
     ref: (repository) => (answers.ref ?? (() => null))(repository),
   });
   await (await vcs.client()).register(id);
@@ -246,6 +247,7 @@ test("a document outside every root decorates its own repository", async () => {
     commitOptions: () => [],
     commitMessage: () => null,
     commit: () => null,
+    hunkActions: () => [],
     ref: () => null,
   });
   await (await vcs.client()).register("one");
@@ -342,6 +344,7 @@ test("statusChanged pulls status and leaves the baselines alone", async () => {
     commitOptions: () => [],
     commitMessage: () => null,
     commit: () => null,
+    hunkActions: () => [],
     ref: () => null,
   });
   await (await vcs.client()).register("one");

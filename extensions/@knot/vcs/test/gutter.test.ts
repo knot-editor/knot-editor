@@ -80,6 +80,7 @@ async function backend(id: string, answers: Answers) {
       return staged === undefined ? { text } : { text, staged };
     },
     status: () => ({ files: [], groups: [] }), compare: () => null, rollback: () => {}, commitOptions: () => [], commitMessage: () => null, commit: () => null,
+    hunkActions: () => [],
     ref: (repository) => (answers.ref ?? (() => null))(repository),
   });
   await (await vcs.client()).register(id);

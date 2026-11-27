@@ -52,6 +52,13 @@ fn product(cx: &mut TestAppContext) -> (TestProduct, TestWindow) {
     (product, window)
 }
 
+/// As `product`, in a native window, which clicks need.
+fn windowed_product(cx: &mut TestAppContext) -> (TestProduct, TestWindow) {
+    let product = TestProduct::launch_windowed(knot_ext_vcs::PACKAGES, cx);
+    let window = product.active_window(cx);
+    (product, window)
+}
+
 fn bars(
     window: &TestWindow,
     tab: usize,
@@ -328,4 +335,121 @@ fn deleting_the_repository_ends_the_gutter(cx: &mut TestAppContext) {
     let (_product, window) = open_with_added_line(directory.path(), cx);
     std::fs::remove_dir_all(directory.path().join(".git")).unwrap();
     wait_until(cx, |cx| bars(&window, 0, cx).is_empty());
+}
+
+/// What `git diff --cached` shows for `file.txt`: the added and removed lines.
+fn cached_changes(directory: &Path) -> Vec<String> {
+    let output = Command::new("git")
+        .args(["diff", "--cached", "--unified=0", "--", "file.txt"])
+        .current_dir(directory)
+        .output()
+        .unwrap();
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter(|line| {
+            (line.starts_with('+') || line.starts_with('-'))
+                && !line.starts_with("+++")
+                && !line.starts_with("---")
+        })
+        .map(str::to_owned)
+        .collect()
+}
+
+#[gpui::test]
+fn stage_hunk_and_unstage_hunk_from_the_popup_change_only_that_hunk(cx: &mut TestAppContext) {
+    let directory = resolved_tempdir();
+    repository(directory.path(), &[("file.txt", BASE.as_bytes())]);
+    std::fs::write(directory.path().join("file.txt"), "a\nB\nc\nD\n").unwrap();
+    let (product, window) = windowed_product(cx);
+    product.watch_files(cx);
+    window.set_roots(&[&uri(directory.path())], cx);
+    window.open_path(&directory.path().join("file.txt"), cx);
+    let colors = |first: &str, second: &str| {
+        vec![(1, "bar", first.to_owned()), (3, "bar", second.to_owned())]
+    };
+    wait_until(cx, |cx| {
+        bars(&window, 0, cx) == colors("diff.modified", "diff.modified")
+    });
+    window.focus_document(cx);
+
+    window.click_gutter_bar(1, cx);
+    wait_until(cx, |cx| !window.zones(cx).is_empty());
+    assert!(
+        window.zones(cx)[0]
+            .buttons
+            .contains(&"Stage Hunk".to_owned())
+    );
+    window.click_zone_button("Stage Hunk", cx);
+    wait_until(cx, |cx| {
+        bars(&window, 0, cx) == colors("diff.modified.staged", "diff.modified")
+    });
+    assert_eq!(cached_changes(directory.path()), ["-b", "+B"]);
+
+    window.click_gutter_bar(1, cx);
+    wait_until(cx, |cx| !window.zones(cx).is_empty());
+    assert!(
+        window.zones(cx)[0]
+            .buttons
+            .contains(&"Unstage Hunk".to_owned())
+    );
+    window.click_zone_button("Unstage Hunk", cx);
+    wait_until(cx, |cx| {
+        bars(&window, 0, cx) == colors("diff.modified", "diff.modified")
+    });
+    assert!(cached_changes(directory.path()).is_empty());
+}
+
+#[gpui::test]
+fn stage_hunk_stages_an_unsaved_edit_as_the_editor_shows_it(cx: &mut TestAppContext) {
+    let directory = resolved_tempdir();
+    repository(directory.path(), &[("file.txt", BASE.as_bytes())]);
+    let (product, window) = windowed_product(cx);
+    product.watch_files(cx);
+    window.set_roots(&[&uri(directory.path())], cx);
+    window.open_path(&directory.path().join("file.txt"), cx);
+    window.focus_document(cx);
+    window.press("X", cx);
+    wait_until(cx, |cx| {
+        bars(&window, 0, cx) == [(0, "bar", "diff.modified".to_owned())]
+    });
+    window.click_gutter_bar(0, cx);
+    wait_until(cx, |cx| !window.zones(cx).is_empty());
+    window.click_zone_button("Stage Hunk", cx);
+    wait_until(cx, |cx| {
+        bars(&window, 0, cx) == [(0, "bar", "diff.modified.staged".to_owned())]
+    });
+    assert_eq!(cached_changes(directory.path()), ["-a", "+Xa"]);
+    assert_eq!(
+        std::fs::read_to_string(directory.path().join("file.txt")).unwrap(),
+        BASE
+    );
+}
+
+#[gpui::test]
+fn stage_hunk_stores_the_index_entry_as_the_clean_filters_make_it(cx: &mut TestAppContext) {
+    let directory = resolved_tempdir();
+    repository(
+        directory.path(),
+        &[
+            (".gitattributes", b"*.txt text eol=crlf\n"),
+            ("file.txt", BASE.as_bytes()),
+        ],
+    );
+    std::fs::write(directory.path().join("file.txt"), "a\r\nB\r\nc\r\nd\r\n").unwrap();
+    let (product, window) = windowed_product(cx);
+    product.watch_files(cx);
+    window.set_roots(&[&uri(directory.path())], cx);
+    window.open_path(&directory.path().join("file.txt"), cx);
+    wait_until(cx, |cx| {
+        bars(&window, 0, cx) == [(1, "bar", "diff.modified".to_owned())]
+    });
+    window.focus_document(cx);
+    window.click_gutter_bar(1, cx);
+    wait_until(cx, |cx| !window.zones(cx).is_empty());
+    window.click_zone_button("Stage Hunk", cx);
+    wait_until(cx, |cx| {
+        bars(&window, 0, cx) == [(1, "bar", "diff.modified.staged".to_owned())]
+    });
+    // The index holds LF text, so the staged change is the one line.
+    assert_eq!(cached_changes(directory.path()), ["-b", "+B"]);
 }

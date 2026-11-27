@@ -59,6 +59,7 @@ async function backend(id: string, roots: string[], fake: Fake) {
       if (fake.answer instanceof Error) throw fake.answer;
       return fake.answer;
     },
+    hunkActions: () => [],
     ref: () => null,
   });
   await (await vcs.client()).register(id);

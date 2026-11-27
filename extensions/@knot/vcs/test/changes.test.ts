@@ -76,6 +76,7 @@ async function backend(id: string, answers: Answers, root = ROOT) {
     commitOptions: () => [],
     commitMessage: () => null,
     commit: () => null,
+    hunkActions: () => [],
     ref: () => null,
   });
   await (await vcs.client()).register(id);

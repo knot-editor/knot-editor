@@ -422,6 +422,23 @@ export async function start(): Promise<Disposable> {
     kick(follow);
   });
 
+  /** The backend's toolbar buttons for a hunk in the given state, run on `line`. */
+  async function hunkActionsOf(follow: Follow, staged: boolean, line: number) {
+    const { repository, uri } = follow;
+    if (repository === null || uri === null) return [];
+    try {
+      const actions = await (await backendContract(repository.backend).client()).hunkActions(repository.root);
+      const arguments_ = { repository: repository.root, file: uri, line };
+      return actions
+        .filter(({ on }) => on.includes(staged ? "staged" : "unstaged"))
+        .map(({ label, icon, command }) => ({ label, icon, command, arguments: arguments_ }));
+    } catch (error) {
+      if (!isGone(error)) throw error;
+      drop(repository.backend);
+      return [];
+    }
+  }
+
   /** Opens the popup for `hunk` under it, showing the baseline's lines it replaced. */
   async function openPopup(follow: Follow, { target }: CommandContext, hunk: DiffHunk) {
     const view = target.focusedView;
@@ -446,6 +463,7 @@ export async function start(): Promise<Disposable> {
       const lastLine = count - 1;
       const at = (await current.lineRange(Math.min(hunk.new.start, lastLine))).startByteOffset;
       const here = { range: { startByteOffset: at, endByteOffset: at } };
+      const backendActions = await hunkActionsOf(follow, staged, Math.min(hunk.new.start, lastLine));
       const popup: Popup = {
         editor,
         baseline,
@@ -468,6 +486,7 @@ export async function start(): Promise<Disposable> {
           { label: "Compare with Last Commit", icon: "vcs.compare", command: SHOW_CHANGES, arguments: here },
           // An insertion has no baseline lines to copy.
           ...(text === "" ? [] : [{ label: "Copy Hunk", icon: "vcs.copyHunk", command: COPY_HUNK, arguments: here }]),
+          ...backendActions,
         ],
         layout: {
           type: "column",

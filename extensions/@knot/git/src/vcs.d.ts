@@ -54,6 +54,10 @@ declare module "@knot/vcs" {
       { repository: string; message: string; options: readonly string[] },
       { summary: string } | null
     >;
+    hunkActions: FnSchema<
+      string,
+      readonly { label: string; icon: string; command: string; on: readonly ("staged" | "unstaged")[] }[]
+    >;
     ref: FnSchema<string, { label: string; tooltip?: string } | null>;
   }>;
 }

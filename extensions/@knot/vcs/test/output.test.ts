@@ -25,6 +25,7 @@ async function backend(id: string) {
     commitOptions: () => [],
     commitMessage: () => null,
     commit: () => null,
+    hunkActions: () => [],
     ref: () => null,
   });
   await (await vcs.client()).register(id);
