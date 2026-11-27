@@ -2317,6 +2317,12 @@ function compositeToolbar(value: unknown): string {
   if (!Array.isArray(value)) throw new TypeError("composite toolbar must be an array");
   return JSON.stringify(value.map((item) => {
     const button = record(item, "composite toolbar button must be an object");
+    if (button.badge !== undefined) {
+      const badge = record(button.badge, "composite toolbar badge must be an object");
+      const text = string(badge.text, "composite toolbar badge text must be text");
+      const color = string(badge.color, "composite toolbar badge color must be a color key");
+      return { label: text, command: "", arguments: null, toggled: false, disabled: false, badge: { text, color } };
+    }
     const icon = iconRef(button.icon);
     if (icon === null) throw new TypeError("composite toolbar button needs an icon");
     for (const field of ["toggled", "disabled"]) {

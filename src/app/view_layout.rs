@@ -37,7 +37,9 @@ use knot_model::editor::popovers::Extent;
 pub(crate) struct ToolbarButton {
     /// The tooltip.
     pub label: String,
-    pub icon: IconRef,
+    /// Absent for a badge.
+    #[serde(default)]
+    pub icon: Option<IconRef>,
     pub command: String,
     #[serde(default = "no_arguments")]
     pub arguments: CommandArgumentValue,
@@ -47,6 +49,18 @@ pub(crate) struct ToolbarButton {
     /// Shown dimmed, and does nothing when clicked.
     #[serde(default)]
     pub disabled: bool,
+    /// A label that runs nothing, in place of a button.
+    #[serde(default)]
+    pub badge: Option<ToolbarBadge>,
+}
+
+/// Text in a pill tinted with a theme color.
+#[derive(Clone, Debug, PartialEq, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ToolbarBadge {
+    pub text: String,
+    /// A theme color key.
+    pub color: String,
 }
 
 fn no_arguments() -> CommandArgumentValue {
@@ -1358,6 +1372,23 @@ pub(crate) fn toolbar(
     let hover = theme.paint_color(color::BUTTON_HOVER_BACKGROUND);
     let pressed = theme.paint_color(color::LIST_SELECTED_BACKGROUND);
     let items = buttons.iter().enumerate().map(|(index, button)| {
+        if let Some(badge) = &button.badge {
+            let tint = theme.paint_color(&badge.color);
+            return div()
+                .id((name, index))
+                .debug_selector(move || format!("{name}-{index}"))
+                .flex()
+                .items_center()
+                .h(zoom::rems(20.))
+                .px(zoom::rems(8.))
+                .mr(zoom::rems(4.))
+                .rounded(zoom::rems(10.))
+                .text_xs()
+                .font_weight(gpui::FontWeight::SEMIBOLD)
+                .bg(tint.opacity(0.18))
+                .text_color(tint)
+                .child(SharedString::from(badge.text.clone()));
+        }
         let label = SharedString::from(button.label.clone());
         let command = Command {
             name: button.command.as_str().into(),
@@ -1385,7 +1416,12 @@ pub(crate) fn toolbar(
                         cx.defer(move |cx| run(handle, command, cx));
                     })
             })
-            .child(AppIcon::new(ref_definition(&button.icon, false, cx)))
+            .children(
+                button
+                    .icon
+                    .as_ref()
+                    .map(|icon| AppIcon::new(ref_definition(icon, false, cx))),
+            )
             .tooltip(move |window, cx| {
                 gpui_component::tooltip::Tooltip::new(label.clone())
                     .text_xs()

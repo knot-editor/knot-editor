@@ -195,11 +195,12 @@ fn a_toolbar_adds_its_height(cx: &mut TestAppContext) {
     let lh = line_height(&view, cx);
     let button = ToolbarButton {
         label: "x".into(),
-        icon: serde_json::from_str("\"file\"").unwrap(),
+        icon: Some(serde_json::from_str("\"file\"").unwrap()),
         command: "x".into(),
         arguments: knot_protocol::CommandArgumentValue::Null,
         toggled: false,
         disabled: false,
+        badge: None,
     };
     let shown = cx.new(|_| Buffer::new(BufferModel::from_text("a\nb")));
     state.update(cx, |state, cx| {

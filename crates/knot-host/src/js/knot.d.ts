@@ -1997,7 +1997,7 @@ declare module "knot" {
     /** Icon buttons above the layout; each runs its command with the
      * anchoring editor's tab as its target and the editor as its editor,
      * wherever focus is. */
-    readonly toolbar?: readonly CompositeButton[];
+    readonly toolbar?: readonly CompositeToolbarItem[];
     /** Its content, as a composite view's: the members of a row or column,
      * with `key`s that keep their views when the popover is updated. Each
      * view is an ordinary view of the view tree, and an editor on a document
@@ -2029,7 +2029,7 @@ declare module "knot" {
     /** Icon buttons above the layout; each runs its command with the
      * editor's tab as its target and the editor as its editor, wherever focus
      * is. */
-    readonly toolbar?: readonly CompositeButton[];
+    readonly toolbar?: readonly CompositeToolbarItem[];
     /** Its content, as a popover's: the members of a row or column, with
      * `key`s that keep their views when the zone is updated. It may hold no
      * view, leaving the toolbar alone. */
@@ -2683,7 +2683,7 @@ declare module "knot" {
     update(
       changes: {
         readonly layout?: CompositeGroup;
-        readonly toolbar?: readonly CompositeButton[];
+        readonly toolbar?: readonly CompositeToolbarItem[];
       },
       options?: { readonly window?: WindowTarget },
     ): Promise<void>;
@@ -3172,6 +3172,13 @@ declare module "knot" {
     /** Dims the button and ignores clicks. Defaults to false. */
     readonly disabled?: boolean;
   }
+  /** A label in a toolbar: `text` in a pill tinted with the theme color key
+   * `color`. It runs nothing. */
+  export interface CompositeBadge {
+    readonly badge: { readonly text: string; readonly color: string };
+  }
+  /** What a toolbar holds, in order. */
+  export type CompositeToolbarItem = CompositeButton | CompositeBadge;
   /** How much of its group's main axis a layout member takes. */
   export type CompositeSize =
     /** A share of the space the `pixels` members leave, in proportion to the
@@ -3336,7 +3343,7 @@ declare module "knot" {
      * least one editor, text frame, or tree at any depth. */
     readonly layout: CompositeGroup;
     /** The buttons of a bar above the layout, in order; none shows no bar. */
-    readonly toolbar?: readonly CompositeButton[];
+    readonly toolbar?: readonly CompositeToolbarItem[];
     /** Open the view as the center pane's preview tab, replacing that pane's
      * current preview, a document's or another composite view's, in place. A
      * replaced view closes as closing its tab does. A preview becomes a
@@ -3374,7 +3381,7 @@ declare module "knot" {
       readonly icon?: IconRef | null;
       readonly resource?: string | null;
       readonly layout?: CompositeGroup;
-      readonly toolbar?: readonly CompositeButton[];
+      readonly toolbar?: readonly CompositeToolbarItem[];
       readonly scrollLink?: CompositeScrollLink | null;
     }): Promise<void>;
     /** Make a preview tab regular, as Keep Tab Open does; a regular tab stays

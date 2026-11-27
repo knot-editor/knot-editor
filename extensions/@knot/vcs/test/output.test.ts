@@ -103,5 +103,5 @@ test("the Changes toolbar has an output button", async () => {
   await running();
   for (let turn = 0; turn < 8; turn += 1) await new Promise((resolve) => setImmediate(resolve));
   const toolbar = host.view("vcs.changes").updates.at(-1)?.toolbar ?? [];
-  assert.ok(toolbar.some((button) => button.command === SHOW_OUTPUT));
+  assert.ok(toolbar.some((button) => "command" in button && button.command === SHOW_OUTPUT));
 });

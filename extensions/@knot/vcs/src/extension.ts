@@ -54,8 +54,6 @@ type Popup = {
   readonly view: PopupView;
   /** The read-only buffer showing the baseline's lines. */
   readonly baseline: ExtensionBuffer;
-  /** The read-only buffer of the "Staged" row, for a staged hunk. */
-  readonly label: ExtensionBuffer | null;
   readonly listener: Disposable;
   /** The hunk it shows. */
   readonly hunk: DiffHunk;
@@ -265,7 +263,6 @@ export async function start(): Promise<Disposable> {
     follow.popup = null;
     await popup.listener[Symbol.asyncDispose]().catch(() => {});
     await Promise.resolve(popup.baseline[Symbol.asyncDispose]()).catch(() => {});
-    await Promise.resolve(popup.label?.[Symbol.asyncDispose]()).catch(() => {});
     await popup.editor[Symbol.asyncDispose]().catch(() => {});
   }
 
@@ -462,7 +459,6 @@ export async function start(): Promise<Disposable> {
     const [staged = false] = await stagedOf(follow, [hunk]);
     // The last line break would show as an empty line.
     const baseline = await buffers.create({ text: text.replace(/\n$/, ""), language: follow.language, readOnly: true });
-    const label = staged ? await buffers.create({ text: "Staged", readOnly: true }) : null;
     try {
       if (text !== "") {
         const { revision } = await baseline.snapshot({ startByteOffset: 0, endByteOffset: 0 });
@@ -484,7 +480,6 @@ export async function start(): Promise<Disposable> {
         editor,
         view,
         baseline,
-        label,
         hunk,
         staged,
         listener: await editor.onDidCloseZone(({ zone }) => {
@@ -498,6 +493,10 @@ export async function start(): Promise<Disposable> {
         // An insertion has its own bar beside the lines.
         ...(text === "" ? {} : { gutter: colorOf(hunk, staged) }),
         toolbar: [
+          // A backend with staging says which state the hunk is in.
+          ...(backendActions.length === 0
+            ? []
+            : [{ badge: staged ? { text: "Staged", color: "success" } : { text: "Unstaged", color: "warning" } }]),
           { label: "Previous Hunk", icon: "vcs.previousHunk", command: PREVIOUS_HUNK },
           { label: "Next Hunk", icon: "vcs.nextHunk", command: NEXT_HUNK },
           ...backendActions,
@@ -508,17 +507,11 @@ export async function start(): Promise<Disposable> {
         ],
         layout: {
           type: "column",
-          children: [
-            ...(label === null ? [] : [{ type: "editor", buffer: label, key: "staged", gutter: false } as const]),
-            ...(text === "" ? [] : [{ type: "editor", buffer: baseline, key: "baseline", gutter: false } as const]),
-          ],
+          children: text === "" ? [] : [{ type: "editor", buffer: baseline, key: "baseline", gutter: false }],
         },
       });
     } catch (error) {
-      if (follow.popup?.baseline !== baseline) {
-        await Promise.resolve(baseline[Symbol.asyncDispose]()).catch(() => {});
-        await Promise.resolve(label?.[Symbol.asyncDispose]()).catch(() => {});
-      }
+      if (follow.popup?.baseline !== baseline) await Promise.resolve(baseline[Symbol.asyncDispose]()).catch(() => {});
       throw error;
     }
   }

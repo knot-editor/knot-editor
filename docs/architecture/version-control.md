@@ -72,7 +72,7 @@ palette on the hunk at the caret.
 A backend adds buttons through `hunkActions(repository)`: each names one of its
 commands, an icon, and the hunk states (`staged`, `unstaged`) it applies to, and
 the popup shows those that match its hunk, after Next Hunk. A staged hunk's popup
-starts with a one-line read-only "Staged" row. The command runs in
+leads with a "Staged" (green) or "Unstaged" (yellow) badge, a toolbar label that runs nothing. The command runs in
 the editor with `{ repository, file, line }`, the hunk's first current line (the
 boundary line for a removal).
 

@@ -108,9 +108,9 @@ type FakeView = {
   /** What a layout view shows, from its `update`s without a window: the layout
    * and toolbar last given. */
   layout: Knot.CompositeGroup | null;
-  toolbar: readonly Knot.CompositeButton[];
+  toolbar: readonly Knot.CompositeToolbarItem[];
   /** Every `update` of a layout view, oldest first. */
-  updates: { layout?: Knot.CompositeGroup; toolbar?: readonly Knot.CompositeButton[]; window: Knot.WindowTarget | undefined }[];
+  updates: { layout?: Knot.CompositeGroup; toolbar?: readonly Knot.CompositeToolbarItem[]; window: Knot.WindowTarget | undefined }[];
 };
 
 type Answers = {
@@ -334,7 +334,7 @@ export type FakeComposite = {
   kind: string;
   options: Knot.OpenCompositeOptions;
   /** What the tab shows now, after any `update`. */
-  tab: { title: string; icon: Knot.IconRef | null; resource: string | null; toolbar: readonly Knot.CompositeButton[] };
+  tab: { title: string; icon: Knot.IconRef | null; resource: string | null; toolbar: readonly Knot.CompositeToolbarItem[] };
   /** The scroll link now, after any `update`; the fake does not scroll. */
   scrollLink: Knot.CompositeScrollLink | null;
   /** The layout now, after any `update`. */

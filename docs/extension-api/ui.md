@@ -224,6 +224,8 @@ its tooltip, and it runs `command` with `arguments` when clicked, with the
 instance's tab as the command's target and the view focused in it as its focus,
 wherever focus is, so a handler finds its instance in `target.viewChain`.
 `toggled` shows the button pressed and `disabled` dims it and ignores clicks.
+An item `{ badge: { text, color } }` is a label instead: its text in a pill
+tinted with the theme color key `color`, running nothing.
 An update replaces the whole list, so send it again to change a button's state;
 `toolbar: []` removes the bar.
 

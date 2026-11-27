@@ -387,14 +387,14 @@ fn stage_hunk_and_unstage_hunk_from_the_popup_change_only_that_hunk(cx: &mut Tes
 
     // The popup stays open on the hunk, now with a Staged row and the other button.
     wait_until(cx, |cx| {
-        window.zones(cx).first().is_some_and(|zone| {
-            zone.buttons.contains(&"Unstage Hunk".to_owned())
-                && zone.texts.first().map(String::as_str) == Some("Staged")
-        })
+        window
+            .zones(cx)
+            .first()
+            .is_some_and(|zone| zone.buttons.contains(&"Unstage Hunk".to_owned()))
     });
     assert_eq!(
-        window.zones(cx)[0].buttons[..3],
-        ["Previous Hunk", "Next Hunk", "Unstage Hunk"]
+        window.zones(cx)[0].buttons[..4],
+        ["Staged", "Previous Hunk", "Next Hunk", "Unstage Hunk"]
     );
     window.click_zone_button("Unstage Hunk", cx);
     wait_until(cx, |cx| {
