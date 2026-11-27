@@ -231,3 +231,28 @@ fn the_focus_command_reaches_the_message_editor(cx: &mut TestAppContext) {
     );
     wait_until(cx, |cx| window.tool_editor_focused(TOOL, cx));
 }
+
+#[gpui::test]
+fn the_history_picker_recalls_an_earlier_message(cx: &mut TestAppContext) {
+    let (_product, window, _tree, directory) = show(true, cx);
+    let root = directory.path();
+    write_message(&window, "First", cx);
+    window.run_command("vcs.commit", cx);
+    wait_until(cx, |_| subjects(root) == ["First", "base"]);
+    wait_until(cx, |cx| window.tool_editors(TOOL, cx)[0].is_empty());
+    write(root, "a.txt", "a3\n");
+    git(root, &["add", "a.txt"]);
+    wait_until(cx, |cx| window.tool_editors(TOOL, cx)[0].is_empty());
+    write_message(&window, "Second", cx);
+    window.run_command("vcs.commit", cx);
+    wait_until(cx, |_| subjects(root) == ["Second", "First", "base"]);
+    wait_until(cx, |cx| window.tool_editors(TOOL, cx)[0].is_empty());
+
+    window.focus_tool_editor(TOOL, cx);
+    window.press("ctrl-m", cx);
+    wait_until(cx, |cx| window.picker_labels(cx) == ["Second", "First"]);
+    window.type_input("First", cx);
+    wait_until(cx, |cx| window.picker_labels(cx) == ["First"]);
+    window.press("enter", cx);
+    wait_until(cx, |cx| window.tool_editors(TOOL, cx)[0] == "First");
+}

@@ -162,6 +162,12 @@ action, and asks for the repository's status again.
 editor runs `vcs.commit.fromMessage`, which commits only when the editor is in
 the Changes tool window.
 
+A successful commit records its message in the repository's `history` list (the
+host keeps the newest 50). `vcs.commitMessageHistory` (Ctrl+M in the panel's
+message editor, through `vcs.commitMessageHistory.fromMessage`) opens a picker
+over it, the subject as the label, and replaces the draft with the chosen message
+as one undoable edit; with no history it raises a notice.
+
 ## Current ref
 
 The `vcs.ref` status item shows a branch icon, the backend's `ref` label, and

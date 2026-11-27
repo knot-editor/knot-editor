@@ -2,7 +2,7 @@
 // message editor, the backend's options as checkboxes, and a Commit button, for
 // the repository the window's last chosen file belongs to (or its first).
 // Each repository has one draft, a persisted buffer cleared by a commit.
-import { buffers, commands, icons, keymaps, platform, windows, workbench } from "knot";
+import { buffers, commands, history, icons, keymaps, platform, windows, workbench } from "knot";
 import type {
   CommandContext,
   CompositeGroup,
@@ -21,6 +21,8 @@ import { keyOf } from "./status.js";
 export const COMMIT = "vcs.commit";
 const COMMIT_FROM_MESSAGE = "vcs.commit.fromMessage";
 export const FOCUS_MESSAGE = "vcs.focusCommitMessage";
+export const MESSAGE_HISTORY = "vcs.commitMessageHistory";
+const MESSAGE_HISTORY_FROM_MESSAGE = "vcs.commitMessageHistory.fromMessage";
 export const TOGGLE_OPTION = "vcs.commit.toggleOption";
 
 type Option = { readonly id: string; readonly label: string; readonly tooltip?: string };
@@ -121,6 +123,9 @@ export async function createPanel(deps: PanelDeps): Promise<Panel> {
     const wanted = chosen.get(window.target);
     return repositories.find((one) => wanted !== undefined && keyOf(one) === keyOf(wanted)) ?? repositories[0] ?? null;
   }
+
+  /** The repository's earlier messages, newest first, kept by the host. */
+  const historyOf = (repository: Repository) => `commit-messages:${keyOf(repository)}`;
 
   const messageKey = (repository: Repository) => `message:${keyOf(repository)}`;
 
@@ -261,6 +266,7 @@ export async function createPanel(deps: PanelDeps): Promise<Panel> {
     await replaceText(draft, "");
     await draft.buffer.clearPersisted();
     draft.empty = true;
+    if (text.trim() !== "") await history.record(historyOf(repository), text.trimEnd());
     deps.changed(repository);
     await render();
     await notice({ message: `Committed ${result.summary}` });
@@ -270,6 +276,31 @@ export async function createPanel(deps: PanelDeps): Promise<Panel> {
   async function commitFromMessage(context: CommandContext) {
     if (context.target.tool !== VIEW_ID) commands.unavailable();
     await commit(context);
+  }
+
+  async function pickMessage(context: CommandContext) {
+    const repository = await targetOf(await windowOf(context));
+    if (repository === null) commands.unavailable();
+    const earlier = await history.recent(historyOf(repository));
+    if (earlier.length === 0) {
+      await workbench.showNotice({ title: "Version Control", message: "No earlier commit messages." });
+      return;
+    }
+    const picked = await workbench.showPicker({
+      title: "Commit Message History",
+      items: earlier.map((text) => {
+        const [subject = "", ...rest] = text.split("\n");
+        return { id: text, label: subject, ...(rest.some((line) => line.trim() !== "") ? { description: "…" } : {}) };
+      }),
+    });
+    if (picked.kind !== "selected") return;
+    await replaceText(await draftOf(repository), picked.id);
+  }
+
+  /** Ctrl+M is bound in every editor; only the panel's own message recalls. */
+  async function pickMessageFromMessage(context: CommandContext) {
+    if (context.target.tool !== VIEW_ID) commands.unavailable();
+    await pickMessage(context);
   }
 
   async function focusMessage(context: CommandContext) {
@@ -298,10 +329,16 @@ export async function createPanel(deps: PanelDeps): Promise<Panel> {
       title: "Focus Commit Message",
       description: "Show the Changes panel and move to its commit message.",
     }),
+    await commands.register(MESSAGE_HISTORY, pickMessage, {
+      title: "Commit Message History…",
+      description: "Replace the commit message with an earlier one of the repository.",
+    }),
+    await commands.register(MESSAGE_HISTORY_FROM_MESSAGE, pickMessageFromMessage, { palette: false }),
     await commands.register(TOGGLE_OPTION, toggleOption, { palette: false }),
   ];
   const mod = platform === "macos" ? "cmd" : "ctrl";
   keymaps.bind(`${mod}-alt-c`, FOCUS_MESSAGE);
+  keymaps.bind("ctrl-m", MESSAGE_HISTORY_FROM_MESSAGE, { view: "editor" });
   keymaps.bind(`${mod}-enter`, COMMIT_FROM_MESSAGE, { view: "editor" });
 
   return {

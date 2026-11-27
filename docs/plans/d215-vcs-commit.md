@@ -1,6 +1,6 @@
 # D215 — VCS commit
 
-Status: 🚧 in progress (checkpoints 1 to 7 done; 8 remains). Source: [roadmap D215](../roadmap.md#version-control), milestone 4 of
+Status: 🚧 in progress (checkpoints 1 to 7 done; 8 awaits its review gate). Source: [roadmap D215](../roadmap.md#version-control), milestone 4 of
 the [version control plan](vcs.md).
 
 ## Outcome
@@ -188,7 +188,9 @@ state database, so every repository's commit editor shares it.
 [ui guide](../extension-api/ui.md#layout-tool-windows). The commit message
 shows one at 72. Checkpoint 4's gate was repeated and passed.
 
-### 8. Message history
+### 8. Message history 🚧
+
+Implemented and tested; the review gate remains (the `try.commit-scratch` command opens a scratch repository: commit twice with Cmd+Enter, then press Ctrl+M in the message). The picker's rows show the message's subject. Documented under [version control](../architecture/version-control.md#commit-panel).
 
 Deliverables: per-repository history recorded on commit, `vcs.commitMessageHistory`
 with Ctrl+M in the message editor, replacing the draft as one undo step.

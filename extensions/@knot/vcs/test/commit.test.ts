@@ -249,3 +249,38 @@ test("Cmd+Alt+C and Cmd+Enter are bound, and the focus command shows the tool wi
   const [focused] = host.view("vcs.changes").focuses;
   assert.match(String(focused), /^message:/);
 });
+
+test("a commit records its message, and the history picker replaces the draft with an earlier one", async () => {
+  host.openWindow({ roots: [ROOT] });
+  await backend("one", [ROOT], fake());
+  assert.equal(await host.run("vcs.commitMessageHistory"), "completed");
+  assert.equal(host.notices().at(-1)!.message, "No earlier commit messages.");
+  await type("First\n\nBody.\n");
+  await commit();
+  await type("Second");
+  await commit();
+  await type("draft");
+  host.answer("showPicker", { kind: "selected", id: "First\n\nBody." });
+  assert.equal(await host.run("vcs.commitMessageHistory"), "completed");
+  const picker = host.prompts().at(-1)!.options as { items: { id: string; label: string }[] };
+  assert.deepEqual(picker.items.map((item) => item.label), ["Second", "First"]);
+  assert.equal(await text(), "First\n\nBody.");
+  assert.equal(commitButton().disabled, false);
+});
+
+test("the history keeps 50 messages per repository, and Ctrl+M recalls only from the Changes tool window", async () => {
+  host.openWindow({ roots: [ROOT, OTHER] });
+  await backend("one", [ROOT], fake());
+  await backend("two", [OTHER], fake());
+  for (let index = 0; index < 55; index += 1) {
+    await type(`message ${index}`);
+    await commit();
+  }
+  assert.equal(await host.run("vcs.commitMessageHistory.fromMessage"), "unavailable");
+  host.answer("showPicker", { kind: "dismissed" });
+  assert.equal(await host.run("vcs.commitMessageHistory.fromMessage", { view: "vcs.changes" }), "completed");
+  const picker = host.prompts().at(-1)!.options as { items: { label: string }[] };
+  assert.equal(picker.items.length, 50);
+  assert.equal(picker.items[0]!.label, "message 54");
+  assert.ok(host.bindings().some((binding) => binding.key === "ctrl-m" && binding.command === "vcs.commitMessageHistory.fromMessage"));
+});
