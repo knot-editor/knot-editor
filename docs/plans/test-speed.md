@@ -45,20 +45,18 @@ on the same machine).
    seed). The sizes are far beyond what the rules need (the rules involve at
    most a few ranges around one edit), so it joins the proptest conversion
    with about 10 ranges and 30 edits.
-2. 🚧 Add `proptest` as a dev-dependency and convert the buffer differential
-   tests to focused properties (agreed direction). ✅ Buffer differential tests
-   converted (four properties: edits against the model, chunk sealing,
-   snapshot immutability, position tracking; chunks are 256 bytes under
-   `cfg(test)`): 10.8s down to 0.7s, and two deliberate bugs (chunks never
-   sealing, a wrong UTF-16 length) are caught and shrunk. Remaining: the
-   anchored-range oracle.
-   - edit sequences against the `String` model: short sequences (about 20–50
-     edits) with occasional full-oracle checks, relying on shrinking;
-   - chunk sealing as its own property, with a test-only way to make chunks
-     small so sealing happens within a few edits;
-   - snapshots and position tracking as separate properties instead of one
-     interleaved loop.
-   Convert the anchored-range oracle the same way. Decide then whether the other `Rng` users are worth converting.
+2. ✅ Add `proptest` and convert the seeded random tests to properties:
+   - `knot-core` buffer differential tests: four properties (edits against the
+     model, chunk sealing, snapshot immutability, position tracking) plus edit
+     points; chunks are 256 bytes under `cfg(test)`. 10.8s down to 0.7s; two
+     deliberate bugs are caught and shrunk.
+   - The anchored-range oracle: one property over about 10 ranges and 30 edits.
+   - The seeded line-index, edit-point, and snapshot stress tests are covered
+     by those properties and removed.
+   - `knot-model` generated file trees (walk against ripgrep, and the index
+     against the disk): proptest supplies the choices the tree generator
+     consumes, so failing trees shrink.
+   The only seeded generator left is the ignored `snapshot_cost` measurement.
 3. Profile `app::product::tests` setup (shared fixture, app and host startup
    per test) and cut the per-test cost.
 4. Look at the per-test cost of the `knot-ext-vcs`, `knot-ext-vim`, and
@@ -67,3 +65,9 @@ on the same machine).
    suite stays under control.
 
 Re-run `just test-timings` after each step and record the new totals here.
+
+## After step 2 (2026-11-27)
+
+2341 tests, 17s test run, 161s summed (from 185s). `knot-core` is 2.3s in
+total (from 13.8s). The remaining time is in `app::product::tests` (51s),
+`knot-ext-vcs`, `knot-ext-vim`, and `knot-ext-workbench`.
