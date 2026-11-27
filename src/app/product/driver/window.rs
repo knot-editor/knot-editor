@@ -81,6 +81,8 @@ pub struct TestZone {
     pub id: String,
     /// The line it sits above; the line count for a zone below the last line.
     pub line: usize,
+    /// The color key of its gutter strip.
+    pub gutter: Option<String>,
     /// The tooltips of its toolbar buttons.
     pub buttons: Vec<String>,
     /// The text of each editor it holds.
@@ -987,6 +989,7 @@ impl TestWindow {
                     TestZone {
                         id: zone.id.clone(),
                         line: zone.spec.line,
+                        gutter: zone.spec.gutter.clone(),
                         buttons: content.toolbar_labels(),
                         texts: content
                             .leaves()

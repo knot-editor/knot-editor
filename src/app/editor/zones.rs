@@ -50,6 +50,8 @@ pub(super) struct ZoneFrame {
     pub(super) left: f32,
     pub(super) width: f32,
     pub(super) height: f32,
+    /// The color key of the gutter strip beside the zone.
+    gutter: Option<String>,
 }
 
 impl Editor {
@@ -324,6 +326,7 @@ impl EditorView {
                     left: self.gutter.width,
                     width,
                     height,
+                    gutter: editor.zones().by_key(key)?.spec.gutter.clone(),
                 })
             })
             .collect()
@@ -334,8 +337,18 @@ impl EditorView {
         let theme = theme(cx);
         self.zone_frames(cx)
             .into_iter()
-            .map(|frame| {
-                div()
+            .flat_map(|frame| {
+                let strip = frame.gutter.as_deref().map(|key| {
+                    div()
+                        .absolute()
+                        .top(px(frame.top))
+                        .left(px(self.gutter.bars_start))
+                        .w(px(self.gutter.bars_width))
+                        .h(px(frame.height))
+                        .bg(theme.paint_color(key))
+                        .into_any_element()
+                });
+                let zone = div()
                     .absolute()
                     .top(px(frame.top))
                     .left(px(frame.left))
@@ -348,9 +361,10 @@ impl EditorView {
                     .overflow_hidden()
                     .border_y_1()
                     .border_color(theme.paint_color(color::POPOVER_BORDER))
-                    .bg(theme.paint_color(color::POPOVER_BACKGROUND))
+                    .bg(theme.paint_color(color::EDITOR_BACKGROUND))
                     .child(frame.content)
-                    .into_any_element()
+                    .into_any_element();
+                strip.into_iter().chain([zone])
             })
             .collect()
     }

@@ -23,7 +23,11 @@ fn content(shown: gpui::Entity<Buffer>, line: usize) -> ZoneContentSpec {
 /// `focus`.
 fn limited(shown: gpui::Entity<Buffer>, line: usize, focus: bool, limit: u32) -> ZoneContentSpec {
     ZoneContentSpec {
-        spec: ZoneSpec { line, focus },
+        spec: ZoneSpec {
+            line,
+            focus,
+            gutter: None,
+        },
         toolbar: Vec::new(),
         layout: GroupSpec {
             arrangement: Arrangement::Column,

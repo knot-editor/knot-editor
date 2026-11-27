@@ -1043,13 +1043,17 @@ function editorFor(authority: Native) {
     },
     async openZone(id: unknown, zone: unknown) {
       expectRecord(zone, "zone must be an object");
-      const { line, toolbar, focus } = zone;
+      const { line, toolbar, focus, gutter } = zone;
       if (typeof line !== "number" || !Number.isSafeInteger(line) || line < 0) {
         throw new TypeError("a zone line must be a non-negative safe integer");
       }
       if (focus !== undefined && typeof focus !== "boolean") throw new TypeError("zone focus must be a boolean");
+      if (gutter !== undefined && (typeof gutter !== "string" || gutter === "")) {
+        throw new TypeError("zone gutter must be a color key");
+      }
       const options = JSON.stringify({
         ...(focus === undefined ? {} : { focus }),
+        ...(gutter === undefined ? {} : { gutter }),
         toolbar: JSON.parse(toolbar === undefined ? "[]" : compositeToolbar(toolbar)),
       });
       await request("editorOpenZone", authority, zoneId(id), line, options, compositeLayoutJson(zone.layout, true));

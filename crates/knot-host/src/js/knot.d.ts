@@ -2023,6 +2023,9 @@ declare module "knot" {
      * `focused`) takes focus when the zone opens, instead of the editor
      * keeping it. Default false. */
     readonly focus?: boolean;
+    /** The theme color key of a strip the gutter draws beside the zone's
+     * rows, in the bar lane, to tie the zone to the lines it explains. */
+    readonly gutter?: string;
     /** Icon buttons above the layout; each runs its command with the
      * editor's tab as its target and the editor as its editor, wherever focus
      * is. */

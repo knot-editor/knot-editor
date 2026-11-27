@@ -320,6 +320,8 @@ pub(crate) struct PopoverOptions {
 pub(crate) struct ZoneOptions {
     #[serde(default)]
     pub focus: bool,
+    #[serde(default)]
+    pub gutter: Option<String>,
     pub toolbar: Vec<ToolbarButton>,
 }
 
@@ -500,6 +502,7 @@ impl ProductExtensionHost {
             spec: ZoneSpec {
                 line: line as usize,
                 focus: options.focus,
+                gutter: options.gutter,
             },
             toolbar: options.toolbar,
             layout: self.composite_spec(owner, layout, cx)?,

@@ -8,7 +8,11 @@ fn owner(extension: u64) -> ExtensionKey {
 }
 
 fn spec(line: usize) -> ZoneSpec {
-    ZoneSpec { line, focus: false }
+    ZoneSpec {
+        line,
+        focus: false,
+        gutter: None,
+    }
 }
 
 fn caret_line(f: &Fixture) -> usize {

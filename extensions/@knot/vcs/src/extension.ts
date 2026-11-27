@@ -19,7 +19,7 @@ import type {
 } from "knot";
 import { diffs } from "@knot/diff";
 import { backendContract, vcs } from "./contract.js";
-import { contributionsOf, SHOW_HUNK } from "./gutter.js";
+import { colorOf, contributionsOf, SHOW_HUNK } from "./gutter.js";
 import { baselineText, hunkAt, revertEdit } from "./hunk.js";
 import { targetLine, type Direction } from "./navigation.js";
 import { createDiscovery, isGone, type Repository } from "./repositories.js";
@@ -409,7 +409,8 @@ export async function start(): Promise<Disposable> {
     const view = target.focusedView;
     if (view === null || follow.baseline === null) commands.unavailable();
     const text = baselineText(follow.baseline, hunk);
-    const baseline = await buffers.create({ text, language: follow.language, readOnly: true });
+    // The last line break would show as an empty line.
+    const baseline = await buffers.create({ text: text.replace(/\n$/, ""), language: follow.language, readOnly: true });
     try {
       if (text !== "") {
         const { revision } = await baseline.snapshot({ startByteOffset: 0, endByteOffset: 0 });
@@ -437,6 +438,7 @@ export async function start(): Promise<Disposable> {
       // Above the hunk's first current line, which a removal leaves as the line that followed it, or below the last.
       await editor.openZone(POPUP, {
         line: Math.min(hunk.new.start, count),
+        gutter: colorOf(hunk),
         toolbar: [
           { label: "Previous Hunk", icon: "vcs.previousHunk", command: PREVIOUS_HUNK },
           { label: "Next Hunk", icon: "vcs.nextHunk", command: NEXT_HUNK },
@@ -447,7 +449,7 @@ export async function start(): Promise<Disposable> {
         ],
         layout: {
           type: "column",
-          children: text === "" ? [] : [{ type: "editor", buffer: baseline, key: "baseline" }],
+          children: text === "" ? [] : [{ type: "editor", buffer: baseline, key: "baseline", gutter: false }],
         },
       });
     } catch (error) {

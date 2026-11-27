@@ -50,7 +50,8 @@ fn a_click_on_a_mark_opens_the_baseline_lines_under_the_hunk(cx: &mut TestAppCon
     assert_eq!(zones[0].id, "vcs.hunk");
     assert_eq!(zones[0].line, 0);
     assert_eq!(zones[0].buttons, [BUTTONS.as_slice(), &[COPY]].concat());
-    assert_eq!(zones[0].texts, ["a\n"]);
+    assert_eq!(zones[0].texts, ["a"]);
+    assert_eq!(zones[0].gutter.as_deref(), Some("diff.modified"));
 }
 
 #[gpui::test]
@@ -60,6 +61,7 @@ fn an_insertions_popup_has_only_the_toolbar(cx: &mut TestAppContext) {
     wait_until(cx, |cx| !window.zones(cx).is_empty());
     let zones = window.zones(cx);
     assert_eq!(zones[0].line, 3);
+    assert_eq!(zones[0].gutter.as_deref(), Some("diff.added"));
     assert_eq!(zones[0].buttons, BUTTONS);
     assert!(zones[0].texts.is_empty());
 }
@@ -83,7 +85,8 @@ fn a_removals_popup_sits_above_the_line_that_followed_it(cx: &mut TestAppContext
     wait_until(cx, |cx| !window.zones(cx).is_empty());
     let zones = window.zones(cx);
     assert_eq!(zones[0].line, 2);
-    assert_eq!(zones[0].texts, ["c\n"]);
+    assert_eq!(zones[0].texts, ["c"]);
+    assert_eq!(zones[0].gutter.as_deref(), Some("diff.removed"));
 }
 
 #[gpui::test]
@@ -195,7 +198,7 @@ fn a_removal_at_the_end_of_the_file_sits_below_the_last_line(cx: &mut TestAppCon
     shown.1.click_gutter_bar(3, cx);
     wait_until(cx, |cx| !shown.1.zones(cx).is_empty());
     let zones = shown.1.zones(cx);
-    assert_eq!(zones[0].texts, ["d\n"]);
+    assert_eq!(zones[0].texts, ["d"]);
     assert_eq!(zones[0].line, text(&shown.1, cx).matches('\n').count());
 }
 

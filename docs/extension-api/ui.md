@@ -566,7 +566,8 @@ whole line heights and at most the viewport's, so members scroll themselves
 beyond that. A wheel over it scrolls the member under the pointer when that can
 scroll, else the editor. The zone holds no caret: the editor's caret steps over
 its rows. Like a popover's, its views are children of the editor in the view
-tree, and it takes focus only with `focus: true`.
+tree, and it takes focus only with `focus: true`. `gutter` names a theme color key for a strip the gutter draws beside the
+zone, tying it to the lines it explains.
 
 An edit does not close a zone; it follows its line, and one whose line an edit
 deletes moves to the start of the edit. A click elsewhere does not close it

@@ -7,13 +7,16 @@
 use knot_protocol::ExtensionKey;
 
 /// What a zone shows where.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ZoneSpec {
     /// The buffer line the zone sits above; the line count means below the
     /// last line, and larger lines clamp to it.
     pub line: usize,
     /// Whether the zone's focused member takes focus when it opens.
     pub focus: bool,
+    /// The theme color key of the strip the gutter shows beside the zone's
+    /// rows, if any.
+    pub gutter: Option<String>,
 }
 
 /// One open zone.
@@ -144,7 +147,11 @@ mod tests {
     }
 
     fn spec(line: usize) -> ZoneSpec {
-        ZoneSpec { line, focus: false }
+        ZoneSpec {
+            line,
+            focus: false,
+            gutter: None,
+        }
     }
 
     fn ids(zones: &EditorZones) -> Vec<(ExtensionKey, &str)> {
@@ -167,6 +174,7 @@ mod tests {
             ZoneSpec {
                 line: 5,
                 focus: true,
+                gutter: None,
             },
         );
         assert_eq!(again, a);

@@ -1078,6 +1078,7 @@ impl EditorState {
         spec: zones::ZoneSpec,
         model: &BufferModel,
     ) -> u64 {
+        let line = spec.line;
         let key = self.zones.open(owner, id, spec);
         let rows = self
             .wrap
@@ -1085,7 +1086,7 @@ impl EditorState {
             .iter()
             .find(|zone| zone.key == key)
             .map_or(0, |zone| zone.rows);
-        self.change_rows(model, |wrap| wrap.set_zone(key, spec.line, rows));
+        self.change_rows(model, |wrap| wrap.set_zone(key, line, rows));
         key
     }
 
