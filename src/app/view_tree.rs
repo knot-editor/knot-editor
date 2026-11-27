@@ -27,6 +27,7 @@ pub(crate) enum ViewKind {
     Text,
     Composite,
     Popover,
+    Zone,
 }
 
 impl ViewKind {
@@ -38,6 +39,7 @@ impl ViewKind {
             Self::Text => "text",
             Self::Composite => "composite",
             Self::Popover => "popover",
+            Self::Zone => "zone",
         }
     }
 }
@@ -85,11 +87,11 @@ impl ViewNode {
         Some(path)
     }
 
-    /// The editors in popovers beneath this view.
+    /// The editors in popovers and zones beneath this view.
     pub(crate) fn popover_editors(&self) -> Vec<&Entity<EditorView>> {
         self.descendants()
             .into_iter()
-            .filter(|node| node.kind == ViewKind::Popover)
+            .filter(|node| matches!(node.kind, ViewKind::Popover | ViewKind::Zone))
             .flat_map(|popover| popover.descendants())
             .filter_map(|node| node.editor.as_ref())
             .collect()
@@ -111,9 +113,14 @@ pub(crate) trait ViewTree {
 }
 
 impl ViewTree for Entity<EditorView> {
-    /// The editor's node, with the popovers floating over it as children.
+    /// The editor's node, with the popovers floating over it and the zones
+    /// between its lines as children.
     fn view_node(&self, cx: &App) -> ViewNode {
-        let (children, focus) = self.read(cx).editor().read(cx).popover_nodes(cx);
+        let editor = self.read(cx).editor().read(cx);
+        let (mut children, mut focus) = editor.popover_nodes(cx);
+        let (zones, zone_focus) = editor.zone_nodes(cx);
+        focus = focus.or(zone_focus.map(|index| children.len() + index));
+        children.extend(zones);
         ViewNode {
             editor: Some(self.clone()),
             children,

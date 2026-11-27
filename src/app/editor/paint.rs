@@ -13,7 +13,7 @@ impl Render for EditorView {
         }
         self.update_caret_blink(focused, cx);
         self.follow_bar_focus(window, cx);
-        self.follow_popover_focus(window, cx);
+        self.follow_content_focus(window, cx);
         self.measure_zones(cx);
         let bars = self.render_bars(cx);
         let entity = cx.entity();
@@ -63,25 +63,7 @@ impl Render for EditorView {
             // content up, i.e. the viewport descends — scroll increases.
             // ScrollEvent delta is positive for swipes upward (toward
             // content top), so we invert it here.
-            .on_scroll(cx.listener(|this, ev: &ScrollEvent, _, cx| {
-                let (dx, dy) = match ev.delta {
-                    ScrollDelta::Pixels(p) => (f32::from(p.x), f32::from(p.y)),
-                    ScrollDelta::Lines(p) => (
-                        p.x * this.metrics.line_height,
-                        p.y * this.metrics.line_height,
-                    ),
-                };
-                let rows = -dy / this.metrics.line_height;
-                let max_x = this.max_line_width + 2. - f32::from(this.text_bounds().size.width);
-                this.editor.update(cx, |editor, cx| {
-                    let max_x = if editor.wrap().width().is_some() {
-                        0.
-                    } else {
-                        max_x
-                    };
-                    editor.scroll_by(rows, -dx, max_x, cx)
-                });
-            }))
+            .on_scroll(cx.listener(|this, ev: &ScrollEvent, _, cx| this.on_scroll(ev, cx)))
             .children(bars)
             .child(
                 div()
@@ -92,6 +74,8 @@ impl Render for EditorView {
                     .child(
                         div()
                             .absolute()
+                            .top_0()
+                            .left_0()
                             .size_full()
                             .overflow_hidden()
                             .children(zones),
@@ -101,6 +85,36 @@ impl Render for EditorView {
             )
     }
 }
+impl EditorView {
+    /// The wheel: scroll the text, and swallow the event when it moved, so
+    /// that an editor inside a zone passes the wheel on to the editor around
+    /// it only when it cannot scroll further.
+    pub(super) fn on_scroll(&mut self, ev: &ScrollEvent, cx: &mut Context<Self>) {
+        let (dx, dy) = match ev.delta {
+            ScrollDelta::Pixels(p) => (f32::from(p.x), f32::from(p.y)),
+            ScrollDelta::Lines(p) => (
+                p.x * self.metrics.line_height,
+                p.y * self.metrics.line_height,
+            ),
+        };
+        let rows = -dy / self.metrics.line_height;
+        let max_x = self.max_line_width + 2. - f32::from(self.text_bounds().size.width);
+        let scrolled = self.editor.update(cx, |editor, cx| {
+            let max_x = if editor.wrap().width().is_some() {
+                0.
+            } else {
+                max_x
+            };
+            let before = (editor.scroll_top(), editor.scroll_x());
+            editor.scroll_by(rows, -dx, max_x, cx);
+            before != (editor.scroll_top(), editor.scroll_x())
+        });
+        if scrolled {
+            cx.stop_propagation();
+        }
+    }
+}
+
 /// The custom `Element`. Owns no state itself; reads everything from the
 /// `EditorView` entity and its editor each layout/paint. Implements `Element` directly
 /// (not `RenderOnce`) per the `Element` module doc's recommendation for

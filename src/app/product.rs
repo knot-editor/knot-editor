@@ -1191,7 +1191,7 @@ impl KnotWindow {
                                         view.read(cx)
                                             .editor()
                                             .read(cx)
-                                            .popover_focus_handles(cx)
+                                            .hosted_focus_handles(cx)
                                             .contains(handle)
                                     })
                             })

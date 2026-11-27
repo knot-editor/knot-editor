@@ -220,8 +220,8 @@ impl ProductCommandTarget {
         }
     }
 
-    /// The editor a popover floats over when the captured leaf is a view
-    /// inside that popover.
+    /// The editor a popover floats over or a zone sits in when the captured
+    /// leaf is a view inside it.
     pub(crate) fn popover_anchor(
         &self,
         cx: &App,
@@ -233,7 +233,13 @@ impl ProductCommandTarget {
         let root = workbench.view_node(workbench.tab(tab.pane, tab.tab)?, cx)?;
         let path = root.path_to(leaf)?;
         path.windows(2)
-            .find(|pair| pair[1].kind == crate::app::view_tree::ViewKind::Popover)
+            .find(|pair| {
+                matches!(
+                    pair[1].kind,
+                    crate::app::view_tree::ViewKind::Popover
+                        | crate::app::view_tree::ViewKind::Zone
+                )
+            })
             .and_then(|pair| pair[0].editor.clone())
     }
 

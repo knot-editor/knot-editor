@@ -124,7 +124,7 @@ pub struct Editor {
     /// The view behind each open popover.
     popover_views: Vec<popovers::PopoverView>,
     /// Where the window should move focus the next time the editor renders.
-    popover_focus: Option<popovers::PopoverFocus>,
+    content_focus: Option<popovers::ContentFocus>,
     /// The view behind each open zone.
     zone_views: Vec<zones::ZoneView>,
     /// The block rows each extension lifecycle set.
@@ -211,7 +211,7 @@ impl Editor {
             completion_tasks: Vec::new(),
             bar_inputs: Vec::new(),
             popover_views: Vec::new(),
-            popover_focus: None,
+            content_focus: None,
             zone_views: Vec::new(),
             owned_blocks: Vec::new(),
             _model_subscription: model_subscription,
@@ -237,7 +237,7 @@ impl Editor {
         self.bar_inputs.clear();
         self.popover_views.clear();
         self.zone_views.clear();
-        self.popover_focus = None;
+        self.content_focus = None;
         cx.notify();
     }
 

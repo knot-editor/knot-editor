@@ -25,10 +25,12 @@ pub(crate) struct PopoverClosed {
 impl EventEmitter<PopoverClosed> for Editor {}
 
 /// Where the window moves focus when the editor next renders.
-pub(super) enum PopoverFocus {
+pub(super) enum ContentFocus {
     /// To the focused member of the popover `id` of `owner`.
     Popover(ExtensionKey, String),
-    /// Back to the editor's text, as a focused popover closed.
+    /// To the focused member of the zone `id` of `owner`.
+    Zone(ExtensionKey, String),
+    /// Back to the editor's text, as a focused popover or zone closed.
     Text,
 }
 
@@ -46,7 +48,7 @@ pub(crate) struct PopoverContent {
     /// None when the popover holds no view, leaving the toolbar alone.
     pub(super) layout: Option<Layout>,
     /// Whether one of its views has focus.
-    inside: bool,
+    pub(super) inside: bool,
     /// Watch the views' focus; set up on the first render after the layout
     /// changes, which has the window.
     focus_subscriptions: Vec<Subscription>,
@@ -165,11 +167,11 @@ impl PopoverContent {
         toolbar + layout + 2.
     }
 
-    /// The popover's node of the view tree.
-    fn node(&self, id: EntityId, cx: &App) -> ViewNode {
+    /// The node of the view tree for content of kind `kind`.
+    pub(super) fn node(&self, id: EntityId, kind: ViewKind, cx: &App) -> ViewNode {
         match &self.layout {
-            Some(layout) => layout.node(id, ViewKind::Popover, cx),
-            None => ViewNode::leaf(id, ViewKind::Popover),
+            Some(layout) => layout.node(id, kind, cx),
+            None => ViewNode::leaf(id, kind),
         }
     }
 
@@ -269,7 +271,7 @@ impl Editor {
     ) -> Vec<ExtensionView> {
         let model = self.model.clone();
         if content.spec.focus {
-            self.popover_focus = Some(PopoverFocus::Popover(owner, id.to_owned()));
+            self.content_focus = Some(ContentFocus::Popover(owner, id.to_owned()));
         }
         model.update(cx, |model, _| {
             self.state
@@ -383,7 +385,7 @@ impl Editor {
                     .any(|popover| popover.owner == view.owner && popover.id == view.id)
         });
         if lost_focus {
-            self.popover_focus = Some(PopoverFocus::Text);
+            self.content_focus = Some(ContentFocus::Text);
             cx.notify();
         }
         if self.popover_views.len() == open.len()
@@ -427,7 +429,7 @@ impl Editor {
                 popover
                     .content
                     .read(cx)
-                    .node(popover.content.entity_id(), cx)
+                    .node(popover.content.entity_id(), ViewKind::Popover, cx)
             })
             .collect();
         let focus = self
@@ -437,11 +439,14 @@ impl Editor {
         (nodes, focus)
     }
 
-    /// The focus handles of every view in the open popovers.
-    pub(crate) fn popover_focus_handles(&self, cx: &App) -> Vec<FocusHandle> {
+    /// The focus handles of every view in the open popovers and zones.
+    pub(crate) fn hosted_focus_handles(&self, cx: &App) -> Vec<FocusHandle> {
+        let zones = self.zone_views.iter().map(|zone| &zone.content);
         self.popover_views
             .iter()
-            .flat_map(|popover| popover.content.read(cx).leaves_of_layout())
+            .map(|popover| &popover.content)
+            .chain(zones)
+            .flat_map(|content| content.read(cx).leaves_of_layout())
             .map(|leaf| leaf.focus_handle(cx))
             .collect()
     }
@@ -464,18 +469,26 @@ pub(super) struct PopoverFrame {
 }
 
 impl EditorView {
-    /// Move focus into a popover that asked for it when it opened, or back to
-    /// the text after the popover with focus closed.
-    pub(super) fn follow_popover_focus(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    /// Move focus into a popover or zone that asked for it when it opened, or
+    /// back to the text after the one with focus closed.
+    pub(super) fn follow_content_focus(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(target) = self
             .editor
-            .update(cx, |editor, _| editor.popover_focus.take())
+            .update(cx, |editor, _| editor.content_focus.take())
         else {
             return;
         };
         let handle = match target {
-            PopoverFocus::Text => self.focus.clone(),
-            PopoverFocus::Popover(owner, id) => {
+            ContentFocus::Text => self.focus.clone(),
+            ContentFocus::Zone(owner, id) => {
+                let editor = self.editor.read(cx);
+                let content = editor.zone_content_of(owner, &id);
+                match content.and_then(|content| content.read(cx).layout.as_ref()) {
+                    Some(layout) => layout.focused_handle(cx),
+                    None => return,
+                }
+            }
+            ContentFocus::Popover(owner, id) => {
                 let editor = self.editor.read(cx);
                 let content = editor
                     .state

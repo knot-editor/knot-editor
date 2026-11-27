@@ -142,7 +142,7 @@ impl EditorView {
             + editor.scroll_top())
         .floor()
         .max(0.) as usize;
-        if editor.wrap().block_row(row).is_some() {
+        if editor.wrap().block_row(row).is_some() || editor.wrap().zone_row(row).is_some() {
             return None;
         }
         let (line, col) = self.hit_test(editor, position, window, cx);
@@ -262,9 +262,13 @@ impl EditorView {
         let row = (f32::from(p.y - origin.y) / self.metrics.line_height + editor.scroll_top())
             .floor()
             .max(0.) as usize;
-        // A block holds no caret: a point on one is the start of its line.
+        // A block or zone holds no caret: a point on one is the start of its
+        // line.
         if let Some(block) = editor.wrap().block_row(row) {
             return (block.line, 0);
+        }
+        if editor.wrap().zone_row(row).is_some() {
+            return (editor.wrap().position(row).0, 0);
         }
         self.column_for_x(
             editor,

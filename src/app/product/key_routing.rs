@@ -125,9 +125,9 @@ impl KnotWindow {
         delivered
     }
 
-    /// Close the popover with focus, else the newest, over the editor Escape
-    /// is for, ahead of the keymap so that modal packages cannot shadow it;
-    /// false when none is open or a bar field has the keys.
+    /// Close the zone or popover with focus, else the newest popover, over the
+    /// editor Escape is for, ahead of the keymap so that modal packages cannot
+    /// shadow it; false when none is open or a bar field has the keys.
     fn dismiss_popover(&mut self, cx: &mut Context<Self>) -> bool {
         if self.focus != Focus::Workbench {
             return false;
@@ -144,7 +144,9 @@ impl KnotWindow {
         if editor.read(cx).bars().focused_bar().is_some() {
             return false;
         }
-        editor.update(cx, |editor, cx| editor.dismiss_popover(cx))
+        editor.update(cx, |editor, cx| {
+            editor.dismiss_zone(cx) || editor.dismiss_popover(cx)
+        })
     }
 
     /// Whether the focused pane belongs to a tool window.

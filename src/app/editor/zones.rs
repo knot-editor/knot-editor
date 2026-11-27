@@ -11,11 +11,22 @@
 use knot_model::editor::zones::ZoneSpec;
 use knot_protocol::ExtensionKey;
 
-use super::popovers::PopoverContent;
+use super::popovers::{ContentFocus, PopoverContent};
 use super::*;
 use crate::app::convert::ThemePaint as _;
 use crate::app::view_layout::{GroupSpec, ToolbarButton};
+use crate::app::view_tree::{ViewKind, ViewNode};
 use crate::app::workbench::ExtensionView;
+
+/// Knot closed a zone `owner` opened because the user dismissed it.
+#[allow(dead_code)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct ZoneClosed {
+    pub owner: ExtensionKey,
+    pub id: String,
+}
+
+impl EventEmitter<ZoneClosed> for Editor {}
 
 #[allow(dead_code)]
 /// What `open_zone` sets: where the zone sits, and what it shows.
@@ -29,7 +40,7 @@ pub(crate) struct ZoneContentSpec {
 pub(super) struct ZoneView {
     owner: ExtensionKey,
     id: String,
-    content: Entity<PopoverContent>,
+    pub(super) content: Entity<PopoverContent>,
     /// Re-measure when a member's content changes.
     _observers: Vec<Subscription>,
 }
@@ -58,6 +69,9 @@ impl Editor {
         cx: &mut Context<Self>,
     ) -> Vec<ExtensionView> {
         let model = self.model.clone();
+        if content.spec.focus {
+            self.content_focus = Some(ContentFocus::Zone(owner, id.to_owned()));
+        }
         model.update(cx, |model, _| {
             self.state.open_zone(owner, id, content.spec, model)
         });
@@ -122,10 +136,46 @@ impl Editor {
         closed
     }
 
-    /// Drop the content of the zones the state no longer has and order the
-    /// rest as the state does.
+    /// Close the zone with focus, as Escape does, for its owner to hear;
+    /// false when no zone has focus.
+    pub(crate) fn dismiss_zone(&mut self, cx: &mut Context<Self>) -> bool {
+        let Some(view) = self
+            .zone_views
+            .iter()
+            .find(|view| view.content.read(cx).inside)
+        else {
+            return false;
+        };
+        let Some(key) = self.state.zones().get(view.owner, &view.id).map(|z| z.key) else {
+            return false;
+        };
+        let model = self.model.clone();
+        let closed = model.update(cx, |model, _| self.state.dismiss_zone(key, model));
+        self.sync_zone_views(cx);
+        closed
+    }
+
+    /// Report the zones the user dismissed, move focus back to the text if
+    /// one with focus went, drop the content of the zones the state no longer
+    /// has, and order the rest as the state does.
     pub(super) fn sync_zone_views(&mut self, cx: &mut Context<Self>) {
+        for closed in self.state.take_closed_zones() {
+            cx.emit(ZoneClosed {
+                owner: closed.owner,
+                id: closed.id,
+            });
+        }
         let open = self.state.zones().zones();
+        let lost_focus = self.zone_views.iter().any(|view| {
+            view.content.read(cx).inside
+                && !open
+                    .iter()
+                    .any(|zone| zone.owner == view.owner && zone.id == view.id)
+        });
+        if lost_focus {
+            self.content_focus = Some(ContentFocus::Text);
+            cx.notify();
+        }
         if self.zone_views.len() == open.len()
             && self
                 .zone_views
@@ -199,6 +249,37 @@ impl Editor {
             .map(|view| &view.content)
     }
 
+    /// The content of `owner`'s zone `id`.
+    pub(super) fn zone_content_of(
+        &self,
+        owner: ExtensionKey,
+        id: &str,
+    ) -> Option<&Entity<PopoverContent>> {
+        self.zone_views
+            .iter()
+            .find(|view| view.owner == owner && view.id == id)
+            .map(|view| &view.content)
+    }
+
+    /// The nodes of the open zones, in the state's order, and the one with
+    /// focus.
+    pub(crate) fn zone_nodes(&self, cx: &App) -> (Vec<ViewNode>, Option<usize>) {
+        let nodes = self
+            .zone_views
+            .iter()
+            .map(|zone| {
+                zone.content
+                    .read(cx)
+                    .node(zone.content.entity_id(), ViewKind::Zone, cx)
+            })
+            .collect();
+        let focus = self
+            .zone_views
+            .iter()
+            .position(|zone| zone.content.read(cx).inside);
+        (nodes, focus)
+    }
+
     /// The content of the open zones, in the state's order.
     #[cfg(test)]
     pub(crate) fn zone_contents(&self) -> Vec<Entity<PopoverContent>> {
@@ -246,7 +327,7 @@ impl EditorView {
     }
 
     /// The zones over the text.
-    pub(super) fn render_zones(&self, cx: &App) -> Vec<AnyElement> {
+    pub(super) fn render_zones(&self, cx: &Context<Self>) -> Vec<AnyElement> {
         let theme = theme(cx);
         self.zone_frames(cx)
             .into_iter()
@@ -258,6 +339,9 @@ impl EditorView {
                     .w(px(frame.width))
                     .h(px(frame.height))
                     .occlude()
+                    // What the zone's views leave of the wheel scrolls the
+                    // editor.
+                    .on_scroll(cx.listener(|this, ev: &ScrollEvent, _, cx| this.on_scroll(ev, cx)))
                     .overflow_hidden()
                     .border_y_1()
                     .border_color(theme.paint_color(color::POPOVER_BORDER))

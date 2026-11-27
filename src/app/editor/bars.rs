@@ -348,7 +348,7 @@ impl EditorView {
             && self
                 .editor
                 .read(cx)
-                .popover_focus_handles(cx)
+                .hosted_focus_handles(cx)
                 .iter()
                 .any(|handle| handle.contains_focused(window, cx))
         {
