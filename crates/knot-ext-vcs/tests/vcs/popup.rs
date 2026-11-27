@@ -212,6 +212,15 @@ fn an_edit_closes_the_popup(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+fn a_removals_wedge_is_clickable_on_both_sides_of_its_boundary(cx: &mut TestAppContext) {
+    let (_product, window, _directory) = changed(cx);
+    // The removal of `c` points at the boundary above line 2.
+    window.click_gutter_edge(2, cx);
+    wait_until(cx, |cx| !window.zones(cx).is_empty());
+    assert_eq!(window.zones(cx)[0].line, 2);
+}
+
+#[gpui::test]
 fn clicking_the_open_hunks_mark_again_closes_the_popup(cx: &mut TestAppContext) {
     let (_product, window, _directory) = changed(cx);
     window.click_gutter_bar(0, cx);

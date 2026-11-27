@@ -1043,8 +1043,18 @@ impl TestWindow {
         cx.run_until_parked();
     }
 
+    /// Click the bar lane of the gutter just above `line` of the first editor
+    /// tab, where a deletion's wedge points.
+    pub fn click_gutter_edge(&self, line: usize, cx: &mut TestAppContext) {
+        self.click_bar_lane(line, -10., cx);
+    }
+
     /// Click the bar lane of the gutter on `line` of the first editor tab.
     pub fn click_gutter_bar(&self, line: usize, cx: &mut TestAppContext) {
+        self.click_bar_lane(line, 0., cx);
+    }
+
+    fn click_bar_lane(&self, line: usize, dy: f32, cx: &mut TestAppContext) {
         let native_window = self.native_window.expect("a native window");
         let at = cx.read(|cx| {
             let workbench = self.window.read(cx).workbench.read(cx);
@@ -1052,7 +1062,8 @@ impl TestWindow {
                 .tabs()
                 .find_map(|tab| workbench.editor(tab))
                 .expect("an editor tab");
-            view.read(cx).click_point_for_test(Some(true), line)
+            let at = view.read(cx).click_point_for_test(Some(true), line);
+            gpui::point(at.x, at.y + gpui::px(dy))
         });
         let mut visual = VisualTestContext::from_window(native_window, cx);
         visual.simulate_click(at, gpui::Modifiers::default());

@@ -170,6 +170,26 @@ impl EditorView {
         );
     }
 
+    /// The deletion mark whose wedge is under `position`: the bar lane within
+    /// half a row of the boundary the wedge points at, on either side.
+    pub(super) fn deletion_at<'a>(
+        &self,
+        editor: &'a Editor,
+        position: Point<Pixels>,
+    ) -> Option<&'a RenderedGutterMarker> {
+        let line_height = self.metrics.line_height;
+        let y = f32::from(position.y - self.bounds.origin.y);
+        bar_marks(editor, &editor.visible_rows())
+            .into_iter()
+            .filter(|(_, mark)| mark.style == GutterStyle::Deletion)
+            .find(|(span, mark)| {
+                let row = if mark.below { span.end } else { span.start };
+                let edge = (row as f32 - editor.scroll_top()) * line_height;
+                (y - edge).abs() < line_height / 2.
+            })
+            .map(|(_, mark)| mark)
+    }
+
     /// The gutter lane under a window position.
     pub(super) fn gutter_lane_at(&self, position: Point<Pixels>) -> Option<GutterLane> {
         self.gutter

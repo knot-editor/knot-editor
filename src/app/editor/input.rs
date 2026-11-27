@@ -51,8 +51,9 @@ impl EditorView {
             Some(GutterLane::Markers) => editor
                 .gutter_marker(line)
                 .and_then(|marker| Some((marker.command.clone()?, marker.source, marker.range))),
-            Some(GutterLane::Bars) => editor
-                .gutter_bar(line)
+            Some(GutterLane::Bars) => self
+                .deletion_at(editor, ev.position)
+                .or_else(|| editor.gutter_bar(line))
                 .and_then(|bar| Some((bar.command.clone()?, bar.source, bar.range))),
             Some(GutterLane::Folds) => {
                 self.suppress_drag_selection = true;

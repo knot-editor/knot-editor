@@ -196,8 +196,21 @@ impl Element for EditorElement {
                 gutter::bar_marks(editor, &rows)
                     .into_iter()
                     .filter(|(_, bar)| bar.command.is_some())
-                    .map(|(span, _)| {
-                        row_bounds(span, view.gutter.bars_start, view.gutter.bars_width)
+                    .map(|(span, bar)| {
+                        let cell = row_bounds(span, view.gutter.bars_start, view.gutter.bars_width);
+                        if bar.style != GutterStyle::Deletion {
+                            return cell;
+                        }
+                        // A wedge's target straddles the boundary it points at.
+                        let edge = if bar.below {
+                            cell.origin.y + cell.size.height
+                        } else {
+                            cell.origin.y
+                        };
+                        Bounds {
+                            origin: point(cell.origin.x, edge - px(line_height / 2.)),
+                            size: size(cell.size.width, px(line_height)),
+                        }
                     }),
             );
             (view.gutter, markers)
