@@ -127,23 +127,10 @@ may deserve polish when the commit panel lands.
 
 ### 3. Version Control output ✅
 
-Deliverables: `vcs.log` on the `vcs` contract, the `vcs.output` tool window,
-`vcs.showOutput`, the Changes toolbar button; `@knot/git` logs its existing
-actions.
-
-Validation: `extensions/@knot/vcs/test` for appending, the size cap, and
-ignoring a dropped backend; a product test in `crates/knot-ext-vcs/tests` that
-staging a file logs the `git add` block. `just check`.
-
-Review gate: stage and discard from the Changes view, then find the output
-through each of the discoverability paths.
-
-**Implementation context:** the contract is `extensions/@knot/vcs/src/contract.ts`;
-add an `output.ts` module in `@knot/vcs` wired from `extension.ts`. Git's actions
-are `extensions/@knot/git/src/actions.ts` over `git()` in `git.ts`, which needs
-to return stderr (`processes.run` already returns it) and accept `stdin`. The
-text frame API is in [ui](../extension-api/ui.md#read-only-text-frames); showing
-the end after `setText` may need a reveal option on text frames.
+`vcs.log`, the `vcs.output` tool window, `vcs.showOutput`, and the Changes
+toolbar button are described in [version control](../architecture/version-control.md#version-control-changes-view).
+Text frames take `follow: true` to show their end after `setText`; see the
+[ui guide](../extension-api/ui.md#read-only-text-frames).
 
 ### 4. Commit panel
 
