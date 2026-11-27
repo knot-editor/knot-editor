@@ -30,7 +30,6 @@ point.
 
 The [version control plan](plans/vcs.md) comes first, in its milestone order:
 
-- D215 — VCS commit.
 - D216 — Git operations.
 
 Then:
@@ -395,15 +394,8 @@ hold the analyses that support some items.
 The [version control plan](plans/vcs.md) holds the agreed architecture and the
 milestones these items belong to.
 
-- **D215 — VCS commit** 🚧
-  - Depends on: none
-  - Description: Committing needs a terminal. Add the commit UI, a message
-    editor with options the provider supplies (for Git: amend, sign-off), and
-    commit through the provider; build the UI primitives it needs as extension
-    API. See the [plan](plans/d215-vcs-commit.md).
-
 - **D216 — Git operations** 🚧
-  - Depends on: D215
+  - Depends on: none
   - Description: Staging hunks, branches, push and pull, stash, and other
     Git-specific workflows stay outside the shared provider contract. Build
     them in `@knot/git` as the plan's last milestone. Let backends add their
