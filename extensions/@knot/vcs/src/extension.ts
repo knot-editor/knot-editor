@@ -44,11 +44,18 @@ export const REVERT_HUNK = "vcs.revertHunk";
 export const COPY_HUNK = "vcs.copyHunk";
 export const CLOSE_HUNK = "vcs.closeHunk";
 
+/** The view of an editor, which a popup opens on. */
+type PopupView = NonNullable<CommandContext["target"]["focusedView"]>;
+
 /** The hunk popup that is open on one of a document's editors. */
 type Popup = {
   readonly editor: EditorHandle;
+  /** The view of the editor, to open the popup again. */
+  readonly view: PopupView;
   /** The read-only buffer showing the baseline's lines. */
   readonly baseline: ExtensionBuffer;
+  /** The read-only buffer of the "Staged" row, for a staged hunk. */
+  readonly label: ExtensionBuffer | null;
   readonly listener: Disposable;
   /** The hunk it shows. */
   readonly hunk: DiffHunk;
@@ -207,11 +214,13 @@ export async function start(): Promise<Disposable> {
       }
     }
     let fetched = false;
+    let reopen: { view: PopupView; hunk: DiffHunk } | null = null;
     if (follow.fetch) {
       follow.fetch = false;
       follow.baseline = null;
       follow.staged = null;
-      // The hunk it shows may have moved.
+      // The hunk it shows may have moved; it opens again below if it has not.
+      reopen = follow.popup === null ? null : { view: follow.popup.view, hunk: follow.popup.hunk };
       await closePopup(follow);
       const { repository, uri } = follow;
       if (repository !== null && uri !== null) {
@@ -235,6 +244,11 @@ export async function start(): Promise<Disposable> {
     }
     if (fetched || (follow.repository === null && !follow.pending && follow.diff !== null)) await syncDiff(follow);
     await paint(follow);
+    if (reopen !== null && follow.baseline !== null && follow.popup === null) {
+      const shown = JSON.stringify(reopen.hunk);
+      const hunk = (await diff(follow.baseline, follow.buffer)).hunks.find((candidate) => JSON.stringify(candidate) === shown);
+      if (hunk !== undefined) await openPopup(follow, reopen.view, hunk).catch(() => {});
+    }
   }
 
   /** Closes the follow's diff, if open. */
@@ -251,6 +265,7 @@ export async function start(): Promise<Disposable> {
     follow.popup = null;
     await popup.listener[Symbol.asyncDispose]().catch(() => {});
     await Promise.resolve(popup.baseline[Symbol.asyncDispose]()).catch(() => {});
+    await Promise.resolve(popup.label?.[Symbol.asyncDispose]()).catch(() => {});
     await popup.editor[Symbol.asyncDispose]().catch(() => {});
   }
 
@@ -441,13 +456,13 @@ export async function start(): Promise<Disposable> {
   }
 
   /** Opens the popup for `hunk` under it, showing the baseline's lines it replaced. */
-  async function openPopup(follow: Follow, { target }: CommandContext, hunk: DiffHunk) {
-    const view = target.focusedView;
-    if (view === null || follow.baseline === null) commands.unavailable();
+  async function openPopup(follow: Follow, view: PopupView, hunk: DiffHunk) {
+    if (follow.baseline === null) commands.unavailable();
     const text = baselineText(follow.baseline, hunk);
     const [staged = false] = await stagedOf(follow, [hunk]);
     // The last line break would show as an empty line.
     const baseline = await buffers.create({ text: text.replace(/\n$/, ""), language: follow.language, readOnly: true });
+    const label = staged ? await buffers.create({ text: "Staged", readOnly: true }) : null;
     try {
       if (text !== "") {
         const { revision } = await baseline.snapshot({ startByteOffset: 0, endByteOffset: 0 });
@@ -467,7 +482,9 @@ export async function start(): Promise<Disposable> {
       const backendActions = await hunkActionsOf(follow, staged, Math.min(hunk.new.start, lastLine));
       const popup: Popup = {
         editor,
+        view,
         baseline,
+        label,
         hunk,
         staged,
         listener: await editor.onDidCloseZone(({ zone }) => {
@@ -483,21 +500,32 @@ export async function start(): Promise<Disposable> {
         toolbar: [
           { label: "Previous Hunk", icon: "vcs.previousHunk", command: PREVIOUS_HUNK },
           { label: "Next Hunk", icon: "vcs.nextHunk", command: NEXT_HUNK },
+          ...backendActions,
           { label: "Revert Hunk", icon: "vcs.revertHunk", command: REVERT_HUNK, arguments: here },
           { label: "Compare with Last Commit", icon: "vcs.compare", command: SHOW_CHANGES, arguments: here },
           // An insertion has no baseline lines to copy.
           ...(text === "" ? [] : [{ label: "Copy Hunk", icon: "vcs.copyHunk", command: COPY_HUNK, arguments: here }]),
-          ...backendActions,
         ],
         layout: {
           type: "column",
-          children: text === "" ? [] : [{ type: "editor", buffer: baseline, key: "baseline", gutter: false }],
+          children: [
+            ...(label === null ? [] : [{ type: "editor", buffer: label, key: "staged", gutter: false } as const]),
+            ...(text === "" ? [] : [{ type: "editor", buffer: baseline, key: "baseline", gutter: false } as const]),
+          ],
         },
       });
     } catch (error) {
-      if (follow.popup?.baseline !== baseline) await Promise.resolve(baseline[Symbol.asyncDispose]()).catch(() => {});
+      if (follow.popup?.baseline !== baseline) {
+        await Promise.resolve(baseline[Symbol.asyncDispose]()).catch(() => {});
+        await Promise.resolve(label?.[Symbol.asyncDispose]()).catch(() => {});
+      }
       throw error;
     }
+  }
+
+  /** The focused view of the command's target, which a popup needs. */
+  function viewOf({ target }: CommandContext): PopupView {
+    return target.focusedView ?? commands.unavailable();
   }
 
   /** The follow, buffer, and hunk of the clicked mark, or of the caret. */
@@ -520,7 +548,7 @@ export async function start(): Promise<Disposable> {
       await closePopup(follow);
       return;
     }
-    await openPopup(follow, context, hunk);
+    await openPopup(follow, viewOf(context), hunk);
   };
 
   /** Closes the hunk popup of the focused editor's document. */
@@ -558,7 +586,7 @@ export async function start(): Promise<Disposable> {
     await editor.setSelection({ anchor: startByteOffset, caret: startByteOffset }, { reveal: "center" });
     if (follow.popup === null) return;
     const hunk = hunkAt(hunks, line, (await buffer.lineCount()) - 1);
-    if (hunk !== null) await openPopup(follow, context, hunk);
+    if (hunk !== null) await openPopup(follow, viewOf(context), hunk);
   };
 
   /** Opens the diff of the focused file's baseline against it, at the clicked mark or the caret. */

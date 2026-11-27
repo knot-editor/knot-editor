@@ -33,7 +33,7 @@ if (await available()) {
   await icons.define("git.discard", { lucide: "undo-2" });
   await icons.define("git.rollback", { lucide: "rotate-ccw" });
   await icons.define("git.stageHunk", { lucide: "plus" });
-  await icons.define("git.unstageHunk", { lucide: "minus" });
+  await icons.define("git.unstageHunk", { lucide: "check" });
   await registerActions();
   await registerStaging();
   await backendContract("git").serve({
