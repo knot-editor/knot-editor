@@ -99,23 +99,16 @@ the editor otherwise. Approved; verified by app tests only, since nothing opens
 a zone until checkpoint 4, which also covers Escape routing through the window.
 `ZoneClosed` carries `allow(dead_code)` until the host subscribes to it.
 
-### 4. Extension API
+### 4. Extension API ✅
 
-Deliverable: `editor.openZone`, `closeZone`, and `onDidCloseZone` through the
-protocol, host handlers, bootstrap, and `knot.d.ts`; per-lifecycle and
-per-view teardown; documentation in `docs/extension-api/ui.md`.
-
-Validation: product tests beside `src/app/product/tests/editor_popovers.rs`
-(open, end-of-file line, update in place, keyed members kept, close reasons,
-teardown).
-
-Review gate: API shape reviewed against the popover API, and a manual `try.*`
-command that opens a zone with a text editor and a tree member, checking
-sizing, typing, scrolling, folding, and Escape in the real app.
-
-**Implementation context:** `crates/knot-protocol` operation declarations,
-`src/app/extensions/host/handlers.rs` and `composites.rs` (the popover
-handlers to mirror), `crates/knot-host/src/js/bootstrap.ts` and `knot.d.ts`.
+`editor.openZone`, `closeZone`, and `onDidCloseZone` are in
+[`docs/extension-api/ui.md`](../extension-api/ui.md#show-a-zone). A zone holds
+the key context `zone:<id>`, which its views also see. Escape goes to the
+keymap first and closes the focused zone only when no binding takes it, so Vim
+can leave insert mode; the Vim package binds Escape in normal mode only while
+it has an effect (visual mode or pending keys), so a second Escape closes the
+zone. The host also routes the requests of trees that popovers and zones
+host. Approved after a manual check in the real app with Vim on.
 
 ### 5. The hunk popup as a zone
 
