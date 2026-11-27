@@ -62,6 +62,14 @@ await commands.register("LABEL.tree", async () => {
   check(zone.kind === "zone" && zone.children.length === 2, "the zone has its layout's members");
   check(zone.children.every((member) => member.kind === "editor"), "the members are editors");
 });
+await commands.register("LABEL.open-tree", async () => {
+  const view = await workbench.registerView({
+    id: "LABEL.tree-view", title: "Items", embedded: true,
+    content: { kind: "tree", provider: { getChildren: (parent) => parent === null
+      ? [{ id: "a", label: "A", collapsibleState: "none" }] : [] } },
+  });
+  await (await editor()).openZone("tree", { line: 1, layout: { type: "column", children: [{ type: "tree", view }] } });
+});
 await commands.register("LABEL.validate", async ({ editor: captured }) => {
   const given = await layout(false);
   await expectError(() => captured.openZone("", { line: 0, ...given }), (e) => e instanceof TypeError, "empty id");
@@ -247,4 +255,19 @@ fn a_zone_is_a_child_of_its_editor_in_the_view_tree(cx: &mut TestAppContext) {
     load("tree", 924, cx);
     fixture.run("tree.open", cx);
     fixture.run("tree.tree", cx);
+}
+
+#[gpui::test]
+fn a_tree_in_a_zone_loads_from_its_provider(cx: &mut TestAppContext) {
+    let fixture = Fixture::new(cx);
+    load("load", 925, cx);
+    fixture.run("load.open-tree", cx);
+    let tree = fixture.leaves(0, cx).remove(0);
+    let crate::app::view_layout::Leaf::Tree(tree) = tree else {
+        panic!("a tree member");
+    };
+    wait_for_api_condition(cx, |cx| {
+        let tree = tree.read(cx);
+        !tree.is_loading() && tree.row_count() == 1
+    });
 }

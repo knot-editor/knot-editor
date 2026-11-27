@@ -2833,8 +2833,7 @@ impl ProductExtensionHost {
             editor.open_popover(owner, id, window, content, cx)
         });
         for view in attached {
-            let kind = view.kind(cx);
-            self.attach_view(kind, window.to_owned(), view, cx);
+            self.attach_hosted_view(window, view, cx);
         }
         self.track_owned_editor(owner, &editor);
     }
@@ -2854,10 +2853,27 @@ impl ProductExtensionHost {
             editor.open_zone(owner, id, window, content, cx)
         });
         for view in attached {
-            let kind = view.kind(cx);
-            self.attach_view(kind, window.to_owned(), view, cx);
+            self.attach_hosted_view(window, view, cx);
         }
         self.track_owned_editor(owner, &editor);
+    }
+
+    /// Attach a view a popover or zone hosts, and route what a tree among
+    /// them reports to the host.
+    fn attach_hosted_view(&mut self, window: &str, view: ExtensionView, cx: &mut Context<Self>) {
+        if let ExtensionView::Tree(tree) = &view {
+            cx.subscribe(tree, |host, _, event: &TreeViewEvent, cx| {
+                if !matches!(
+                    event,
+                    TreeViewEvent::ContextMenuOpened | TreeViewEvent::ContextMenuClosed
+                ) {
+                    host.handle_tree_event(event, cx);
+                }
+            })
+            .detach();
+        }
+        let kind = view.kind(cx);
+        self.attach_view(kind, window.to_owned(), view, cx);
     }
 
     /// Set or clear the calling lifecycle's caret shape on an editor,
