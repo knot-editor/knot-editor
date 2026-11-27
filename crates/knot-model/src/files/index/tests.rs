@@ -10,6 +10,7 @@ use crate::{
     filesystem::{FileSystemProviderRegistry, MemoryFileSystemProvider},
     matching::{Matcher, Query},
 };
+use proptest::{collection::vec, prelude::*};
 
 fn run<T>(future: impl Future<Output = T>) -> T {
     pollster::block_on(future)
@@ -419,26 +420,30 @@ fn mutate(random: &mut Random, fixture: &Fixture) -> Vec<ResourceUri> {
     }
 }
 
-#[test]
-fn the_index_matches_the_disk_through_random_changes_and_reclassification() {
-    for seed in 0..2 {
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(24))]
+
+    /// After a random tree is scanned, and after each random change and
+    /// policy switch, the index lists and searches what the disk walk does.
+    #[test]
+    fn the_index_matches_the_disk_through_random_changes_and_reclassification(
+        choices in vec(any::<usize>(), 0..200),
+        ignore_src in any::<bool>(),
+        steps in 1..=4usize,
+    ) {
         let fixture = Fixture::new();
-        let mut random = Random(seed);
+        let mut random = Random::new(choices);
         fixture.memory.seed_directory(uri(".git")).unwrap();
         generate(&mut random, &fixture, "", 0);
         let policy = IgnorePolicy {
-            ignored: if seed % 5 == 0 {
-                vec!["src".into()]
-            } else {
-                Vec::new()
-            },
+            ignored: if ignore_src { vec!["src".into()] } else { Vec::new() },
             ..IgnorePolicy::default()
         };
         let index = fixture.index("");
         run(index.scan(policy.clone()));
-        assert_matches_disk(&fixture, &index, &policy, &format!("seed {seed} scan"));
+        assert_matches_disk(&fixture, &index, &policy, "scan");
         let mut policy = policy;
-        for step in 0..2 {
+        for step in 0..steps {
             // A query with another policy scans the tree again.
             if random.below(8) == 0 {
                 policy.respect_gitignore = !policy.respect_gitignore;
@@ -452,12 +457,7 @@ fn the_index_matches_the_disk_through_random_changes_and_reclassification() {
             }
             let changed = mutate(&mut random, &fixture);
             run(index.apply(&changed));
-            assert_matches_disk(
-                &fixture,
-                &index,
-                &policy,
-                &format!("seed {seed} step {step} {changed:?}"),
-            );
+            assert_matches_disk(&fixture, &index, &policy, &format!("step {step} {changed:?}"));
         }
     }
 }

@@ -9,6 +9,7 @@ use std::{
 };
 
 use ignore::{WalkBuilder, gitignore::GitignoreBuilder};
+use proptest::{collection::vec, prelude::*};
 
 use crate::{
     files::{IgnorePolicy, walk},
@@ -261,16 +262,23 @@ fn symlinks_are_not_followed_and_symlinked_files_are_listed_like_ripgrep() {
     assert_equivalent(&root.join("repo"), &IgnorePolicy::default());
 }
 
-/// A deterministic generator, so a failing tree reproduces from its seed.
-pub(super) struct Random(pub(super) u64);
+/// Choices drawn by a property test and consumed in order, so a failing tree
+/// shrinks with its choices. Once they run out every pick takes its last
+/// option, which builds nothing more.
+pub(super) struct Random {
+    choices: Vec<usize>,
+    next: usize,
+}
 
 impl Random {
+    pub(super) fn new(choices: Vec<usize>) -> Self {
+        Self { choices, next: 0 }
+    }
+
     pub(super) fn below(&mut self, bound: usize) -> usize {
-        self.0 = self
-            .0
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
-        ((self.0 >> 33) as usize) % bound
+        let choice = self.choices.get(self.next).map(|choice| choice % bound);
+        self.next += 1;
+        choice.unwrap_or(bound - 1)
     }
 
     pub(super) fn pick<'a>(&mut self, items: &[&'a str]) -> &'a str {
@@ -327,25 +335,30 @@ fn generate(random: &mut Random, directory: &Path, depth: usize) {
     }
 }
 
-#[test]
-fn generated_trees_match_ripgrep() {
-    for seed in 0..4 {
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(24))]
+
+    /// A random tree of ignore files and entries is walked like ripgrep walks
+    /// it, from the repository and from its parent, with and without a
+    /// repository marker and exclude file.
+    #[test]
+    fn generated_trees_match_ripgrep(
+        choices in vec(any::<usize>(), 0..200),
+        marker in 0..3u8,
+        ignore_src in any::<bool>(),
+    ) {
         let (_guard, root) = root();
-        let mut random = Random(seed);
+        let mut random = Random::new(choices);
         let repository = root.join("repo");
         generate(&mut random, &repository, 0);
-        if seed % 4 != 0 {
+        if marker > 0 {
             fs::create_dir_all(repository.join(".git/info")).unwrap();
-            if seed % 2 == 0 {
+            if marker == 2 {
                 fs::write(repository.join(".git/info/exclude"), "*.log\n!keep.log\n").unwrap();
             }
         }
         let policy = IgnorePolicy {
-            ignored: if seed % 5 == 0 {
-                vec!["src".into()]
-            } else {
-                Vec::new()
-            },
+            ignored: if ignore_src { vec!["src".into()] } else { Vec::new() },
             ..IgnorePolicy::default()
         };
         assert_equivalent(&repository, &policy);

@@ -3982,6 +3982,7 @@ dependencies = [
  "nucleo-matcher",
  "percent-encoding",
  "pollster 1.0.3",
+ "proptest",
  "regex-automata",
  "rusqlite",
  "semver",

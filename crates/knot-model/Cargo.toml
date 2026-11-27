@@ -51,6 +51,7 @@ imara-diff = { workspace = true }
 [dev-dependencies]
 knot-core = { path = "../knot-core", features = ["test-support"] }
 pollster = { workspace = true }
+proptest = "1"
 
 [features]
 # Test-only helpers for the application's tests.
