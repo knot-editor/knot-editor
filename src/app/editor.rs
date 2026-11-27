@@ -15,6 +15,7 @@ pub(super) mod native_commands;
 mod paint;
 mod popovers;
 mod view;
+mod zones;
 
 pub(crate) use bars::BarFieldEdited;
 pub(crate) use popovers::{PopoverClosed, PopoverContentSpec};
@@ -124,6 +125,8 @@ pub struct Editor {
     popover_views: Vec<popovers::PopoverView>,
     /// Where the window should move focus the next time the editor renders.
     popover_focus: Option<popovers::PopoverFocus>,
+    /// The view behind each open zone.
+    zone_views: Vec<zones::ZoneView>,
     /// The block rows each extension lifecycle set.
     owned_blocks: Vec<OwnedBlocks>,
     _model_subscription: Subscription,
@@ -209,6 +212,7 @@ impl Editor {
             bar_inputs: Vec::new(),
             popover_views: Vec::new(),
             popover_focus: None,
+            zone_views: Vec::new(),
             owned_blocks: Vec::new(),
             _model_subscription: model_subscription,
             _release_subscription: release_subscription,
@@ -232,6 +236,7 @@ impl Editor {
         self.completion_tasks.clear();
         self.bar_inputs.clear();
         self.popover_views.clear();
+        self.zone_views.clear();
         self.popover_focus = None;
         cx.notify();
     }
@@ -261,6 +266,7 @@ impl Editor {
         });
         self.run_effects(cx);
         self.sync_popover_views(cx);
+        self.sync_zone_views(cx);
         let generation = self.state.completion_generation();
         self.completion_tasks
             .retain(|(task, _, _)| Some(*task) == generation);
@@ -374,6 +380,7 @@ impl Editor {
         model.update(cx, |buffer, _| self.state.remove_owner_state(owner, buffer));
         self.sync_bar_inputs(cx);
         self.sync_popover_views(cx);
+        self.sync_zone_views(cx);
         if self.owned_blocks.iter().any(|blocks| blocks.owner == owner) {
             self.set_block_rows(owner, Vec::new(), cx);
         }

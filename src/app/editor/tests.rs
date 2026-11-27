@@ -1129,6 +1129,7 @@ mod indentation;
 mod popovers;
 mod rulers;
 mod wrap;
+mod zones;
 
 fn press(
     view: &mut EditorView,

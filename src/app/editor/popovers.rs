@@ -44,7 +44,7 @@ pub(crate) struct PopoverContentSpec {
 pub(crate) struct PopoverContent {
     toolbar: Vec<ToolbarButton>,
     /// None when the popover holds no view, leaving the toolbar alone.
-    layout: Option<Layout>,
+    pub(super) layout: Option<Layout>,
     /// Whether one of its views has focus.
     inside: bool,
     /// Watch the views' focus; set up on the first render after the layout
@@ -53,7 +53,7 @@ pub(crate) struct PopoverContent {
 }
 
 impl PopoverContent {
-    fn new(
+    pub(super) fn new(
         toolbar: Vec<ToolbarButton>,
         layout: GroupSpec,
         window: &str,
@@ -85,7 +85,7 @@ impl PopoverContent {
 
     /// Replace what the popover shows, keeping the views of keyed members;
     /// returns the contributed views the new layout added.
-    fn update(
+    pub(super) fn update(
         &mut self,
         toolbar: Vec<ToolbarButton>,
         layout: GroupSpec,
@@ -152,7 +152,7 @@ impl PopoverContent {
 
     /// The height the content takes in window pixels, with its toolbar and
     /// border.
-    fn natural_height(&self, cx: &App) -> f32 {
+    pub(super) fn natural_height(&self, cx: &App) -> f32 {
         let toolbar = if self.toolbar.is_empty() {
             0.
         } else {
@@ -182,7 +182,7 @@ impl PopoverContent {
             .collect()
     }
 
-    fn leaves_of_layout(&self) -> Vec<crate::app::view_layout::Leaf> {
+    pub(super) fn leaves_of_layout(&self) -> Vec<crate::app::view_layout::Leaf> {
         self.layout
             .as_ref()
             .map_or_else(Vec::new, |layout| layout.leaves().to_vec())

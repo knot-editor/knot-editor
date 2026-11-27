@@ -275,6 +275,20 @@ impl Leaf {
         }
     }
 
+    /// Call `changed` on the observing entity whenever the view notifies.
+    #[allow(dead_code)]
+    pub(crate) fn observe<T: 'static>(
+        &self,
+        cx: &mut Context<T>,
+        mut changed: impl FnMut(&mut T, &mut Context<T>) + 'static,
+    ) -> Subscription {
+        match self {
+            Self::Editor(view) => cx.observe(view, move |this, _, cx| changed(this, cx)),
+            Self::Text(view) => cx.observe(view, move |this, _, cx| changed(this, cx)),
+            Self::Tree(view) => cx.observe(view, move |this, _, cx| changed(this, cx)),
+        }
+    }
+
     pub(crate) fn entity_id(&self) -> EntityId {
         match self {
             Self::Editor(view) => view.entity_id(),

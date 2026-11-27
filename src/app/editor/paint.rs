@@ -14,6 +14,7 @@ impl Render for EditorView {
         self.update_caret_blink(focused, cx);
         self.follow_bar_focus(window, cx);
         self.follow_popover_focus(window, cx);
+        self.measure_zones(cx);
         let bars = self.render_bars(cx);
         let entity = cx.entity();
         let editor = self.editor.read(cx);
@@ -27,6 +28,7 @@ impl Render for EditorView {
             crate::app::completion::render_completion(surface, anchor, theme(cx))
         });
         let popovers = self.render_popovers(cx);
+        let zones = self.render_zones(cx);
         div()
             .id(("editor", self.element_id))
             .size_full()
@@ -87,6 +89,13 @@ impl Render for EditorView {
                     .min_h_0()
                     .relative()
                     .child(EditorElement { entity })
+                    .child(
+                        div()
+                            .absolute()
+                            .size_full()
+                            .overflow_hidden()
+                            .children(zones),
+                    )
                     .children(completion)
                     .children(popovers),
             )
@@ -303,6 +312,9 @@ impl Element for EditorElement {
                     blocks.push(view.block_paint(index, &block, theme));
                     continue;
                 }
+                if editor.wrap().zone_row(index).is_some() {
+                    continue;
+                }
                 let row = editor.row(model, index);
                 if line.as_ref().is_none_or(|(at, ..)| *at != row.line) {
                     let text = line_text(model, row.line);
@@ -443,12 +455,16 @@ impl Element for EditorElement {
         // must not trigger a re-render.
         let full_bounds = bounds;
         let bounds = self.entity.update(cx, |view, cx| {
-            // Popovers place themselves against the bounds, so they follow
-            // a change of size.
+            // Popovers and zones place and size themselves against the
+            // bounds, so a change of size draws another frame for them to
+            // follow it. A notify during paint schedules none.
             let resized = view.bounds.size != full_bounds.size;
             view.bounds = full_bounds;
-            if resized && !view.editor.read(cx).popovers().popovers().is_empty() {
-                cx.notify();
+            if resized
+                && (!view.editor.read(cx).popovers().popovers().is_empty()
+                    || !view.editor.read(cx).zones().zones().is_empty())
+            {
+                window.request_animation_frame();
             }
             #[cfg(test)]
             {
