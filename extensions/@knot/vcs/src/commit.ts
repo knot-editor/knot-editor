@@ -142,6 +142,7 @@ export async function createPanel(deps: PanelDeps): Promise<Panel> {
           buffer: draft.buffer,
           placeholder: `${several ? `Commit message for ${name}` : "Commit message"} (${platform === "macos" ? "⌘" : "Ctrl+"}⏎ to commit)`,
           size: { pixels: 96 },
+          resize: "commit-message",
           focused: true,
           gutter: false,
         },

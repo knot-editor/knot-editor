@@ -98,6 +98,7 @@ test("the panel is a tree over a message editor and the backend's options, with 
   await backend("one", [ROOT], fake());
   assert.equal(layout().children[0].type, "tree");
   assert.equal(editor().placeholder, "Commit message (⌘⏎ to commit)");
+  assert.equal((editor() as { resize?: string }).resize, "commit-message");
   assert.deepEqual(controls().map((item) => [item.type, item.label, item.checked]), [
     ["checkbox", "Amend", false],
     ["checkbox", "Sign-off", false],

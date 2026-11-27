@@ -18,6 +18,7 @@ use knot_protocol::{Command, CommandArgumentValue, IconRef, ViewId};
 use super::convert::ThemePaint as _;
 use super::editor::EditorView;
 use super::icons::{AppIcon, ref_definition};
+use super::layout_sizes;
 use super::model::Buffer;
 use super::text_view::TextView;
 use super::theme::{color, theme};
@@ -149,6 +150,9 @@ pub(crate) struct MemberSpec {
     /// The most lines an editor or text frame, or rows a tree, shows before
     /// it scrolls, when the layout is sized to its content.
     pub limit: Option<u32>,
+    /// The name the user's dragged size is remembered under. A member of a
+    /// column sized in pixels shows a handle on its top edge.
+    pub resize: Option<String>,
     pub content: ContentSpec,
 }
 
@@ -369,10 +373,78 @@ struct Member {
     size: LayoutSize,
     title: Option<String>,
     limit: u32,
+    resize: Option<String>,
     content: Content,
 }
 
+/// What dragging a resize handle starts from.
+#[derive(Clone)]
+struct ResizeDrag {
+    name: String,
+    start_size: f32,
+    /// What a size is multiplied by to give window pixels.
+    scale: f32,
+    /// The pointer's y when the drag began.
+    origin: Rc<Cell<Option<Pixels>>>,
+}
+
+/// The drag's ghost, which shows nothing.
+struct NoGhost;
+
+impl Render for NoGhost {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        Empty
+    }
+}
+
+/// The handle on the top edge of a member sized in pixels, which grows the
+/// member as it is dragged up.
+fn resize_handle(name: &str, size: f32, scale: f32, cx: &App) -> Stateful<Div> {
+    let drag = ResizeDrag {
+        name: name.to_owned(),
+        start_size: size,
+        scale,
+        origin: Rc::new(Cell::new(None)),
+    };
+    let hover = theme(cx).paint_color(color::BORDER_HOVER);
+    div()
+        .id(SharedString::from(format!("layout-resize-{name}")))
+        .debug_selector({
+            let name = name.to_owned();
+            move || format!("layout-resize-{name}")
+        })
+        .absolute()
+        .top(px(-3.))
+        .left_0()
+        .w_full()
+        .h(px(6.))
+        .cursor(CursorStyle::ResizeUpDown)
+        .hover(move |style| style.bg(hover))
+        .on_drag(drag, |drag, _, window, cx| {
+            drag.origin.set(Some(window.mouse_position().y));
+            cx.new(|_| NoGhost)
+        })
+        .on_drag_move::<ResizeDrag>(|event, window, cx| {
+            let drag = event.drag(cx).clone();
+            let Some(start) = drag.origin.get() else {
+                return;
+            };
+            let dragged = f32::from(start - event.event.position.y) / drag.scale;
+            layout_sizes::remember(&drag.name, drag.start_size + dragged, cx);
+            window.refresh();
+        })
+}
+
 impl Member {
+    /// The size of a member sized in pixels: the user's dragged size when it
+    /// has a name for one, else `pixels` as the package gave it.
+    fn pixels(&self, pixels: f32, cx: &App) -> f32 {
+        self.resize
+            .as_deref()
+            .and_then(|name| layout_sizes::remembered(name, cx))
+            .unwrap_or(pixels)
+    }
+
     /// The natural height of the member's content.
     fn extent(&self, cx: &App) -> Extent {
         match &self.content {
@@ -540,6 +612,7 @@ impl Group {
                     size: member.size,
                     title: member.title,
                     limit: member.limit.unwrap_or(DEFAULT_LIMIT),
+                    resize: member.resize,
                     content,
                 }
             })
@@ -709,7 +782,9 @@ impl Group {
             self.members
                 .iter()
                 .map(|member| match member.size {
-                    LayoutSize::Pixels(pixels) if sized => Extent::Leaf(pixels * scale),
+                    LayoutSize::Pixels(pixels) if sized => {
+                        Extent::Leaf(member.pixels(pixels, cx) * scale)
+                    }
                     _ => member.extent(cx),
                 })
                 .collect()
@@ -756,6 +831,7 @@ impl Group {
                 LayoutSize::Auto => slot = slot.flex_none(),
                 LayoutSize::Pixels(pixels) => {
                     slot = slot.flex_none();
+                    let pixels = member.pixels(pixels, cx);
                     slot = if row {
                         slot.w(px(pixels * scale))
                     } else {
@@ -771,7 +847,17 @@ impl Group {
                 }
                 .border_color(border);
             }
-            group = group.child(slot.child(div().size_full().child(member.content.element())));
+            let handle = match (&member.resize, member.size) {
+                (Some(name), LayoutSize::Pixels(pixels)) if !row && index > 0 => {
+                    Some(resize_handle(name, member.pixels(pixels, cx), scale, cx))
+                }
+                _ => None,
+            };
+            group = group.child(
+                slot.relative()
+                    .child(div().size_full().child(member.content.element()))
+                    .children(handle),
+            );
         }
         group
     }

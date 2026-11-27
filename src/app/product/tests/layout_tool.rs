@@ -35,7 +35,8 @@ let message;
 let clicks = [];
 const layoutOf = (checked, placeholder) => ({ type: "column", children: [
   { type: "tree", key: "files", view: files },
-  { type: "editor", key: "message", buffer: message, placeholder, gutter: placeholder === "Message" },
+  { type: "editor", key: "message", buffer: message, placeholder, gutter: placeholder === "Message",
+    size: { pixels: 96 }, resize: "layout-message" },
   { type: "controls", items: [
     { type: "checkbox", label: "Amend", checked, command: "layout.click", arguments: "amend" },
     { type: "button", label: "Commit", primary: true, command: "layout.click", arguments: "commit" },
@@ -73,6 +74,9 @@ await commands.register("layout.invalid", async () => {
   await rejected(() => tool.update({ layout: { type: "row", children: [] } }), "no view");
   await rejected(() => tool.update({ layout: { type: "row", children: [{ type: "editor", buffer: {} }] } }), "foreign buffer");
   await rejected(() => tool.update({ toolbar: "x" }), "toolbar not a list");
+  await rejected(() => tool.update({ layout: { type: "column", children: [
+    { type: "editor", buffer: message, resize: "x" },
+  ] } }), "resize without pixels");
   await rejected(() => tool.update({ layout: { type: "row", children: [
     { type: "text", view: plain },
   ] } }), "view not embedded");
@@ -296,4 +300,52 @@ fn invalid_updates_and_registrations_are_rejected(cx: &mut TestAppContext) {
     let (window, native_window) = window_with_layout_tool(cx);
     run(&window, native_window, "layout.invalid", cx);
     assert!(leaf_ids(&window, cx).is_empty());
+}
+
+#[gpui::test]
+fn dragging_a_resizable_members_handle_sets_and_remembers_its_height(cx: &mut TestAppContext) {
+    let (window, native_window) = window_with_layout_tool(cx);
+    run(&window, native_window, "layout.show", cx);
+    window.update(cx, |window, cx| window.toggle_tool("layout.tool", cx));
+    cx.run_until_parked();
+    let mut visual = VisualTestContext::from_window(native_window, cx);
+    visual.run_until_parked();
+    let view = tool(&window, cx);
+    let height = |visual: &VisualTestContext| {
+        let editor = visual.read(|cx| {
+            view.read(cx).leaves()[1]
+                .editor()
+                .unwrap()
+                .read(cx)
+                .interaction_bounds()
+        });
+        f32::from(editor.size.height)
+    };
+    let before = height(&visual);
+    let handle = visual
+        .debug_bounds("layout-resize-layout-message")
+        .expect("a handle on the member's top edge")
+        .center();
+    visual.simulate_mouse_down(handle, MouseButton::Left, Modifiers::default());
+    visual.simulate_mouse_move(handle, MouseButton::Left, Modifiers::default());
+    for step in [20., 40.] {
+        visual.simulate_mouse_move(
+            handle - point(gpui::px(0.), gpui::px(step)),
+            MouseButton::Left,
+            Modifiers::default(),
+        );
+    }
+    visual.simulate_mouse_up(
+        handle - point(gpui::px(0.), gpui::px(40.)),
+        MouseButton::Left,
+        Modifiers::default(),
+    );
+    visual.run_until_parked();
+    let remembered = visual.read(|cx| crate::app::layout_sizes::remembered("layout-message", cx));
+    assert!(
+        remembered.is_some_and(|size| size >= 116.),
+        "{remembered:?}"
+    );
+    let after = height(&visual);
+    assert!(after >= before + 20., "{before} -> {after}");
 }

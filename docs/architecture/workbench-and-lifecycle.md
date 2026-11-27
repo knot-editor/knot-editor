@@ -435,7 +435,9 @@ follows the composite rules. The view reports its own command target, the
 layout's focused leaf, so keys, typing, and commands reach the editor or tree
 focused in it; clicks on its toolbar and controls target the tool window and
 that leaf. Embedded views in it bind and unbind as in a composite, and the
-layout is dropped when the package that described it goes.
+layout is dropped when the package that described it goes. A resizable member's
+dragged size is one application-wide record (`src/app/layout_sizes.rs`) keyed
+by the member's `resize` name.
 
 ## Window layouts
 

@@ -2430,6 +2430,15 @@ function compositeLayout(node: unknown, root: boolean, inTabs: boolean, seen: Co
     ...(title === undefined ? {} : { title }),
   };
   if (type === "editor" && key !== undefined) seen.editors.add(key as string);
+  if (given.resize !== undefined) {
+    if (typeof given.resize !== "string" || given.resize === "") {
+      throw new TypeError("composite resize is a non-empty name");
+    }
+    if (!isObject(size) || (size as Rec).pixels === undefined) {
+      throw new TypeError("only a member sized in pixels can be resized");
+    }
+    wire.resize = given.resize;
+  }
   if (given.placeholder !== undefined) {
     if (type !== "editor") throw new TypeError("only a composite editor has a placeholder");
     wire.placeholder = string(given.placeholder, "composite placeholder must be text");

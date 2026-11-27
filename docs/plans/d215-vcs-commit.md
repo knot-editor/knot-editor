@@ -1,6 +1,6 @@
 # D215 — VCS commit
 
-Status: 🚧 in progress (checkpoints 1 to 5 done; 6 to 8 remain). Source: [roadmap D215](../roadmap.md#version-control), milestone 4 of
+Status: 🚧 in progress (checkpoints 1 to 5 done, 6 awaiting review; 7 and 8 remain). Source: [roadmap D215](../roadmap.md#version-control), milestone 4 of
 the [version control plan](vcs.md).
 
 ## Outcome
@@ -172,16 +172,13 @@ changes view decisions in [bundled packages](../decisions/bundled-packages.md).
 and the compact controls row are described in the [ui guide](../extension-api/ui.md#layout-tool-windows).
 Cmd+K begins the split chords, so the panel's focus binding is Cmd+Alt+C.
 
-### 6. Resizable commit editor
+### 6. Resizable commit editor 🔍
 
-Deliverables: the message editor's height is draggable (a splitter between the
-tree and the editor in a layout column), remembered per window, with a sensible
-minimum and maximum, replacing the fixed 96 pixels. The API describes it as a
-layout member property so any layout can opt in.
-
-Validation: product test of dragging and of the remembered height; ui guide and
-[workbench and lifecycle](../architecture/workbench-and-lifecycle.md#layout-tool-windows)
-updated. `just check`.
+A pixel-sized member of a column with `resize: "<name>"` shows a handle on its
+top edge, described in the [ui guide](../extension-api/ui.md#layout-tool-windows).
+Scope decisions: the dragged height (40 to 480 pixels) is remembered under that
+name for the whole application rather than per window, as one record in the
+state database, so every repository's commit editor shares it.
 
 Review gate: resize the editor, restart, and the size is kept.
 

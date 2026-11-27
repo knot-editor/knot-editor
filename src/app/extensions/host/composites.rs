@@ -76,6 +76,9 @@ pub(crate) struct LayoutWire {
     /// The label of a member of tabs.
     #[serde(default)]
     title: Option<String>,
+    /// Names the size the user drags a pixel-sized member to.
+    #[serde(default)]
+    resize: Option<String>,
     #[serde(flatten)]
     content: ContentWire,
 }
@@ -283,6 +286,7 @@ impl LayoutWire {
             size,
             focused: self.focused,
             title: self.title.clone(),
+            resize: self.resize.clone(),
             limit: match self.content {
                 ContentWire::Editor { max_lines, .. } | ContentWire::Text { max_lines, .. } => {
                     max_lines

@@ -1614,6 +1614,7 @@ mod documents {
             focused: false,
             title: None,
             limit: None,
+            resize: None,
             content: ContentSpec::Editor {
                 buffer: buffer.clone(),
                 document: Some(document),
@@ -1794,6 +1795,7 @@ mod documents {
                         focused: false,
                         title: None,
                         limit: None,
+                        resize: None,
                         content: ContentSpec::Editor {
                             buffer,
                             document: Some(document),

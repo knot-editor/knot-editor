@@ -3144,6 +3144,11 @@ declare module "knot" {
     /** The label of the member's tab. Required for a member of `tabs`, and
      * for no other member. */
     readonly title?: string;
+    /** Names a size the user can drag. A member of a column sized in `pixels`
+     * shows a handle on its top edge; dragging it resizes the member between
+     * 40 and 480 pixels, and the size is remembered under this name for the
+     * whole application, across restarts. Members with the same name share it. */
+    readonly resize?: string;
   }
   /** An editor on a buffer of `buffers.create` or on a document. A document's
    * editor edits the document and counts the composite as one of its views,

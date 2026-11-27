@@ -193,7 +193,10 @@ The layout is a `row` or `column` of members: an `editor` on an
 `text` frame of a view registered with `embedded: true`, nested rows and
 columns, and `tabs`, which show one titled member at a time. A member's `size`
 is a `weight` (a share of what the `pixels` members leave, 1 by default) or
-`pixels`. `focused` names the member that has focus on open; reselecting the
+`pixels`. A `pixels` member of a column with a `resize` name shows a handle on
+its top edge: dragging it sets the member's height between 40 and 480 pixels,
+and the height is remembered under that name for the application, across
+restarts. `focused` names the member that has focus on open; reselecting the
 tab restores the view focused last. Every view, nested groups included, is in
 the [view tree](application.md#inspect-and-change-application-state), so
 commands, keymaps, and editor-driven packages such as Vim work in each editor.
