@@ -1,17 +1,17 @@
-// The Changes view: the changed files of the window's repositories, grouped
-// as each backend reports them, as a tree of folders or a flat list. A file
+// The Changes tree: the changed files of the window's repositories, grouped
+// as each backend reports them, as a tree of folders or a flat list, embedded
+// in the Changes tool window (commit.ts). A file
 // opens its changes in the diff view, comparing the sides its group stands
 // for; an open diff follows each new snapshot of its repository.
-import { commands, documents, icons, settings, windows, workbench, workspaces } from "knot";
-import type { CommandContext, Disposable, JsonValue, TreeItem, ViewRegistration } from "knot";
+import { commands, documents, settings, workbench, workspaces } from "knot";
+import type { CommandContext, Disposable, JsonValue, TreeItem, ViewRegistration, WindowTarget } from "knot";
 import { diffs } from "@knot/diff";
 import { backendContract } from "./contract.js";
-import { SHOW_OUTPUT } from "./output.js";
 import { isGone, type Repository } from "./repositories.js";
 import {
   OPEN_FILE,
   SHOW_FILE_CHANGES,
-  VIEW_ID,
+  TREE_ID,
   childrenOf,
   groupItem,
   noChangesItem,
@@ -39,9 +39,13 @@ export type ChangesDeps = {
   snapshot(repository: Repository): Snapshot | undefined;
   /** A backend whose contract no longer binds. */
   gone(backend: string): void;
+  /** A file of the repository was chosen in the tree of the window. */
+  selected(window: WindowTarget, repository: Repository): void;
 };
 
 export type Changes = Disposable & {
+  /** The embedded tree, which the tool window lays out. */
+  readonly tree: ViewRegistration;
   /** A repository's snapshot was replaced, or the shown repositories changed (null). */
   refresh(repository: Repository | null): Promise<void>;
 };
@@ -175,6 +179,7 @@ export async function registerChanges(deps: ChangesDeps): Promise<Changes> {
   async function openFileChanges({ target, arguments: args }: CommandContext) {
     const request = requestOf(args);
     if (request === null) return;
+    deps.selected(target.windowTarget, request.repository);
     const { preview } = request;
     const sides = await compare(request);
     if (sides === null) {
@@ -218,16 +223,11 @@ export async function registerChanges(deps: ChangesDeps): Promise<Changes> {
     default: "tree",
     description: "How the Changes view lists files: `tree` for folders, `list` for a flat list.",
   });
-  await icons.define("vcs.changes.layout", { lucide: "list-tree" });
   view = await workbench.registerView({
-    id: VIEW_ID,
+    id: TREE_ID,
     title: "Changes",
+    embedded: true,
     content: { kind: "tree", provider: { getChildren: (parentId, { window }) => children(parentId, window) } },
-    placement: { location: "leftTop", order: 1 },
-    actions: [
-      { label: "Toggle Tree and List", icon: "vcs.changes.layout", command: TOGGLE_LAYOUT },
-      { label: "Show Version Control Output", icon: "vcs.output", command: SHOW_OUTPUT },
-    ],
   });
   registrations.push(view);
   registrations.push(await settings.observe(LAYOUT, invalidate));
@@ -237,7 +237,7 @@ export async function registerChanges(deps: ChangesDeps): Promise<Changes> {
       description: "Open the changes of a file in its Changes group.",
       palette: false,
     }),
-    await commands.registerForView(VIEW_ID, SHOW_FILE_CHANGES, showFileChanges),
+    await commands.registerForView(TREE_ID, SHOW_FILE_CHANGES, showFileChanges),
     await commands.register(
       OPEN_FILE,
       async ({ target, arguments: args }) => {
@@ -256,6 +256,7 @@ export async function registerChanges(deps: ChangesDeps): Promise<Changes> {
   );
 
   return {
+    tree: view,
     async refresh(repository) {
       await invalidate();
       await followDiffs(repository);

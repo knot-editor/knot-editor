@@ -22,6 +22,9 @@ async function backend(id: string) {
     status: () => ({ files: [], groups: [] }),
     compare: () => null,
     rollback: () => {},
+    commitOptions: () => [],
+    commitMessage: () => null,
+    commit: () => null,
     ref: () => null,
   });
   await (await vcs.client()).register(id);
@@ -95,7 +98,9 @@ test("Show Version Control Output shows and focuses the tool window", async () =
 });
 
 test("the Changes toolbar has an output button", async () => {
+  host.openWindow();
   await running();
-  const actions = host.view("vcs.changes").contribution.actions ?? [];
-  assert.ok(actions.some((action) => action.command === SHOW_OUTPUT));
+  for (let turn = 0; turn < 8; turn += 1) await new Promise((resolve) => setImmediate(resolve));
+  const toolbar = host.view("vcs.changes").updates.at(-1)?.toolbar ?? [];
+  assert.ok(toolbar.some((button) => button.command === SHOW_OUTPUT));
 });

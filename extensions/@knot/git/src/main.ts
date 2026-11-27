@@ -2,6 +2,7 @@ import { icons, processes, workbench } from "knot";
 import { backendContract, vcs } from "@knot/vcs";
 import { registerActions, rollback } from "./actions.js";
 import { baseline } from "./baseline.js";
+import { commit, commitMessage, commitOptions } from "./commit.js";
 import { compare } from "./compare.js";
 import { isMissingProgram } from "./git.js";
 import { ref } from "./ref.js";
@@ -46,6 +47,9 @@ if (await available()) {
     status: (repository) => status(repository).catch(() => ({ files: [], groups: [] })),
     compare: ({ repository, group, file }) => compare(repository, group, file).catch(() => null),
     rollback: ({ repository, path }) => rollback(repository, path),
+    commitOptions: () => commitOptions,
+    commitMessage: ({ repository, options }) => commitMessage(repository, options),
+    commit: ({ repository, message, options }, { window }) => commit(repository, message, options, window),
     ref: (repository) => ref(repository).catch(() => null),
   });
   await (await vcs.client()).register("git");

@@ -15,6 +15,9 @@ await backendContract("fixed").serve({
   status: () => ({ files: [], groups: [] }),
   compare: () => null,
   rollback: () => {},
+  commitOptions: () => [],
+  commitMessage: () => null,
+  commit: () => null,
   ref: () => null,
 });
 await (await vcs.client()).register("fixed");

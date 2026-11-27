@@ -24,7 +24,8 @@ import { anchorLines, baselineText, hunkAt, revertEdit } from "./hunk.js";
 import { targetLine, type Direction } from "./navigation.js";
 import { createDiscovery, isGone, type Repository } from "./repositories.js";
 import { createRefs } from "./ref.js";
-import { registerChanges } from "./changes.js";
+import { registerChanges, TOGGLE_LAYOUT } from "./changes.js";
+import { createPanel } from "./commit.js";
 import { createOutput } from "./output.js";
 import { createStatuses, defineColors, keyOf } from "./status.js";
 
@@ -120,7 +121,10 @@ export async function start(): Promise<Disposable> {
     },
     fetch: async (repository) => (await backendContract(repository.backend).client()).status(repository.root),
     gone: drop,
-    changed: (repository) => void changes.refresh(repository).catch(() => {}),
+    changed: (repository) => {
+      void changes.refresh(repository).catch(() => {});
+      void panel.render().catch(() => {});
+    },
   });
   await defineColors();
   const refs = await createRefs({
@@ -139,7 +143,16 @@ export async function start(): Promise<Disposable> {
     covering: (rootUris) => discovery.covering(rootUris),
     snapshot: (repository) => statuses.snapshot(repository),
     gone: drop,
+    selected: (window, repository) => panel.select(window, repository),
   });
+  const panel = await createPanel({
+    tree: changes.tree,
+    covering: (rootUris) => discovery.covering(rootUris),
+    gone: drop,
+    changed: (repository) => statuses.request(keyOf(repository)),
+    toggleLayout: TOGGLE_LAYOUT,
+  });
+  await panel.render();
 
   /** The URIs of every window's roots. */
   const roots = async () => [...new Set((await windows.list()).flatMap((window) => window.workspace.roots.map((root) => root.uri)))];
@@ -586,7 +599,10 @@ export async function start(): Promise<Disposable> {
   keymaps.bind("alt-shift-f5", PREVIOUS_HUNK, { view: "editor" });
 
   const observation = await workbench.observe((event) => {
-    if (event.type === "workspaceChanged" || event.type === "windowOpened") resolveAll();
+    if (event.type === "workspaceChanged" || event.type === "windowOpened") {
+      resolveAll();
+      void panel.render().catch(() => {});
+    }
     else if (event.type === "activeTargetChanged") refs.refresh();
   });
 
@@ -596,6 +612,7 @@ export async function start(): Promise<Disposable> {
       for (const command of navigation) await command[Symbol.asyncDispose]();
       await tracker[Symbol.asyncDispose]();
       await statuses[Symbol.asyncDispose]();
+      await panel[Symbol.asyncDispose]();
       await changes[Symbol.asyncDispose]();
       await output[Symbol.asyncDispose]();
       await refs[Symbol.asyncDispose]();

@@ -72,7 +72,7 @@ async function backend(id: string, answers: Answers) {
     repositories: (root) => (answers.repositories ?? (() => []))(root),
     repositoryOf: (directory) => (answers.repositoryOf ?? (() => null))(directory),
     baseline: ({ repository, file }) => (answers.baseline ?? (() => null))(repository, file),
-    status: () => ({ files: [], groups: [] }), compare: () => null, rollback: () => {},
+    status: () => ({ files: [], groups: [] }), compare: () => null, rollback: () => {}, commitOptions: () => [], commitMessage: () => null, commit: () => null,
     ref: (repository) => (answers.ref ?? (() => null))(repository),
   });
   await (await vcs.client()).register(id);

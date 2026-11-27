@@ -28,6 +28,9 @@ const serving = await backendContract("{id}").serve({{
   status: () => ({{ files: [], groups: [] }}),
   compare: () => null,
   rollback: () => {{}},
+  commitOptions: () => [],
+  commitMessage: () => null,
+  commit: () => null,
   ref: () => null,
 }});
 await (await vcs.client()).register("{id}");

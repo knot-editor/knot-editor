@@ -5,7 +5,10 @@ import type { JsonValue, TreeAction, TreeItem } from "knot";
 import { contains, type Repository } from "./repositories.js";
 import type { Group, GroupAction } from "./status.js";
 
+/** The Changes tool window, which holds the tree and the commit panel. */
 export const VIEW_ID = "vcs.changes";
+/** The embedded tree of the Changes tool window. */
+export const TREE_ID = "vcs.changes.tree";
 export const SHOW_FILE_CHANGES = "vcs.showFileChanges";
 export const OPEN_FILE = "vcs.changes.openFile";
 export const NO_REPOSITORY = "vcs.changes.none";

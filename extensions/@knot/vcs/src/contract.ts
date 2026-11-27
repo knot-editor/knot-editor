@@ -103,6 +103,21 @@ function defineBackend(id: string) {
     ),
     /** Restores the path, a file or folder URI, to its baseline on disk, after confirming with the user. */
     rollback: s.fn(s.object({ repository: s.string(), path: s.string() }), s.void()),
+    /** The toggles the commit panel offers for the repository, all off by default. */
+    commitOptions: s.fn(
+      s.string(),
+      s.array(s.object({ id: s.string(), label: s.string(), tooltip: s.optional(s.string()) })),
+    ),
+    /** The message the options suggest, or null when they suggest none. */
+    commitMessage: s.fn(s.object({ repository: s.string(), options: s.array(s.string()) }), s.nullable(s.string())),
+    /**
+     * Commits with the options on, asking the user for what it needs. Null means
+     * the user cancelled; a failure rejects.
+     */
+    commit: s.fn(
+      s.object({ repository: s.string(), message: s.string(), options: s.array(s.string()) }),
+      s.nullable(s.object({ summary: s.string() })),
+    ),
     /** What is checked out in the repository, or null when the backend has nothing to show. */
     ref: s.fn(s.string(), s.nullable(s.object({ label: s.string(), tooltip: s.optional(s.string()) }))),
   });

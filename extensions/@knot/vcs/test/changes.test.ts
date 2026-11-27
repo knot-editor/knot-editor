@@ -11,7 +11,7 @@ import type { Group, GroupAction } from "../src/status.js";
 
 const ROOT = "file:///work";
 const REPOSITORY = { backend: "one", root: ROOT };
-const VIEW = "vcs.changes";
+const VIEW = "vcs.changes.tree";
 
 type Side = { label: string; text: string };
 type Compared = { original: Side; modified: "document" | Side } | null;
@@ -73,6 +73,9 @@ async function backend(id: string, answers: Answers, root = ROOT) {
     status: () => ({ files: [], groups: answers.groups as never }),
     compare: ({ group, file }) => (answers.compare ?? (() => null))(group, file),
     rollback: () => {},
+    commitOptions: () => [],
+    commitMessage: () => null,
+    commit: () => null,
     ref: () => null,
   });
   await (await vcs.client()).register(id);

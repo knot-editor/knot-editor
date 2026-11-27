@@ -48,6 +48,12 @@ declare module "@knot/vcs" {
       } | null
     >;
     rollback: FnSchema<{ repository: string; path: string }, void>;
+    commitOptions: FnSchema<string, readonly { id: string; label: string; tooltip?: string }[]>;
+    commitMessage: FnSchema<{ repository: string; options: readonly string[] }, string | null>;
+    commit: FnSchema<
+      { repository: string; message: string; options: readonly string[] },
+      { summary: string } | null
+    >;
     ref: FnSchema<string, { label: string; tooltip?: string } | null>;
   }>;
 }

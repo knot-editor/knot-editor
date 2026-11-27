@@ -171,6 +171,28 @@ impl TestWindow {
         self.start_command_with(name, arguments, cx).finish(cx)
     }
 
+    /// Run the command `name` with an object of text `arguments` on the
+    /// focused surface until it completes.
+    pub fn run_command_with(
+        &self,
+        name: &str,
+        arguments: &[(&str, &str)],
+        cx: &mut TestAppContext,
+    ) -> CommandOutcome {
+        let arguments = CommandArgumentValue::Object(
+            arguments
+                .iter()
+                .map(|(key, value)| {
+                    (
+                        (*key).to_owned(),
+                        CommandArgumentValue::String((*value).to_owned()),
+                    )
+                })
+                .collect(),
+        );
+        self.start_command_with(name, arguments, cx).finish(cx)
+    }
+
     fn start_command_with(
         &self,
         name: &str,
@@ -445,6 +467,76 @@ impl TestWindow {
                 _ => None,
             },
         )
+    }
+
+    fn layout_tool(
+        &self,
+        view: &str,
+        cx: &TestAppContext,
+    ) -> Entity<crate::app::layout_view::LayoutView> {
+        cx.read(|cx| {
+            self.window
+                .read(cx)
+                .contributed_views
+                .get(view)
+                .expect("a contributed view")
+                .layout()
+                .clone()
+        })
+    }
+
+    /// The text of each editor of the layout tool window `view`, in layout order.
+    pub fn tool_editors(&self, view: &str, cx: &mut TestAppContext) -> Vec<String> {
+        let tool = self.layout_tool(view, cx);
+        cx.read(|cx| {
+            tool.read(cx)
+                .leaves()
+                .iter()
+                .filter_map(|leaf| leaf.editor())
+                .map(|editor| editor.read(cx).model().read(cx).text())
+                .collect()
+        })
+    }
+
+    /// The placeholder of the first editor of the layout tool window `view`.
+    pub fn tool_placeholder(&self, view: &str, cx: &mut TestAppContext) -> Option<String> {
+        let tool = self.layout_tool(view, cx);
+        cx.read(|cx| {
+            let leaves = tool.read(cx).leaves();
+            let editor = leaves.iter().find_map(|leaf| leaf.editor())?;
+            editor.read(cx).placeholder().map(str::to_owned)
+        })
+    }
+
+    /// The commands of the toolbar buttons of the layout tool window `view`.
+    pub fn tool_toolbar(&self, view: &str, cx: &mut TestAppContext) -> Vec<String> {
+        let tool = self.layout_tool(view, cx);
+        cx.read(|cx| {
+            tool.read(cx)
+                .toolbar()
+                .iter()
+                .map(|button| button.command.clone())
+                .collect()
+        })
+    }
+
+    /// Give focus to the first editor of the layout tool window `view`.
+    pub fn focus_tool_editor(&self, view: &str, cx: &mut TestAppContext) {
+        let tool = self.layout_tool(view, cx);
+        let handle = cx.read(|cx| {
+            let leaves = tool.read(cx).leaves();
+            leaves
+                .iter()
+                .find(|leaf| leaf.editor().is_some())
+                .expect("an editor")
+                .focus_handle(cx)
+        });
+        cx.update(|cx| {
+            tool.read(cx).set_focused_leaf_holding(&handle, cx);
+            self.window
+                .update(cx, |window, cx| window.focus_view(&handle, cx));
+        });
+        super::park_packages(cx);
     }
 
     /// Whether the tool window `stable_id` is shown.
@@ -977,11 +1069,32 @@ impl TestWindow {
         let mut tree = None;
         wait_until(cx, |cx| {
             tree = cx.read(|cx| {
-                self.window
-                    .read(cx)
+                let window = self.window.read(cx);
+                window
                     .contributed_views
                     .get(id)
                     .map(|view| view.tree().clone())
+                    .or_else(|| {
+                        // An embedded tree lives in the layout that hosts it.
+                        window
+                            .contributed_views
+                            .values()
+                            .filter(|view| {
+                                matches!(
+                                    view.content,
+                                    crate::app::workbench::ExtensionView::Layout(..)
+                                )
+                            })
+                            .flat_map(|view| view.layout().read(cx).hosted_views())
+                            .find_map(|hosted| match &hosted {
+                                crate::app::workbench::ExtensionView::Tree(tree)
+                                    if hosted.kind(cx) == id =>
+                                {
+                                    Some(tree.clone())
+                                }
+                                _ => None,
+                            })
+                    })
             });
             tree.is_some()
         });
@@ -1105,6 +1218,16 @@ impl TestTree {
         self.activate_tab(cx);
         in_window(self.native_window, cx, |cx| {
             let handle = self.tree.read(cx).focus_handle(cx);
+            // A tree in a layout tool window is its layout's focused view.
+            let window = self.window.read(cx);
+            for view in window.contributed_views.values() {
+                if matches!(
+                    view.content,
+                    crate::app::workbench::ExtensionView::Layout(..)
+                ) {
+                    view.layout().read(cx).set_focused_leaf_holding(&handle, cx);
+                }
+            }
             self.window
                 .update(cx, |window, cx| window.focus_view(&handle, cx));
         });
@@ -1158,7 +1281,7 @@ impl TestTree {
         let row = self
             .row_id(label, cx)
             .unwrap_or_else(|| panic!("no visible row labelled {label}"));
-        self.activate_tab(cx);
+        self.focus(cx);
         in_window(self.native_window, cx, |cx| {
             self.tree.update(cx, |tree, cx| {
                 tree.activate_row_as_for_test(&row, gesture, cx)
@@ -1195,11 +1318,7 @@ impl TestTree {
             .find_map(|pane| {
                 pane.tabs()
                     .iter()
-                    .find(|tab| {
-                        workbench
-                            .command_view(tab)
-                            .is_some_and(|view| view.focus_handle(cx) == focus)
-                    })
+                    .find(|tab| workbench.tab_holds(tab, &focus, cx))
                     .map(|tab| (pane.id(), tab.id()))
             })
     }

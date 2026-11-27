@@ -192,7 +192,7 @@ impl EditorView {
         }
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn placeholder(&self) -> Option<&str> {
         self.placeholder.as_deref()
     }

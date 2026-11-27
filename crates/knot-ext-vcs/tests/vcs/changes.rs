@@ -85,7 +85,7 @@ fn show_in(
     product.watch_files(cx);
     let window = product.active_window(cx);
     window.set_roots(&[&uri(root)], cx);
-    let tree = window.tree("vcs.changes", cx);
+    let tree = window.tree("vcs.changes.tree", cx);
     wait_until(cx, |cx| tree.labels(cx) == TREE);
     (product, window, tree, directory)
 }
@@ -106,7 +106,7 @@ fn the_groups_list_their_files_in_folders_and_a_window_without_repository_says_s
 fn the_toggle_switches_between_folders_and_a_flat_list(cx: &mut TestAppContext) {
     let (_product, window, tree, _directory) = show(cx);
     assert_eq!(
-        tree.frame_commands(cx),
+        window.tool_toolbar("vcs.changes", cx),
         ["vcs.changes.toggleLayout", "vcs.showOutput"]
     );
     assert_eq!(

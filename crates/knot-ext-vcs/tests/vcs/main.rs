@@ -1,6 +1,7 @@
 //! `@knot/vcs` and its backends, run in the launched product.
 
 mod changes;
+mod commit;
 mod compare;
 mod contracts;
 mod decorations;

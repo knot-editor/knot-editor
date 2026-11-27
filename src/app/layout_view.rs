@@ -131,13 +131,13 @@ impl LayoutView {
         cx.notify();
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn toolbar(&self) -> &[ToolbarButton] {
         &self.toolbar
     }
 
     /// The views of the layout in layout order.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn leaves(&self) -> Vec<crate::app::view_layout::Leaf> {
         self.layout
             .as_ref()
@@ -145,8 +145,24 @@ impl LayoutView {
             .unwrap_or_default()
     }
 
+    /// Treat the view with the focus handle `focus` as the layout's focused
+    /// one, as it gaining focus in a rendered window does.
+    #[cfg(any(test, feature = "test-support"))]
+    pub(crate) fn set_focused_leaf_holding(&self, focus: &FocusHandle, cx: &App) {
+        let Some(layout) = &self.layout else {
+            return;
+        };
+        let leaves = layout.leaves();
+        if let Some(index) = leaves
+            .iter()
+            .position(|leaf| leaf.focus_handle(cx) == *focus)
+        {
+            layout.set_focused_leaf(index);
+        }
+    }
+
     /// The contributed views the layout holds.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn hosted_views(&self) -> Vec<super::workbench::ExtensionView> {
         self.layout
             .as_ref()

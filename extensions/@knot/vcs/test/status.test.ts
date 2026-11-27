@@ -40,6 +40,9 @@ async function backend(id: string, answers: Answers) {
     }),
     compare: () => null,
     rollback: () => {},
+    commitOptions: () => [],
+    commitMessage: () => null,
+    commit: () => null,
     ref: (repository) => (answers.ref ?? (() => null))(repository),
   });
   await (await vcs.client()).register(id);
@@ -240,6 +243,9 @@ test("a document outside every root decorates its own repository", async () => {
     status: () => ({ files: [{ file: `${OUTSIDE}/f.txt`, status: "modified" }], groups: [] }),
     compare: () => null,
     rollback: () => {},
+    commitOptions: () => [],
+    commitMessage: () => null,
+    commit: () => null,
     ref: () => null,
   });
   await (await vcs.client()).register("one");
@@ -333,6 +339,9 @@ test("statusChanged pulls status and leaves the baselines alone", async () => {
     status: () => ({ files: entries, groups: [] }),
     compare: () => null,
     rollback: () => {},
+    commitOptions: () => [],
+    commitMessage: () => null,
+    commit: () => null,
     ref: () => null,
   });
   await (await vcs.client()).register("one");

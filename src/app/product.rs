@@ -807,8 +807,8 @@ impl ContributedView {
         self.content.instance_id(cx)
     }
 
-    #[cfg(test)]
-    fn layout(&self) -> &Entity<super::layout_view::LayoutView> {
+    #[cfg(any(test, feature = "test-support"))]
+    pub(crate) fn layout(&self) -> &Entity<super::layout_view::LayoutView> {
         match &self.content {
             super::workbench::ExtensionView::Layout(view, _) => view,
             _ => panic!("contributed view is not a layout"),

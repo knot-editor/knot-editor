@@ -366,6 +366,25 @@ impl Workbench {
         })
     }
 
+    /// Whether a view of the tab's presentation has the focus handle `focus`,
+    /// including any view of a layout tool window.
+    #[cfg(any(test, feature = "test-support"))]
+    pub(crate) fn tab_holds(&self, tab: &WorkbenchTab, focus: &FocusHandle, cx: &App) -> bool {
+        if let Some(PresentationView::Tool(ToolContent::Extension(ExtensionView::Layout(
+            view,
+            _,
+        )))) = self.views.get(&tab.presentation())
+        {
+            return view
+                .read(cx)
+                .leaves()
+                .iter()
+                .any(|leaf| leaf.focus_handle(cx) == *focus);
+        }
+        self.command_view(tab)
+            .is_some_and(|view| view.focus_handle(cx) == *focus)
+    }
+
     /// The tool whose view is `content`.
     pub(crate) fn tool_presenting(&self, content: EntityId) -> Option<ToolFrameId> {
         self.tools().iter().map(|tool| tool.id).find(|id| {
