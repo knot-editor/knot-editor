@@ -1,6 +1,6 @@
 # D215 — VCS commit
 
-Status: 🚧 in progress (checkpoints 1 to 6 done; 7 and 8 remain). Source: [roadmap D215](../roadmap.md#version-control), milestone 4 of
+Status: 🚧 in progress (checkpoints 1 to 7 done; 8 remains). Source: [roadmap D215](../roadmap.md#version-control), milestone 4 of
 the [version control plan](vcs.md).
 
 ## Outcome
@@ -181,20 +181,12 @@ name for the whole application rather than per window, as one record in the
 state database, so every repository's commit editor shares it.
 
 
-### 7. Message ruler (built; review gate pending)
+### 7. Message ruler ✅
 
-Deliverables: editors can show a vertical guide at a column, as IntelliJ's
-right margin does, set per editor member and by a setting for documents (a list
-of columns, none by default), painted behind the text; the message editor shows
-one at 72.
-
-Validation: model or view tests for the guide's position under zoom and wrap,
-and a product test that the message editor shows it. Update the
-[editor and languages](../architecture/editor-and-languages.md) reference and
-settings docs. `just check`.
-
-Review gate: the guide at 72 columns in the commit message and, with the
-setting, in a document. Then repeat checkpoint 4's gate.
+`editor.rulers` and a layout editor member's `rulers` draw vertical guides, described in
+[editor and languages](../architecture/editor-and-languages.md) and the
+[ui guide](../extension-api/ui.md#layout-tool-windows). The commit message
+shows one at 72. Checkpoint 4's gate was repeated and passed.
 
 ### 8. Message history
 
