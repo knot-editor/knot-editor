@@ -1900,9 +1900,14 @@ export async function registerView(contribution: unknown) {
       owned.assertActive();
       await owned.track(request("hideView", registration, optionalWindowAuthority(window)));
     },
-    async focus(window: unknown) {
+    async focus(window: unknown, options: unknown) {
       owned.assertActive();
-      await owned.track(request("focusView", registration, optionalWindowAuthority(window)));
+      const member = (options as { member?: unknown } | null | undefined)?.member;
+      if (member != null && typeof member !== "string") {
+        throw new TypeError("focus member must be a string");
+      }
+      await owned.track(request("focusView", registration, optionalWindowAuthority(window),
+        member ?? null));
     },
     async toggle(window: unknown) {
       owned.assertActive();

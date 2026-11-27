@@ -539,6 +539,22 @@ impl TestWindow {
         super::park_packages(cx);
     }
 
+    /// Whether the first editor of the layout tool window `view` has focus.
+    pub fn tool_editor_focused(&self, view: &str, cx: &mut TestAppContext) -> bool {
+        let tool = self.layout_tool(view, cx);
+        let handle = cx.read(|cx| {
+            let leaves = tool.read(cx).leaves();
+            leaves
+                .iter()
+                .find(|leaf| leaf.editor().is_some())
+                .expect("an editor")
+                .focus_handle(cx)
+        });
+        let native = self.native_window.expect("a windowed product");
+        cx.update_window(native, |_, window, _| handle.is_focused(window))
+            .unwrap()
+    }
+
     /// Whether the tool window `stable_id` is shown.
     pub fn tool_shown(&self, stable_id: &str, cx: &mut TestAppContext) -> bool {
         cx.read(|cx| {

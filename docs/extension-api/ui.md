@@ -322,6 +322,8 @@ control or toolbar button runs its command with the tool window as target.
 every window and is kept for windows created later, which an update to one
 window is not. `embedded` and the other content options do not apply to a
 layout, and `update` on a tree or text view rejects `ContentKindMismatch`.
+`view.focus(window, { member })` shows the tool window and focuses the editor
+member with that key, instead of the view that had focus last.
 
 ## Ask the user transiently
 

@@ -98,6 +98,8 @@ type FakeView = {
   invalidated: { parent: string | null; window: Knot.WindowTarget | undefined }[];
   /** The ID paths passed to `reveal`, oldest first. */
   reveals: (readonly string[])[];
+  /** The layout members `focus` asked for, `null` for the view itself. */
+  focuses: (string | null)[];
   /** What a layout view shows, from its `update`s without a window: the layout
    * and toolbar last given. */
   layout: Knot.CompositeGroup | null;
@@ -3159,6 +3161,7 @@ export const api: KnotApi = {
         invalidations: 0,
         invalidated: [],
         reveals: [],
+        focuses: [],
         layout: null,
         toolbar: [],
         updates: [],
@@ -3172,8 +3175,9 @@ export const api: KnotApi = {
         hide: async () => {
           registered.visible = false;
         },
-        focus: async () => {
+        focus: async (_window, options) => {
           registered.visible = true;
+          registered.focuses.push(options?.member ?? null);
         },
         toggle: async () => {
           registered.visible = !registered.visible;

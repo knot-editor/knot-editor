@@ -8,7 +8,7 @@ the [version control plan](vcs.md).
 Committing no longer needs a terminal. The Changes tool window gains a commit
 panel under its tree, as in IntelliJ, VS Code, and Zed: a message editor, the
 backend's options as checkboxes (for Git: Amend, Sign-off), and a Commit
-button. Cmd+K focuses the message and Cmd+Enter in it commits. Earlier messages
+button. Cmd+Alt+C focuses the message and Cmd+Enter in it commits. Earlier messages
 come back through a history picker. What Version Control runs on the user's
 behalf is logged in a Version Control output tool window, and Cmd+click on an
 http(s) URL in any editor, the output included, opens it in the browser.
@@ -136,7 +136,7 @@ Text frames take `follow: true` to show their end after `setText`; see the
 
 Deliverables: the three backend methods and Git's implementation, the Changes
 view as a layout tool window with the panel, per-repository persisted drafts,
-the Amend swap, `vcs.commit` and `vcs.focusCommitMessage` with Cmd+K and
+the Amend swap, `vcs.commit` and `vcs.focusCommitMessage` with Cmd+Alt+C and
 Cmd+Enter, the commit notice, and logging through checkpoint 3.
 
 Validation: `@knot/vcs` tests for target repository choice, draft and
@@ -147,7 +147,7 @@ confirmation, a failing `commit-msg` hook, and the draft cleared and the status
 refreshed after commit. `just check`.
 
 Review gate: commit, amend, and sign off in a scratch repository; a failing hook
-shows in the output. The first review found Cmd+K focusing nothing and the panel
+shows in the output. The first review found Cmd+K focusing nothing (it begins the split chords, so the binding is now Cmd+Alt+C) and the panel
 ugly; checkpoints 5 to 7 address both, and the gate is repeated after 7.
 
 Scope decisions: the panel follows the file last chosen in the tree rather than
@@ -171,7 +171,7 @@ changes view decisions in [bundled packages](../decisions/bundled-packages.md).
 Deliverables:
 - A native way to focus a named layout member: `ViewRegistration.focus(window,
   { member })` shows the tool window and focuses the member with that key, so
-  Cmd+K reaches the message editor wherever focus was.
+  Cmd+Alt+C reaches the message editor wherever focus was.
 - An editor member option `gutter: false` (no line numbers, markers, or current
   line highlight), used by the message editor.
 - Controls laid out compactly: options on the left, Commit on the right of the
@@ -182,7 +182,7 @@ Validation: product test that the focus request moves focus to the keyed editor
 and that a gutterless editor paints no gutter; `@knot/vcs` test that
 `vcs.focusCommitMessage` asks for the message member. `just check`.
 
-Review gate: Cmd+K from the tree and from a document lands in the message
+Review gate: Cmd+Alt+C from the tree and from a document lands in the message
 editor; the panel looks right in the scratch repository.
 
 ### 6. Resizable commit editor

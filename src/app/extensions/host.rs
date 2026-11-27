@@ -4002,6 +4002,7 @@ impl ProductExtensionHost {
         registration: knot_protocol::TreeProviderRegistrationId,
         window: Option<&str>,
         action: crate::app::extensions::semantics::ViewPresentation,
+        member: Option<&str>,
         cx: &mut Context<Self>,
     ) -> Result<(), crate::app::extensions::semantics::SemanticError> {
         use handlers::AccessError;
@@ -4027,7 +4028,7 @@ impl ProductExtensionHost {
                     window.set_contributed_view_visible(&id, false, cx);
                 }
                 crate::app::extensions::semantics::ViewPresentation::Focus => {
-                    window.focus_contributed_view(&id, cx);
+                    window.focus_contributed_view(&id, member, cx);
                 }
                 crate::app::extensions::semantics::ViewPresentation::Toggle => {
                     window.toggle_tool(&id, cx);

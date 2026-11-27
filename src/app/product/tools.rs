@@ -298,6 +298,7 @@ impl KnotWindow {
     pub(crate) fn focus_contributed_view(
         &mut self,
         stable_id: &str,
+        member: Option<&str>,
         cx: &mut Context<Self>,
     ) -> bool {
         if !self.set_contributed_view_visible(stable_id, true, cx) {
@@ -314,7 +315,16 @@ impl KnotWindow {
             .get(stable_id)
             .map(|instance| instance.content.clone())
         {
-            Some(view) => self.focus_view(&view.focus_handle(cx), cx),
+            Some(view) => {
+                let member = member.and_then(|key| match &view {
+                    crate::app::workbench::ExtensionView::Layout(layout, _) => {
+                        layout.read(cx).focus_member(key, cx)
+                    }
+                    _ => None,
+                });
+                let handle = member.unwrap_or_else(|| view.focus_handle(cx));
+                self.focus_view(&handle, cx);
+            }
             None => self.focus_active_surface(cx),
         }
         cx.notify();

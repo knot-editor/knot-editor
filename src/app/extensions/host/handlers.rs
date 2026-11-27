@@ -3063,6 +3063,7 @@ pub(crate) async fn show_view(
             arguments.registration,
             arguments.window.as_deref(),
             ViewPresentation::Show,
+            None,
             cx,
         )
     })?
@@ -3080,23 +3081,43 @@ pub(crate) async fn hide_view(
             arguments.registration,
             arguments.window.as_deref(),
             ViewPresentation::Hide,
+            None,
             cx,
         )
     })?
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct FocusViewArguments {
+    pub view: ViewOperationArguments,
+    /// The key of the layout member to focus, instead of the view's own focus.
+    pub member: Option<String>,
+}
+impl HostArguments for FocusViewArguments {
+    fn decode(reader: &mut dyn ArgumentReader) -> Result<Self, DecodeError> {
+        Ok(Self {
+            view: ViewOperationArguments::decode(reader)?,
+            member: reader.optional_text(4, "layout member key must be text")?,
+        })
+    }
+    fn provider_mutation(&self) -> Option<ProviderIdentity> {
+        self.view.provider_mutation()
+    }
+}
+
 #[host_operation("focusView")]
 pub(crate) async fn focus_view(
     context: HostContext,
-    arguments: ViewOperationArguments,
+    arguments: FocusViewArguments,
 ) -> Result<(), SemanticError> {
     let request = context.request;
     context.foreground(|host, cx| {
         host.present_view(
             &request,
-            arguments.registration,
-            arguments.window.as_deref(),
+            arguments.view.registration,
+            arguments.view.window.as_deref(),
             ViewPresentation::Focus,
+            arguments.member.as_deref(),
             cx,
         )
     })?
@@ -3114,6 +3135,7 @@ pub(crate) async fn toggle_view(
             arguments.registration,
             arguments.window.as_deref(),
             ViewPresentation::Toggle,
+            None,
             cx,
         )
     })?

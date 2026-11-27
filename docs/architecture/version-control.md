@@ -158,7 +158,7 @@ the suggestion goes away. `vcs.commit` refuses an empty message, except while
 <summary>" notice, or the failure as an error notice, each with a Show Output
 action, and asks for the repository's status again.
 
-`vcs.focusCommitMessage` (Cmd+K) shows the tool window, and Cmd+Enter in an
+`vcs.focusCommitMessage` (Cmd+Alt+C) shows the tool window and focuses the message editor, and Cmd+Enter in an
 editor runs `vcs.commit.fromMessage`, which commits only when the editor is in
 the Changes tool window.
 

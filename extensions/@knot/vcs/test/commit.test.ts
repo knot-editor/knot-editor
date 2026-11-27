@@ -236,12 +236,14 @@ test("Cmd+Enter commits only from the Changes tool window", async () => {
   assert.equal(calls.calls.length, 1);
 });
 
-test("Cmd+K and Cmd+Enter are bound, and the focus command shows the tool window", async () => {
+test("Cmd+Alt+C and Cmd+Enter are bound, and the focus command shows the tool window", async () => {
   host.openWindow({ roots: [ROOT] });
   await backend("one", [ROOT], fake());
   const bound = host.bindings().map((binding) => [binding.key, binding.command]);
-  assert.ok(bound.some(([key, command]) => /-k$/.test(String(key)) && command === "vcs.focusCommitMessage"));
+  assert.ok(bound.some(([key, command]) => /-alt-c$/.test(String(key)) && command === "vcs.focusCommitMessage"));
   assert.ok(bound.some(([key, command]) => /-enter$/.test(String(key)) && command === "vcs.commit.fromMessage"));
   assert.equal(host.view("vcs.changes").visible, true);
   assert.equal(await host.run("vcs.focusCommitMessage"), "completed");
+  const [focused] = host.view("vcs.changes").focuses;
+  assert.match(String(focused), /^message:/);
 });

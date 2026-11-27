@@ -2536,8 +2536,13 @@ declare module "knot" {
     show(window?: WindowTarget): Promise<void>;
     /** Hide this view in every live window, or only in one window. */
     hide(window?: WindowTarget): Promise<void>;
-    /** Show if hidden, then focus this view in every window or one window. */
-    focus(window?: WindowTarget): Promise<void>;
+    /**
+     * Show if hidden, then focus this view in every window or one window.
+     * With `member`, a layout view focuses its editor member with that key
+     * instead of the view it last focused; a key that names no editor
+     * focuses as without it.
+     */
+    focus(window?: WindowTarget, options?: { readonly member?: string }): Promise<void>;
     /** Show and focus this view where it is hidden or not focused, and hide it
      * where it is focused, returning focus to the center. */
     toggle(window?: WindowTarget): Promise<void>;

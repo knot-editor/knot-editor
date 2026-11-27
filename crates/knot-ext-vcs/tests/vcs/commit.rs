@@ -215,3 +215,19 @@ fn a_failing_hook_keeps_the_draft_and_shows_in_the_output(cx: &mut TestAppContex
     assert!(output.contains("message rejected by hook"), "{output}");
     assert!(output.contains("Failed"), "{output}");
 }
+
+#[gpui::test]
+fn the_focus_command_reaches_the_message_editor(cx: &mut TestAppContext) {
+    let (_product, window, tree, _directory) = show(true, cx);
+    tree.focus(cx);
+    assert!(!window.tool_editor_focused(TOOL, cx));
+    window.press(
+        if cfg!(target_os = "macos") {
+            "cmd-alt-c"
+        } else {
+            "ctrl-alt-c"
+        },
+        cx,
+    );
+    wait_until(cx, |cx| window.tool_editor_focused(TOOL, cx));
+}

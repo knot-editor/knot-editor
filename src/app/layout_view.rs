@@ -161,6 +161,19 @@ impl LayoutView {
         }
     }
 
+    /// Make the editor member keyed `key` the layout's focused view and return
+    /// its focus handle, or None when no editor has that key.
+    pub(crate) fn focus_member(&self, key: &str, cx: &App) -> Option<FocusHandle> {
+        let layout = self.layout.as_ref()?;
+        let handle = layout.keyed_editor(key, cx)?.read(cx).focus_handle(cx);
+        let index = layout
+            .leaves()
+            .iter()
+            .position(|leaf| leaf.focus_handle(cx) == handle)?;
+        layout.set_focused_leaf(index);
+        Some(handle)
+    }
+
     /// The contributed views the layout holds.
     #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn hosted_views(&self) -> Vec<super::workbench::ExtensionView> {

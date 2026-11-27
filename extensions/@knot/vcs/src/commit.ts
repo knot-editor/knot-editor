@@ -122,6 +122,8 @@ export async function createPanel(deps: PanelDeps): Promise<Panel> {
     return repositories.find((one) => wanted !== undefined && keyOf(one) === keyOf(wanted)) ?? repositories[0] ?? null;
   }
 
+  const messageKey = (repository: Repository) => `message:${keyOf(repository)}`;
+
   async function layoutOf(window: WindowInfo): Promise<CompositeGroup> {
     const tree = { type: "tree", key: "changes", view: deps.tree } as const;
     const repository = await targetOf(window);
@@ -136,7 +138,7 @@ export async function createPanel(deps: PanelDeps): Promise<Panel> {
         tree,
         {
           type: "editor",
-          key: `message:${key}`,
+          key: messageKey(repository),
           buffer: draft.buffer,
           placeholder: `${several ? `Commit message for ${name}` : "Commit message"} (${platform === "macos" ? "⌘" : "Ctrl+"}⏎ to commit)`,
           size: { pixels: 96 },
@@ -268,7 +270,11 @@ export async function createPanel(deps: PanelDeps): Promise<Panel> {
   }
 
   async function focusMessage(context: CommandContext) {
-    await view!.focus(context.target.windowTarget);
+    const repository = await targetOf(await windowOf(context));
+    await view!.focus(
+      context.target.windowTarget,
+      repository === null ? undefined : { member: messageKey(repository) },
+    );
   }
 
   await icons.define("vcs.changes.layout", { lucide: "list-tree" });
@@ -292,7 +298,7 @@ export async function createPanel(deps: PanelDeps): Promise<Panel> {
     await commands.register(TOGGLE_OPTION, toggleOption, { palette: false }),
   ];
   const mod = platform === "macos" ? "cmd" : "ctrl";
-  keymaps.bind(`${mod}-k`, FOCUS_MESSAGE);
+  keymaps.bind(`${mod}-alt-c`, FOCUS_MESSAGE);
   keymaps.bind(`${mod}-enter`, COMMIT_FROM_MESSAGE, { view: "editor" });
 
   return {
