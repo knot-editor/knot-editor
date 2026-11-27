@@ -71,6 +71,15 @@ on the same machine).
    per test, so 14s of the 23s; the rest is a few commits and filesystem
    events per test. `wait_until` blocks on host turns rather than polling, so
    nothing is wasted there. No change worth making.
+
+   A second look timed every `wait_until` (a temporary probe, removed). Over
+   the 93 tests, 12.7s of the 18.9s in-process run is spent waiting: 4.5s
+   (49ms per test) is `wait_for_product_startup`, the launch floor, and most
+   of the rest is waits of 180–260ms in `git.rs` (lines 275–454) for the marks
+   to follow a change made with `git` outside Knot. Those wait on the real
+   file watcher and the follow-up diff, so they are the product's latency
+   rather than test overhead; shortening them would mean faking the watcher
+   and losing what the tests check. The suite stays as it is.
 4b. The same look at `knot-ext-vim`, then `knot-ext-workbench`, one step each
    (`vim::topics` 11s over 15 tests; `project_sessions`, `explorer`, `find`).
 5. Decide whether to add a guard (a budget in CI or a slow-test report) so the
