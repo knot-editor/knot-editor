@@ -63,8 +63,16 @@ on the same machine).
    installed, which is the case in most product tests. It is now built once.
    What remains per test is about 27ms of process start (nextest runs one
    process per test) plus V8 isolate and extension-module setup.
-4. Look at the per-test cost of the `knot-ext-vcs`, `knot-ext-vim`, and
-   `knot-ext-workbench` tests (git repo setup, host boot).
+4. ✅ `knot-ext-vcs`. Run serially (`cargo nextest run -p knot-ext-vcs -j1`)
+   the 93 tests take 23s, 0.25s on average; the slowest is 0.8s and the
+   fastest 0.12s. The 35–45s in the parallel timings is contention, not cost.
+   Git is not the cost: a `git init` takes about 12ms. The floor is product
+   launch (V8 isolates plus loading `@knot/vcs` and `@knot/git`), about 0.15s
+   per test, so 14s of the 23s; the rest is a few commits and filesystem
+   events per test. `wait_until` blocks on host turns rather than polling, so
+   nothing is wasted there. No change worth making.
+4b. The same look at `knot-ext-vim`, then `knot-ext-workbench`, one step each
+   (`vim::topics` 11s over 15 tests; `project_sessions`, `explorer`, `find`).
 5. Decide whether to add a guard (a budget in CI or a slow-test report) so the
    suite stays under control.
 
