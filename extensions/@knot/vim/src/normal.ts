@@ -8,7 +8,7 @@ import type {
 } from "knot";
 import { JumpList, type LineOf } from "./jumps.js";
 import { closedAt, createFold, foldMotion, intoShownLine, lastLine, linesDown, linesUp, runFold, shownLine } from "./folds.js";
-import type { Command, FindKind, InsertAt, MarkMotion, Motion, Operator, Scroll, Target } from "./keys.js";
+import type { Command, FindKind, InsertAt, MarkMotion, Motion, Operator, Pending, Scroll, Target } from "./keys.js";
 import { BufferLines } from "./lines.js";
 import {
   bracketFrom, findInLine, left, lineStart, matchBracketText, paragraph, type Position, right, sentence,
@@ -33,6 +33,9 @@ export function isReadOnlyError(error: unknown): boolean {
 export const NORMAL = "vim.normal";
 export const INSERT = "vim.insert";
 export const REPLACE = "vim.replace";
+/** Held while Escape has something to do in normal mode: a visual mode or
+ * pending keys. Without it, Escape is left to what holds the editor. */
+export const ESCAPABLE = "vim.escapable";
 
 export type Mode = "normal" | "insert" | "replace" | "visual" | "visual-line";
 
@@ -104,6 +107,10 @@ export type State = {
   readonly shared: Shared;
   language: string;
   mode: Mode;
+  /** The keys typed toward a command that is not complete. */
+  pending: Pending;
+  /** Whether the `ESCAPABLE` context is set. */
+  escapable: boolean;
   /** What the last command reported, shown in place of the mode until the
    * next key. */
   message: string | null;
@@ -156,6 +163,14 @@ export type State = {
   foldsOff: readonly FoldRange[] | null;
 };
 
+/** Sets the `ESCAPABLE` context to whether Escape would do something now. */
+export async function syncEscape(state: State) {
+  const on = !isTyping(state.mode) && (isVisual(state.mode) || state.pending.typed !== "");
+  if (on === state.escapable) return;
+  state.escapable = on;
+  await state.handle.setKeyContext(ESCAPABLE, on);
+}
+
 export async function setMode(state: State, mode: Mode) {
   const was = state.mode;
   state.mode = mode;
@@ -165,7 +180,7 @@ export async function setMode(state: State, mode: Mode) {
   }
   if (mode !== "replace") state.replaced = null;
   // Visual modes share normal mode's keys, context, and caret.
-  if (!isTyping(was) && !isTyping(mode) && was !== mode) return;
+  if (!isTyping(was) && !isTyping(mode) && was !== mode) return syncEscape(state);
   if (isTyping(mode) && state.replaying === null) {
     // A playing macro's input is not recorded; it keeps its own.
     if (state.player === null) state.recording = await state.handle.record();
@@ -175,6 +190,7 @@ export async function setMode(state: State, mode: Mode) {
   await state.handle.setKeyContext(INSERT, mode === "insert");
   await state.handle.setKeyContext(REPLACE, mode === "replace");
   await state.handle.setCursorStyle(mode === "insert" ? null : mode === "replace" ? "underline" : "block");
+  await syncEscape(state);
 }
 
 /** Puts a caret that sits past its line's last character back on it, as

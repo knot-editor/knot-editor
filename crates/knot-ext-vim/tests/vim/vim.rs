@@ -95,9 +95,15 @@ fn normal() -> String {
 }
 
 /// The mode from the key context, and in normal mode's context from the
-/// status bar, which names the visual modes.
+/// status bar, which names the visual modes. The context that marks Escape
+/// as having an effect is not a mode.
 fn mode(test_editor: &TestEditor, cx: &mut TestAppContext) -> String {
-    let mode = match test_editor.contexts(cx).as_slice() {
+    let contexts = test_editor
+        .contexts(cx)
+        .into_iter()
+        .filter(|context| context != "vim.escapable")
+        .collect::<Vec<_>>();
+    let mode = match contexts.as_slice() {
         [context] => context.trim_start_matches("vim.").to_owned(),
         other => return format!("{other:?}"),
     };
@@ -1502,4 +1508,35 @@ fn package(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../extensions/@knot")
         .join(name)
+}
+
+#[gpui::test]
+fn escape_is_bound_in_normal_mode_only_while_it_has_an_effect(cx: &mut TestAppContext) {
+    let product = start(cx);
+    let test_editor = product.windowed_editor("one two", cx);
+    let escapable = |cx: &mut TestAppContext| {
+        test_editor
+            .contexts(cx)
+            .iter()
+            .any(|context| context == "vim.escapable")
+    };
+    assert!(!escapable(cx));
+
+    // Pending keys and visual modes give Escape work to do.
+    test_editor.press("d", cx);
+    assert!(escapable(cx));
+    test_editor.press("<esc>", cx);
+    assert!(!escapable(cx));
+    test_editor.press("v", cx);
+    assert!(escapable(cx));
+    test_editor.press("<esc>", cx);
+    assert!(!escapable(cx));
+    assert_eq!(mode(&test_editor, cx), "normal");
+
+    // Insert mode has its own Escape binding, and leaving it leaves none.
+    test_editor.press("i", cx);
+    assert!(!escapable(cx));
+    test_editor.press("<esc>", cx);
+    assert_eq!(mode(&test_editor, cx), "normal");
+    assert!(!escapable(cx));
 }

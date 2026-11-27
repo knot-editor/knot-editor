@@ -16,7 +16,7 @@ import { EMPTY, feed, type Pending, pendingText, type WindowAction } from "./key
 import { BufferLines } from "./lines.js";
 import { lineStart } from "./motions.js";
 import {
-  INSERT, invokeRecorded, isReadOnlyError, isTyping, isVisual, leaveInsert, type Mode, moveOnto, NORMAL, type Player, READ_ONLY, REPLACE, replaceKey, run, setMode,
+  ESCAPABLE, INSERT, invokeRecorded, isReadOnlyError, isTyping, isVisual, leaveInsert, type Mode, moveOnto, NORMAL, type Player, READ_ONLY, REPLACE, replaceKey, run, setMode, syncEscape,
   type Shared, type State,
 } from "./normal.js";
 import { Registers } from "./registers.js";
@@ -48,7 +48,6 @@ const REPLACE_KEYS: readonly (readonly [string, string])[] = [
  * names them. Keys that would edit natively are bound too, so normal mode
  * never inserts or deletes text by accident; unhandled ones do nothing. */
 const NAMED_KEYS: readonly (readonly [string, string])[] = [
-  ["escape", "<esc>"],
   ["enter", "<cr>"],
   ["backspace", "<bs>"],
   ["delete", "<del>"],
@@ -79,7 +78,6 @@ const NAMED_KEYS: readonly (readonly [string, string])[] = [
 
 /** A followed editor and the normal-mode input pending in it. */
 type Followed = State & {
-  pending: Pending;
   /** Whether the caret shows that an operator is pending. */
   operatorShown: boolean;
 };
@@ -178,6 +176,10 @@ export async function start() {
   for (const [key, name] of REPLACE_KEYS) {
     keymaps.bind(key, { name: "vim.key", arguments: { key: name } }, replacing);
   }
+  // Escape in normal mode only has an effect while something is pending or
+  // visual mode is on; otherwise it is left to what holds the editor, such as
+  // a zone that closes on it.
+  keymaps.bind("escape", { name: "vim.key", arguments: { key: "<esc>" } }, { view: "editor", context: ESCAPABLE });
   for (const scope of [insert, replacing]) {
     keymaps.bind("escape", "vim.leave-insert", scope);
     keymaps.bind("ctrl-[", "vim.leave-insert", scope);
@@ -291,7 +293,7 @@ class Vim {
     }
     const state: Followed = {
       target: location!.tab.target, view: target, handle, buffer: node.buffer, document: node.document, shared: this.shared,
-      language, mode: "normal", pending: EMPTY, operatorShown: false, message: null,
+      language, mode: "normal", pending: EMPTY, escapable: false, operatorShown: false, message: null,
       want: null, caret: null, replaced: null, group: null, recording: null, change: null, replaying: null,
       macro: null, player: null, failed: false,
       repeat: { count: 1, open: false }, opened: false, visual: null, selected: null, previous: null,
@@ -332,6 +334,7 @@ class Vim {
     await state.handle.setKeyContext(NORMAL, false);
     await state.handle.setKeyContext(INSERT, false);
     await state.handle.setKeyContext(REPLACE, false);
+    await state.handle.setKeyContext(ESCAPABLE, false);
     await state.handle.setCursorStyle(null);
     await state.handle[Symbol.asyncDispose]();
   }
@@ -417,8 +420,10 @@ class Vim {
       const fed = feed(state.pending, key, visual);
       if ("pending" in fed) {
         state.pending = fed.pending;
+        await syncEscape(state);
       } else {
         state.pending = EMPTY;
+        await syncEscape(state);
         await showOperator(state, false);
         const command = fed.command;
         if (command === null) continue;
