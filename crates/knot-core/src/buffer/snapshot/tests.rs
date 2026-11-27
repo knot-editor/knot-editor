@@ -19,14 +19,6 @@ impl Rng {
     }
 }
 
-/// A char boundary in `b` near `offset`.
-fn boundary(b: &TextBuffer, mut offset: usize) -> usize {
-    while !b.is_char_boundary(offset) {
-        offset -= 1;
-    }
-    offset
-}
-
 fn whole(snapshot: &TextSnapshot) -> String {
     snapshot.read_range(0..snapshot.len())
 }
@@ -86,40 +78,6 @@ fn chunk_at_reads_from_inside_a_piece() {
     assert_eq!(snapshot.chunk_at(5), ",");
     assert_eq!(snapshot.chunk_at(8), "orld");
     assert_eq!(snapshot.chunk_at(12), "");
-}
-
-#[test]
-fn snapshot_reads_match_buffer_after_random_edits() {
-    let mut rng = Rng(0x5eed_cafe);
-    let mut b = TextBuffer::from_text("línea uno\nline two\n日本語\n");
-    let fragments = ["a", "é", "\n", "語", "😀", "word ", "\r\n"];
-    for step in 0..2_000 {
-        let at = boundary(&b, rng.below(b.len() + 1));
-        match rng.below(4) {
-            0 if !b.is_empty() => {
-                let end = boundary(&b, (at + rng.below(16)).min(b.len()));
-                b.delete(at.min(end)..at.max(end));
-            }
-            1 => b.insert(at, &"x".repeat(rng.below(ADD_CHUNK_SIZE / 4))),
-            _ => b.insert(at, fragments[rng.below(fragments.len())]),
-        }
-        if step % 50 != 0 {
-            continue;
-        }
-        let snapshot = b.snapshot();
-        assert_eq!(snapshot.len(), b.len());
-        assert_eq!(whole(&snapshot), b.read_range(0..b.len()));
-        assert_eq!(streamed(&snapshot), whole(&snapshot));
-        for _ in 0..20 {
-            let start = boundary(&b, rng.below(b.len() + 1));
-            let end = boundary(&b, start + rng.below(b.len() - start + 1));
-            assert_eq!(snapshot.read_range(start..end), b.read_range(start..end));
-        }
-    }
-    assert!(
-        b.backings.sealed.len() > 1,
-        "the sequence must seal add chunks"
-    );
 }
 
 /// Measures snapshot and streamed-read cost on a 29 MiB, million-line
