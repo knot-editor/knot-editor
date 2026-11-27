@@ -87,8 +87,12 @@ on the same machine).
    over 15 tests (0.14–0.72s each, `search` the slowest); each topic runs its
    cases in one product, so launch is paid once per topic. The 11s in the
    parallel timings was contention. Nothing to change.
-4c. The same look at `knot-ext-workbench` (`project_sessions`, `explorer`,
-   `find`).
+4c. ✅ `knot-ext-workbench`. Run serially (`cargo nextest run -p
+   knot-ext-workbench -j1`) the 84 tests take 8.9s, 0.11s on average; the
+   slowest is 0.54s (`explorer::files_created_outside_the_editor_appear_in_loaded_folders`,
+   which waits on the real file watcher) and `project_sessions` tests are
+   0.12–0.26s. The 3.6–4.0s per area in the parallel timings was contention.
+   Nothing to change.
 5. Decide whether to add a guard (a budget in CI or a slow-test report) so the
    suite stays under control.
 
