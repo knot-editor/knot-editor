@@ -1,6 +1,6 @@
 # D215 — VCS commit
 
-Status: 🚧 in progress (checkpoints 1 to 4 done; 4 awaits its review gate). Source: [roadmap D215](../roadmap.md#version-control), milestone 4 of
+Status: 🚧 in progress (checkpoints 1 to 4 done; 5 to 8 remain). Source: [roadmap D215](../roadmap.md#version-control), milestone 4 of
 the [version control plan](vcs.md).
 
 ## Outcome
@@ -147,7 +147,8 @@ confirmation, a failing `commit-msg` hook, and the draft cleared and the status
 refreshed after commit. `just check`.
 
 Review gate: commit, amend, and sign off in a scratch repository; a failing hook
-shows in the output.
+shows in the output. The first review found Cmd+K focusing nothing and the panel
+ugly; checkpoints 5 to 7 address both, and the gate is repeated after 7.
 
 Scope decisions: the panel follows the file last chosen in the tree rather than
 the selected row (a selection is readable only inside a tree command), has no
@@ -165,7 +166,54 @@ side in a new `extensions/@knot/git/src/commit.ts`, registered in `main.ts` like
 [version control](../architecture/version-control.md) and the backends and
 changes view decisions in [bundled packages](../decisions/bundled-packages.md).
 
-### 5. Message history
+### 5. Panel polish and member focus
+
+Deliverables:
+- A native way to focus a named layout member: `ViewRegistration.focus(window,
+  { member })` shows the tool window and focuses the member with that key, so
+  Cmd+K reaches the message editor wherever focus was.
+- An editor member option `gutter: false` (no line numbers, markers, or current
+  line highlight), used by the message editor.
+- Controls laid out compactly: options on the left, Commit on the right of the
+  same row, smaller checkboxes and button, and the editor with padding and one
+  subtle separator instead of hard borders.
+
+Validation: product test that the focus request moves focus to the keyed editor
+and that a gutterless editor paints no gutter; `@knot/vcs` test that
+`vcs.focusCommitMessage` asks for the message member. `just check`.
+
+Review gate: Cmd+K from the tree and from a document lands in the message
+editor; the panel looks right in the scratch repository.
+
+### 6. Resizable commit editor
+
+Deliverables: the message editor's height is draggable (a splitter between the
+tree and the editor in a layout column), remembered per window, with a sensible
+minimum and maximum, replacing the fixed 96 pixels. The API describes it as a
+layout member property so any layout can opt in.
+
+Validation: product test of dragging and of the remembered height; ui guide and
+[workbench and lifecycle](../architecture/workbench-and-lifecycle.md#layout-tool-windows)
+updated. `just check`.
+
+Review gate: resize the editor, restart, and the size is kept.
+
+### 7. Message ruler
+
+Deliverables: editors can show a vertical guide at a column, as IntelliJ's
+right margin does, set per editor member and by a setting for documents (a list
+of columns, none by default), painted behind the text; the message editor shows
+one at 72.
+
+Validation: model or view tests for the guide's position under zoom and wrap,
+and a product test that the message editor shows it. Update the
+[editor and languages](../architecture/editor-and-languages.md) reference and
+settings docs. `just check`.
+
+Review gate: the guide at 72 columns in the commit message and, with the
+setting, in a document. Then repeat checkpoint 4's gate.
+
+### 8. Message history
 
 Deliverables: per-repository history recorded on commit, `vcs.commitMessageHistory`
 with Ctrl+M in the message editor, replacing the draft as one undo step.

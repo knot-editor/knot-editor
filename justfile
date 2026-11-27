@@ -10,6 +10,7 @@ lint:
     cargo clippy --locked --release --workspace -- -D warnings
     cargo clippy --locked --workspace --all-targets -- -D warnings
 
+
 # Run all Rust tests, each in its own process, then doc tests
 test:
     cargo nextest run --workspace --all-targets
