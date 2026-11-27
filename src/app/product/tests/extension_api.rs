@@ -1357,15 +1357,20 @@ await commands.register("test.reveal", async () => { await view.reveal(["dir", "
     let model = cx.read(|cx| documents.read(cx).get(document).unwrap().model().clone());
     let (window, native_window) = product_window(document, model, cx);
     let key = ExtensionKey::new(ExtensionId::new(88), ExtensionLifecycleId::new(1));
+    let loaded = std::rc::Rc::new(std::cell::Cell::new(false));
     host.update(cx, |host, cx| {
         let execution = host.load_test_source(key, SOURCE).unwrap();
+        let loaded = loaded.clone();
         cx.spawn(async move |_, _| {
             execution.await.unwrap();
+            loaded.set(true);
         })
         .detach();
     });
     let tree = wait_for_contributed_view(&window, "example.reveal", cx);
     wait_for_api_condition(cx, |cx| tree.read(cx).root_labels() == ["dir", "file"]);
+    // The script registers its commands after the view, and a click needs them.
+    wait_for_api_condition(cx, |_| loaded.get());
     cx.update_window(native_window, |_, native_window, cx| {
         focus_view(&tree.focus_handle(cx), native_window, cx)
     })

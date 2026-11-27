@@ -595,6 +595,7 @@ fn dispatch_tree_copy(
     dispatch_tree_command(window, native_window, super::COPY_COMMAND, cx)
 }
 
+#[track_caller]
 fn wait_for_api_condition(cx: &mut TestAppContext, mut ready: impl FnMut(&gpui::App) -> bool) {
     crate::test_support::wait_until(cx, |cx| cx.read(&mut ready));
 }
