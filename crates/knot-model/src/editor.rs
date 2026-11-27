@@ -639,13 +639,14 @@ impl EditorState {
     }
 
     /// The key contexts some live lifecycle has set on this editor, and
-    /// `popover:<id>` for each open popover.
+    /// `popover:<id>` and `zone:<id>` for each open popover and zone.
     pub fn key_contexts(&self) -> Vec<&str> {
         let mut contexts = self
             .key_contexts
             .iter()
             .map(|(_, name)| name.as_ref())
             .chain(self.popovers.contexts())
+            .chain(self.zones.contexts())
             .collect::<Vec<_>>();
         contexts.sort_unstable();
         contexts.dedup();

@@ -99,12 +99,20 @@ impl KnotWindow {
         if keystroke.key == "escape"
             && !keystroke.modifiers.modified()
             && !self.keys.router.is_pending()
-            && self.dismiss_popover(cx)
+            && self.dismiss_popover(false, cx)
         {
             return true;
         }
         if !std::mem::take(&mut self.keys.native)
             && self.route_key(keystroke.clone(), native_window, cx)
+        {
+            return true;
+        }
+        // A zone's views bind Escape before the zone takes it.
+        if keystroke.key == "escape"
+            && !keystroke.modifiers.modified()
+            && !self.keys.router.is_pending()
+            && self.dismiss_popover(true, cx)
         {
             return true;
         }
@@ -125,10 +133,12 @@ impl KnotWindow {
         delivered
     }
 
-    /// Close the zone or popover with focus, else the newest popover, over the
-    /// editor Escape is for, ahead of the keymap so that modal packages cannot
-    /// shadow it; false when none is open or a bar field has the keys.
-    fn dismiss_popover(&mut self, cx: &mut Context<Self>) -> bool {
+    /// Close the popover with focus, else the newest, over the editor Escape
+    /// is for, ahead of the keymap so that modal packages cannot shadow it; or,
+    /// with `zones`, the zone with focus, after the keymap had the key. False
+    /// when none is open or a bar field has the keys. A focused zone's views
+    /// keep Escape from the popovers, which would otherwise close the newest.
+    fn dismiss_popover(&mut self, zones: bool, cx: &mut Context<Self>) -> bool {
         if self.focus != Focus::Workbench {
             return false;
         }
@@ -145,7 +155,11 @@ impl KnotWindow {
             return false;
         }
         editor.update(cx, |editor, cx| {
-            editor.dismiss_zone(cx) || editor.dismiss_popover(cx)
+            if zones {
+                editor.dismiss_zone(cx)
+            } else {
+                !editor.zone_focused(cx) && editor.dismiss_popover(cx)
+            }
         })
     }
 
@@ -372,7 +386,7 @@ impl KnotWindow {
             return (None, Vec::new());
         }
         let target = self.capture_command_target(cx);
-        let contexts = Self::target_editor(&target, cx)
+        let mut contexts: Vec<String> = Self::target_editor(&target, cx)
             .map(|editor| {
                 let state = editor.read(cx).editor().read(cx);
                 match state.bars().focused_bar() {
@@ -386,6 +400,22 @@ impl KnotWindow {
                 }
             })
             .unwrap_or_default();
+        // A view inside a popover or zone also has the contexts the open
+        // popovers and zones put on the editor they belong to.
+        if let Some(anchor) = target.popover_anchor(cx) {
+            let state = anchor.read(cx).editor().read(cx);
+            let overlays = state
+                .popovers()
+                .contexts()
+                .chain(state.zones().contexts())
+                .map(str::to_owned)
+                .collect::<Vec<_>>();
+            for context in overlays {
+                if !contexts.contains(&context) {
+                    contexts.push(context);
+                }
+            }
+        }
         (Self::target_view_kind(&target, cx), contexts)
     }
 

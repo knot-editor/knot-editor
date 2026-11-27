@@ -7,7 +7,7 @@ use knot_protocol::ExtensionKey;
 /// A package whose commands, named after `LABEL`, open and close zones named
 /// "hunk" and "end" through a long-lived editor handle.
 const SOURCE: &str = r#"
-import { buffers, commands, workbench } from "knot";
+import { buffers, commands, keymaps, workbench } from "knot";
 const check = (condition, message) => { if (!condition) throw new Error(message); };
 const expectError = async (operation, test, message) => {
   try { await operation(); } catch (error) { if (test(error)) return; throw error; }
@@ -47,6 +47,12 @@ await commands.register("LABEL.open-focus", async () => {
 });
 await commands.register("LABEL.open-end", async () => {
   await (await editor()).openZone("end", { line: 1000, ...await layout(false) });
+});
+// A package's own Escape binding for a zone, as a modal package would make.
+keymaps.bind("escape", "LABEL.shadow", { view: "editor", context: "zone:keep" });
+await commands.register("LABEL.shadow", async () => { await workbench.writeClipboardText("LABEL:shadow"); });
+await commands.register("LABEL.open-keep", async () => {
+  await (await editor()).openZone("keep", { line: 1, focus: true, ...await layout(false) });
 });
 await commands.register("LABEL.update", async () => {
   await (await editor()).openZone("hunk", { line: 2, ...await layout(true) });
@@ -270,4 +276,22 @@ fn a_tree_in_a_zone_loads_from_its_provider(cx: &mut TestAppContext) {
         let tree = tree.read(cx);
         !tree.is_loading() && tree.row_count() == 1
     });
+}
+
+#[gpui::test]
+fn a_binding_for_escape_in_a_zone_keeps_it_open(cx: &mut TestAppContext) {
+    let fixture = Fixture::new(cx);
+    load("keep", 926, cx);
+    fixture.run("keep.open-keep", cx);
+    fixture.refresh(cx);
+    let content = cx.read(|cx| fixture.editor.read(cx).zone_contents()[0].clone());
+    content.update(cx, |content, cx| content.focus_leaf(0, cx));
+
+    // The zone's context binds Escape, so the key does that and nothing else.
+    cx.simulate_keystrokes(fixture.native_window, "escape");
+    cx.run_until_parked();
+    wait_for_api_condition(cx, |cx| {
+        cx.read_from_clipboard().and_then(|item| item.text()) == Some("keep:shadow".to_owned())
+    });
+    assert_eq!(fixture.zones(cx).len(), 1);
 }

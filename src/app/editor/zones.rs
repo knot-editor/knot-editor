@@ -132,6 +132,13 @@ impl Editor {
         closed
     }
 
+    /// Whether a view of a zone has focus.
+    pub(crate) fn zone_focused(&self, cx: &App) -> bool {
+        self.zone_views
+            .iter()
+            .any(|view| view.content.read(cx).inside)
+    }
+
     /// Close the zone with focus, as Escape does, for its owner to hear;
     /// false when no zone has focus.
     pub(crate) fn dismiss_zone(&mut self, cx: &mut Context<Self>) -> bool {

@@ -570,7 +570,12 @@ tree, and it takes focus only with `focus: true`.
 
 An edit does not close a zone; it follows its line, and one whose line an edit
 deletes moves to the start of the edit. A click elsewhere does not close it
-either. Escape closes the zone with focus, and `onDidCloseZone` reports its ID;
+either. While a zone is open, the editor and the views inside the zone hold the
+key context `zone:<id>`, for `keymaps.bind(key, command, { view: "editor",
+context: "zone:<id>" })`. Escape in a zone's view goes to the keymap first, so a
+modal package's own Escape (Vim leaving insert mode) wins; when no binding takes
+it, Escape closes the zone with focus and `onDidCloseZone` reports its ID. A
+package whose keymap always takes Escape binds its own key to `closeZone`.
 `closeZone`, the editor closing, and unloading the package report nothing. The
 precise contracts are in `knot.d.ts`.
 

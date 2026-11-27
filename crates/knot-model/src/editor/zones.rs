@@ -24,6 +24,8 @@ pub struct EditorZone {
     pub spec: ZoneSpec,
     /// The key the wrap map knows the zone by.
     pub key: u64,
+    /// The key context `zone:<id>` it holds while open.
+    context: String,
 }
 
 /// A zone Knot closed, not yet reported to the lifecycle that opened it.
@@ -44,6 +46,11 @@ pub struct EditorZones {
 impl EditorZones {
     pub fn zones(&self) -> &[EditorZone] {
         &self.zones
+    }
+
+    /// The key contexts of the open zones.
+    pub fn contexts(&self) -> impl Iterator<Item = &str> {
+        self.zones.iter().map(|zone| zone.context.as_str())
     }
 
     pub fn get(&self, owner: ExtensionKey, id: &str) -> Option<&EditorZone> {
@@ -74,6 +81,7 @@ impl EditorZones {
             id: id.to_owned(),
             spec,
             key,
+            context: format!("zone:{id}"),
         });
         key
     }

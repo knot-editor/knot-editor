@@ -2246,8 +2246,11 @@ declare module "knot" {
      * editor's caret steps over its rows. It belongs to the caller's
      * lifecycle, as popovers do, and teardown closes it. It is presentation
      * state, never recorded, and lasts until closed or the view closes; an
-     * edit or a click elsewhere does not close it. Escape in a focused zone
-     * closes it; use `onDidCloseZone` on a handle to learn of that.
+     * edit or a click elsewhere does not close it. While it is open, the
+     * editor and the views inside the zone hold the key context `zone:<id>`.
+     * Escape in a zone's view goes to the keymap first, so a modal package's
+     * binding wins; if none takes it, Escape closes the focused zone. Use
+     * `onDidCloseZone` on a handle to learn of that.
      * @throws HostError with InvalidTarget, BufferClosed, or Cancelled;
      * TypeError for an empty ID or a malformed zone.
      */
