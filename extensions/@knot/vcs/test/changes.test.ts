@@ -271,6 +271,38 @@ test("an open diff follows each new snapshot and closes when the file has no dif
   assert.equal(shown[0]!.closed, true);
 });
 
+test("a diff whose file moved to another group opens there in the same kind of tab", async () => {
+  const window = host.openWindow({ roots: [ROOT] });
+  host.addDocument({ uri: FILE, text: "new\n" });
+  const answers: Answers = {
+    groups: [group("unstaged", "Unstaged", [FILE])],
+    compare: (groupId, file) => {
+      const listed = answers.groups.find((candidate) => candidate.id === groupId)?.files.includes(file);
+      return listed ? { original: { label: groupId, text: "old\n" }, modified: { label: "Other", text: "new\n" } } : null;
+    },
+  };
+  await backend("one", answers);
+  await host.run("vcs.showFileChanges", { window, arguments: { gesture: "click", arguments: showArguments("unstaged", FILE) } });
+  // Staged: the unstaged preview is replaced by a staged preview.
+  answers.groups = [group("staged", "Staged", [FILE])];
+  await (await vcs.client()).changed({ backend: "one", repository: ROOT });
+  await settle();
+  assert.deepEqual(shown.map((diff) => [diff.options.original.label, diff.closed, diff.options.preview]), [
+    ["unstaged", true, true],
+    ["staged", false, true],
+  ]);
+  // A kept tab stays kept, and a file in no group closes it.
+  await host.run("vcs.showFileChanges", { window, arguments: { gesture: "doubleClick", arguments: showArguments("staged", FILE) } });
+  answers.groups = [group("unstaged", "Unstaged", [FILE])];
+  await (await vcs.client()).changed({ backend: "one", repository: ROOT });
+  await settle();
+  assert.deepEqual(shown.slice(2).map((diff) => [diff.options.original.label, diff.closed, diff.options.preview]), [["unstaged", false, undefined]]);
+  answers.groups = [];
+  await (await vcs.client()).changed({ backend: "one", repository: ROOT });
+  await settle();
+  assert.deepEqual(shown.map((diff) => diff.closed), [true, true, true]);
+});
+
 test("a file without a diff in its group says so and opens nothing", async () => {
   const window = host.openWindow({ roots: [ROOT] });
   await backend("one", { groups: [group("staged", "Staged", [FILE])] });

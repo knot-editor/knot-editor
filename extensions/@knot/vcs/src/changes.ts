@@ -2,7 +2,8 @@
 // as each backend reports them, as a tree of folders or a flat list, embedded
 // in the Changes tool window (commit.ts). A file
 // opens its changes in the diff view, comparing the sides its group stands
-// for; an open diff follows each new snapshot of its repository.
+// for; an open diff follows each new snapshot of its repository, moving to
+// the group that lists the file when it left its own.
 import { commands, documents, settings, workbench, workspaces } from "knot";
 import type { CommandContext, Disposable, JsonValue, TreeItem, ViewRegistration, WindowTarget } from "knot";
 import { diffs } from "@knot/diff";
@@ -58,6 +59,10 @@ type OpenDiff = {
   readonly file: string;
   /** The modified side is the working file's document, not a snapshot. */
   readonly document: boolean;
+  /** The tab was kept, not a preview. */
+  kept: boolean;
+  /** The window it was opened for. */
+  readonly target: WindowTarget;
 };
 
 type Request = { readonly repository: Repository; readonly group: string; readonly file: string };
@@ -153,7 +158,10 @@ export async function registerChanges(deps: ChangesDeps): Promise<Changes> {
     if (shown === undefined) return false;
     try {
       const client = await diffs.client();
-      if (!preview) await client.keep(shown.id);
+      if (!preview) {
+        await client.keep(shown.id);
+        shown.kept = true;
+      }
       await client.activate(shown.id);
       return true;
     } catch {
@@ -186,14 +194,32 @@ export async function registerChanges(deps: ChangesDeps): Promise<Changes> {
       await workbench.showNotice({ title: "Version Control", message: "No changes to show for this file." });
       return;
     }
-    const key = keyOf(request);
-    if (await reuse(key, preview)) return;
+    if (await reuse(keyOf(request), preview)) return;
+    await openDiff(request, sides, preview, target.windowTarget);
+  }
+
+  /** Opens the diff of `sides` as a preview or a kept tab, and remembers it. */
+  async function openDiff(request: Request, sides: NonNullable<Awaited<ReturnType<typeof compare>>>, preview: boolean, target: WindowTarget) {
     const document = sides.modified === "document";
     const modified = document
-      ? { label: "Working Copy", document: (await documents.load(request.file, { target: target.windowTarget })).id }
+      ? { label: "Working Copy", document: (await documents.load(request.file, { target })).id }
       : sides.modified;
     const id = await (await diffs.client()).open({ original: sides.original, modified, ...(preview ? { preview } : {}) });
-    open.set(key, { id, repository: request.repository, group: request.group, file: request.file, document });
+    open.set(keyOf(request), { id, repository: request.repository, group: request.group, file: request.file, document, kept: !preview, target });
+  }
+
+  /**
+   * Opens a closed diff's file in the other group that now lists it, such as
+   * Staged after the file was staged, in the same kind of tab; nothing happens
+   * when no group lists it.
+   */
+  async function moveDiff(shown: OpenDiff) {
+    const group = deps.snapshot(shown.repository)?.groups.find((other) => other.id !== shown.group && other.files.includes(shown.file));
+    if (group === undefined) return;
+    const request = { repository: shown.repository, group: group.id, file: shown.file };
+    if (open.has(keyOf(request))) return;
+    const sides = await compare(request);
+    if (sides !== null) await openDiff(request, sides, !shown.kept, shown.target);
   }
 
   /** Brings the diffs of a repository up to the sides its backend now gives. */
@@ -204,6 +230,8 @@ export async function registerChanges(deps: ChangesDeps): Promise<Changes> {
         const sides = await compare(shown);
         if (sides === null || (sides.modified === "document") !== shown.document) {
           await closeDiff(key);
+          // The file left the group, as staging moves it.
+          if (sides === null) await moveDiff(shown);
           continue;
         }
         const client = await diffs.client();

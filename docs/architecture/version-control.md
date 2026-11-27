@@ -140,7 +140,9 @@ the `diff` contract; `null` means the file has no diff there. The working file i
 loaded without a tab of its own. Each file and group
 keeps at most one diff, and a second request shows that tab, keeping it for
 double-click or Enter. When the repository's status is pulled again, snapshot sides are replaced
-and the tab closes once `compare` returns null.
+and the tab closes once `compare` returns null; when another group of the snapshot
+lists the file, such as Staged after staging, the same kind of tab (preview or kept)
+opens on that group instead.
 
 `vcs.rollbackFile` (Rollback File) works from the palette on the focused editor's
 file. It confirms, saying that unsaved edits will be lost when the document is
