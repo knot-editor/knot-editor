@@ -95,7 +95,9 @@ the Changes view.
 
 ## Checkpoints
 
-### 1. Staged hunks in the gutter
+### 1. Staged hunks in the gutter ✅
+
+Implemented; the review gate is pending (`Try: staged hunks …` commands).
 
 Deliverables: `staged` in the baseline answer, Git serving the index text,
 staged marks and color keys, and the popup knowing a hunk's state. Staging a

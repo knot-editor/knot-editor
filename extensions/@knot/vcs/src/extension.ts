@@ -19,7 +19,7 @@ import type {
 } from "knot";
 import { diffs } from "@knot/diff";
 import { backendContract, vcs } from "./contract.js";
-import { colorOf, contributionsOf, SHOW_HUNK } from "./gutter.js";
+import { colorOf, contributionsOf, SHOW_HUNK, stagedFlags } from "./gutter.js";
 import { baselineText, hunkAt, revertEdit } from "./hunk.js";
 import { targetLine, type Direction } from "./navigation.js";
 import { createDiscovery, isGone, type Repository } from "./repositories.js";
@@ -27,7 +27,7 @@ import { createRefs } from "./ref.js";
 import { registerChanges, TOGGLE_LAYOUT } from "./changes.js";
 import { createPanel } from "./commit.js";
 import { createOutput } from "./output.js";
-import { createStatuses, defineColors, keyOf } from "./status.js";
+import { createStatuses, defineColors, defineStagedColors, keyOf } from "./status.js";
 
 /** Milliseconds after the last edit before the marks are diffed again. */
 const DELAY = 150;
@@ -52,6 +52,8 @@ type Popup = {
   readonly listener: Disposable;
   /** The hunk it shows. */
   readonly hunk: DiffHunk;
+  /** Whether that hunk is staged. */
+  readonly staged: boolean;
 };
 
 /** What the gutter knows about one open document. */
@@ -65,6 +67,8 @@ type Follow = {
   repository: Repository | null;
   /** The baseline text, null when the file has none. */
   baseline: string | null;
+  /** The text between the baseline and the file, null when there is none. */
+  staged: string | null;
   /** The repository must be found again. */
   resolve: boolean;
   /** The baseline must be fetched again. */
@@ -130,6 +134,7 @@ export async function start(): Promise<Disposable> {
     },
   });
   await defineColors();
+  await defineStagedColors();
   const refs = await createRefs({
     async fileOf(window) {
       const view = window.statusView === null ? null : windows.findView(window, window.statusView)?.view;
@@ -165,6 +170,12 @@ export async function start(): Promise<Disposable> {
     follow.painted = items.length > 0;
   }
 
+  /** Whether each of `hunks`, the baseline's against the buffer, is staged. */
+  async function stagedOf(follow: Follow, hunks: readonly DiffHunk[]): Promise<boolean[]> {
+    if (follow.staged === null || hunks.length === 0) return hunks.map(() => false);
+    return stagedFlags(hunks, (await diff(follow.staged, follow.buffer)).hunks);
+  }
+
   /** Marks the lines that differ from the baseline, or clears the marks. */
   async function paint(follow: Follow) {
     if (follow.baseline === null && !follow.painted) return;
@@ -175,7 +186,7 @@ export async function start(): Promise<Disposable> {
           await replace(follow, [], revision);
         } else {
           const { hunks, newRevision } = await diff(follow.baseline, follow.buffer);
-          const items = await contributionsOf(follow.buffer, hunks);
+          const items = await contributionsOf(follow.buffer, hunks, await stagedOf(follow, hunks));
           if (items.length > 0 || follow.painted) await replace(follow, items, newRevision!);
         }
         return;
@@ -200,15 +211,18 @@ export async function start(): Promise<Disposable> {
     if (follow.fetch) {
       follow.fetch = false;
       follow.baseline = null;
+      follow.staged = null;
       // The hunk it shows may have moved.
       await closePopup(follow);
       const { repository, uri } = follow;
       if (repository !== null && uri !== null) {
         try {
-          follow.baseline = await (await backendContract(repository.backend).client()).baseline({
+          const answer = await (await backendContract(repository.backend).client()).baseline({
             repository: repository.root,
             file: uri,
           });
+          follow.baseline = answer?.text ?? null;
+          follow.staged = answer?.staged ?? null;
           fetched = true;
         } catch (error) {
           // A backend that stopped is dropped, and the file looked up again.
@@ -368,6 +382,7 @@ export async function start(): Promise<Disposable> {
       uri: document.resourceUri,
       repository: null,
       baseline: null,
+      staged: null,
       resolve: true,
       fetch: false,
       painted: false,
@@ -412,6 +427,7 @@ export async function start(): Promise<Disposable> {
     const view = target.focusedView;
     if (view === null || follow.baseline === null) commands.unavailable();
     const text = baselineText(follow.baseline, hunk);
+    const [staged = false] = await stagedOf(follow, [hunk]);
     // The last line break would show as an empty line.
     const baseline = await buffers.create({ text: text.replace(/\n$/, ""), language: follow.language, readOnly: true });
     try {
@@ -434,6 +450,7 @@ export async function start(): Promise<Disposable> {
         editor,
         baseline,
         hunk,
+        staged,
         listener: await editor.onDidCloseZone(({ zone }) => {
           if (zone === POPUP && follow.popup === popup) return forgetPopup(follow);
         }),
@@ -443,7 +460,7 @@ export async function start(): Promise<Disposable> {
       await editor.openZone(POPUP, {
         line: Math.min(hunk.new.start, count),
         // An insertion has its own bar beside the lines.
-        ...(text === "" ? {} : { gutter: colorOf(hunk) }),
+        ...(text === "" ? {} : { gutter: colorOf(hunk, staged) }),
         toolbar: [
           { label: "Previous Hunk", icon: "vcs.previousHunk", command: PREVIOUS_HUNK },
           { label: "Next Hunk", icon: "vcs.nextHunk", command: NEXT_HUNK },

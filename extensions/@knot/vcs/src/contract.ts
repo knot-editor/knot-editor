@@ -61,8 +61,16 @@ function defineBackend(id: string) {
     repositories: s.fn(s.string(), s.array(s.string())),
     /** The root URI of the repository of a file URI, or null when it has none. */
     repositoryOf: s.fn(s.string(), s.nullable(s.string())),
-    /** The text of a file URI in a repository's baseline, or null when it has none. */
-    baseline: s.fn(s.object({ repository: s.string(), file: s.string() }), s.nullable(s.string())),
+    /**
+     * The text of a file URI in a repository's baseline, or null when it has
+     * none. `staged` is the text between the baseline and the working file,
+     * such as Git's index entry; it is omitted when it equals `text` or the
+     * backend has no such text.
+     */
+    baseline: s.fn(
+      s.object({ repository: s.string(), file: s.string() }),
+      s.nullable(s.object({ text: s.string(), staged: s.optional(s.string()) })),
+    ),
     /**
      * A snapshot of the repository: `files` are those that differ from its
      * baseline, as file URIs (one it does not list is unchanged, ignored files

@@ -17,7 +17,7 @@ declare module "@knot/vcs" {
   export function backendContract(id: string): Contract<{
     repositories: FnSchema<string, readonly string[]>;
     repositoryOf: FnSchema<string, string | null>;
-    baseline: FnSchema<{ repository: string; file: string }, string | null>;
+    baseline: FnSchema<{ repository: string; file: string }, { text: string; staged?: string } | null>;
     status: FnSchema<
       string,
       {

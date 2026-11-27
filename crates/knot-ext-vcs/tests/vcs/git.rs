@@ -64,6 +64,11 @@ fn added(line: usize) -> (usize, &'static str, String) {
     (line, "bar", "diff.added".to_owned())
 }
 
+/// A bar of an added line the index already holds.
+fn staged_added(line: usize) -> (usize, &'static str, String) {
+    (line, "bar", "diff.added.staged".to_owned())
+}
+
 /// Opens the edited sentinel `marker.txt` of a repository after the files
 /// under test and waits for its mark, so what stayed empty had its turn.
 fn settle(window: &TestWindow, directory: &Path, tab: usize, cx: &mut TestAppContext) {
@@ -147,7 +152,7 @@ fn a_file_added_to_the_index_but_not_to_head_is_entirely_added(cx: &mut TestAppC
     window.set_roots(&[&uri(directory.path())], cx);
     window.open_path(&directory.path().join("new.txt"), cx);
     wait_until(cx, |cx| !bars(&window, 0, cx).is_empty());
-    assert_eq!(bars(&window, 0, cx), [added(0), added(1)]);
+    assert_eq!(bars(&window, 0, cx), [staged_added(0), staged_added(1)]);
 }
 
 #[gpui::test]
@@ -258,8 +263,9 @@ fn a_commit_made_outside_knot_clears_the_marks_and_a_soft_reset_brings_them_back
     let (_product, window) = open_with_added_line(directory.path(), cx);
     git(directory.path(), &["commit", "-q", "-a", "-m", "more"]);
     wait_until(cx, |cx| bars(&window, 0, cx).is_empty());
+    // The soft reset leaves the index holding the line.
     git(directory.path(), &["reset", "-q", "--soft", "HEAD~1"]);
-    wait_until(cx, |cx| bars(&window, 0, cx) == [added(4)]);
+    wait_until(cx, |cx| bars(&window, 0, cx) == [staged_added(4)]);
 }
 
 #[gpui::test]
@@ -276,7 +282,8 @@ fn a_branch_switch_outside_knot_changes_the_baseline(cx: &mut TestAppContext) {
         directory.path(),
         &["symbolic-ref", "HEAD", "refs/heads/main"],
     );
-    wait_until(cx, |cx| bars(&window, 0, cx) == [added(4)]);
+    // The index still holds the line.
+    wait_until(cx, |cx| bars(&window, 0, cx) == [staged_added(4)]);
 }
 
 #[gpui::test]
@@ -290,7 +297,29 @@ fn staging_a_file_outside_knot_gives_a_new_file_its_baseline(cx: &mut TestAppCon
     settle(&window, directory.path(), 2, cx);
     assert!(bars(&window, 1, cx).is_empty());
     git(directory.path(), &["add", "new.txt"]);
-    wait_until(cx, |cx| bars(&window, 1, cx) == [added(0), added(1)]);
+    wait_until(cx, |cx| {
+        bars(&window, 1, cx) == [staged_added(0), staged_added(1)]
+    });
+}
+
+#[gpui::test]
+fn staging_a_file_outside_knot_dims_its_hunks_and_unstaging_restores_them(cx: &mut TestAppContext) {
+    let directory = resolved_tempdir();
+    repository(directory.path(), &[("file.txt", BASE.as_bytes())]);
+    std::fs::write(directory.path().join("file.txt"), "a\nB\nc\nd\n").unwrap();
+    let (product, window) = product(cx);
+    product.watch_files(cx);
+    window.set_roots(&[&uri(directory.path())], cx);
+    window.open_path(&directory.path().join("file.txt"), cx);
+    let modified = |color: &str| vec![(1, "bar", color.to_owned())];
+    wait_until(cx, |cx| bars(&window, 0, cx) == modified("diff.modified"));
+    git(directory.path(), &["add", "file.txt"]);
+    wait_until(cx, |cx| {
+        bars(&window, 0, cx) == modified("diff.modified.staged")
+    });
+    // Unstaging brings the full color back.
+    git(directory.path(), &["reset", "-q", "file.txt"]);
+    wait_until(cx, |cx| bars(&window, 0, cx) == modified("diff.modified"));
 }
 
 #[gpui::test]

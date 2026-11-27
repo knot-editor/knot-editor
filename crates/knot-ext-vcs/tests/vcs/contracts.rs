@@ -24,7 +24,7 @@ import {{ commands }} from "knot";
 const serving = await backendContract("{id}").serve({{
   repositories: (root) => [`${{root}}/{id}`],
   repositoryOf: (file) => `{id}:${{file}}`,
-  baseline: ({{ repository, file }}) => `{id}|${{repository}}|${{file}}`,
+  baseline: ({{ repository, file }}) => ({{ text: `{id}|${{repository}}|${{file}}` }}),
   status: () => ({{ files: [], groups: [] }}),
   compare: () => null,
   rollback: () => {{}},
@@ -115,12 +115,12 @@ fn a_contract_the_factory_defines_is_owned_by_vcs_and_served_by_each_backend(
             "alpha": [
                 ["file:///work/alpha"],
                 "alpha:file:///work/a.txt",
-                "alpha|file:///work|file:///work/a.txt",
+                { "text": "alpha|file:///work|file:///work/a.txt" },
             ],
             "beta": [
                 ["file:///work/beta"],
                 "beta:file:///work/a.txt",
-                "beta|file:///work|file:///work/a.txt",
+                { "text": "beta|file:///work|file:///work/a.txt" },
             ],
         })
     );

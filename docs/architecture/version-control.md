@@ -28,8 +28,9 @@ contract, and its marks are cleared.
 ## Gutter
 
 `@knot/vcs` follows every open document with a file through `documents.track`.
-A backend supplies a baseline, which is text or none; a file with none (untracked,
-ignored, or binary) has no gutter. The baseline is cached per document and
+A backend supplies a baseline, which is text or none, and optionally the
+staged text between it and the working file; a file with no baseline
+(untracked, ignored, or binary) has no gutter. Both are cached per document and
 fetched again when the backend reports a change, when the document's file
 changes, and when the document goes from dirty to clean.
 
@@ -39,6 +40,12 @@ a `diff.added` bar for an insertion, a `diff.modified` bar for a replacement,
 and a `diff.removed` wedge for a removal. The contributions are replaced at the
 revision that was diffed, and a diff an edit raced is repeated. A click on a
 mark runs `vcs.showHunk`.
+
+A hunk is staged when the staged text, diffed against the buffer the same way,
+has no hunk overlapping the hunk's new lines (or touching a removal's boundary),
+that is the buffer equals the staged text there; a partly staged hunk counts
+as unstaged. Staged hunks paint with the dimmer `diff.added.staged`,
+`diff.modified.staged`, and `diff.removed.staged`, which `@knot/vcs` defines.
 
 ## Hunk popup
 

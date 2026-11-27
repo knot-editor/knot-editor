@@ -63,7 +63,7 @@ Bundled packages publish contracts for each other:
 | Package | Contract | Methods |
 | --- | --- | --- |
 | `@knot/go-to-file` | `workspace` | `files(query)`, `buffers(query)`, `actions(query)`: the rows of that Search Everywhere tab for the caller's window |
-| `@knot/vcs` | `vcs`, `backendContract(id)` | `vcs`, served by `@knot/vcs`: backends `register(id)`, `unregister(id)`, and report `changed(...)` baselines or `statusChanged(...)` files. `backendContract(id)`, served by the backend `id` and called by `@knot/vcs`: `repositories(root)`, `repositoryOf(file)`, `baseline(...)`, `status(repository)`, `ref(repository)` |
+| `@knot/vcs` | `vcs`, `backendContract(id)` | `vcs`, served by `@knot/vcs`: backends `register(id)`, `unregister(id)`, and report `changed(...)` baselines or `statusChanged(...)` files. `backendContract(id)`, served by the backend `id` and called by `@knot/vcs`: `repositories(root)`, `repositoryOf(file)`, `baseline(...)` (`{ text, staged? }`), `status(repository)`, `ref(repository)` |
 
 A version control backend lists `@knot/vcs` in `requires`, serves its own
 `backendContract(id)`, and registers; `@knot/vcs` then draws the change gutter
@@ -78,7 +78,7 @@ import { backendContract, vcs } from "@knot/vcs";
 await backendContract("mine").serve({
   repositories: (root) => [root],
   repositoryOf: (file) => null,
-  baseline: ({ repository, file }) => "text of the file at the baseline\n",
+  baseline: ({ repository, file }) => ({ text: "text of the file at the baseline\n" }),
   status: (repository) => [{ file: "file:///work/a.txt", status: "modified" }],
   ref: (repository) => ({ label: "main" }),
 });

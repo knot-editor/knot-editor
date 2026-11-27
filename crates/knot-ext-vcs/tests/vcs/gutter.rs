@@ -11,7 +11,7 @@ import { backendContract, vcs } from "@knot/vcs";
 await backendContract("fixed").serve({
   repositories: (root) => [root],
   repositoryOf: () => null,
-  baseline: () => "a\nb\nc\nd\n",
+  baseline: () => ({ text: "a\nb\nc\nd\n" }),
   status: () => ({ files: [], groups: [] }),
   compare: () => null,
   rollback: () => {},

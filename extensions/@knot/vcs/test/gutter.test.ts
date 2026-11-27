@@ -62,6 +62,8 @@ type Answers = {
   /** The repository of a directory. */
   repositoryOf?: (directory: string) => string | null;
   baseline?: (repository: string, file: string) => string | null;
+  /** The staged text of the baseline's file, when the backend has some. */
+  staged?: (repository: string, file: string) => string | undefined;
   ref?: (repository: string) => { label: string } | null;
 };
 
@@ -71,7 +73,12 @@ async function backend(id: string, answers: Answers) {
   const serving = await backendContract(id).serve({
     repositories: (root) => (answers.repositories ?? (() => []))(root),
     repositoryOf: (directory) => (answers.repositoryOf ?? (() => null))(directory),
-    baseline: ({ repository, file }) => (answers.baseline ?? (() => null))(repository, file),
+    baseline: ({ repository, file }) => {
+      const text = (answers.baseline ?? (() => null))(repository, file);
+      if (text === null) return null;
+      const staged = answers.staged?.(repository, file);
+      return staged === undefined ? { text } : { text, staged };
+    },
     status: () => ({ files: [], groups: [] }), compare: () => null, rollback: () => {}, commitOptions: () => [], commitMessage: () => null, commit: () => null,
     ref: (repository) => (answers.ref ?? (() => null))(repository),
   });
@@ -411,4 +418,72 @@ test("an open diff closes with its document", async () => {
   await host.emit({ type: "documentClosed", document: id } as never);
   await settle();
   assert.equal(shown[0]!.closed, true);
+});
+
+test("hunks the staged text already holds are marked as staged", async () => {
+  const id = open("a\nB\nc\ne\nf\n");
+  // The modification is staged; the removal and the addition are not.
+  await backend("one", {
+    repositories: () => [ROOT],
+    baseline: () => "a\nb\nc\nd\ne\n",
+    staged: () => "a\nB\nc\nd\ne\n",
+  });
+  await running();
+  await settle();
+  assert.deepEqual(marks(id), [
+    [2, 3, "diff.modified.staged", "bar"],
+    [6, 6, "diff.removed", "deletion"],
+    [8, 9, "diff.added", "bar"],
+  ]);
+});
+
+test("a replacement of the last line that is staged is marked as staged", async () => {
+  const id = open("a\nb\nx\n");
+  await backend("one", { repositories: () => [ROOT], baseline: () => "a\nb\nc\n", staged: () => "a\nb\nx\n" });
+  await running();
+  await settle();
+  assert.deepEqual(marks(id), [[4, 5, "diff.modified.staged", "bar"]]);
+});
+
+test("a staged removal at the end of the file is marked as staged", async () => {
+  const id = open("a\n");
+  await backend("one", { repositories: () => [ROOT], baseline: () => "a\nb\n", staged: () => "a\n" });
+  await running();
+  await settle();
+  assert.deepEqual(marks(id), [[2, 2, "diff.removed.staged", "deletion"]]);
+});
+
+test("a hunk the staged text holds only part of counts as unstaged", async () => {
+  const id = open("a\nX\nY\nc\n");
+  await backend("one", { repositories: () => [ROOT], baseline: () => "a\nb\nc\n", staged: () => "a\nX\nb\nc\n" });
+  await running();
+  await settle();
+  assert.deepEqual(marks(id), [[2, 5, "diff.modified", "bar"]]);
+});
+
+test("nothing is staged when the backend has no staged text", async () => {
+  const id = open("a\nB\n");
+  await backend("one", { repositories: () => [ROOT], baseline: () => "a\nb\n" });
+  await running();
+  await settle();
+  assert.deepEqual(marks(id), [[2, 3, "diff.modified", "bar"]]);
+});
+
+test("a change of the staged text is fetched with the baseline", async () => {
+  const id = open("a\nB\n");
+  let staged: string | undefined;
+  await backend("one", { repositories: () => [ROOT], baseline: () => "a\nb\n", staged: () => staged });
+  await running();
+  await settle();
+  assert.deepEqual(marks(id), [[2, 3, "diff.modified", "bar"]]);
+
+  staged = "a\nB\n";
+  await (await vcs.client()).changed({ backend: "one", repository: ROOT });
+  await settle();
+  assert.deepEqual(marks(id), [[2, 3, "diff.modified.staged", "bar"]]);
+
+  staged = undefined;
+  await (await vcs.client()).changed({ backend: "one", repository: ROOT });
+  await settle();
+  assert.deepEqual(marks(id), [[2, 3, "diff.modified", "bar"]]);
 });

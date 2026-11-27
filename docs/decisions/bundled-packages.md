@@ -317,7 +317,9 @@ References: [version control](../architecture/version-control.md#hunk-popup).
 Git's baseline is HEAD, as in IntelliJ, read with `git cat-file --filters` so
 the text compares cleanly with the buffer after line-ending and other smudge
 filters. The index is not the baseline: it would make a staged edit disappear
-from the gutter, and the index shows in the changes view's groups instead. A
+from the gutter. It is the baseline's `staged` text instead, read the same way,
+so the gutter dims the hunks the index already holds; the changes view's groups
+show staging too. A
 repository's root is derived from URIs, not Git's absolute path, because a
 symlinked directory would then no longer match document URIs and window roots.
 
