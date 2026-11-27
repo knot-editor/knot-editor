@@ -42,6 +42,7 @@ export const SHOW_CHANGES = "vcs.showChanges";
 export const ROLLBACK_FILE = "vcs.rollbackFile";
 export const REVERT_HUNK = "vcs.revertHunk";
 export const COPY_HUNK = "vcs.copyHunk";
+export const CLOSE_HUNK = "vcs.closeHunk";
 
 /** The hunk popup that is open on one of a document's editors. */
 type Popup = {
@@ -49,6 +50,8 @@ type Popup = {
   /** The read-only buffer showing the baseline's lines. */
   readonly baseline: ExtensionBuffer;
   readonly listener: Disposable;
+  /** The hunk it shows. */
+  readonly hunk: DiffHunk;
 };
 
 /** What the gutter knows about one open document. */
@@ -430,6 +433,7 @@ export async function start(): Promise<Disposable> {
       const popup: Popup = {
         editor,
         baseline,
+        hunk,
         listener: await editor.onDidCloseZone(({ zone }) => {
           if (zone === POPUP && follow.popup === popup) return forgetPopup(follow);
         }),
@@ -438,7 +442,8 @@ export async function start(): Promise<Disposable> {
       // Above the hunk's first current line, which a removal leaves as the line that followed it, or below the last.
       await editor.openZone(POPUP, {
         line: Math.min(hunk.new.start, count),
-        gutter: colorOf(hunk),
+        // An insertion has its own bar beside the lines.
+        ...(text === "" ? {} : { gutter: colorOf(hunk) }),
         toolbar: [
           { label: "Previous Hunk", icon: "vcs.previousHunk", command: PREVIOUS_HUNK },
           { label: "Next Hunk", icon: "vcs.nextHunk", command: NEXT_HUNK },
@@ -471,10 +476,21 @@ export async function start(): Promise<Disposable> {
     return { follow, buffer, hunk, baseline: follow.baseline, revision: newRevision! };
   }
 
-  /** Opens the popup of the clicked mark's hunk, or of the hunk at the caret. */
+  /** Opens the popup of the clicked mark's hunk, or of the hunk at the caret; closes it if that hunk's is open. */
   const showHunk = async (context: CommandContext) => {
     const { follow, hunk } = await hunkOf(context);
+    if (follow.popup !== null && JSON.stringify(follow.popup.hunk) === JSON.stringify(hunk)) {
+      await closePopup(follow);
+      return;
+    }
     await openPopup(follow, context, hunk);
+  };
+
+  /** Closes the hunk popup of the focused editor's document. */
+  const closeHunk = async ({ buffer }: CommandContext) => {
+    const follow = [...follows.values()].find((candidate) => candidate.buffer === buffer);
+    if (follow === undefined || follow.popup === null) commands.unavailable();
+    await closePopup(follow);
   };
 
   /** Replaces the hunk's current lines with its baseline lines. */
@@ -583,6 +599,10 @@ export async function start(): Promise<Disposable> {
       title: "Revert Hunk",
       description: "Replace the hunk at the cursor with its version control baseline.",
     }),
+    await commands.register(CLOSE_HUNK, closeHunk, {
+      title: "Close Hunk",
+      description: "Close the hunk popup.",
+    }),
     await commands.register(COPY_HUNK, copyHunk, {
       title: "Copy Hunk",
       description: "Copy the version control baseline's lines for the hunk at the cursor.",
@@ -604,6 +624,8 @@ export async function start(): Promise<Disposable> {
       description: "Move the cursor to the previous hunk from the version control baseline.",
     }),
   ];
+  // Escape from the text closes the popup, which a zone does not do on its own.
+  keymaps.bind("escape", CLOSE_HUNK, { view: "editor", context: `zone:${POPUP}` });
   keymaps.bind("alt-f5", NEXT_HUNK, { view: "editor" });
   keymaps.bind("alt-shift-f5", PREVIOUS_HUNK, { view: "editor" });
 

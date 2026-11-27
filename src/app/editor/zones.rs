@@ -335,6 +335,7 @@ impl EditorView {
     /// The zones over the text.
     pub(super) fn render_zones(&self, cx: &Context<Self>) -> Vec<AnyElement> {
         let theme = theme(cx);
+        let scale = self.metrics.scale();
         self.zone_frames(cx)
             .into_iter()
             .flat_map(|frame| {
@@ -342,8 +343,10 @@ impl EditorView {
                     div()
                         .absolute()
                         .top(px(frame.top))
-                        .left(px(self.gutter.bars_start))
-                        .w(px(self.gutter.bars_width))
+                        // As the gutter's bars: right of their lane's start by
+                        // three units, three units wide.
+                        .left(px(self.gutter.bars_start + 3. * scale))
+                        .w(px(3. * scale))
                         .h(px(frame.height))
                         .bg(theme.paint_color(key))
                         .into_any_element()

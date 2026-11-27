@@ -61,7 +61,7 @@ fn an_insertions_popup_has_only_the_toolbar(cx: &mut TestAppContext) {
     wait_until(cx, |cx| !window.zones(cx).is_empty());
     let zones = window.zones(cx);
     assert_eq!(zones[0].line, 3);
-    assert_eq!(zones[0].gutter.as_deref(), Some("diff.added"));
+    assert_eq!(zones[0].gutter, None);
     assert_eq!(zones[0].buttons, BUTTONS);
     assert!(zones[0].texts.is_empty());
 }
@@ -208,5 +208,24 @@ fn an_edit_closes_the_popup(cx: &mut TestAppContext) {
     window.click_gutter_bar(0, cx);
     wait_until(cx, |cx| !window.zones(cx).is_empty());
     window.append("f\n", cx);
+    wait_until(cx, |cx| window.zones(cx).is_empty());
+}
+
+#[gpui::test]
+fn clicking_the_open_hunks_mark_again_closes_the_popup(cx: &mut TestAppContext) {
+    let (_product, window, _directory) = changed(cx);
+    window.click_gutter_bar(0, cx);
+    wait_until(cx, |cx| !window.zones(cx).is_empty());
+    window.click_gutter_bar(0, cx);
+    wait_until(cx, |cx| window.zones(cx).is_empty());
+}
+
+#[gpui::test]
+fn escape_in_the_text_closes_the_popup(cx: &mut TestAppContext) {
+    let (_product, window, _directory) = changed(cx);
+    window.click_gutter_bar(0, cx);
+    wait_until(cx, |cx| !window.zones(cx).is_empty());
+    window.focus_document(cx);
+    window.press("escape", cx);
     wait_until(cx, |cx| window.zones(cx).is_empty());
 }
