@@ -34,7 +34,7 @@ Status: 🚧 planned. Source: [roadmap D216](../roadmap.md), milestone 5 of the
   `diff.modified.staged`, and `diff.removed.staged`, dimmer color keys
   `@knot/vcs` defines; the gutter styles stay native `bar` and `deletion`.
 - **Hunk actions.** A backend method `hunkActions(repository)` returns
-  `{ label, icon?, command, on: ("staged" | "unstaged")[] }[]`, appended to the
+  `{ label, icon, command, on: ("staged" | "unstaged")[] }[]`, appended to the
   popup's toolbar for a hunk in the matching state. `command` is one of the
   backend's commands, run in the editor with `{ repository, file, line }`, the
   hunk's first current line (the boundary line for a removal), like the
@@ -108,7 +108,9 @@ which needs per-hunk staged state there anyway.
 
 Deliverables: `hunkActions` in the contract and the popup toolbar, Git's
 `git.stageHunk` and `git.unstageHunk` with the index computation, also
-runnable from the palette on the hunk at the caret.
+runnable from the palette on the hunk at the caret, and staged hunks drawn
+dimmer in the diff view of Compare with Last Commit (`open` takes `staged`,
+`setText` replaces it, and `@knot/diff` now defines the staged colors).
 
 Validation: unit tests for the index computation (pure function over HEAD,
 index, and buffer texts and a line), including a partly staged hunk, a

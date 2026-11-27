@@ -198,7 +198,8 @@ touches.
   gutter strip; "hunk" names everywhere.
 - [Git baseline](decisions/bundled-packages.md#git-baseline): HEAD through
   `cat-file --filters`, not the index; roots derived from URIs, not Git's
-  absolute paths; watching, not polling, with a hidden-entry opt-in.
+  absolute paths; watching, not polling, with a hidden-entry opt-in; staging a
+  hunk edits the index text instead of applying a patch.
 
 ## [Workbench and lifecycle](decisions/workbench-and-lifecycle.md)
 

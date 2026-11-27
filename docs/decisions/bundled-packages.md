@@ -329,4 +329,11 @@ watches opt in with `files.watch`'s `includeHidden`, a generic option that the
 explorer and other watchers leave off. The object store is not watched, since it
 is large and busy and no baseline depends on a change there.
 
+Staging a hunk edits the index entry's text rather than applying a patch: the
+text comes from the same three reads the gutter uses (HEAD, the index, the
+buffer), so unsaved edits stage as the editor shows them, and the rule that
+picks the hunks is the gutter's overlap rule, which keeps what the popup shows
+and what the command does in step. A patch through `git apply --cached` would
+need the saved file and Git's own hunk splitting.
+
 References: [version control](../architecture/version-control.md#git).

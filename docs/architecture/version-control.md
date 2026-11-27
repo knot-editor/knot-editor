@@ -45,7 +45,7 @@ A hunk is staged when the staged text, diffed against the buffer the same way,
 has no hunk overlapping the hunk's new lines (or touching a removal's boundary),
 that is the buffer equals the staged text there; a partly staged hunk counts
 as unstaged. Staged hunks paint with the dimmer `diff.added.staged`,
-`diff.modified.staged`, and `diff.removed.staged`, which `@knot/vcs` defines.
+`diff.modified.staged`, and `diff.removed.staged`, which [`@knot/diff`](#the-diff-package) defines.
 
 ## Hunk popup
 
@@ -68,6 +68,12 @@ The toolbar has Previous Hunk, Next Hunk, Revert Hunk, Compare with Last Commit
 one edit at the diffed revision, one undo step, restoring a missing final
 newline exactly. `vcs.copyHunk` copies the baseline lines. Both work from the
 palette on the hunk at the caret.
+
+A backend adds buttons through `hunkActions(repository)`: each names one of its
+commands, an icon, and the hunk states (`staged`, `unstaged`) it applies to, and
+the popup shows those that match its hunk, after Copy Hunk. The command runs in
+the editor with `{ repository, file, line }`, the hunk's first current line (the
+boundary line for a removal).
 
 A document has one popup. Opening it on another hunk updates it in place, and
 [navigation](#navigation) moves it while it is open. Escape closes it, in the
@@ -211,7 +217,9 @@ the command unavailable, and a file equal to its baseline raises a "No changes"
 notice instead of a tab. The diff opens as the pane's preview tab. Each document keeps at most one such diff: a second
 request closes the open one and opens a new tab. The open diff's original side
 is replaced when the baseline is fetched again, and the tab closes when the file
-has no baseline any more or the document closes.
+has no baseline any more or the document closes. The diff also gets the baseline's `staged` text, which
+the diff package uses to draw staged hunks dimmer; a refetch replaces it too, with the
+baseline when nothing is staged.
 
 ## The diff package
 
@@ -226,6 +234,13 @@ describe, paints line bands and gutter wedges on each editor as view
 decorations, sends the strip's links, and links the editors' scrolling. A
 comparison that an edit raced is dropped, and the edit's own notification
 compares again.
+
+`open` takes an optional `staged` text, and `setText` replaces it with the side
+`"staged"`. A hunk is staged when the modified side matches that text where it
+changed, by the [gutter's rule](#gutter); the bands, wedges, strip links, and
+inline blocks of a staged hunk use the dimmer `diff.added.staged`,
+`diff.modified.staged`, `diff.removed.staged`, and the `.background.staged` forms
+of the three band colors, all defined by the package.
 
 The `diff.layout` setting picks how a tab opens, and `diff.toggleLayout` (the
 toolbar's last button) switches an open one. Inline keeps only the `modified`
@@ -288,6 +303,15 @@ not register.
   another group's files. A file that is added but not in HEAD is unstaged and left
   on disk as untracked. The index and working tree watches report the change, so
   an action needs no refresh of its own.
+- **Stage and Unstage Hunk** (`git.stageHunk`, `git.unstageHunk`) are the
+  backend's `hunkActions`, also on the palette for the hunk at the caret. They
+  read HEAD, the index entry, and the buffer's text, find the hunk of HEAD
+  against the buffer at the line, and edit the index entry: staging replaces the
+  index's lines that differ from the buffer there with the buffer's, unstaging
+  replaces the index's lines that differ from HEAD there with HEAD's. The text
+  is written with `git hash-object -w --stdin --path` (clean filters apply) and
+  `git update-index --cacheinfo`, keeping the entry's mode, so unsaved edits stage as
+  they show and the working file is untouched.
 - **Commit** runs `git commit -F -` with the message on stdin, adding `--amend`
   and `--signoff` for the options of the same name; Amend suggests HEAD's
   message. With nothing staged and tracked files changed, it confirms "Stage all

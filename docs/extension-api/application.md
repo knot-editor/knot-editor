@@ -168,7 +168,9 @@ original's changed lines above the modified text; its toolbar and
 `diff.toggleLayout` switch it, and `diff.nextHunk` and `diff.previousHunk` move
 between hunks. The tab keeps its bands, strip, and scrolling current as either
 side changes, and is not restored with its window. `setText` throws for a
-document side or a closed tab, and unloading the package closes its tabs.
+document side or a closed tab, and unloading the package closes its tabs. An
+optional `staged` text between the sides, which `setText` replaces with
+`side: "staged"`, makes the hunks the modified side already matches draw dimmer.
 
 ```js
 import { diffs } from "@knot/diff";

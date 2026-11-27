@@ -63,7 +63,7 @@ Bundled packages publish contracts for each other:
 | Package | Contract | Methods |
 | --- | --- | --- |
 | `@knot/go-to-file` | `workspace` | `files(query)`, `buffers(query)`, `actions(query)`: the rows of that Search Everywhere tab for the caller's window |
-| `@knot/vcs` | `vcs`, `backendContract(id)` | `vcs`, served by `@knot/vcs`: backends `register(id)`, `unregister(id)`, and report `changed(...)` baselines or `statusChanged(...)` files. `backendContract(id)`, served by the backend `id` and called by `@knot/vcs`: `repositories(root)`, `repositoryOf(file)`, `baseline(...)` (`{ text, staged? }`), `status(repository)`, `ref(repository)` |
+| `@knot/vcs` | `vcs`, `backendContract(id)` | `vcs`, served by `@knot/vcs`: backends `register(id)`, `unregister(id)`, and report `changed(...)` baselines or `statusChanged(...)` files. `backendContract(id)`, served by the backend `id` and called by `@knot/vcs`: `repositories(root)`, `repositoryOf(file)`, `baseline(...)` (`{ text, staged? }`), `status(repository)`, `hunkActions(repository)`, `ref(repository)` |
 
 A version control backend lists `@knot/vcs` in `requires`, serves its own
 `backendContract(id)`, and registers; `@knot/vcs` then draws the change gutter
