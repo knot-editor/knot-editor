@@ -519,7 +519,9 @@ fn tab_menu_items_act_on_the_clicked_tab_not_the_active_file(cx: &mut TestAppCon
         Some("src/main.rs".to_owned())
     );
 
-    // Revealing the clicked tab selects its file in the tree.
+    // Revealing the clicked tab selects its file in the tree. The active
+    // tab's own auto-reveal settles first, so it cannot land after this one.
+    wait_until(cx, |cx| tree.selected(cx).as_deref() == Some("README.md"));
     assert_eq!(
         window.run_tab_command(0, "explorer.reveal-active-file", cx),
         CommandOutcome::Completed
