@@ -80,6 +80,8 @@ on the same machine).
    file watcher and the follow-up diff, so they are the product's latency
    rather than test overhead; shortening them would mean faking the watcher
    and losing what the tests check. The suite stays as it is.
+4a. Cutting the launch floor with a V8 code cache has its own plan:
+   [v8-code-cache](v8-code-cache.md).
 4b. The same look at `knot-ext-vim`, then `knot-ext-workbench`, one step each
    (`vim::topics` 11s over 15 tests; `project_sessions`, `explorer`, `find`).
 5. Decide whether to add a guard (a budget in CI or a slow-test report) so the
