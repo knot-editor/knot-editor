@@ -168,26 +168,9 @@ changes view decisions in [bundled packages](../decisions/bundled-packages.md).
 
 ### 5. Panel polish and member focus ✅
 
-Deliverables:
-- A native way to focus a named layout member: `ViewRegistration.focus(window,
-  { member })` shows the tool window and focuses the member with that key, so
-  Cmd+Alt+C reaches the message editor wherever focus was.
-- An editor member option `gutter: false` (no line numbers, markers, or current
-  line highlight), used by the message editor.
-- Controls laid out compactly: options on the left, Commit on the right of the
-  same row, smaller checkboxes and button, and the editor with padding and one
-  subtle separator instead of hard borders.
-
-Validation: product test that the focus request moves focus to the keyed editor
-and that a gutterless editor paints no gutter; `@knot/vcs` test that
-`vcs.focusCommitMessage` asks for the message member. `just check`.
-
-Review gate: Cmd+Alt+C from the tree and from a document lands in the message
-editor; the panel looks right in the scratch repository.
-
-Scope decisions: Cmd+K begins the split chords and waited a second, so the
-binding is Cmd+Alt+C; `focus` takes editor members only; the panel keeps the
-layout's separators between its members.
+`ViewRegistration.focus(window, { member })`, the editor member's `gutter: false`,
+and the compact controls row are described in the [ui guide](../extension-api/ui.md#layout-tool-windows).
+Cmd+K begins the split chords, so the panel's focus binding is Cmd+Alt+C.
 
 ### 6. Resizable commit editor
 
