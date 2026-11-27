@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { ByteRange, DiffHunk } from "knot";
-import { anchorLines, baselineText, hunkAt, revertEdit } from "../src/hunk.js";
+import { baselineText, hunkAt, revertEdit } from "../src/hunk.js";
 
 const hunk = (old: [number, number], now: [number, number]): DiffHunk => ({
   old: { start: old[0], end: old[1] },
@@ -37,15 +37,6 @@ test("a removal belongs to the line that followed it, clamped to the last line",
   assert.equal(hunkAt([removal], 2, 5), removal);
   assert.equal(hunkAt([removal], 1, 5), null);
   assert.equal(hunkAt([hunk([2, 4], [3, 3])], 2, 2) !== null, true);
-});
-
-test("a hunk with new lines is anchored to them", () => {
-  assert.deepEqual(anchorLines(hunk([1, 2], [4, 7])), { first: 4, last: 6 });
-});
-
-test("a removal is anchored to the line before it, or line 0 at the top", () => {
-  assert.deepEqual(anchorLines(hunk([3, 5], [3, 3])), { first: 2, last: 2 });
-  assert.deepEqual(anchorLines(hunk([0, 2], [0, 0])), { first: 0, last: 0 });
 });
 
 test("the baseline text is the replaced lines with their terminators", () => {

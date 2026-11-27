@@ -1,4 +1,4 @@
-//! The hunk popup in the launched product: `@knot/vcs` over a test backend
+//! The hunk popup, a zone, in the launched product: `@knot/vcs` over a test backend
 //! whose baseline is `a`, `b`, `c`, `d` on lines of their own.
 use gpui::TestAppContext;
 use knot::test_support::{CommandOutcome, TestWindow, wait_until};
@@ -44,46 +44,46 @@ const COPY: &str = "Copy Hunk";
 fn a_click_on_a_mark_opens_the_baseline_lines_under_the_hunk(cx: &mut TestAppContext) {
     let (_product, window, _directory) = changed(cx);
     window.click_gutter_bar(0, cx);
-    wait_until(cx, |cx| !window.popovers(cx).is_empty());
-    let popovers = window.popovers(cx);
-    assert_eq!(popovers.len(), 1);
-    assert_eq!(popovers[0].id, "vcs.hunk");
-    assert_eq!(popovers[0].anchor, 0..1);
-    assert_eq!(popovers[0].buttons, [BUTTONS.as_slice(), &[COPY]].concat());
-    assert_eq!(popovers[0].texts, ["a\n"]);
+    wait_until(cx, |cx| !window.zones(cx).is_empty());
+    let zones = window.zones(cx);
+    assert_eq!(zones.len(), 1);
+    assert_eq!(zones[0].id, "vcs.hunk");
+    assert_eq!(zones[0].line, 0);
+    assert_eq!(zones[0].buttons, [BUTTONS.as_slice(), &[COPY]].concat());
+    assert_eq!(zones[0].texts, ["a\n"]);
 }
 
 #[gpui::test]
 fn an_insertions_popup_has_only_the_toolbar(cx: &mut TestAppContext) {
     let (_product, window, _directory) = changed(cx);
     window.click_gutter_bar(3, cx);
-    wait_until(cx, |cx| !window.popovers(cx).is_empty());
-    let popovers = window.popovers(cx);
-    assert_eq!(popovers[0].anchor, 3..4);
-    assert_eq!(popovers[0].buttons, BUTTONS);
-    assert!(popovers[0].texts.is_empty());
+    wait_until(cx, |cx| !window.zones(cx).is_empty());
+    let zones = window.zones(cx);
+    assert_eq!(zones[0].line, 3);
+    assert_eq!(zones[0].buttons, BUTTONS);
+    assert!(zones[0].texts.is_empty());
 }
 
 #[gpui::test]
 fn copy_hunk_puts_the_baseline_lines_on_the_clipboard(cx: &mut TestAppContext) {
     let (_product, window, _directory) = changed(cx);
     window.click_gutter_bar(0, cx);
-    wait_until(cx, |cx| !window.popovers(cx).is_empty());
+    wait_until(cx, |cx| !window.zones(cx).is_empty());
     cx.update(|cx| cx.write_to_clipboard(gpui::ClipboardItem::new_string(String::new())));
-    window.click_popover_button(COPY, cx);
+    window.click_zone_button(COPY, cx);
     wait_until(cx, |cx| {
         cx.read_from_clipboard().and_then(|item| item.text()) == Some("a\n".to_owned())
     });
 }
 
 #[gpui::test]
-fn a_removals_popup_sits_on_the_line_before_it(cx: &mut TestAppContext) {
+fn a_removals_popup_sits_above_the_line_that_followed_it(cx: &mut TestAppContext) {
     let (_product, window, _directory) = changed(cx);
     window.click_gutter_bar(2, cx);
-    wait_until(cx, |cx| !window.popovers(cx).is_empty());
-    let popovers = window.popovers(cx);
-    assert_eq!(popovers[0].anchor, 1..2);
-    assert_eq!(popovers[0].texts, ["c\n"]);
+    wait_until(cx, |cx| !window.zones(cx).is_empty());
+    let zones = window.zones(cx);
+    assert_eq!(zones[0].line, 2);
+    assert_eq!(zones[0].texts, ["c\n"]);
 }
 
 #[gpui::test]
@@ -91,23 +91,19 @@ fn next_and_previous_move_the_caret_and_the_popup_and_wrap(cx: &mut TestAppConte
     let (_product, window, _directory) = changed(cx);
     window.set_view(0, 0, 0, cx);
     window.click_gutter_bar(0, cx);
-    wait_until(cx, |cx| !window.popovers(cx).is_empty());
+    wait_until(cx, |cx| !window.zones(cx).is_empty());
 
-    for (button, line, anchor) in [
-        ("Next Hunk", 2, 1..2),
-        ("Next Hunk", 3, 3..4),
-        ("Next Hunk", 0, 0..1),
-        ("Previous Hunk", 3, 3..4),
-        ("Previous Hunk", 2, 1..2),
+    for (button, line, zone_line) in [
+        ("Next Hunk", 2, 2),
+        ("Next Hunk", 3, 3),
+        ("Next Hunk", 0, 0),
+        ("Previous Hunk", 3, 3),
+        ("Previous Hunk", 2, 2),
     ] {
-        window.click_popover_button(button, cx);
+        window.click_zone_button(button, cx);
         wait_until(cx, |cx| {
             caret_line(&window, cx) == line
-                && window
-                    .popovers(cx)
-                    .first()
-                    .map(|popover| popover.anchor.clone())
-                    == Some(anchor.clone())
+                && window.zones(cx).first().map(|zone| zone.line) == Some(zone_line)
         });
     }
 }
@@ -118,18 +114,14 @@ fn alt_f5_moves_an_open_popup_and_does_not_open_one(cx: &mut TestAppContext) {
     window.set_view(0, 0, 0, cx);
     window.press("alt-f5", cx);
     wait_until(cx, |cx| caret_line(&window, cx) == 2);
-    assert!(window.popovers(cx).is_empty());
+    assert!(window.zones(cx).is_empty());
 
     window.click_gutter_bar(0, cx);
-    wait_until(cx, |cx| !window.popovers(cx).is_empty());
+    wait_until(cx, |cx| !window.zones(cx).is_empty());
     window.press("alt-f5", cx);
     // The caret was already on the removal.
     wait_until(cx, |cx| {
-        window
-            .popovers(cx)
-            .first()
-            .map(|popover| popover.anchor.clone())
-            == Some(3..4)
+        window.zones(cx).first().map(|zone| zone.line) == Some(3)
     });
 }
 
@@ -137,10 +129,10 @@ fn alt_f5_moves_an_open_popup_and_does_not_open_one(cx: &mut TestAppContext) {
 fn reverting_restores_the_baseline_in_one_undo_step_and_closes_the_popup(cx: &mut TestAppContext) {
     let (_product, window, _directory) = changed(cx);
     window.click_gutter_bar(0, cx);
-    wait_until(cx, |cx| !window.popovers(cx).is_empty());
-    window.click_popover_button("Revert Hunk", cx);
+    wait_until(cx, |cx| !window.zones(cx).is_empty());
+    window.click_zone_button("Revert Hunk", cx);
     wait_until(cx, |cx| text(&window, cx) == "a\nb\nd\ne\n");
-    wait_until(cx, |cx| window.popovers(cx).is_empty());
+    wait_until(cx, |cx| window.zones(cx).is_empty());
 
     assert_eq!(
         window.run_command("editor.undo", cx),
@@ -157,8 +149,8 @@ fn the_commands_work_on_the_hunk_at_the_caret(cx: &mut TestAppContext) {
         window.run_command("vcs.showHunk", cx),
         CommandOutcome::Completed
     );
-    wait_until(cx, |cx| !window.popovers(cx).is_empty());
-    assert_eq!(window.popovers(cx)[0].anchor, 0..1);
+    wait_until(cx, |cx| !window.zones(cx).is_empty());
+    assert_eq!(window.zones(cx)[0].line, 0);
 
     // The removal of `c`, and then the added line.
     window.set_view(5, 5, 0, cx);
@@ -176,7 +168,7 @@ fn a_caret_on_no_change_leaves_the_commands_unavailable(cx: &mut TestAppContext)
     for command in ["vcs.showHunk", "vcs.revertHunk"] {
         assert_eq!(window.run_command(command, cx), CommandOutcome::Unavailable);
     }
-    assert!(window.popovers(cx).is_empty());
+    assert!(window.zones(cx).is_empty());
 }
 
 #[gpui::test]
@@ -185,11 +177,33 @@ fn a_new_baseline_closes_the_popup(cx: &mut TestAppContext) {
     window.append("f\n", cx);
     wait_until(cx, |cx| window.gutter_bars(0, cx).len() == 3);
     window.click_gutter_bar(0, cx);
-    wait_until(cx, |cx| !window.popovers(cx).is_empty());
+    wait_until(cx, |cx| !window.zones(cx).is_empty());
     // Saving fetches the baseline again.
     assert_eq!(
         window.run_command("file.save", cx),
         CommandOutcome::Completed
     );
-    wait_until(cx, |cx| window.popovers(cx).is_empty());
+    wait_until(cx, |cx| window.zones(cx).is_empty());
+}
+
+#[gpui::test]
+fn a_removal_at_the_end_of_the_file_sits_below_the_last_line(cx: &mut TestAppContext) {
+    // Against the baseline `a`, `b`, `c`, `d`, only `d` is gone.
+    let shown = show_windowed("a\nb\nc\n", cx);
+    wait_until(cx, |cx| shown.1.gutter_bars(0, cx).len() == 1);
+    shown.1.focus_document(cx);
+    shown.1.click_gutter_bar(3, cx);
+    wait_until(cx, |cx| !shown.1.zones(cx).is_empty());
+    let zones = shown.1.zones(cx);
+    assert_eq!(zones[0].texts, ["d\n"]);
+    assert_eq!(zones[0].line, text(&shown.1, cx).matches('\n').count());
+}
+
+#[gpui::test]
+fn an_edit_closes_the_popup(cx: &mut TestAppContext) {
+    let (_product, window, _directory) = changed(cx);
+    window.click_gutter_bar(0, cx);
+    wait_until(cx, |cx| !window.zones(cx).is_empty());
+    window.append("f\n", cx);
+    wait_until(cx, |cx| window.zones(cx).is_empty());
 }

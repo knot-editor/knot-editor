@@ -1,5 +1,4 @@
-// What a hunk means for the popup: which hunk a line belongs to, where its
-// popup is anchored, its baseline text, and the edit that reverts it.
+// What a hunk means for the popup: which hunk a line belongs to, its baseline text, and the edit that reverts it.
 import type { Buffer, ByteRange, DiffHunk } from "knot";
 
 /** The buffer reads the revert edit needs. */
@@ -12,16 +11,6 @@ export function hunkAt(hunks: readonly DiffHunk[], line: number, lastLine: numbe
   // A removal after the last line of a text without a final newline sits at
   // the end of that line.
   return hunks.find((hunk) => hunk.new.end === hunk.new.start && Math.min(hunk.new.start, lastLine) === line) ?? null;
-}
-
-/**
- * The lines (first to last, inclusive) a hunk's popup is anchored to: its new
- * lines, or for a removal the line before it (line 0 at the top of the file).
- */
-export function anchorLines({ new: now }: DiffHunk): { first: number; last: number } {
-  if (now.end > now.start) return { first: now.start, last: now.end - 1 };
-  const line = Math.max(0, now.start - 1);
-  return { first: line, last: line };
 }
 
 /** The lines of `text`, each with its terminator; hunks index these lines. */

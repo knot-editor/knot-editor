@@ -75,6 +75,18 @@ pub struct TestPopover {
     pub texts: Vec<String>,
 }
 
+/// An open editor zone, as the driver reads it.
+#[derive(Debug, PartialEq)]
+pub struct TestZone {
+    pub id: String,
+    /// The line it sits above; the line count for a zone below the last line.
+    pub line: usize,
+    /// The tooltips of its toolbar buttons.
+    pub buttons: Vec<String>,
+    /// The text of each editor it holds.
+    pub texts: Vec<String>,
+}
+
 /// A command started in a window and not yet waited for.
 pub struct TestCommand(CommandExecution);
 
@@ -955,6 +967,60 @@ impl TestWindow {
                 })
                 .collect()
         })
+    }
+
+    /// The first editor tab's open zones, in opening order.
+    pub fn zones(&self, cx: &mut TestAppContext) -> Vec<TestZone> {
+        cx.read(|cx| {
+            let workbench = self.window.read(cx).workbench.read(cx);
+            let view = workbench
+                .tabs()
+                .find_map(|tab| workbench.editor(tab))
+                .expect("an editor tab");
+            let editor = view.read(cx).editor().read(cx);
+            editor
+                .zone_contents()
+                .into_iter()
+                .zip(editor.zones().zones())
+                .map(|(content, zone)| {
+                    let content = content.read(cx);
+                    TestZone {
+                        id: zone.id.clone(),
+                        line: zone.spec.line,
+                        buttons: content.toolbar_labels(),
+                        texts: content
+                            .leaves()
+                            .iter()
+                            .filter_map(|leaf| leaf.editor())
+                            .map(|view| view.read(cx).model().read(cx).text())
+                            .collect(),
+                    }
+                })
+                .collect()
+        })
+    }
+
+    /// Click the toolbar button of the first editor's zone with the tooltip `label`.
+    pub fn click_zone_button(&self, label: &str, cx: &mut TestAppContext) {
+        let native_window = self.native_window.expect("a native window");
+        let index = self.zones(cx)[0]
+            .buttons
+            .iter()
+            .position(|button| button == label)
+            .expect("a toolbar button");
+        let selector: &'static str = Box::leak(format!("popover-toolbar-{index}").into_boxed_str());
+        // The first frame measures the zone, and the next paints its content.
+        for _ in 0..3 {
+            cx.update_window(native_window, |_, window, _| window.refresh())
+                .unwrap();
+            cx.run_until_parked();
+            cx.refresh().unwrap();
+        }
+        let mut visual = VisualTestContext::from_window(native_window, cx);
+        let at = visual.debug_bounds(selector).unwrap().center();
+        visual.simulate_mouse_down(at, gpui::MouseButton::Left, gpui::Modifiers::default());
+        visual.simulate_mouse_up(at, gpui::MouseButton::Left, gpui::Modifiers::default());
+        cx.run_until_parked();
     }
 
     /// Click the toolbar button of the first editor's popover with the tooltip `label`.

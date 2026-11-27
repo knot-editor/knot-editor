@@ -20,7 +20,7 @@ import type {
 import { diffs } from "@knot/diff";
 import { backendContract, vcs } from "./contract.js";
 import { contributionsOf, SHOW_HUNK } from "./gutter.js";
-import { anchorLines, baselineText, hunkAt, revertEdit } from "./hunk.js";
+import { baselineText, hunkAt, revertEdit } from "./hunk.js";
 import { targetLine, type Direction } from "./navigation.js";
 import { createDiscovery, isGone, type Repository } from "./repositories.js";
 import { createRefs } from "./ref.js";
@@ -35,7 +35,7 @@ const DELAY = 150;
 /** How many times a diff that an edit raced is repeated before the edit's own notification takes over. */
 const ATTEMPTS = 5;
 
-/** The popover ID of the hunk popup. */
+/** The zone ID of the hunk popup. */
 const POPUP = "vcs.hunk";
 
 export const SHOW_CHANGES = "vcs.showChanges";
@@ -241,9 +241,9 @@ export async function start(): Promise<Disposable> {
   /** Closes the popup, if open. */
   async function closePopup(follow: Follow) {
     try {
-      await follow.popup?.editor.closePopover(POPUP);
+      await follow.popup?.editor.closeZone(POPUP);
     } catch {
-      // The editor is gone, and the popover with it.
+      // The editor is gone, and the zone with it.
     }
     await forgetPopup(follow);
   }
@@ -377,7 +377,13 @@ export async function start(): Promise<Disposable> {
     };
     follows.set(document.id, follow);
     try {
-      follow.disposables.push(await document.buffer.onDidChange(() => schedule(follow)));
+      follow.disposables.push(
+        await document.buffer.onDidChange(async () => {
+          schedule(follow);
+          // The hunk it shows may have changed, and a zone does not close on an edit by itself.
+          await closePopup(follow);
+        }),
+      );
     } catch (error) {
       if (!isBufferGone(error)) throw error;
     }
@@ -415,21 +421,22 @@ export async function start(): Promise<Disposable> {
       }
       await closePopup(follow);
       const editor = await workbench.editor(view);
-      const { first, last } = anchorLines(hunk);
       const current = follow.buffer;
-      const lastLine = (await current.lineCount()) - 1;
+      const count = await current.lineCount();
+      const lastLine = count - 1;
       const at = (await current.lineRange(Math.min(hunk.new.start, lastLine))).startByteOffset;
       const here = { range: { startByteOffset: at, endByteOffset: at } };
       const popup: Popup = {
         editor,
         baseline,
-        listener: await editor.onDidClosePopover(({ popover }) => {
-          if (popover === POPUP && follow.popup === popup) return forgetPopup(follow);
+        listener: await editor.onDidCloseZone(({ zone }) => {
+          if (zone === POPUP && follow.popup === popup) return forgetPopup(follow);
         }),
       };
       follow.popup = popup;
-      await editor.openPopover(POPUP, {
-        anchor: { start: first, end: last + 1 },
+      // Above the hunk's first current line, which a removal leaves as the line that followed it, or below the last.
+      await editor.openZone(POPUP, {
+        line: Math.min(hunk.new.start, count),
         toolbar: [
           { label: "Previous Hunk", icon: "vcs.previousHunk", command: PREVIOUS_HUNK },
           { label: "Next Hunk", icon: "vcs.nextHunk", command: NEXT_HUNK },

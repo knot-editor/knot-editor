@@ -284,7 +284,7 @@ impl Editor {
     }
 
     /// The content of the open zones, in the state's order.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn zone_contents(&self) -> Vec<Entity<PopoverContent>> {
         self.zone_views
             .iter()
