@@ -66,8 +66,21 @@ on the same machine).
 
 Re-run `just test-timings` after each step and record the new totals here.
 
-## After step 2 (2026-11-27)
+## Progress
 
-2341 tests, 17s test run, 161s summed (from 185s). `knot-core` is 2.3s in
-total (from 13.8s). The remaining time is in `app::product::tests` (51s),
-`knot-ext-vcs`, `knot-ext-vim`, and `knot-ext-workbench`.
+Summed test time per binary and module, from `just test-timings`. Differences
+in areas a step didn't touch are run-to-run noise (about 10%).
+
+| | Baseline | After step 2 |
+|---|---|---|
+| Tests | 2345 | 2341 |
+| Test run (wall) | 19.0s | 17.1s |
+| Summed test time | 184.9s | 161.1s |
+| `knot` | 76.1s | 71.0s |
+| `knot` `app::product::tests` | 55.5s | 51.2s |
+| `knot-ext-vcs` | 35.6s | 32.4s |
+| `knot-ext-vim` | 20.6s | 18.4s |
+| `knot-ext-workbench` | 15.8s | 14.2s |
+| `knot-model` | 16.3s | 16.9s |
+| `knot-core` | 13.8s | 2.3s |
+| `knot-core` `buffer::differential_tests` | 10.8s | 0.7s |
