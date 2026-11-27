@@ -102,6 +102,9 @@ touches.
   data-described content with the composite layout, several per editor,
   children of their editor in the view tree, zoom-scaled pixels, closed by every
   external edit; Escape ahead of the keymap.
+- [Editor zones](decisions/semantic-ui.md#editor-zones): popover content in
+  whole reserved rows between lines; closed by the owner, not by edits; Escape
+  to the keymap first; a gutter strip names the lines it explains.
 - [Status bar](decisions/semantic-ui.md#status-bar): native bar, extension
   items with per-window values.
 - [Generated text surfaces](decisions/semantic-ui.md#generated-text-surfaces):
@@ -191,8 +194,8 @@ touches.
   one `commit` method that asks its own questions, options and suggested
   messages as data, and the panel following the last chosen file.
 - [Hunk popup](decisions/bundled-packages.md#hunk-popup): the baseline's lines
-  only, toolbar-only for an insertion, anchored to the hunk; "hunk" names
-  everywhere.
+  only, toolbar-only for an insertion, an editor zone between the lines with a
+  gutter strip; "hunk" names everywhere.
 - [Git baseline](decisions/bundled-packages.md#git-baseline): HEAD through
   `cat-file --filters`, not the index; roots derived from URIs, not Git's
   absolute paths; watching, not polling, with a hidden-entry opt-in.

@@ -294,13 +294,21 @@ lines left in the editor beside it, rather than a baseline-against-current
 diff: the editor already shows the current side, and `diff` reports no
 changes inside a line to highlight. A pure insertion shows only the toolbar,
 as IntelliJ does, because an empty editor read as a bug; this meant letting a
-popover's layout hold no view. A removal anchors to the line before it so the
-popup sits where the lines were.
+popover's layout hold no view.
+
+The popup is an [editor zone](../architecture/editor-and-languages.md#editor-zones)
+between the editor's lines, as Zed shows deleted lines, rather than a floating
+popover, so the deleted lines sit where they were. A removal sits above the line
+that followed it. The baseline editor has no gutter and no empty last line, and
+the hunk's mark color runs in the gutter beside the zone, because numbers from 1
+and a zone detached from the marks read as unrelated to the document. An
+insertion's zone has no strip, since its bar already marks the lines. The
+package closes the zone on an edit and on a second Show Hunk on the same hunk,
+since a zone does not close itself.
 
 Names follow Git's: hunks in every command, title, icon, and the code, after
 comparing editors, which split between "change" (VS Code, Zed, IntelliJ's UI)
-and "hunk". Showing the deleted lines inline between the editor's lines, as Zed
-does, was left to the inline zones of D231.
+and "hunk".
 
 References: [version control](../architecture/version-control.md#hunk-popup).
 

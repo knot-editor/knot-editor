@@ -340,6 +340,38 @@ them, since a popover may hold an editor on the same document; the model tells
 edits apart by buffer revision. A toolbar click dispatches its command with the
 anchoring editor captured. [Commands](commands.md#editor-popovers) covers keys.
 
+### Editor zones
+
+A zone shows the content of a popover (`PopoverContent`, the toolbar over a
+layout with `Sizing::Natural`) in rows reserved between an editor's lines, so
+it pushes the text apart instead of covering it. It sits above a line, or at the
+line count below the last one, and belongs to its opening lifecycle and an
+extension-chosen ID per editor; opening an ID again updates it in place. It is
+presentation state, never recorded, and closes with its editor or lifecycle.
+
+The wrap map holds each zone's opaque key, line, and row count, in whole rows,
+so scrolling, folding, and edit-following stay integer-row; a zone's rows
+belong to no line, and `position` reports them as the first row of the line
+below, which the caret steps over. A line's rows are its zones, then its block
+rows, then its text. `crates/knot-model/src/editor/zones.rs` owns the owner, ID,
+and spec, and drives the wrap map through `EditorState`. The editor view
+(`src/app/editor/zones.rs`) measures each zone's content while rendering,
+rounds its height up to whole line heights, capped at the viewport's, and paints
+it over the reserved rows at the text area's width, pinned when the text
+scrolls sideways. A height change re-wraps and keeps the top row's text at the
+top, except that the first rows of a zone above the top line show. A spec can
+name a color key for a strip in the gutter's bar lane beside the zone's rows.
+
+A zone's views are children of the editor in the
+[view tree](workbench-and-lifecycle.md#view-tree), and it takes focus only when
+opened with `focus`. A wheel over a zone scrolls the member under the pointer
+when that can scroll, else the editor. An edit does not close a zone; it
+follows its line, and one whose line is deleted moves to the start of the edit.
+A click elsewhere does not close it either. While open, the editor and the
+zone's views hold the key context `zone:<id>`, and Escape in a zone's view
+goes to the keymap first and closes the zone, reported through
+`onDidCloseZone`, only when no binding takes it.
+
 ## Syntax highlighting and languages
 
 Highlight layers compose in a fixed order: syntax, then contribution

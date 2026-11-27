@@ -42,15 +42,18 @@ mark runs `vcs.showHunk`.
 
 ## Hunk popup
 
-`vcs.showHunk` (Show Hunk) opens a popover under the hunk of the clicked mark,
-or of the caret's line from the palette; it has no default key and is
-unavailable when the caret is on no hunk. The popover has the ID `vcs.hunk` and
-shows the hunk's baseline lines in a read-only buffer in the document's
-language, banded `diff.removed.background`; the current lines stay in the editor
-beside it. An insertion has no baseline lines, so its popover is only the
-toolbar. A hunk with current lines anchors to them; a removal anchors to the
-line before it, or line 0 at the top of the file. Changes inside a line are not
-highlighted.
+`vcs.showHunk` (Show Hunk) opens an [editor zone](editor-and-languages.md#editor-zones)
+for the hunk of the clicked mark, or of the caret's line from the palette; it
+has no default key and is unavailable when the caret is on no hunk. Run on the
+hunk that is already open, it closes the zone. The zone has the ID `vcs.hunk`
+and shows the hunk's baseline lines in a read-only buffer without a gutter, in
+the document's language, banded `diff.removed.background`; the current lines
+stay in the editor. It sits above the hunk's first current line (a removal above
+the line that followed it, or below the last line for a removal at the end of
+the file), with a gutter strip in the hunk's mark color. An insertion has no
+baseline lines, so its zone is only the toolbar and has no strip. Changes inside
+a line are not highlighted. A deletion's wedge is clickable within half a row
+of the boundary it points at.
 
 The toolbar has Previous Hunk, Next Hunk, Revert Hunk, Compare with Last Commit
 (`vcs.showChanges` at the hunk's line), and Copy Hunk, which an insertion omits.
@@ -60,9 +63,10 @@ newline exactly. `vcs.copyHunk` copies the baseline lines. Both work from the
 palette on the hunk at the caret.
 
 A document has one popup. Opening it on another hunk updates it in place, and
-[navigation](#navigation) moves it while it is open. Knot's popover rules close
-it (Escape, a click outside, an edit, a deleted anchor), and `@knot/vcs` also
-closes it when the document's baseline is fetched again or goes away and when
+[navigation](#navigation) moves it while it is open. Escape closes it, in the
+zone or from the text through `vcs.closeHunk` (bound while the zone's key
+context is held), and `@knot/vcs` closes it on an
+edit of the document, when the baseline is fetched again or goes away, and when
 the document closes, rather than following a hunk that may have moved.
 
 ## File status

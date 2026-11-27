@@ -324,9 +324,8 @@ is a floating popover described as data, not a new kind of surface. It takes
 the composite layout (a toolbar over editors, text frames, and trees) rather
 than text and trees only, so one layout builder serves composites and popovers,
 the views are ordinary views of the view tree, and Vim and other editor-driven
-packages work inside them. Inline zones that push lines apart were rejected for
-this: they need layout, fold, and scroll integration that a floating surface
-avoids, and they reuse the same content later.
+packages work inside them. Content that must push lines apart is an
+[editor zone](#editor-zones), not a popover.
 
 - **Several popovers per editor** over one, keyed by package and ID, because
   hover and a hunk popup are independent consumers; there is no collision
@@ -348,6 +347,34 @@ avoids, and they reuse the same content later.
 
 Reference: [editor popovers](../architecture/editor-and-languages.md#editor-popovers)
 and [key routing](../architecture/commands.md#editor-popovers).
+
+## Editor zones
+
+Content that belongs between an editor's lines, such as a hunk's deleted lines,
+reuses the popover's content and layout and differs only in placement: the
+editor reserves rows for it instead of floating it.
+
+- **Whole reserved rows**, rounded up from the content's natural height, so the
+  wrap map, scrolling, folding, and edit-following stay integer-row, accepting
+  up to one line of slack under the content. Pixel-height rows were rejected:
+  they would touch every row-to-y conversion for no consumer's benefit. The
+  zone's background is the editor's, so the slack reads as padding.
+- **Placement above a line, or below the last one**, so a removal at the end of
+  the file shows where its lines were; only zones take the end position.
+- **A zone does not close on an edit or a click elsewhere**; it follows its
+  line. The owner closes it, so a consumer such as the hunk popup decides what
+  an edit means for it. This differs from popovers, which close on every
+  external edit.
+- **Escape goes to the keymap first**, unlike popovers, so Vim can leave insert
+  mode in a zone's editor; a package's own Escape binding under the key context
+  `zone:<id>` closes the zone from the text.
+- **A gutter strip named by the owner** ties a zone to the lines it explains:
+  without it a zone between lines read as unrelated to the gutter marks.
+- **The first rows of a zone above the top line show**, where other row-count
+  changes keep the top row's text in place, so opening a zone on the first
+  visible line is not scrolled out of view.
+
+Reference: [editor zones](../architecture/editor-and-languages.md#editor-zones).
 
 ## Status bar
 
