@@ -72,28 +72,13 @@ painting both independently.
 
 ### 1. Zones in the wrap map ✅
 
-Deliverable: zone entries in `WrapMap` reserving N rows above a line or below
-the last one, with their row count settable, following edits, hiding with a
-folded line, holding no caret, and surfacing their frame rows for painting.
-`EditorState` sets, resizes, and removes zones by key, keeping the top row's
-text at the top. `EditorZones` holds owner, ID, and lifecycle and maps them to
-keys.
-
-Validation: model tests beside the block tests (rows, end-of-file position,
-scrolling, fold, edit following including a deleted line, row-count change
-keeping the top text, caret stepping over, order with block rows on the same
-line), and `EditorZones` tests beside the popover model tests (open, update in
-place, close reasons, owner teardown).
-
-Review gate: row semantics match block rows; no change to existing block-row
-behavior.
-
-**Done:** zones are a separate sorted list in `WrapMap` (`Zone`, `zone_row`,
-`zone_frames`), not a `BlockEntry` variant, so block normalization is
-untouched. `EditorZones` is `crates/knot-model/src/editor/zones.rs`;
-`EditorState` offers `open_zone`, `set_zone_rows`, `close_zone`,
-`dismiss_zone`, and `take_closed_zones`. A new zone has no rows until the view
-measures it (checkpoint 2). Only Escape reports a closure to the owner.
+Zones are a sorted list in `WrapMap`, apart from block entries. `EditorZones`
+(`crates/knot-model/src/editor/zones.rs`) owns owner, ID, and keys, and
+`EditorState` drives the wrap map through `open_zone`, `set_zone_rows`,
+`close_zone`, `dismiss_zone`, and `take_closed_zones`. A new zone has no rows
+until the view measures it (checkpoint 2). Only Escape reports a closure to
+the owner. Approved; verified by model tests only, since nothing opens a zone
+yet.
 
 ### 2. Measuring and painting zones
 
