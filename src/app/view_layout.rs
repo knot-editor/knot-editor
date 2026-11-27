@@ -1381,7 +1381,7 @@ pub(crate) fn toolbar(
                 .items_center()
                 .justify_center()
                 .h(zoom::rems(20.))
-                .min_w(zoom::rems(66.))
+                .w(zoom::rems(76.))
                 .px(zoom::rems(8.))
                 .mr(zoom::rems(4.))
                 .rounded(zoom::rems(10.))
