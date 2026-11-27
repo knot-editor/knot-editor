@@ -13,11 +13,11 @@ on the same machine).
 
 | Area | Total | Notes |
 |---|---|---|
-| `knot` `app::product::tests` | 55.5s (584 tests) | About 95ms per test; likely app and extension-host startup per test. Biggest target in aggregate. |
-| `knot-core` `buffer::differential_tests` | 10.8s (6 tests) | 1.4–2.2s each; the slowest tests. |
+| `knot` `app::product::tests` | 55.5s (584 tests) | About 95ms per test; likely app and extension-host startup per test. Biggest target in aggregate. | 42.7s |
+| `knot-core` `buffer::differential_tests` | 10.8s (6 tests) | 1.4–2.2s each; the slowest tests. | 0.7s |
 | `knot-ext-vim` `vim::topics` | 10.9s (15 tests) | `search` 1.9s, `operators` 1.4s, `ex` 1.0s. |
-| `knot-ext-vcs` | 35.6s (93 tests) | Real `git` subprocesses, mostly 0.7–1.2s each. |
-| `knot-ext-workbench` | 15.8s (84 tests) | `project_sessions`, `explorer`, `find` at 3.6–4.0s each. |
+| `knot-ext-vcs` | 35.6s (93 tests) | Real `git` subprocesses, mostly 0.7–1.2s each. | 45.6s |
+| `knot-ext-workbench` | 15.8s (84 tests) | `project_sessions`, `explorer`, `find` at 3.6–4.0s each. | 11.7s |
 | `knot-app` `bundled_packages_load_with_product_discovery` | 1.3s | One test. |
 
 ## Findings
@@ -57,8 +57,12 @@ on the same machine).
      against the disk): proptest supplies the choices the tree generator
      consumes, so failing trees shrink.
    The only seeded generator left is the ignored `snapshot_cost` measurement.
-3. Profile `app::product::tests` setup (shared fixture, app and host startup
-   per test) and cut the per-test cost.
+3. ✅ Profile `app::product::tests` setup. A `sample` of a single-process run
+   put most busy time in `SettingsStore::default`: `app::settings` rebuilt the
+   whole native store on every read when no `ApplicationSettings` global was
+   installed, which is the case in most product tests. It is now built once.
+   What remains per test is about 27ms of process start (nextest runs one
+   process per test) plus V8 isolate and extension-module setup.
 4. Look at the per-test cost of the `knot-ext-vcs`, `knot-ext-vim`, and
    `knot-ext-workbench` tests (git repo setup, host boot).
 5. Decide whether to add a guard (a budget in CI or a slow-test report) so the
@@ -71,16 +75,19 @@ Re-run `just test-timings` after each step and record the new totals here.
 Summed test time per binary and module, from `just test-timings`. Differences
 in areas a step didn't touch are run-to-run noise (about 10%).
 
-| | Baseline | After step 2 |
-|---|---|---|
-| Tests | 2345 | 2341 |
-| Test run (wall) | 19.0s | 17.1s |
-| Summed test time | 184.9s | 161.1s |
-| `knot` | 76.1s | 71.0s |
-| `knot` `app::product::tests` | 55.5s | 51.2s |
-| `knot-ext-vcs` | 35.6s | 32.4s |
-| `knot-ext-vim` | 20.6s | 18.4s |
-| `knot-ext-workbench` | 15.8s | 14.2s |
-| `knot-model` | 16.3s | 16.9s |
-| `knot-core` | 13.8s | 2.3s |
-| `knot-core` `buffer::differential_tests` | 10.8s | 0.7s |
+| | Baseline | After step 2 | After step 3 |
+|---|---|---|---|
+| Tests | 2345 | 2341 | 2341 |
+| Test run (wall) | 19.0s | 17.1s | 16.9s |
+| Summed test time | 184.9s | 161.1s | 171.9s |
+| `knot` | 76.1s | 71.0s | 63.9s |
+| `knot` `app::product::tests` | 55.5s | 51.2s | 42.7s |
+| `knot-ext-vcs` | 35.6s | 32.4s | 45.6s |
+| `knot-ext-vim` | 20.6s | 18.4s | 21.3s |
+| `knot-ext-workbench` | 15.8s | 14.2s | 11.7s |
+| `knot-model` | 16.3s | 16.9s | 17.3s |
+| `knot-core` | 13.8s | 2.3s | 2.9s |
+| `knot-core` `buffer::differential_tests` | 10.8s | 0.7s | 0.7s |
+
+The step 3 run overlapped a build, so the `knot-ext-*` columns and the summed
+total are inflated by contention; only the `knot` rows are comparable.

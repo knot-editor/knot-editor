@@ -13,6 +13,10 @@ pub(crate) use knot_model::settings::*;
 #[derive(Default)]
 pub(crate) struct ApplicationSettings(pub(crate) SettingsStore);
 
+/// The native definitions alone, for reads before the application installs its store.
+static NATIVE_DEFAULTS: std::sync::LazyLock<SettingsStore> =
+    std::sync::LazyLock::new(SettingsStore::default);
+
 impl Global for ApplicationSettings {}
 
 pub(crate) fn remove_lifecycle(
@@ -99,7 +103,7 @@ pub(crate) fn font_settings(
 ) -> knot_model::typography::FontSettings {
     match cx.try_global::<ApplicationSettings>() {
         Some(settings) => knot_model::typography::FontSettings::resolve(&settings.0, context),
-        None => knot_model::typography::FontSettings::resolve(&SettingsStore::default(), context),
+        None => knot_model::typography::FontSettings::resolve(&NATIVE_DEFAULTS, context),
     }
 }
 
@@ -227,7 +231,7 @@ fn resolve<T>(
 ) -> Option<T> {
     match cx.try_global::<ApplicationSettings>() {
         Some(settings) => settings.0.get(key, context).and_then(read),
-        None => SettingsStore::default().get(key, context).and_then(read),
+        None => NATIVE_DEFAULTS.get(key, context).and_then(read),
     }
 }
 
