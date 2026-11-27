@@ -175,18 +175,20 @@ fn a_caret_on_no_change_leaves_the_commands_unavailable(cx: &mut TestAppContext)
 }
 
 #[gpui::test]
-fn a_new_baseline_closes_the_popup(cx: &mut TestAppContext) {
+fn a_new_baseline_keeps_the_popup_on_a_hunk_it_still_has(cx: &mut TestAppContext) {
     let (_product, window, _directory) = changed(cx);
     window.append("f\n", cx);
     wait_until(cx, |cx| window.gutter_bars(0, cx).len() == 3);
     window.click_gutter_bar(0, cx);
     wait_until(cx, |cx| !window.zones(cx).is_empty());
-    // Saving fetches the baseline again.
+    // Saving fetches the baseline again; the hunk is still there.
     assert_eq!(
         window.run_command("file.save", cx),
         CommandOutcome::Completed
     );
-    wait_until(cx, |cx| window.zones(cx).is_empty());
+    wait_until(cx, |cx| window.gutter_bars(0, cx).len() == 3);
+    assert_eq!(window.zones(cx).len(), 1);
+    assert_eq!(window.zones(cx)[0].texts, ["a"]);
 }
 
 #[gpui::test]

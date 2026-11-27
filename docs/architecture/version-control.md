@@ -72,7 +72,7 @@ palette on the hunk at the caret.
 A backend adds buttons through `hunkActions(repository)`: each names one of its
 commands, an icon, and the hunk states (`staged`, `unstaged`) it applies to, and
 the popup shows those that match its hunk, after Next Hunk. A staged hunk's popup
-leads with a "Staged" (green) or "Unstaged" (yellow) badge, a toolbar label that runs nothing. The command runs in
+leads with a "Staged" (green) or "Unstaged" (muted) badge, a toolbar label that runs nothing. The command runs in
 the editor with `{ repository, file, line }`, the hunk's first current line (the
 boundary line for a removal).
 
@@ -82,8 +82,10 @@ zone or from the text through `vcs.closeHunk` (bound while the zone's key
 context is held), and `@knot/vcs` closes it on an
 edit of the document, when the baseline is fetched again or goes away, and when
 the document closes, rather than following a hunk that may have moved. When the
-baseline is fetched again, as after staging, the popup opens again on the same
-hunk if the new diff still has it.
+baseline is fetched again, as after staging, the popup stays on the same hunk if
+the new diff still has it, and closes otherwise. A popup replaces its zone in
+place when the new hunk has baseline lines as the old one did (or neither has),
+and closes and opens it otherwise.
 
 ## File status
 

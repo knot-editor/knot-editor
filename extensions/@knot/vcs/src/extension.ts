@@ -217,9 +217,8 @@ export async function start(): Promise<Disposable> {
       follow.fetch = false;
       follow.baseline = null;
       follow.staged = null;
-      // The hunk it shows may have moved; it opens again below if it has not.
+      // The hunk it shows may have moved; the popup is shown again below if it has not, and closes otherwise.
       reopen = follow.popup === null ? null : { view: follow.popup.view, hunk: follow.popup.hunk };
-      await closePopup(follow);
       const { repository, uri } = follow;
       if (repository !== null && uri !== null) {
         try {
@@ -242,10 +241,14 @@ export async function start(): Promise<Disposable> {
     }
     if (fetched || (follow.repository === null && !follow.pending && follow.diff !== null)) await syncDiff(follow);
     await paint(follow);
-    if (reopen !== null && follow.baseline !== null && follow.popup === null) {
+    if (reopen !== null && follow.popup !== null) {
       const shown = JSON.stringify(reopen.hunk);
-      const hunk = (await diff(follow.baseline, follow.buffer)).hunks.find((candidate) => JSON.stringify(candidate) === shown);
-      if (hunk !== undefined) await openPopup(follow, reopen.view, hunk).catch(() => {});
+      const hunk =
+        follow.baseline === null
+          ? undefined
+          : (await diff(follow.baseline, follow.buffer)).hunks.find((candidate) => JSON.stringify(candidate) === shown);
+      if (hunk === undefined) await closePopup(follow);
+      else await openPopup(follow, reopen.view, hunk).catch(() => closePopup(follow));
     }
   }
 
@@ -261,9 +264,14 @@ export async function start(): Promise<Disposable> {
     const { popup } = follow;
     if (popup === null) return;
     follow.popup = null;
+    await disposePopup(popup);
+  }
+
+  /** Releases what a popup holds. */
+  async function disposePopup(popup: Popup, keepEditor = false) {
     await popup.listener[Symbol.asyncDispose]().catch(() => {});
     await Promise.resolve(popup.baseline[Symbol.asyncDispose]()).catch(() => {});
-    await popup.editor[Symbol.asyncDispose]().catch(() => {});
+    if (!keepEditor) await popup.editor[Symbol.asyncDispose]().catch(() => {});
   }
 
   /** Closes the popup, if open. */
@@ -468,8 +476,13 @@ export async function start(): Promise<Disposable> {
           { ifRevision: revision },
         );
       }
-      await closePopup(follow);
-      const editor = await workbench.editor(view);
+      // A zone with the same kind of content is replaced in place, so a popup that flips does not flicker;
+      // one that gains or loses its baseline lines is closed and opened.
+      if (follow.popup !== null && (follow.popup.hunk.old.start === follow.popup.hunk.old.end) !== (text === "")) {
+        await closePopup(follow);
+      }
+      const previous = follow.popup;
+      const editor = previous?.view === view ? previous.editor : await workbench.editor(view);
       const current = follow.buffer;
       const count = await current.lineCount();
       const lastLine = count - 1;
@@ -496,7 +509,7 @@ export async function start(): Promise<Disposable> {
           // A backend with staging says which state the hunk is in.
           ...(backendActions.length === 0
             ? []
-            : [{ badge: staged ? { text: "Staged", color: "success" } : { text: "Unstaged", color: "warning" } }]),
+            : [{ badge: staged ? { text: "Staged", color: "success" } : { text: "Unstaged", color: "text.muted" } }]),
           { label: "Previous Hunk", icon: "vcs.previousHunk", command: PREVIOUS_HUNK },
           { label: "Next Hunk", icon: "vcs.nextHunk", command: NEXT_HUNK },
           ...backendActions,
@@ -510,6 +523,7 @@ export async function start(): Promise<Disposable> {
           children: text === "" ? [] : [{ type: "editor", buffer: baseline, key: "baseline", gutter: false }],
         },
       });
+      if (previous !== null) await disposePopup(previous, previous.editor === editor);
     } catch (error) {
       if (follow.popup?.baseline !== baseline) await Promise.resolve(baseline[Symbol.asyncDispose]()).catch(() => {});
       throw error;
