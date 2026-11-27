@@ -397,15 +397,15 @@ await commands.register("files.report", async () => {
             "x",
         )
         .unwrap();
-    let mut seen = String::new();
-    for _ in 0..100 {
-        seen = report(cx);
-        if seen.starts_with("added.txt,") {
-            break;
-        }
+    // The index applies the change on its own thread, so poll in real time.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let mut seen = report(cx);
+    while !seen.starts_with("added.txt,") && std::time::Instant::now() < deadline {
+        std::thread::sleep(std::time::Duration::from_millis(5));
         cx.executor()
             .advance_clock(std::time::Duration::from_millis(100));
         cx.run_until_parked();
+        seen = report(cx);
     }
     assert_eq!(
         seen,
