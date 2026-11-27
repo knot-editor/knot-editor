@@ -1,6 +1,6 @@
 # D215 — VCS commit
 
-Status: 🚧 in progress (checkpoints 1 to 3 done). Source: [roadmap D215](../roadmap.md#version-control), milestone 4 of
+Status: 🚧 in progress (checkpoints 1 to 4 done; 4 awaits its review gate). Source: [roadmap D215](../roadmap.md#version-control), milestone 4 of
 the [version control plan](vcs.md).
 
 ## Outcome
@@ -132,7 +132,7 @@ toolbar button are described in [version control](../architecture/version-contro
 Text frames take `follow: true` to show their end after `setText`; see the
 [ui guide](../extension-api/ui.md#read-only-text-frames).
 
-### 4. Commit panel
+### 4. Commit panel ✅
 
 Deliverables: the three backend methods and Git's implementation, the Changes
 view as a layout tool window with the panel, per-repository persisted drafts,
@@ -148,6 +148,13 @@ refreshed after commit. `just check`.
 
 Review gate: commit, amend, and sign off in a scratch repository; a failing hook
 shows in the output.
+
+Scope decisions: the panel follows the file last chosen in the tree rather than
+the selected row (a selection is readable only inside a tree command), has no
+header (the editor placeholder names the repository), and the product tests at
+`crates/knot-ext-vcs/tests/vcs/commit.rs` drive the controls' commands, since a
+synthetic control click is not dispatched to the package under the test driver.
+See [version control](../architecture/version-control.md#commit-panel).
 
 **Implementation context:** backend contract in
 `extensions/@knot/vcs/src/contract.ts`; the view in `changes.ts` and `rows.ts`

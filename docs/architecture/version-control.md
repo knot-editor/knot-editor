@@ -93,8 +93,9 @@ when only the working tree did, which pulls status alone.
 
 ## Changes view
 
-The `vcs.changes` tree view, titled Changes, sits at `leftTop` after the
-Explorer. It covers the known repositories that cover the window's roots. One
+The `vcs.changes` layout tool window, titled Changes, sits at `leftTop` after the
+Explorer. It holds the embedded `vcs.changes.tree` over the [commit panel](#commit-panel),
+and its toolbar toggles the layout and opens the output. The tree covers the known repositories that cover the window's roots. One
 repository shows its groups at the top level; several show each repository as an
 expanded row named after its root. A window with none shows a "No repository"
 row. Each new status snapshot invalidates the view, and row IDs (repository,
@@ -135,6 +136,31 @@ file. It confirms, saying that unsaved edits will be lost when the document is
 dirty, calls the backend's `rollback({ repository, path })`, which restores the
 path to its baseline on disk, and reloads the document from disk with no Reload or
 Keep prompt after it.
+
+## Commit panel
+
+`@knot/vcs` lays the Changes tool window out per window as the tree, a message
+editor, and a row of controls: the backend's options as checkboxes, then Commit.
+The panel commits one repository, the one of the file last chosen in the window's
+tree, or else the first covering the window; with several repositories the
+editor's placeholder names it. Each repository has one draft, an extension buffer
+persisted under a key of the repository and cleared after a commit. Commit is
+disabled while the draft is empty and Amend is off.
+
+A backend serves three methods: `commitOptions(repository)` (the toggles, all off
+at first), `commitMessage({ repository, options })` (the message the options
+suggest, or null), and `commit({ repository, message, options })`, which commits,
+asks the user for what it needs itself, and answers `{ summary }`, or null when
+the user cancelled. A failure rejects. When an option toggles and the suggestion
+changes, the panel replaces the draft with it and puts the user's draft back when
+the suggestion goes away. `vcs.commit` refuses an empty message, except while
+`amend` is on, before calling the backend. Afterwards it raises a "Committed
+<summary>" notice, or the failure as an error notice, each with a Show Output
+action, and asks for the repository's status again.
+
+`vcs.focusCommitMessage` (Cmd+K) shows the tool window, and Cmd+Enter in an
+editor runs `vcs.commit.fromMessage`, which commits only when the editor is in
+the Changes tool window.
 
 ## Current ref
 
@@ -243,6 +269,12 @@ not register.
   another group's files. A file that is added but not in HEAD is unstaged and left
   on disk as untracked. The index and working tree watches report the change, so
   an action needs no refresh of its own.
+- **Commit** runs `git commit -F -` with the message on stdin, adding `--amend`
+  and `--signoff` for the options of the same name; Amend suggests HEAD's
+  message. With nothing staged and tracked files changed, it confirms "Stage all
+  changes and commit?" in the caller's window and adds `-a`; untracked files are
+  never included. It is logged through `gitLogged`, so a failing hook shows in the
+  output.
 - **Output** is the Version Control tool window (`vcs.output`, bottom right, text
   frame that follows its end), which `@knot/vcs` owns. A backend reports each
   command the user started through `vcs.log` (command line, stdout and stderr,

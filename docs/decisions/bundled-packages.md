@@ -266,6 +266,27 @@ would need a tree row checkbox and may replace them after use.
 References: [version control](../architecture/version-control.md#changes-view)
 and [file commands](../architecture/commands.md#file-commands).
 
+## Version control commit
+
+A backend commits through one `commit` method that asks its own questions, such
+as Git's stage-all confirmation, rather than a protocol of follow-up requests:
+no callbacks cross a contract, and the backend knows what it needs. A served
+method shows the prompt in the window of the call it receives. Options are data
+the backend lists (`commitOptions`), and the message they suggest is a second
+method (`commitMessage`), so Amend's HEAD message needs no knowledge of Git in
+`@knot/vcs`; the package only knows the option ID `amend`, to allow an empty
+message while amending.
+
+The panel's repository is the one of the file last chosen in the tree, not the
+selected row: a tree's selection is readable only by a command running in the
+tree, so the panel could not follow it, and a click on a file already runs a
+command. The panel has no header naming the repository; its editor placeholder
+does. Cmd+Enter is bound in every editor, because a binding cannot be scoped to
+an editor of one tool window, so its command declines outside the Changes tool
+window.
+
+References: [version control](../architecture/version-control.md#commit-panel).
+
 ## Hunk popup
 
 The popup shows only the baseline's lines, banded as removed, with the current

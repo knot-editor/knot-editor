@@ -187,6 +187,9 @@ touches.
 - [Version control changes view](decisions/bundled-packages.md#version-control-changes-view):
   groups in the status answer, backend actions as command references run on a
   file, folder, or group, native file commands rather than explorer-owned ones.
+- [Version control commit](decisions/bundled-packages.md#version-control-commit):
+  one `commit` method that asks its own questions, options and suggested
+  messages as data, and the panel following the last chosen file.
 - [Hunk popup](decisions/bundled-packages.md#hunk-popup): the baseline's lines
   only, toolbar-only for an insertion, anchored to the hunk; "hunk" names
   everywhere.
