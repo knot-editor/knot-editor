@@ -6,15 +6,13 @@
 //! again to change what they show.
 
 use gpui::{prelude::*, *};
-use gpui_component::Disableable as _;
 use gpui_component::button::{Button, ButtonVariants as _};
 use gpui_component::checkbox::Checkbox;
+use gpui_component::{Disableable as _, Sizable as _};
 use knot_protocol::{Command, CommandArgumentValue};
 
-use super::theme::{color, theme};
 use super::view_layout::RunCommand;
 use super::zoom;
-use crate::app::convert::ThemePaint as _;
 
 /// One checkbox or button of a controls member.
 #[derive(Clone, Debug, PartialEq, serde::Deserialize)]
@@ -81,8 +79,7 @@ impl ControlsView {
 }
 
 impl Render for ControlsView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let border = theme(cx).paint_color(color::BORDER);
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
         let items = self.items.iter().enumerate().map(|(index, item)| {
             let (run, command) = (self.run.clone(), item.command());
             let click = move |window: &mut Window, cx: &mut App| {
@@ -98,6 +95,7 @@ impl Render for ControlsView {
                     ..
                 } => {
                     let checkbox = Checkbox::new(("control", index))
+                        .small()
                         .label(label.clone())
                         .checked(*checked)
                         .on_click(move |_, window, cx| click(window, cx));
@@ -114,15 +112,20 @@ impl Render for ControlsView {
                     ..
                 } => {
                     let button = Button::new(("control", index))
+                        .small()
                         .label(label.clone())
                         .disabled(*disabled)
                         .on_click(move |_, window, cx| click(window, cx));
                     if *primary { button.primary() } else { button }.into_any_element()
                 }
             };
-            div()
-                .debug_selector(move || format!("control-{index}"))
-                .child(control)
+            // Buttons gather at the right of the row, after the options.
+            let first_button = matches!(item, ControlItem::Button { .. })
+                && !self.items[..index]
+                    .iter()
+                    .any(|item| matches!(item, ControlItem::Button { .. }));
+            let slot = div().debug_selector(move || format!("control-{index}"));
+            if first_button { slot.ml_auto() } else { slot }.child(control)
         });
         div()
             .flex()
@@ -131,9 +134,7 @@ impl Render for ControlsView {
             .items_center()
             .gap(zoom::rems(8.))
             .px(zoom::rems(8.))
-            .py(zoom::rems(6.))
-            .border_t_1()
-            .border_color(border)
+            .py(zoom::rems(4.))
             .children(items)
     }
 }

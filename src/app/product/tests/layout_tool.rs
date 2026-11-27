@@ -161,7 +161,13 @@ fn leaf_ids(window: &Entity<KnotWindow>, cx: &TestAppContext) -> Vec<gpui::Entit
 
 fn shows_gutter(window: &Entity<KnotWindow>, cx: &TestAppContext) -> bool {
     let view = tool(window, cx);
-    cx.read(|cx| view.read(cx).leaves()[1].editor().unwrap().read(cx).shows_gutter())
+    cx.read(|cx| {
+        view.read(cx).leaves()[1]
+            .editor()
+            .unwrap()
+            .read(cx)
+            .shows_gutter()
+    })
 }
 
 fn placeholder(window: &Entity<KnotWindow>, cx: &TestAppContext) -> Option<String> {

@@ -1,6 +1,6 @@
 # D215 — VCS commit
 
-Status: 🚧 in progress (checkpoints 1 to 4 done; 5 to 8 remain). Source: [roadmap D215](../roadmap.md#version-control), milestone 4 of
+Status: 🚧 in progress (checkpoints 1 to 5 done; 6 to 8 remain). Source: [roadmap D215](../roadmap.md#version-control), milestone 4 of
 the [version control plan](vcs.md).
 
 ## Outcome
@@ -166,7 +166,7 @@ side in a new `extensions/@knot/git/src/commit.ts`, registered in `main.ts` like
 [version control](../architecture/version-control.md) and the backends and
 changes view decisions in [bundled packages](../decisions/bundled-packages.md).
 
-### 5. Panel polish and member focus
+### 5. Panel polish and member focus ✅
 
 Deliverables:
 - A native way to focus a named layout member: `ViewRegistration.focus(window,
@@ -184,6 +184,10 @@ and that a gutterless editor paints no gutter; `@knot/vcs` test that
 
 Review gate: Cmd+Alt+C from the tree and from a document lands in the message
 editor; the panel looks right in the scratch repository.
+
+Scope decisions: Cmd+K begins the split chords and waited a second, so the
+binding is Cmd+Alt+C; `focus` takes editor members only; the panel keeps the
+layout's separators between its members.
 
 ### 6. Resizable commit editor
 

@@ -197,7 +197,7 @@ impl EditorView {
         self.placeholder.as_deref()
     }
 
-    #[cfg(any(test, feature = "test-support"))]
+    #[cfg(test)]
     pub(crate) fn shows_gutter(&self) -> bool {
         self.rendering.show_gutter
     }
