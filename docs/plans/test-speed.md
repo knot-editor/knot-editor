@@ -68,6 +68,13 @@ on the same machine).
 5. Decide whether to add a guard (a budget in CI or a slow-test report) so the
    suite stays under control.
 
+6. After step 4: look into two product tests that fail under `cargo test`
+   (one shared process, a loaded machine) and may have failed once under
+   nextest: `editor_zones::escape_in_a_focused_zone_closes_it_and_tells_its_owner`
+   (`editor_zones.rs:254`) and `startup::declared_api_options_are_accepted_by_the_real_host`
+   (`tests.rs:536`). Nextest stays the runner: `cargo test` was slower (22s for
+   the `knot` lib alone, against 17s for the workspace) and less reliable.
+
 Re-run `just test-timings` after each step and record the new totals here.
 
 ## Progress
