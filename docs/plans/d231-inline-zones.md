@@ -89,21 +89,15 @@ notify during paint schedules none. Approved; verified by app tests only, since
 nothing opens a zone until checkpoint 4. `Editor::open_zone`, `close_zone`, and
 `Leaf::observe` carry `allow(dead_code)` until then.
 
-### 3. Input and focus in zones
+### 3. Input and focus in zones ✅
 
-Deliverable: focus, clicks, typing, and Escape route to a zone's views; a
-wheel over a zone goes to a scrollable member under the pointer, else the
-outer editor; focus returns to the text when a focused zone closes.
-
-Validation: app tests: focus and typing in a zone member, click routing
-inside and outside the frame, Escape closing a focused zone and returning
-focus, wheel routing with and without a scrollable member.
-
-Review gate: code review of hit testing and focus handling against popovers'.
-
-**Implementation context:** `src/app/editor/input.rs` (hit testing: a point in
-a zone's frame goes to its views), focus handling via `PopoverFocus` in
-`src/app/editor/popovers.rs`.
+A zone's views take focus, clicks, and typing as a popover's do, and are
+children of their editor in the view tree (`ViewKind::Zone`). Escape dismisses
+the zone with focus and reports it as `ZoneClosed`; an explicit close does
+not. A wheel over a zone scrolls the member under the pointer when it can, and
+the editor otherwise. Approved; verified by app tests only, since nothing opens
+a zone until checkpoint 4, which also covers Escape routing through the window.
+`ZoneClosed` carries `allow(dead_code)` until the host subscribes to it.
 
 ### 4. Extension API
 
