@@ -2032,7 +2032,7 @@ fn a_terminal_notification_becomes_a_notice_that_shows_the_terminal(cx: &mut Tes
                 .with_terminal(|terminal| terminal.write(bytes))
         });
     };
-    let notices = |cx: &mut TestAppContext| {
+    let notices = |count: usize, cx: &mut TestAppContext| {
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         loop {
             cx.run_until_parked();
@@ -2042,7 +2042,7 @@ fn a_terminal_notification_becomes_a_notice_that_shows_the_terminal(cx: &mut Tes
                 terminal.retain(|notice| notice.target.is_some());
                 terminal
             });
-            if notices.len() == 2 {
+            if notices.len() == count {
                 return notices;
             }
             assert!(std::time::Instant::now() < deadline, "notices: {notices:?}");
@@ -2052,9 +2052,12 @@ fn a_terminal_notification_becomes_a_notice_that_shows_the_terminal(cx: &mut Tes
 
     // A notification raises a notice even from the shown terminal; without a
     // title of its own it carries the tab's label.
+    // Each terminal parses on its own thread, so the second waits for the
+    // first notice to fix their order.
     write(second, b"\x1b]777;notify;Build;all green\x07", cx);
+    notices(1, cx);
     write(first, b"\x1b]9;done\x07", cx);
-    let notices = notices(cx);
+    let notices = notices(2, cx);
     let window_id = super::super::window_id(window.entity_id());
     let label = cx.read(|cx| KnotWindow::terminal_session_label(first, cx).unwrap());
     assert_eq!(notices[0].title.as_deref(), Some("Build"));
