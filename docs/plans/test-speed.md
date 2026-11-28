@@ -117,9 +117,15 @@ on the same machine).
      now parks the packages before focusing and after.
    Twelve workspace runs afterwards had no failure. Under `cargo test` (one
    process for all 1081 `knot` tests) `startup::declared_api_options_...` still
-   fails: one of its waits takes 15s there against 0.7s alone, so it is
-   contention in a shared process, which nextest avoids. Nextest stays the
-   runner (CI runs it, and `cargo test` is slower and less reliable).
+   failed, and the cause was one more test helper: gpui's `add_window_view`
+   leaks the whole application (see `into_mut`), so every product test left its
+   extension pool, watchers and terminals running. The process grew to 1,400
+   threads and 1 GB, and each terminal test's `fork` then held the malloc fork
+   lock long enough to stall every other test. `product_window` now opens its
+   window with `add_window`, which leaks nothing; the `knot` lib under
+   `cargo test` went from 23s to 3s. Prefer `add_window` plus
+   `VisualTestContext::from_window` over `add_window_view` wherever a test
+   builds a whole application.
 
 Re-run `just test-timings` after each step and record the new totals here.
 

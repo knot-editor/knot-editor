@@ -79,13 +79,15 @@ pub(crate) fn product_window(
     model: Entity<Buffer>,
     cx: &mut TestAppContext,
 ) -> (Entity<KnotWindow>, gpui::AnyWindowHandle) {
-    let mut native_window = None;
-    let (window, _) = cx.add_window_view(|native, cx| {
-        native_window = Some(native.window_handle());
+    // `add_window_view` would leak the whole application, and the threads and
+    // processes it owns, for the rest of the test run.
+    let handle = cx.add_window(|_, cx| {
         let workbench = cx.new(|cx| Workbench::new_for_document(document, model, cx));
         KnotWindow::new(workbench, cx)
     });
-    let native_window = native_window.unwrap();
+    let window = handle.root(cx).unwrap();
+    let native_window = gpui::AnyWindowHandle::from(handle);
+    cx.run_until_parked();
     cx.update_window(native_window, |_, native_window, cx| {
         window.update(cx, |window, cx| {
             window.observe_extension_host(native_window, cx)
